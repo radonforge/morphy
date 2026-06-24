@@ -30,6 +30,7 @@ function applyTauntPulse(group: THREE.Group, pulses: TauntPulseRef, id: string, 
 }
 
 const PLAYER_RADIUS = 0.4;
+const PLAYER_SEPARATION = PLAYER_RADIUS * 2;
 const PLAYER_BODY_LENGTH = 0.9;
 const PLAYER_BODY_Y = PLAYER_BODY_LENGTH / 2 + PLAYER_RADIUS;
 const PLAYER_HEAD_Y = PLAYER_BODY_LENGTH + PLAYER_RADIUS * 1.6;
@@ -111,6 +112,7 @@ export function Scene({
         teleportRef={teleportRef}
         tauntPulseRef={tauntPulseRef}
         chatOpen={chatOpen}
+        playersRef={playersRef}
       />
       {ids
         .filter((id) => id !== localId && (meta[id]?.alive ?? true))
@@ -338,6 +340,7 @@ interface LocalPlayerProps {
   teleportRef: TeleportRef;
   tauntPulseRef: TauntPulseRef;
   chatOpen: boolean;
+  playersRef: PlayersRef;
 }
 
 function LocalPlayer({
@@ -352,6 +355,7 @@ function LocalPlayer({
   teleportRef,
   tauntPulseRef,
   chatOpen,
+  playersRef,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!chatOpen);
@@ -398,6 +402,24 @@ function LocalPlayer({
         heading.current = Math.atan2(moveVec.x, moveVec.z);
       }
 
+      const { min, max } = map.bounds;
+      pos.x = THREE.MathUtils.clamp(pos.x, min.x + PLAYER_RADIUS, max.x - PLAYER_RADIUS);
+      pos.z = THREE.MathUtils.clamp(pos.z, min.z + PLAYER_RADIUS, max.z - PLAYER_RADIUS);
+    }
+
+    if (alive) {
+      for (const [otherId, other] of playersRef.current) {
+        if (otherId === id || !other.alive) continue;
+        const dx = pos.x - other.x;
+        const dz = pos.z - other.z;
+        const distSq = dx * dx + dz * dz;
+        if (distSq > 1e-8 && distSq < PLAYER_SEPARATION * PLAYER_SEPARATION) {
+          const dist = Math.sqrt(distSq);
+          const push = PLAYER_SEPARATION - dist;
+          pos.x += (dx / dist) * push;
+          pos.z += (dz / dist) * push;
+        }
+      }
       const { min, max } = map.bounds;
       pos.x = THREE.MathUtils.clamp(pos.x, min.x + PLAYER_RADIUS, max.x - PLAYER_RADIUS);
       pos.z = THREE.MathUtils.clamp(pos.z, min.z + PLAYER_RADIUS, max.z - PLAYER_RADIUS);
