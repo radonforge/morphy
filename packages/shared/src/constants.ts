@@ -17,6 +17,8 @@ export const HUNTER_MAX_HP = 100;
 export const WRONG_SHOT_DAMAGE = 20;
 export const FIRE_COOLDOWN_MS = 800;
 export const SHOOT_RANGE = 50;
+export const PROP_HIT_RADIUS = 0.6;
+export const CATCH_HEIGHT = 0.8;
 
 export const MOVE_SPEED = 5;
 
