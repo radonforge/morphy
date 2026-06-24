@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: false
+minimumReleaseAgeExclude:
+  - '@colyseus/core@0.17.44'
