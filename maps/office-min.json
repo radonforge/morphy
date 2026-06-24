@@ -1,0 +1,127 @@
+{
+  "id": "office-min",
+  "name": "Office (minimal)",
+  "bounds": {
+    "min": { "x": -14, "y": 0, "z": -14 },
+    "max": { "x": 14, "y": 8, "z": 14 }
+  },
+  "spawnPoints": {
+    "hunters": [
+      { "x": 0, "y": 0, "z": 0 },
+      { "x": 0, "y": 0, "z": 2 }
+    ],
+    "props": [
+      { "x": -10, "y": 0, "z": 0 },
+      { "x": 10, "y": 0, "z": 0 },
+      { "x": 0, "y": 0, "z": -10 },
+      { "x": 0, "y": 0, "z": 10 },
+      { "x": 5, "y": 0, "z": 5 },
+      { "x": -5, "y": 0, "z": -5 }
+    ]
+  },
+  "colliders": [
+    { "position": { "x": 0, "y": -0.5, "z": 0 }, "size": { "x": 30, "y": 1, "z": 30 } },
+    { "position": { "x": 0, "y": 4, "z": -15 }, "size": { "x": 30, "y": 8, "z": 1 } },
+    { "position": { "x": 0, "y": 4, "z": 15 }, "size": { "x": 30, "y": 8, "z": 1 } },
+    { "position": { "x": 15, "y": 4, "z": 0 }, "size": { "x": 1, "y": 8, "z": 30 } },
+    { "position": { "x": -15, "y": 4, "z": 0 }, "size": { "x": 1, "y": 8, "z": 30 } }
+  ],
+  "props": [
+    { "type": "desk", "position": { "x": -8, "y": 0, "z": -6 }, "rotation": 0 },
+    { "type": "monitor", "position": { "x": -8, "y": 0.76, "z": -6 }, "rotation": 0 },
+    { "type": "mug", "position": { "x": -8.5, "y": 0.76, "z": -6.2 }, "rotation": 0 },
+    { "type": "chair", "position": { "x": -8, "y": 0, "z": -4.6 }, "rotation": 0 },
+    { "type": "desk", "position": { "x": 8, "y": 0, "z": -6 }, "rotation": 3.14159 },
+    { "type": "monitor", "position": { "x": 8, "y": 0.76, "z": -6 }, "rotation": 3.14159 },
+    { "type": "mug", "position": { "x": 8.3, "y": 0.76, "z": -6.1 }, "rotation": 0 },
+    { "type": "chair", "position": { "x": 8, "y": 0, "z": -4.6 }, "rotation": 3.14159 },
+    { "type": "plant", "position": { "x": 12, "y": 0, "z": 12 }, "rotation": 0 },
+    { "type": "plant", "position": { "x": -12, "y": 0, "z": 12 }, "rotation": 0 },
+    { "type": "printer", "position": { "x": -12, "y": 0, "z": -12 }, "rotation": 0 },
+    { "type": "watercooler", "position": { "x": 12, "y": 0, "z": -12 }, "rotation": 0 },
+    { "type": "bin", "position": { "x": -2, "y": 0, "z": 8 }, "rotation": 0 },
+    { "type": "bin", "position": { "x": 2, "y": 0, "z": 8 }, "rotation": 0 },
+    { "type": "crate", "position": { "x": 6, "y": 0, "z": 8 }, "rotation": 0.4 },
+    { "type": "crate", "position": { "x": 7, "y": 0, "z": 7 }, "rotation": 0.9 },
+    { "type": "cabinet", "position": { "x": 0, "y": 0, "z": -14 }, "rotation": 0 },
+    { "type": "cabinet", "position": { "x": -6, "y": 0, "z": -14 }, "rotation": 0 }
+  ],
+  "propCatalog": [
+    {
+      "id": "desk",
+      "name": "Scrivania",
+      "parts": [
+        { "kind": "box", "position": { "x": 0, "y": 0.72, "z": 0 }, "size": { "x": 1.6, "y": 0.08, "z": 0.8 }, "color": "#b5895a" },
+        { "kind": "box", "position": { "x": 0, "y": 0.36, "z": 0 }, "size": { "x": 1.5, "y": 0.7, "z": 0.7 }, "color": "#8a6d3b" }
+      ]
+    },
+    {
+      "id": "monitor",
+      "name": "Monitor",
+      "parts": [
+        { "kind": "box", "position": { "x": 0, "y": 0.15, "z": 0 }, "size": { "x": 0.1, "y": 0.3, "z": 0.1 }, "color": "#333333" },
+        { "kind": "box", "position": { "x": 0, "y": 0.5, "z": 0 }, "size": { "x": 0.6, "y": 0.4, "z": 0.05 }, "color": "#111111" }
+      ]
+    },
+    {
+      "id": "chair",
+      "name": "Sedia",
+      "parts": [
+        { "kind": "box", "position": { "x": 0, "y": 0.45, "z": 0 }, "size": { "x": 0.45, "y": 0.08, "z": 0.45 }, "color": "#444444" },
+        { "kind": "box", "position": { "x": 0, "y": 0.75, "z": -0.2 }, "size": { "x": 0.45, "y": 0.5, "z": 0.06 }, "color": "#444444" }
+      ]
+    },
+    {
+      "id": "plant",
+      "name": "Pianta",
+      "parts": [
+        { "kind": "cylinder", "position": { "x": 0, "y": 0.15, "z": 0 }, "size": { "x": 0.5, "y": 0.3, "z": 0.5 }, "color": "#b5651d" },
+        { "kind": "cone", "position": { "x": 0, "y": 0.7, "z": 0 }, "size": { "x": 1.0, "y": 0.8, "z": 1.0 }, "color": "#3f9b4f" }
+      ]
+    },
+    {
+      "id": "printer",
+      "name": "Stampante",
+      "parts": [
+        { "kind": "box", "position": { "x": 0, "y": 0.2, "z": 0 }, "size": { "x": 0.5, "y": 0.4, "z": 0.45 }, "color": "#dddddd" },
+        { "kind": "box", "position": { "x": 0, "y": 0.42, "z": 0.1 }, "size": { "x": 0.45, "y": 0.05, "z": 0.3 }, "color": "#bbbbbb" }
+      ]
+    },
+    {
+      "id": "mug",
+      "name": "Tazza",
+      "parts": [
+        { "kind": "cylinder", "position": { "x": 0, "y": 0.06, "z": 0 }, "size": { "x": 0.16, "y": 0.12, "z": 0.16 }, "color": "#d94f4f" }
+      ]
+    },
+    {
+      "id": "bin",
+      "name": "Cestino",
+      "parts": [
+        { "kind": "cylinder", "position": { "x": 0, "y": 0.25, "z": 0 }, "size": { "x": 0.36, "y": 0.5, "z": 0.36 }, "color": "#555555" }
+      ]
+    },
+    {
+      "id": "watercooler",
+      "name": "Distributore acqua",
+      "parts": [
+        { "kind": "box", "position": { "x": 0, "y": 0.45, "z": 0 }, "size": { "x": 0.35, "y": 0.9, "z": 0.35 }, "color": "#eeeeee" },
+        { "kind": "cylinder", "position": { "x": 0, "y": 1.1, "z": 0 }, "size": { "x": 0.36, "y": 0.4, "z": 0.36 }, "color": "#7fb6e0" }
+      ]
+    },
+    {
+      "id": "crate",
+      "name": "Cassa",
+      "parts": [
+        { "kind": "box", "position": { "x": 0, "y": 0.3, "z": 0 }, "size": { "x": 0.6, "y": 0.6, "z": 0.6 }, "color": "#a07840" }
+      ]
+    },
+    {
+      "id": "cabinet",
+      "name": "Armadietto",
+      "parts": [
+        { "kind": "box", "position": { "x": 0, "y": 0.8, "z": 0 }, "size": { "x": 0.8, "y": 1.6, "z": 0.5 }, "color": "#777777" }
+      ]
+    }
+  ]
+}
