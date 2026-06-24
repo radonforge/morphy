@@ -8,6 +8,7 @@ import {
   MSG_INPUT,
   MSG_TRANSFORM,
   MSG_SHOOT,
+  SHOOT_RANGE,
   type MapDefinition,
   type Phase,
   type PrimitiveSpec,
@@ -44,6 +45,8 @@ const CAMERA_DAMP = 0.0008;
 const REMOTE_DAMP = 0.0009;
 export const TAUNT_PULSE_SECONDS = 0.5;
 const TAUNT_AMPLITUDE = 0.18;
+const TRACER_TTL = 0.09;
+const TRACER_COLOR = "#fff34d";
 const LOOK_SENSITIVITY = 0.0025;
 const PITCH_MIN = -1.4;
 const PITCH_MAX = 1.4;
@@ -80,6 +83,18 @@ function buildObstacles(map: MapDefinition, catalog: Catalog): Obstacle[] {
   return obstacles;
 }
 
+interface TracerState {
+  ox: number;
+  oy: number;
+  oz: number;
+  ex: number;
+  ey: number;
+  ez: number;
+  ttl: number;
+}
+
+type TracerRef = { current: TracerState | null };
+
 interface SceneProps {
   room: Room;
   map: MapDefinition;
@@ -110,6 +125,7 @@ export function Scene({
     [map],
   );
   const obstacles = useMemo(() => buildObstacles(map, catalog), [map, catalog]);
+  const tracerRef = useRef<TracerState | null>(null);
   const localMeta = meta[localId];
   const localRole: Role = localMeta?.role ?? "prop";
   const localAlive = localMeta?.alive ?? true;
@@ -125,7 +141,8 @@ export function Scene({
       <directionalLight position={[12, 22, 8]} intensity={1.2} castShadow />
       <MapView map={map} />
       <PropPicker room={room} enabled={canTransform} />
-      <Shooter room={room} enabled={canShoot} />
+      <Shooter room={room} enabled={canShoot} tracerRef={tracerRef} />
+      <Tracer tracerRef={tracerRef} />
       <LocalPlayer
         room={room}
         map={map}
@@ -157,8 +174,8 @@ export function Scene({
   );
 }
 
-function Shooter({ room, enabled }: { room: Room; enabled: boolean }) {
-  const { camera, gl } = useThree();
+function Shooter({ room, enabled, tracerRef }: { room: Room; enabled: boolean; tracerRef: TracerRef }) {
+  const { camera, gl, scene } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
 
   useEffect(() => {
@@ -177,12 +194,63 @@ function Shooter({ room, enabled }: { room: Room; enabled: boolean }) {
         origin: { x: o.x, y: o.y, z: o.z },
         dir: { x: d.x, y: d.y, z: d.z },
       });
+      const hits = raycaster.intersectObjects(scene.children, true);
+      const end = hits[0]?.point;
+      tracerRef.current = {
+        ox: o.x,
+        oy: o.y,
+        oz: o.z,
+        ex: end ? end.x : o.x + d.x * SHOOT_RANGE,
+        ey: end ? end.y : o.y + d.y * SHOOT_RANGE,
+        ez: end ? end.z : o.z + d.z * SHOOT_RANGE,
+        ttl: TRACER_TTL,
+      };
     };
     el.addEventListener("click", onClick);
     return () => el.removeEventListener("click", onClick);
-  }, [enabled, camera, gl, raycaster, room]);
+  }, [enabled, camera, gl, scene, raycaster, room, tracerRef]);
 
   return null;
+}
+
+function Tracer({ tracerRef }: { tracerRef: TracerRef }) {
+  const geometry = useMemo(() => {
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+    return geom;
+  }, []);
+  const material = useMemo(
+    () => new THREE.LineBasicMaterial({ color: TRACER_COLOR, transparent: true }),
+    [],
+  );
+  const line = useMemo(() => {
+    const l = new THREE.Line(geometry, material);
+    l.visible = false;
+    l.frustumCulled = false;
+    return l;
+  }, [geometry, material]);
+
+  useFrame((_, delta) => {
+    const tracer = tracerRef.current;
+    if (!tracer) {
+      line.visible = false;
+      return;
+    }
+    tracer.ttl -= delta;
+    if (tracer.ttl <= 0) {
+      tracerRef.current = null;
+      line.visible = false;
+      return;
+    }
+    const position = geometry.getAttribute("position") as THREE.BufferAttribute;
+    position.setXYZ(0, tracer.ox, tracer.oy, tracer.oz);
+    position.setXYZ(1, tracer.ex, tracer.ey, tracer.ez);
+    position.needsUpdate = true;
+    material.opacity = tracer.ttl / TRACER_TTL;
+    line.visible = true;
+  });
+
+  return <primitive object={line} />;
 }
 
 function geometryFor(part: PrimitiveSpec): ReactElement {

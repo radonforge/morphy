@@ -103,6 +103,24 @@ canvas {
   pointer-events: none;
 }
 
+.crosshair.hit {
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  background: #44e06a;
+}
+
+.crosshair.miss {
+  background: #ff5b5b;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 45%, rgba(220, 0, 0, 0.45) 100%);
+}
+
 .banner {
   position: absolute;
   top: 32%;

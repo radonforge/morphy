@@ -4,6 +4,7 @@ import { Callbacks } from "@colyseus/sdk";
 import {
   MAX_CHAT_LENGTH,
   MSG_CHAT,
+  MSG_SHOT_RESULT,
   MSG_TAUNT,
   MSG_TELEPORT,
   type Phase,
@@ -13,13 +14,14 @@ import {
 import { type Connection } from "../net/connection";
 import { officeMap } from "../officeMap";
 import { Scene, TAUNT_PULSE_SECONDS } from "./Scene";
-import { playTaunt } from "./audio";
+import { playHitConfirm, playMiss, playTaunt } from "./audio";
 import type { MetaMap, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
 
 const STATE_POLL_MS = 200;
 const COUNTDOWN_TICK_MS = 250;
 const TAUNT_MAX_DISTANCE = 40;
 const CHAT_HISTORY = 6;
+const SHOT_FX_MS = 220;
 
 interface GameProps {
   connection: Connection;
@@ -96,6 +98,7 @@ export function Game({ connection, onLeave }: GameProps) {
   const tauntPulseRef = useRef<Map<string, number>>(new Map()) as TauntPulseRef;
   const msgSeq = useRef(0);
   const chatOpenRef = useRef(false);
+  const fxSeq = useRef(0);
 
   const [ids, setIds] = useState<string[]>([]);
   const [meta, setMeta] = useState<MetaMap>({});
@@ -105,6 +108,7 @@ export function Game({ connection, onLeave }: GameProps) {
   const [messages, setMessages] = useState<ChatLine[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatDraft, setChatDraft] = useState("");
+  const [shotFx, setShotFx] = useState<{ kind: "hit" | "miss"; seq: number } | null>(null);
 
   chatOpenRef.current = chatOpen;
 
@@ -151,6 +155,17 @@ export function Game({ connection, onLeave }: GameProps) {
       setMessages((prev) => [...prev, line].slice(-CHAT_HISTORY));
     });
 
+    room.onMessage(MSG_SHOT_RESULT, (message: unknown) => {
+      if (typeof message !== "object" || message === null) return;
+      const hit = (message as Record<string, unknown>).hit === true;
+      if (hit) {
+        playHitConfirm();
+      } else {
+        playMiss();
+      }
+      setShotFx({ kind: hit ? "hit" : "miss", seq: fxSeq.current++ });
+    });
+
     room.onError((code, errMessage) => {
       console.error("[webhunt] room error", code, errMessage);
       onLeave();
@@ -161,6 +176,12 @@ export function Game({ connection, onLeave }: GameProps) {
       void room.leave();
     };
   }, [room, onLeave, teleportRef, tauntPulseRef, sessionId]);
+
+  useEffect(() => {
+    if (!shotFx) return;
+    const timer = setTimeout(() => setShotFx(null), SHOT_FX_MS);
+    return () => clearTimeout(timer);
+  }, [shotFx]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -251,7 +272,9 @@ export function Game({ connection, onLeave }: GameProps) {
         />
       </Canvas>
 
-      {showCrosshair && <div className="crosshair" />}
+      {showCrosshair && <div className={`crosshair${shotFx ? ` ${shotFx.kind}` : ""}`} />}
+
+      {shotFx?.kind === "miss" && <div className="vignette" />}
 
       {localRole === "hunter" && phase === "hiding" && (
         <div className="blindout">
