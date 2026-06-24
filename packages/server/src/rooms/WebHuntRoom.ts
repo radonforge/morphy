@@ -10,12 +10,22 @@ import {
   ROUND_DURATION_MS,
   ROUND_END_MS,
   PATCH_RATE_MS,
+  HUNTER_MAX_HP,
+  WRONG_SHOT_DAMAGE,
+  FIRE_COOLDOWN_MS,
+  SHOOT_RANGE,
+  PROP_HIT_RADIUS,
+  CATCH_HEIGHT,
   MSG_INPUT,
   MSG_TRANSFORM,
+  MSG_SHOOT,
+  MSG_TELEPORT,
   type InputMessage,
+  type ShootMessage,
   type MapDefinition,
   type Phase,
   type Role,
+  type Winner,
 } from "@webhunt/shared";
 import { loadMap } from "../loadMap";
 
@@ -31,6 +41,7 @@ export class PlayerState extends Schema {
   @type("number") rot = 0;
   @type("string") role: Role = "prop";
   @type("boolean") alive = true;
+  @type("number") hp = 0;
   @type("string") propType = "";
 }
 
@@ -38,6 +49,7 @@ export class RoomState extends Schema {
   @type("string") mapId = "";
   @type("string") phase: Phase = "lobby";
   @type("number") phaseEndsAt = 0;
+  @type("string") winner: Winner = "";
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
 }
 
@@ -53,6 +65,13 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function parseVec3(value: unknown): { x: number; y: number; z: number } | null {
+  if (typeof value !== "object" || value === null) return null;
+  const v = value as Record<string, unknown>;
+  if (!isFiniteNumber(v.x) || !isFiniteNumber(v.y) || !isFiniteNumber(v.z)) return null;
+  return { x: v.x, y: v.y, z: v.z };
+}
+
 function parseInput(payload: unknown): InputMessage | null {
   if (typeof payload !== "object" || payload === null) return null;
   const p = payload as Record<string, unknown>;
@@ -60,6 +79,15 @@ function parseInput(payload: unknown): InputMessage | null {
     return null;
   }
   return { x: p.x, y: p.y, z: p.z, rot: p.rot };
+}
+
+function parseShoot(payload: unknown): ShootMessage | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const p = payload as Record<string, unknown>;
+  const origin = parseVec3(p.origin);
+  const dir = parseVec3(p.dir);
+  if (!origin || !dir) return null;
+  return { origin, dir };
 }
 
 function parsePropType(payload: unknown): string | null {
@@ -74,12 +102,32 @@ function sanitizeName(raw: unknown): string {
   return trimmed.length > 0 ? trimmed : FALLBACK_NAME;
 }
 
+function rayHitDistance(
+  origin: { x: number; y: number; z: number },
+  dir: { x: number; y: number; z: number },
+  center: { x: number; y: number; z: number },
+  radius: number,
+  maxDist: number,
+): number | null {
+  const ex = center.x - origin.x;
+  const ey = center.y - origin.y;
+  const ez = center.z - origin.z;
+  const t = ex * dir.x + ey * dir.y + ez * dir.z;
+  if (t < 0 || t > maxDist) return null;
+  const px = origin.x + dir.x * t;
+  const py = origin.y + dir.y * t;
+  const pz = origin.z + dir.z * t;
+  const distSq = (px - center.x) ** 2 + (py - center.y) ** 2 + (pz - center.z) ** 2;
+  return distSq <= radius * radius ? t : null;
+}
+
 export class WebHuntRoom extends Room<{ state: RoomState }> {
   maxClients = MAX_PLAYERS;
   state = new RoomState();
   private map!: MapDefinition;
   private catalogIds = new Set<string>();
   private phaseTimer?: ClearableTimer;
+  private lastShotAt = new Map<string, number>();
 
   onCreate(): void {
     this.map = loadMap(DEFAULT_MAP_ID);
@@ -88,6 +136,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     this.setPatchRate(PATCH_RATE_MS);
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
     this.onMessage(MSG_TRANSFORM, (client, payload) => this.handleTransform(client, payload));
+    this.onMessage(MSG_SHOOT, (client, payload) => this.handleShoot(client, payload));
   }
 
   onJoin(client: Client, options: unknown): void {
@@ -106,6 +155,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   onLeave(client: Client): void {
     this.state.players.delete(client.sessionId);
+    this.lastShotAt.delete(client.sessionId);
     if (this.state.players.size < MIN_PLAYERS_TO_START && this.state.phase !== "lobby") {
       this.resetToLobby();
     }
@@ -113,7 +163,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   private handleInput(client: Client, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
-    if (!player) return;
+    if (!player || !player.alive) return;
     if (player.role === "hunter" && this.state.phase === "hiding") return;
     const input = parseInput(payload);
     if (!input) return;
@@ -126,11 +176,54 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   private handleTransform(client: Client, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
-    if (!player || player.role !== "prop") return;
+    if (!player || player.role !== "prop" || !player.alive) return;
     if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
     const propType = parsePropType(payload);
     if (!propType || !this.catalogIds.has(propType)) return;
     player.propType = propType;
+  }
+
+  private handleShoot(client: Client, payload: unknown): void {
+    const player = this.state.players.get(client.sessionId);
+    if (!player || player.role !== "hunter" || !player.alive) return;
+    if (this.state.phase !== "hunting") return;
+
+    const now = Date.now();
+    if (now - (this.lastShotAt.get(client.sessionId) ?? 0) < FIRE_COOLDOWN_MS) return;
+    this.lastShotAt.set(client.sessionId, now);
+
+    const ray = parseShoot(payload);
+    if (!ray) return;
+    const len = Math.hypot(ray.dir.x, ray.dir.y, ray.dir.z);
+    if (len === 0) return;
+    const dir = { x: ray.dir.x / len, y: ray.dir.y / len, z: ray.dir.z / len };
+
+    let bestT = Infinity;
+    let target: PlayerState | undefined;
+    this.state.players.forEach((candidate) => {
+      if (candidate === player || candidate.role !== "prop" || !candidate.alive) return;
+      const t = rayHitDistance(
+        ray.origin,
+        dir,
+        { x: candidate.x, y: CATCH_HEIGHT, z: candidate.z },
+        PROP_HIT_RADIUS,
+        SHOOT_RANGE,
+      );
+      if (t !== null && t < bestT) {
+        bestT = t;
+        target = candidate;
+      }
+    });
+
+    if (target) {
+      target.alive = false;
+    } else {
+      player.hp = Math.max(0, player.hp - WRONG_SHOT_DAMAGE);
+      if (player.hp === 0) {
+        player.alive = false;
+      }
+    }
+    this.checkRoundEnd();
   }
 
   private maybeStartRound(): void {
@@ -147,16 +240,21 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   }
 
   private startCountdown(): void {
+    this.state.winner = "";
     this.setPhase("starting", START_COUNTDOWN_MS, () => this.beginHiding());
   }
 
   private beginHiding(): void {
     this.assignRoles();
+    this.respawnPlayers();
     this.setPhase("hiding", HIDE_DURATION_MS, () => this.beginHunting());
   }
 
   private beginHunting(): void {
-    this.setPhase("hunting", ROUND_DURATION_MS, () => this.endRound());
+    this.setPhase("hunting", ROUND_DURATION_MS, () => {
+      this.state.winner = "props";
+      this.endRound();
+    });
   }
 
   private endRound(): void {
@@ -176,6 +274,25 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     this.phaseTimer = undefined;
     this.state.phase = "lobby";
     this.state.phaseEndsAt = 0;
+    this.state.winner = "";
+  }
+
+  private checkRoundEnd(): void {
+    if (this.state.phase !== "hunting") return;
+    let aliveProps = 0;
+    let aliveHunters = 0;
+    this.state.players.forEach((player) => {
+      if (!player.alive) return;
+      if (player.role === "prop") aliveProps++;
+      else aliveHunters++;
+    });
+    if (aliveProps === 0) {
+      this.state.winner = "hunters";
+      this.endRound();
+    } else if (aliveHunters === 0) {
+      this.state.winner = "props";
+      this.endRound();
+    }
   }
 
   private assignRoles(): void {
@@ -196,7 +313,25 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     players.forEach((player, index) => {
       player.role = index < hunterCount ? "hunter" : "prop";
       player.alive = true;
+      player.hp = player.role === "hunter" ? HUNTER_MAX_HP : 0;
       player.propType = "";
+    });
+  }
+
+  private respawnPlayers(): void {
+    let hunterIndex = 0;
+    let propIndex = 0;
+    this.clients.forEach((client) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player) return;
+      const isHunter = player.role === "hunter";
+      const spawns = isHunter ? this.map.spawnPoints.hunters : this.map.spawnPoints.props;
+      const index = isHunter ? hunterIndex++ : propIndex++;
+      const spawn = spawns[index % spawns.length] ?? this.map.bounds.min;
+      player.x = spawn.x;
+      player.y = spawn.y;
+      player.z = spawn.z;
+      client.send(MSG_TELEPORT, { x: spawn.x, z: spawn.z });
     });
   }
 }
