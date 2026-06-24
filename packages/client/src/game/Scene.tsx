@@ -31,6 +31,7 @@ function applyTauntPulse(group: THREE.Group, pulses: TauntPulseRef, id: string, 
 
 const PLAYER_RADIUS = 0.4;
 const PLAYER_SEPARATION = PLAYER_RADIUS * 2;
+const FURNITURE_MIN_RADIUS = 0.3;
 const PLAYER_BODY_LENGTH = 0.9;
 const PLAYER_BODY_Y = PLAYER_BODY_LENGTH / 2 + PLAYER_RADIUS;
 const PLAYER_HEAD_Y = PLAYER_BODY_LENGTH + PLAYER_RADIUS * 1.6;
@@ -54,6 +55,30 @@ const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 
 type Catalog = Map<string, PropDefinition>;
+
+interface Obstacle {
+  x: number;
+  z: number;
+  radius: number;
+}
+
+function buildObstacles(map: MapDefinition, catalog: Catalog): Obstacle[] {
+  const obstacles: Obstacle[] = [];
+  for (const instance of map.props) {
+    const def = catalog.get(instance.type);
+    if (!def) continue;
+    let radius = 0;
+    for (const part of def.parts) {
+      const reach =
+        Math.hypot(part.position.x, part.position.z) + Math.max(part.size.x, part.size.z) / 2;
+      if (reach > radius) radius = reach;
+    }
+    if (radius >= FURNITURE_MIN_RADIUS) {
+      obstacles.push({ x: instance.position.x, z: instance.position.z, radius });
+    }
+  }
+  return obstacles;
+}
 
 interface SceneProps {
   room: Room;
@@ -84,6 +109,7 @@ export function Scene({
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
     [map],
   );
+  const obstacles = useMemo(() => buildObstacles(map, catalog), [map, catalog]);
   const localMeta = meta[localId];
   const localRole: Role = localMeta?.role ?? "prop";
   const localAlive = localMeta?.alive ?? true;
@@ -113,6 +139,7 @@ export function Scene({
         tauntPulseRef={tauntPulseRef}
         chatOpen={chatOpen}
         playersRef={playersRef}
+        obstacles={obstacles}
       />
       {ids
         .filter((id) => id !== localId && (meta[id]?.alive ?? true))
@@ -341,6 +368,7 @@ interface LocalPlayerProps {
   tauntPulseRef: TauntPulseRef;
   chatOpen: boolean;
   playersRef: PlayersRef;
+  obstacles: Obstacle[];
 }
 
 function LocalPlayer({
@@ -356,6 +384,7 @@ function LocalPlayer({
   tauntPulseRef,
   chatOpen,
   playersRef,
+  obstacles,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!chatOpen);
@@ -416,6 +445,18 @@ function LocalPlayer({
         if (distSq > 1e-8 && distSq < PLAYER_SEPARATION * PLAYER_SEPARATION) {
           const dist = Math.sqrt(distSq);
           const push = PLAYER_SEPARATION - dist;
+          pos.x += (dx / dist) * push;
+          pos.z += (dz / dist) * push;
+        }
+      }
+      for (const obstacle of obstacles) {
+        const dx = pos.x - obstacle.x;
+        const dz = pos.z - obstacle.z;
+        const minSep = PLAYER_RADIUS + obstacle.radius;
+        const distSq = dx * dx + dz * dz;
+        if (distSq > 1e-8 && distSq < minSep * minSep) {
+          const dist = Math.sqrt(distSq);
+          const push = minSep - dist;
           pos.x += (dx / dist) * push;
           pos.z += (dz / dist) * push;
         }
