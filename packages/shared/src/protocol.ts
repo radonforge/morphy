@@ -10,6 +10,8 @@ export const MSG_INPUT = "input";
 export const MSG_TRANSFORM = "transform";
 export const MSG_SHOOT = "shoot";
 export const MSG_TELEPORT = "teleport";
+export const MSG_TAUNT = "taunt";
+export const MSG_CHAT = "chat";
 
 export interface InputMessage {
   x: number;
@@ -30,4 +32,20 @@ export interface ShootMessage {
 export interface TeleportMessage {
   x: number;
   z: number;
+}
+
+export interface TauntMessage {
+  playerId: string;
+  x: number;
+  z: number;
+}
+
+export interface ChatSend {
+  text: string;
+}
+
+export interface ChatEvent {
+  fromId: string;
+  name: string;
+  text: string;
 }
