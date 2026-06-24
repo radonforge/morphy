@@ -6,18 +6,22 @@ import {
   INPUT_SEND_RATE_MS,
   MOVE_SPEED,
   MSG_INPUT,
+  MSG_TRANSFORM,
   type MapDefinition,
+  type Phase,
   type PrimitiveSpec,
+  type PropDefinition,
+  type Role,
 } from "@webhunt/shared";
 import { useControls } from "./useControls";
-import type { PlayersRef, RemotePlayerView } from "./types";
+import type { MetaMap, PlayersRef, RemotePlayerView } from "./types";
 
 const PLAYER_RADIUS = 0.4;
 const PLAYER_BODY_LENGTH = 0.9;
 const PLAYER_BODY_Y = PLAYER_BODY_LENGTH / 2 + PLAYER_RADIUS;
 const PLAYER_HEAD_Y = PLAYER_BODY_LENGTH + PLAYER_RADIUS * 1.6;
-const LOCAL_COLOR = "#5bd75b";
-const REMOTE_COLOR = "#f0a35e";
+const HUNTER_COLOR = "#e8564a";
+const PROP_COLOR = "#5bd75b";
 
 const CAMERA_DISTANCE = 8;
 const CAMERA_TARGET_Y = 1.2;
@@ -28,6 +32,9 @@ const PITCH_MIN = -0.15;
 const PITCH_MAX = 1.2;
 const DEFAULT_PITCH = 0.5;
 const UP = new THREE.Vector3(0, 1, 0);
+const SCREEN_CENTER = new THREE.Vector2(0, 0);
+
+type Catalog = Map<string, PropDefinition>;
 
 interface SceneProps {
   room: Room;
@@ -35,9 +42,19 @@ interface SceneProps {
   localId: string;
   ids: string[];
   playersRef: PlayersRef;
+  meta: MetaMap;
+  phase: Phase;
 }
 
-export function Scene({ room, map, localId, ids, playersRef }: SceneProps) {
+export function Scene({ room, map, localId, ids, playersRef, meta, phase }: SceneProps) {
+  const catalog = useMemo<Catalog>(
+    () => new Map(map.propCatalog.map((def) => [def.id, def])),
+    [map],
+  );
+  const localMeta = meta[localId];
+  const localRole: Role = localMeta?.role ?? "prop";
+  const canTransform = localRole === "prop" && (phase === "hiding" || phase === "hunting");
+
   return (
     <>
       <color attach="background" args={["#aecbe8"]} />
@@ -45,11 +62,25 @@ export function Scene({ room, map, localId, ids, playersRef }: SceneProps) {
       <ambientLight intensity={0.35} />
       <directionalLight position={[12, 22, 8]} intensity={1.2} castShadow />
       <MapView map={map} />
-      <LocalPlayer room={room} map={map} />
+      <PropPicker room={room} enabled={canTransform} />
+      <LocalPlayer
+        room={room}
+        map={map}
+        catalog={catalog}
+        role={localRole}
+        propType={localMeta?.propType ?? ""}
+        phase={phase}
+      />
       {ids
         .filter((id) => id !== localId)
         .map((id) => (
-          <RemotePlayer key={id} view={playersRef.current.get(id)} />
+          <RemotePlayer
+            key={id}
+            view={playersRef.current.get(id)}
+            catalog={catalog}
+            role={meta[id]?.role ?? "prop"}
+            propType={meta[id]?.propType ?? ""}
+          />
         ))}
     </>
   );
@@ -70,8 +101,26 @@ function geometryFor(part: PrimitiveSpec): ReactElement {
   }
 }
 
+function PropMesh({ def }: { def: PropDefinition }) {
+  return (
+    <>
+      {def.parts.map((part, index) => (
+        <mesh
+          key={index}
+          position={[part.position.x, part.position.y, part.position.z]}
+          castShadow
+          receiveShadow
+        >
+          {geometryFor(part)}
+          <meshStandardMaterial color={part.color} />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
 function MapView({ map }: { map: MapDefinition }) {
-  const catalog = useMemo(
+  const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
     [map],
   );
@@ -108,18 +157,9 @@ function MapView({ map }: { map: MapDefinition }) {
             key={`prop-${index}`}
             position={[instance.position.x, instance.position.y, instance.position.z]}
             rotation-y={instance.rotation}
+            userData={{ propType: instance.type }}
           >
-            {def.parts.map((part, partIndex) => (
-              <mesh
-                key={partIndex}
-                position={[part.position.x, part.position.y, part.position.z]}
-                castShadow
-                receiveShadow
-              >
-                {geometryFor(part)}
-                <meshStandardMaterial color={part.color} />
-              </mesh>
-            ))}
+            <PropMesh def={def} />
           </group>
         );
       })}
@@ -140,6 +180,47 @@ function Avatar({ color }: { color: string }) {
       </mesh>
     </>
   );
+}
+
+function PlayerModel({ role, propType, catalog }: { role: Role; propType: string; catalog: Catalog }) {
+  const def = propType ? catalog.get(propType) : undefined;
+  if (def) {
+    return <PropMesh def={def} />;
+  }
+  return <Avatar color={role === "hunter" ? HUNTER_COLOR : PROP_COLOR} />;
+}
+
+function PropPicker({ room, enabled }: { room: Room; enabled: boolean }) {
+  const { camera, scene } = useThree();
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.code !== "KeyE") {
+        return;
+      }
+      raycaster.setFromCamera(SCREEN_CENTER, camera);
+      const hits = raycaster.intersectObjects(scene.children, true);
+      for (const hit of hits) {
+        let obj: THREE.Object3D | null = hit.object;
+        while (obj) {
+          const propType = obj.userData?.propType;
+          if (typeof propType === "string" && propType) {
+            room.send(MSG_TRANSFORM, { propType });
+            return;
+          }
+          obj = obj.parent;
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enabled, camera, scene, raycaster, room]);
+
+  return null;
 }
 
 function useMouseLook() {
@@ -175,7 +256,16 @@ function useMouseLook() {
   return look;
 }
 
-function LocalPlayer({ room, map }: { room: Room; map: MapDefinition }) {
+interface LocalPlayerProps {
+  room: Room;
+  map: MapDefinition;
+  catalog: Catalog;
+  role: Role;
+  propType: string;
+  phase: Phase;
+}
+
+function LocalPlayer({ room, map, catalog, role, propType, phase }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls();
   const look = useMouseLook();
@@ -191,29 +281,33 @@ function LocalPlayer({ room, map }: { room: Room; map: MapDefinition }) {
   const camOffset = useMemo(() => new THREE.Vector3(), []);
   const camTarget = useMemo(() => new THREE.Vector3(), []);
 
+  const frozen = role === "hunter" && phase === "hiding";
+
   useFrame((_, delta) => {
     const { yaw, pitch } = look.current;
     forwardVec.set(-Math.sin(yaw), 0, -Math.cos(yaw));
     rightVec.crossVectors(forwardVec, UP);
 
-    const k = keys.current;
-    const forwardInput = (k.forward ? 1 : 0) - (k.back ? 1 : 0);
-    const strafeInput = (k.right ? 1 : 0) - (k.left ? 1 : 0);
-    moveVec
-      .set(0, 0, 0)
-      .addScaledVector(forwardVec, forwardInput)
-      .addScaledVector(rightVec, strafeInput);
+    if (!frozen) {
+      const k = keys.current;
+      const forwardInput = (k.forward ? 1 : 0) - (k.back ? 1 : 0);
+      const strafeInput = (k.right ? 1 : 0) - (k.left ? 1 : 0);
+      moveVec
+        .set(0, 0, 0)
+        .addScaledVector(forwardVec, forwardInput)
+        .addScaledVector(rightVec, strafeInput);
 
-    if (moveVec.lengthSq() > 0) {
-      moveVec.normalize();
-      pos.x += moveVec.x * MOVE_SPEED * delta;
-      pos.z += moveVec.z * MOVE_SPEED * delta;
-      heading.current = Math.atan2(moveVec.x, moveVec.z);
+      if (moveVec.lengthSq() > 0) {
+        moveVec.normalize();
+        pos.x += moveVec.x * MOVE_SPEED * delta;
+        pos.z += moveVec.z * MOVE_SPEED * delta;
+        heading.current = Math.atan2(moveVec.x, moveVec.z);
+      }
+
+      const { min, max } = map.bounds;
+      pos.x = THREE.MathUtils.clamp(pos.x, min.x + PLAYER_RADIUS, max.x - PLAYER_RADIUS);
+      pos.z = THREE.MathUtils.clamp(pos.z, min.z + PLAYER_RADIUS, max.z - PLAYER_RADIUS);
     }
-
-    const { min, max } = map.bounds;
-    pos.x = THREE.MathUtils.clamp(pos.x, min.x + PLAYER_RADIUS, max.x - PLAYER_RADIUS);
-    pos.z = THREE.MathUtils.clamp(pos.z, min.z + PLAYER_RADIUS, max.z - PLAYER_RADIUS);
 
     const group = groupRef.current;
     if (group) {
@@ -239,12 +333,19 @@ function LocalPlayer({ room, map }: { room: Room; map: MapDefinition }) {
 
   return (
     <group ref={groupRef}>
-      <Avatar color={LOCAL_COLOR} />
+      <PlayerModel role={role} propType={propType} catalog={catalog} />
     </group>
   );
 }
 
-function RemotePlayer({ view }: { view: RemotePlayerView | undefined }) {
+interface RemotePlayerProps {
+  view: RemotePlayerView | undefined;
+  catalog: Catalog;
+  role: Role;
+  propType: string;
+}
+
+function RemotePlayer({ view, catalog, role, propType }: RemotePlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
@@ -263,7 +364,7 @@ function RemotePlayer({ view }: { view: RemotePlayerView | undefined }) {
   }
   return (
     <group ref={groupRef}>
-      <Avatar color={REMOTE_COLOR} />
+      <PlayerModel role={role} propType={propType} catalog={catalog} />
     </group>
   );
 }

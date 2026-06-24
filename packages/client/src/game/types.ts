@@ -1,3 +1,5 @@
+import type { Role } from "@webhunt/shared";
+
 export interface RemotePlayerView {
   id: string;
   name: string;
@@ -5,6 +7,16 @@ export interface RemotePlayerView {
   y: number;
   z: number;
   rot: number;
+  role: Role;
+  alive: boolean;
+  propType: string;
 }
 
 export type PlayersRef = { readonly current: Map<string, RemotePlayerView> };
+
+export interface PlayerMeta {
+  role: Role;
+  propType: string;
+}
+
+export type MetaMap = Record<string, PlayerMeta>;
