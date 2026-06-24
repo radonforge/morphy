@@ -16,6 +16,7 @@ import {
   type Role,
 } from "@webhunt/shared";
 import { useControls } from "./useControls";
+import { playShot, playStep } from "./audio";
 import type { MetaMap, PlayersRef, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
 
 function applyTauntPulse(group: THREE.Group, pulses: TauntPulseRef, id: string, delta: number): void {
@@ -47,6 +48,7 @@ export const TAUNT_PULSE_SECONDS = 0.5;
 const TAUNT_AMPLITUDE = 0.18;
 const TRACER_TTL = 0.09;
 const TRACER_COLOR = "#fff34d";
+const STEP_DISTANCE = 2.2;
 const LOOK_SENSITIVITY = 0.0025;
 const PITCH_MIN = -1.4;
 const PITCH_MAX = 1.4;
@@ -106,6 +108,7 @@ interface SceneProps {
   teleportRef: TeleportRef;
   tauntPulseRef: TauntPulseRef;
   chatOpen: boolean;
+  onShoot: () => void;
 }
 
 export function Scene({
@@ -119,6 +122,7 @@ export function Scene({
   teleportRef,
   tauntPulseRef,
   chatOpen,
+  onShoot,
 }: SceneProps) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
@@ -141,7 +145,7 @@ export function Scene({
       <directionalLight position={[12, 22, 8]} intensity={1.2} castShadow />
       <MapView map={map} />
       <PropPicker room={room} enabled={canTransform} />
-      <Shooter room={room} enabled={canShoot} tracerRef={tracerRef} />
+      <Shooter room={room} enabled={canShoot} tracerRef={tracerRef} onShoot={onShoot} />
       <Tracer tracerRef={tracerRef} />
       <LocalPlayer
         room={room}
@@ -174,7 +178,17 @@ export function Scene({
   );
 }
 
-function Shooter({ room, enabled, tracerRef }: { room: Room; enabled: boolean; tracerRef: TracerRef }) {
+function Shooter({
+  room,
+  enabled,
+  tracerRef,
+  onShoot,
+}: {
+  room: Room;
+  enabled: boolean;
+  tracerRef: TracerRef;
+  onShoot: () => void;
+}) {
   const { camera, gl, scene } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
 
@@ -194,6 +208,8 @@ function Shooter({ room, enabled, tracerRef }: { room: Room; enabled: boolean; t
         origin: { x: o.x, y: o.y, z: o.z },
         dir: { x: d.x, y: d.y, z: d.z },
       });
+      playShot();
+      onShoot();
       const hits = raycaster.intersectObjects(scene.children, true);
       const end = hits[0]?.point;
       tracerRef.current = {
@@ -208,7 +224,7 @@ function Shooter({ room, enabled, tracerRef }: { room: Room; enabled: boolean; t
     };
     el.addEventListener("click", onClick);
     return () => el.removeEventListener("click", onClick);
-  }, [enabled, camera, gl, scene, raycaster, room, tracerRef]);
+  }, [enabled, camera, gl, scene, raycaster, room, tracerRef, onShoot]);
 
   return null;
 }
@@ -463,6 +479,7 @@ function LocalPlayer({
   const pos = useMemo(() => new THREE.Vector3(spawn.x, 0, spawn.z), [spawn.x, spawn.z]);
   const heading = useRef(0);
   const sendAccumMs = useRef(0);
+  const stepAccum = useRef(0);
   const forwardVec = useMemo(() => new THREE.Vector3(), []);
   const rightVec = useMemo(() => new THREE.Vector3(), []);
   const moveVec = useMemo(() => new THREE.Vector3(), []);
@@ -497,6 +514,11 @@ function LocalPlayer({
         pos.x += moveVec.x * MOVE_SPEED * delta;
         pos.z += moveVec.z * MOVE_SPEED * delta;
         heading.current = Math.atan2(moveVec.x, moveVec.z);
+        stepAccum.current += MOVE_SPEED * delta;
+        if (stepAccum.current >= STEP_DISTANCE) {
+          stepAccum.current = 0;
+          playStep();
+        }
       }
 
       const { min, max } = map.bounds;

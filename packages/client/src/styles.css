@@ -121,6 +121,13 @@ canvas {
   background: radial-gradient(ellipse at center, rgba(255, 0, 0, 0) 45%, rgba(220, 0, 0, 0.45) 100%);
 }
 
+.muzzle {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(255, 250, 235, 0.12);
+}
+
 .banner {
   position: absolute;
   top: 32%;

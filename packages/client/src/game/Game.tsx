@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Callbacks } from "@colyseus/sdk";
 import {
@@ -22,6 +22,7 @@ const COUNTDOWN_TICK_MS = 250;
 const TAUNT_MAX_DISTANCE = 40;
 const CHAT_HISTORY = 6;
 const SHOT_FX_MS = 220;
+const MUZZLE_MS = 60;
 
 interface GameProps {
   connection: Connection;
@@ -99,6 +100,7 @@ export function Game({ connection, onLeave }: GameProps) {
   const msgSeq = useRef(0);
   const chatOpenRef = useRef(false);
   const fxSeq = useRef(0);
+  const muzzleSeq = useRef(0);
 
   const [ids, setIds] = useState<string[]>([]);
   const [meta, setMeta] = useState<MetaMap>({});
@@ -109,8 +111,11 @@ export function Game({ connection, onLeave }: GameProps) {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatDraft, setChatDraft] = useState("");
   const [shotFx, setShotFx] = useState<{ kind: "hit" | "miss"; seq: number } | null>(null);
+  const [muzzle, setMuzzle] = useState<number | null>(null);
 
   chatOpenRef.current = chatOpen;
+
+  const onShoot = useCallback(() => setMuzzle(muzzleSeq.current++), []);
 
   useEffect(() => {
     const callbacks = Callbacks.get(room);
@@ -182,6 +187,12 @@ export function Game({ connection, onLeave }: GameProps) {
     const timer = setTimeout(() => setShotFx(null), SHOT_FX_MS);
     return () => clearTimeout(timer);
   }, [shotFx]);
+
+  useEffect(() => {
+    if (muzzle === null) return;
+    const timer = setTimeout(() => setMuzzle(null), MUZZLE_MS);
+    return () => clearTimeout(timer);
+  }, [muzzle]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -269,8 +280,11 @@ export function Game({ connection, onLeave }: GameProps) {
           teleportRef={teleportRef}
           tauntPulseRef={tauntPulseRef}
           chatOpen={chatOpen}
+          onShoot={onShoot}
         />
       </Canvas>
+
+      {muzzle !== null && <div className="muzzle" />}
 
       {showCrosshair && <div className={`crosshair${shotFx ? ` ${shotFx.kind}` : ""}`} />}
 
