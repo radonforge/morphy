@@ -7,6 +7,7 @@ import {
   MOVE_SPEED,
   MSG_INPUT,
   MSG_TRANSFORM,
+  MSG_SHOOT,
   type MapDefinition,
   type Phase,
   type PrimitiveSpec,
@@ -14,7 +15,7 @@ import {
   type Role,
 } from "@webhunt/shared";
 import { useControls } from "./useControls";
-import type { MetaMap, PlayersRef, RemotePlayerView } from "./types";
+import type { MetaMap, PlayersRef, RemotePlayerView, TeleportRef } from "./types";
 
 const PLAYER_RADIUS = 0.4;
 const PLAYER_BODY_LENGTH = 0.9;
@@ -44,16 +45,19 @@ interface SceneProps {
   playersRef: PlayersRef;
   meta: MetaMap;
   phase: Phase;
+  teleportRef: TeleportRef;
 }
 
-export function Scene({ room, map, localId, ids, playersRef, meta, phase }: SceneProps) {
+export function Scene({ room, map, localId, ids, playersRef, meta, phase, teleportRef }: SceneProps) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
     [map],
   );
   const localMeta = meta[localId];
   const localRole: Role = localMeta?.role ?? "prop";
-  const canTransform = localRole === "prop" && (phase === "hiding" || phase === "hunting");
+  const localAlive = localMeta?.alive ?? true;
+  const canTransform = localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
+  const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
 
   return (
     <>
@@ -63,6 +67,7 @@ export function Scene({ room, map, localId, ids, playersRef, meta, phase }: Scen
       <directionalLight position={[12, 22, 8]} intensity={1.2} castShadow />
       <MapView map={map} />
       <PropPicker room={room} enabled={canTransform} />
+      <Shooter room={room} enabled={canShoot} />
       <LocalPlayer
         room={room}
         map={map}
@@ -70,9 +75,11 @@ export function Scene({ room, map, localId, ids, playersRef, meta, phase }: Scen
         role={localRole}
         propType={localMeta?.propType ?? ""}
         phase={phase}
+        alive={localAlive}
+        teleportRef={teleportRef}
       />
       {ids
-        .filter((id) => id !== localId)
+        .filter((id) => id !== localId && (meta[id]?.alive ?? true))
         .map((id) => (
           <RemotePlayer
             key={id}
@@ -84,6 +91,34 @@ export function Scene({ room, map, localId, ids, playersRef, meta, phase }: Scen
         ))}
     </>
   );
+}
+
+function Shooter({ room, enabled }: { room: Room; enabled: boolean }) {
+  const { camera, gl } = useThree();
+  const raycaster = useMemo(() => new THREE.Raycaster(), []);
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    const el = gl.domElement;
+    const onClick = () => {
+      if (document.pointerLockElement !== el) {
+        return;
+      }
+      raycaster.setFromCamera(SCREEN_CENTER, camera);
+      const o = raycaster.ray.origin;
+      const d = raycaster.ray.direction;
+      room.send(MSG_SHOOT, {
+        origin: { x: o.x, y: o.y, z: o.z },
+        dir: { x: d.x, y: d.y, z: d.z },
+      });
+    };
+    el.addEventListener("click", onClick);
+    return () => el.removeEventListener("click", onClick);
+  }, [enabled, camera, gl, raycaster, room]);
+
+  return null;
 }
 
 function geometryFor(part: PrimitiveSpec): ReactElement {
@@ -263,9 +298,11 @@ interface LocalPlayerProps {
   role: Role;
   propType: string;
   phase: Phase;
+  alive: boolean;
+  teleportRef: TeleportRef;
 }
 
-function LocalPlayer({ room, map, catalog, role, propType, phase }: LocalPlayerProps) {
+function LocalPlayer({ room, map, catalog, role, propType, phase, alive, teleportRef }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls();
   const look = useMouseLook();
@@ -281,9 +318,16 @@ function LocalPlayer({ room, map, catalog, role, propType, phase }: LocalPlayerP
   const camOffset = useMemo(() => new THREE.Vector3(), []);
   const camTarget = useMemo(() => new THREE.Vector3(), []);
 
-  const frozen = role === "hunter" && phase === "hiding";
+  const frozen = !alive || (role === "hunter" && phase === "hiding");
 
   useFrame((_, delta) => {
+    const teleport = teleportRef.current;
+    if (teleport) {
+      pos.x = teleport.x;
+      pos.z = teleport.z;
+      teleportRef.current = null;
+    }
+
     const { yaw, pitch } = look.current;
     forwardVec.set(-Math.sin(yaw), 0, -Math.cos(yaw));
     rightVec.crossVectors(forwardVec, UP);
@@ -332,9 +376,7 @@ function LocalPlayer({ room, map, catalog, role, propType, phase }: LocalPlayerP
   });
 
   return (
-    <group ref={groupRef}>
-      <PlayerModel role={role} propType={propType} catalog={catalog} />
-    </group>
+    <group ref={groupRef}>{alive && <PlayerModel role={role} propType={propType} catalog={catalog} />}</group>
   );
 }
 

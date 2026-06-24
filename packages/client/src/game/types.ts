@@ -9,6 +9,7 @@ export interface RemotePlayerView {
   rot: number;
   role: Role;
   alive: boolean;
+  hp: number;
   propType: string;
 }
 
@@ -16,7 +17,11 @@ export type PlayersRef = { readonly current: Map<string, RemotePlayerView> };
 
 export interface PlayerMeta {
   role: Role;
+  alive: boolean;
+  hp: number;
   propType: string;
 }
 
 export type MetaMap = Record<string, PlayerMeta>;
+
+export type TeleportRef = { current: { x: number; z: number } | null };
