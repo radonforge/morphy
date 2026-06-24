@@ -174,6 +174,16 @@ export function Game({ connection, onLeave }: GameProps) {
 
       {showCrosshair && <div className="crosshair" />}
 
+      {localRole === "hunter" && phase === "hiding" && (
+        <div className="blindout">
+          <div>I prop si stanno nascondendo…</div>
+          <div className="blindout-timer">
+            La caccia inizia
+            <Countdown endsAt={phaseEndsAt} />
+          </div>
+        </div>
+      )}
+
       {phase === "round_end" && winner !== "" && <div className="banner">{WINNER_LABEL[winner]}</div>}
 
       <div className="hud">
