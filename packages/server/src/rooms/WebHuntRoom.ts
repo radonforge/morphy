@@ -9,6 +9,8 @@ import {
   HIDE_DURATION_MS,
   ROUND_DURATION_MS,
   ROUND_END_MS,
+  TAUNT_INTERVAL_MS,
+  MAX_CHAT_LENGTH,
   PATCH_RATE_MS,
   HUNTER_MAX_HP,
   WRONG_SHOT_DAMAGE,
@@ -20,6 +22,8 @@ import {
   MSG_TRANSFORM,
   MSG_SHOOT,
   MSG_TELEPORT,
+  MSG_TAUNT,
+  MSG_CHAT,
   type InputMessage,
   type ShootMessage,
   type MapDefinition,
@@ -96,6 +100,14 @@ function parsePropType(payload: unknown): string | null {
   return typeof propType === "string" ? propType : null;
 }
 
+function parseChatText(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const text = (payload as Record<string, unknown>).text;
+  if (typeof text !== "string") return null;
+  const trimmed = text.trim().slice(0, MAX_CHAT_LENGTH);
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 function sanitizeName(raw: unknown): string {
   if (typeof raw !== "string") return FALLBACK_NAME;
   const trimmed = raw.trim().slice(0, MAX_NAME_LENGTH);
@@ -127,6 +139,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   private map!: MapDefinition;
   private catalogIds = new Set<string>();
   private phaseTimer?: ClearableTimer;
+  private tauntTimer?: ClearableTimer;
   private lastShotAt = new Map<string, number>();
 
   onCreate(): void {
@@ -137,6 +150,15 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
     this.onMessage(MSG_TRANSFORM, (client, payload) => this.handleTransform(client, payload));
     this.onMessage(MSG_SHOOT, (client, payload) => this.handleShoot(client, payload));
+    this.onMessage(MSG_CHAT, (client, payload) => this.handleChat(client, payload));
+  }
+
+  private handleChat(client: Client, payload: unknown): void {
+    const text = parseChatText(payload);
+    if (!text) return;
+    const player = this.state.players.get(client.sessionId);
+    const name = player?.name ?? "?";
+    this.broadcast(MSG_CHAT, { fromId: client.sessionId, name, text });
   }
 
   onJoin(client: Client, options: unknown): void {
@@ -251,13 +273,25 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   }
 
   private beginHunting(): void {
+    this.tauntTimer?.clear();
+    this.tauntTimer = this.clock.setInterval(() => this.broadcastTaunts(), TAUNT_INTERVAL_MS);
     this.setPhase("hunting", ROUND_DURATION_MS, () => {
       this.state.winner = "props";
       this.endRound();
     });
   }
 
+  private broadcastTaunts(): void {
+    this.state.players.forEach((player) => {
+      if (player.role === "prop" && player.alive) {
+        this.broadcast(MSG_TAUNT, { playerId: player.id, x: player.x, z: player.z });
+      }
+    });
+  }
+
   private endRound(): void {
+    this.tauntTimer?.clear();
+    this.tauntTimer = undefined;
     this.setPhase("round_end", ROUND_END_MS, () => this.afterRound());
   }
 
@@ -272,6 +306,8 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   private resetToLobby(): void {
     this.phaseTimer?.clear();
     this.phaseTimer = undefined;
+    this.tauntTimer?.clear();
+    this.tauntTimer = undefined;
     this.state.phase = "lobby";
     this.state.phaseEndsAt = 0;
     this.state.winner = "";
