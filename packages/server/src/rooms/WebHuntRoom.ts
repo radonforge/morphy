@@ -24,6 +24,7 @@ import {
   MSG_TELEPORT,
   MSG_TAUNT,
   MSG_CHAT,
+  MSG_SHOT_RESULT,
   type InputMessage,
   type ShootMessage,
   type MapDefinition,
@@ -245,6 +246,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
         player.alive = false;
       }
     }
+    client.send(MSG_SHOT_RESULT, { hit: target !== undefined });
     this.checkRoundEnd();
   }
 
