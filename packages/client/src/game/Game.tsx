@@ -1,14 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Callbacks } from "@colyseus/sdk";
-import { MSG_TELEPORT, type Phase, type Role, type Winner } from "@webhunt/shared";
+import {
+  MAX_CHAT_LENGTH,
+  MSG_CHAT,
+  MSG_TAUNT,
+  MSG_TELEPORT,
+  type Phase,
+  type Role,
+  type Winner,
+} from "@webhunt/shared";
 import { type Connection } from "../net/connection";
 import { officeMap } from "../officeMap";
-import { Scene } from "./Scene";
-import type { MetaMap, RemotePlayerView, TeleportRef } from "./types";
+import { Scene, TAUNT_PULSE_SECONDS } from "./Scene";
+import { playTaunt } from "./audio";
+import type { MetaMap, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
 
 const STATE_POLL_MS = 200;
 const COUNTDOWN_TICK_MS = 250;
+const TAUNT_MAX_DISTANCE = 40;
+const CHAT_HISTORY = 6;
 
 interface GameProps {
   connection: Connection;
@@ -19,6 +30,12 @@ interface RoomStateView {
   phase: Phase;
   phaseEndsAt: number;
   winner: Winner;
+}
+
+interface ChatLine {
+  key: number;
+  name: string;
+  text: string;
 }
 
 const PHASE_LABEL: Record<Phase, string> = {
@@ -76,11 +93,20 @@ export function Game({ connection, onLeave }: GameProps) {
   const { room, sessionId } = connection;
   const playersRef = useRef<Map<string, RemotePlayerView>>(new Map());
   const teleportRef = useRef<{ x: number; z: number } | null>(null) as TeleportRef;
+  const tauntPulseRef = useRef<Map<string, number>>(new Map()) as TauntPulseRef;
+  const msgSeq = useRef(0);
+  const chatOpenRef = useRef(false);
+
   const [ids, setIds] = useState<string[]>([]);
   const [meta, setMeta] = useState<MetaMap>({});
   const [phase, setPhase] = useState<Phase>("lobby");
   const [phaseEndsAt, setPhaseEndsAt] = useState(0);
   const [winner, setWinner] = useState<Winner>("");
+  const [messages, setMessages] = useState<ChatLine[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatDraft, setChatDraft] = useState("");
+
+  chatOpenRef.current = chatOpen;
 
   useEffect(() => {
     const callbacks = Callbacks.get(room);
@@ -105,8 +131,28 @@ export function Game({ connection, onLeave }: GameProps) {
       }
     });
 
-    room.onError((code, message) => {
-      console.error("[webhunt] room error", code, message);
+    room.onMessage(MSG_TAUNT, (message: unknown) => {
+      if (typeof message !== "object" || message === null) return;
+      const m = message as Record<string, unknown>;
+      if (typeof m.playerId !== "string" || !isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
+      tauntPulseRef.current.set(m.playerId, TAUNT_PULSE_SECONDS);
+      const local = playersRef.current.get(sessionId);
+      const volume = local
+        ? Math.max(0, 1 - Math.hypot(local.x - m.x, local.z - m.z) / TAUNT_MAX_DISTANCE)
+        : 0.7;
+      playTaunt(volume);
+    });
+
+    room.onMessage(MSG_CHAT, (message: unknown) => {
+      if (typeof message !== "object" || message === null) return;
+      const m = message as Record<string, unknown>;
+      if (typeof m.name !== "string" || typeof m.text !== "string") return;
+      const line: ChatLine = { key: msgSeq.current++, name: m.name, text: m.text };
+      setMessages((prev) => [...prev, line].slice(-CHAT_HISTORY));
+    });
+
+    room.onError((code, errMessage) => {
+      console.error("[webhunt] room error", code, errMessage);
       onLeave();
     });
     room.onLeave(() => onLeave());
@@ -114,7 +160,21 @@ export function Game({ connection, onLeave }: GameProps) {
     return () => {
       void room.leave();
     };
-  }, [room, onLeave, teleportRef]);
+  }, [room, onLeave, teleportRef, tauntPulseRef, sessionId]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === "KeyT" && !chatOpenRef.current) {
+        e.preventDefault();
+        if (document.pointerLockElement) {
+          document.exitPointerLock();
+        }
+        setChatOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     const poll = setInterval(() => {
@@ -145,17 +205,34 @@ export function Game({ connection, onLeave }: GameProps) {
 
   const canTransform = localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
-  const showCrosshair = canTransform || canShoot;
+  const showCrosshair = (canTransform || canShoot) && !chatOpen;
+
+  const closeChat = () => {
+    setChatOpen(false);
+    setChatDraft("");
+  };
+
+  const onChatKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const text = chatDraft.trim();
+      if (text) {
+        room.send(MSG_CHAT, { text });
+      }
+      closeChat();
+    } else if (e.key === "Escape") {
+      closeChat();
+    }
+  };
 
   const hint = !localAlive
     ? "Eliminato — guardi da spettatore"
     : canShoot
-      ? "Click per sparare · sbagliare costa vita"
+      ? "Click per sparare · sbagliare costa vita · T chat"
       : canTransform
-        ? "Guarda un oggetto e premi E per trasformarti"
+        ? "Guarda un oggetto e premi E · T chat"
         : localRole === "hunter" && phase === "hiding"
           ? "Sei accecato… attendi la caccia"
-          : "WASD muovi · click + mouse ruota visuale · Esc libera";
+          : "WASD muovi · click+mouse visuale · T chat";
 
   return (
     <>
@@ -169,6 +246,8 @@ export function Game({ connection, onLeave }: GameProps) {
           meta={meta}
           phase={phase}
           teleportRef={teleportRef}
+          tauntPulseRef={tauntPulseRef}
+          chatOpen={chatOpen}
         />
       </Canvas>
 
@@ -185,6 +264,25 @@ export function Game({ connection, onLeave }: GameProps) {
       )}
 
       {phase === "round_end" && winner !== "" && <div className="banner">{WINNER_LABEL[winner]}</div>}
+
+      <div className="chat">
+        {messages.map((m) => (
+          <div key={m.key} className="chat-line">
+            <b>{m.name}:</b> {m.text}
+          </div>
+        ))}
+        {chatOpen && (
+          <input
+            className="chat-input"
+            autoFocus
+            maxLength={MAX_CHAT_LENGTH}
+            value={chatDraft}
+            onChange={(e) => setChatDraft(e.target.value)}
+            onKeyDown={onChatKeyDown}
+            placeholder="Messaggio… (Invio invia, Esc chiudi)"
+          />
+        )}
+      </div>
 
       <div className="hud">
         <div>

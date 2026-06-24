@@ -25,3 +25,5 @@ export interface PlayerMeta {
 export type MetaMap = Record<string, PlayerMeta>;
 
 export type TeleportRef = { current: { x: number; z: number } | null };
+
+export type TauntPulseRef = { readonly current: Map<string, number> };

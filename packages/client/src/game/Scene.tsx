@@ -15,7 +15,19 @@ import {
   type Role,
 } from "@webhunt/shared";
 import { useControls } from "./useControls";
-import type { MetaMap, PlayersRef, RemotePlayerView, TeleportRef } from "./types";
+import type { MetaMap, PlayersRef, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
+
+function applyTauntPulse(group: THREE.Group, pulses: TauntPulseRef, id: string, delta: number): void {
+  const remaining = pulses.current.get(id) ?? 0;
+  if (remaining <= 0) {
+    group.scale.setScalar(1);
+    return;
+  }
+  const next = Math.max(0, remaining - delta);
+  pulses.current.set(id, next);
+  const progress = 1 - next / TAUNT_PULSE_SECONDS;
+  group.scale.setScalar(1 + TAUNT_AMPLITUDE * Math.sin(progress * Math.PI));
+}
 
 const PLAYER_RADIUS = 0.4;
 const PLAYER_BODY_LENGTH = 0.9;
@@ -28,6 +40,8 @@ const CAMERA_DISTANCE = 8;
 const CAMERA_TARGET_Y = 1.2;
 const CAMERA_DAMP = 0.0008;
 const REMOTE_DAMP = 0.0009;
+export const TAUNT_PULSE_SECONDS = 0.5;
+const TAUNT_AMPLITUDE = 0.18;
 const LOOK_SENSITIVITY = 0.0025;
 const PITCH_MIN = -1.4;
 const PITCH_MAX = 1.4;
@@ -49,9 +63,22 @@ interface SceneProps {
   meta: MetaMap;
   phase: Phase;
   teleportRef: TeleportRef;
+  tauntPulseRef: TauntPulseRef;
+  chatOpen: boolean;
 }
 
-export function Scene({ room, map, localId, ids, playersRef, meta, phase, teleportRef }: SceneProps) {
+export function Scene({
+  room,
+  map,
+  localId,
+  ids,
+  playersRef,
+  meta,
+  phase,
+  teleportRef,
+  tauntPulseRef,
+  chatOpen,
+}: SceneProps) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
     [map],
@@ -59,8 +86,9 @@ export function Scene({ room, map, localId, ids, playersRef, meta, phase, telepo
   const localMeta = meta[localId];
   const localRole: Role = localMeta?.role ?? "prop";
   const localAlive = localMeta?.alive ?? true;
-  const canTransform = localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
-  const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
+  const canTransform =
+    localRole === "prop" && localAlive && !chatOpen && (phase === "hiding" || phase === "hunting");
+  const canShoot = localRole === "hunter" && localAlive && !chatOpen && phase === "hunting";
 
   return (
     <>
@@ -75,11 +103,14 @@ export function Scene({ room, map, localId, ids, playersRef, meta, phase, telepo
         room={room}
         map={map}
         catalog={catalog}
+        id={localId}
         role={localRole}
         propType={localMeta?.propType ?? ""}
         phase={phase}
         alive={localAlive}
         teleportRef={teleportRef}
+        tauntPulseRef={tauntPulseRef}
+        chatOpen={chatOpen}
       />
       {ids
         .filter((id) => id !== localId && (meta[id]?.alive ?? true))
@@ -90,6 +121,7 @@ export function Scene({ room, map, localId, ids, playersRef, meta, phase, telepo
             catalog={catalog}
             role={meta[id]?.role ?? "prop"}
             propType={meta[id]?.propType ?? ""}
+            tauntPulseRef={tauntPulseRef}
           />
         ))}
     </>
@@ -298,16 +330,31 @@ interface LocalPlayerProps {
   room: Room;
   map: MapDefinition;
   catalog: Catalog;
+  id: string;
   role: Role;
   propType: string;
   phase: Phase;
   alive: boolean;
   teleportRef: TeleportRef;
+  tauntPulseRef: TauntPulseRef;
+  chatOpen: boolean;
 }
 
-function LocalPlayer({ room, map, catalog, role, propType, phase, alive, teleportRef }: LocalPlayerProps) {
+function LocalPlayer({
+  room,
+  map,
+  catalog,
+  id,
+  role,
+  propType,
+  phase,
+  alive,
+  teleportRef,
+  tauntPulseRef,
+  chatOpen,
+}: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
-  const keys = useControls();
+  const keys = useControls(!chatOpen);
   const look = useMouseLook();
   const { camera } = useThree();
 
@@ -360,6 +407,7 @@ function LocalPlayer({ room, map, catalog, role, propType, phase, alive, telepor
     if (group) {
       group.position.set(pos.x, 0, pos.z);
       group.rotation.y = heading.current;
+      applyTauntPulse(group, tauntPulseRef, id, delta);
     }
 
     if (role === "hunter") {
@@ -401,9 +449,10 @@ interface RemotePlayerProps {
   catalog: Catalog;
   role: Role;
   propType: string;
+  tauntPulseRef: TauntPulseRef;
 }
 
-function RemotePlayer({ view, catalog, role, propType }: RemotePlayerProps) {
+function RemotePlayer({ view, catalog, role, propType, tauntPulseRef }: RemotePlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
@@ -415,6 +464,7 @@ function RemotePlayer({ view, catalog, role, propType }: RemotePlayerProps) {
     group.position.x += (view.x - group.position.x) * t;
     group.position.z += (view.z - group.position.z) * t;
     group.rotation.y = view.rot;
+    applyTauntPulse(group, tauntPulseRef, view.id, delta);
   });
 
   if (!view) {
