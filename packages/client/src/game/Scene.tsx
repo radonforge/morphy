@@ -29,9 +29,12 @@ const CAMERA_TARGET_Y = 1.2;
 const CAMERA_DAMP = 0.0008;
 const REMOTE_DAMP = 0.0009;
 const LOOK_SENSITIVITY = 0.0025;
-const PITCH_MIN = -0.15;
-const PITCH_MAX = 1.2;
+const PITCH_MIN = -1.4;
+const PITCH_MAX = 1.4;
+const TP_PITCH_MIN = -0.15;
+const TP_PITCH_MAX = 1.2;
 const DEFAULT_PITCH = 0.5;
+const EYE_HEIGHT = 1.6;
 const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 
@@ -359,14 +362,25 @@ function LocalPlayer({ room, map, catalog, role, propType, phase, alive, telepor
       group.rotation.y = heading.current;
     }
 
-    const cosPitch = Math.cos(pitch);
-    camOffset
-      .set(Math.sin(yaw) * cosPitch, Math.sin(pitch), Math.cos(yaw) * cosPitch)
-      .multiplyScalar(CAMERA_DISTANCE);
-    camTarget.copy(pos).add(camOffset);
-    camTarget.y += CAMERA_TARGET_Y;
-    camera.position.lerp(camTarget, 1 - Math.pow(CAMERA_DAMP, delta));
-    camera.lookAt(pos.x, CAMERA_TARGET_Y, pos.z);
+    if (role === "hunter") {
+      const cosPitch = Math.cos(pitch);
+      camera.position.set(pos.x, EYE_HEIGHT, pos.z);
+      camera.lookAt(
+        pos.x - Math.sin(yaw) * cosPitch,
+        EYE_HEIGHT - Math.sin(pitch),
+        pos.z - Math.cos(yaw) * cosPitch,
+      );
+    } else {
+      const localPitch = THREE.MathUtils.clamp(pitch, TP_PITCH_MIN, TP_PITCH_MAX);
+      const cosPitch = Math.cos(localPitch);
+      camOffset
+        .set(Math.sin(yaw) * cosPitch, Math.sin(localPitch), Math.cos(yaw) * cosPitch)
+        .multiplyScalar(CAMERA_DISTANCE);
+      camTarget.copy(pos).add(camOffset);
+      camTarget.y += CAMERA_TARGET_Y;
+      camera.position.lerp(camTarget, 1 - Math.pow(CAMERA_DAMP, delta));
+      camera.lookAt(pos.x, CAMERA_TARGET_Y, pos.z);
+    }
 
     sendAccumMs.current += delta * 1000;
     if (sendAccumMs.current >= INPUT_SEND_RATE_MS) {
@@ -376,7 +390,9 @@ function LocalPlayer({ room, map, catalog, role, propType, phase, alive, telepor
   });
 
   return (
-    <group ref={groupRef}>{alive && <PlayerModel role={role} propType={propType} catalog={catalog} />}</group>
+    <group ref={groupRef}>
+      {alive && role !== "hunter" && <PlayerModel role={role} propType={propType} catalog={catalog} />}
+    </group>
   );
 }
 
