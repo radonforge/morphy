@@ -21,6 +21,7 @@ const FLOOR_THICKNESS = 1;
 
 const FLOOR_MODEL = "/models/space/template-floor.glb";
 const WALL_MODEL = "/models/space/template-wall.glb";
+const GATE_MODEL = "/models/space/gate.glb";
 const WALL_ROTATION_X = 0;
 const WALL_ROTATION_Z = Math.PI / 2;
 
@@ -150,6 +151,29 @@ function emitWallLine(
   }
 }
 
+/** Place an open archway framing a doorway gap left in a wall along `axis`. */
+function pushGate(
+  grid: Grid,
+  axis: "x" | "z",
+  line: number,
+  cellIndex: number,
+  tiles: TileInstance[],
+): void {
+  if (axis === "x") {
+    tiles.push({
+      model: GATE_MODEL,
+      position: { x: cellCenterX(grid, cellIndex), y: 0, z: line },
+      rotationY: WALL_ROTATION_X,
+    });
+  } else {
+    tiles.push({
+      model: GATE_MODEL,
+      position: { x: line, y: 0, z: cellCenterZ(grid, cellIndex) },
+      rotationY: WALL_ROTATION_Z,
+    });
+  }
+}
+
 /**
  * Build a procedural "rooms + corridors" map for the given seed on a fixed tile
  * grid: an outer walled rectangle partitioned into rooms, every interior
@@ -199,6 +223,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
     for (let r = 0; r < roomRows; r++) {
       const door = randInt(rng, rowBounds[r]!, rowBounds[r + 1]! - 1);
       present[door] = false;
+      pushGate(grid, "z", lineX(grid, cell), door, tiles);
     }
     emitWallLine(grid, "z", lineX(grid, cell), present, tiles, colliders);
   }
@@ -208,6 +233,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
     for (let c = 0; c < roomCols; c++) {
       const door = randInt(rng, colBounds[c]!, colBounds[c + 1]! - 1);
       present[door] = false;
+      pushGate(grid, "x", lineZ(grid, cell), door, tiles);
     }
     emitWallLine(grid, "x", lineZ(grid, cell), present, tiles, colliders);
   }
