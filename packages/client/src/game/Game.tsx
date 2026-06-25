@@ -104,8 +104,11 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
   });
 }
 
-function Scoreboard({ ids, meta, localId }: { ids: string[]; meta: MetaMap; localId: string }) {
-  const rows = ids
+function sortStandings(
+  ids: string[],
+  meta: MetaMap,
+): { id: string; player: PlayerMeta }[] {
+  return ids
     .map((id) => ({ id, player: meta[id] }))
     .filter((row): row is { id: string; player: PlayerMeta } => row.player !== undefined)
     .sort((a, b) => {
@@ -113,35 +116,90 @@ function Scoreboard({ ids, meta, localId }: { ids: string[]; meta: MetaMap; loca
       if (b.player.kills !== a.player.kills) return b.player.kills - a.player.kills;
       return a.player.name.localeCompare(b.player.name);
     });
+}
 
+function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; localId: string }) {
+  return (
+    <>
+      <div className="scoreboard-row scoreboard-head">
+        <span>Giocatore</span>
+        <span>Ruolo</span>
+        <span>Stato</span>
+        <span>Kill</span>
+      </div>
+      {sortStandings(ids, meta).map(({ id, player }) => (
+        <div
+          key={id}
+          className={`scoreboard-row${id === localId ? " scoreboard-self" : ""}${
+            player.alive ? "" : " scoreboard-dead"
+          }`}
+        >
+          <span>{player.name}</span>
+          <span>{ROLE_LABEL[player.role]}</span>
+          <span>
+            {player.alive
+              ? player.role === "hunter"
+                ? `Vivo · ${player.hp} HP`
+                : "Vivo"
+              : "Eliminato"}
+          </span>
+          <span>{player.role === "hunter" ? player.kills : "—"}</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function Scoreboard({ ids, meta, localId }: { ids: string[]; meta: MetaMap; localId: string }) {
   return (
     <div className="scoreboard">
       <div className="scoreboard-card">
-        <div className="scoreboard-row scoreboard-head">
-          <span>Giocatore</span>
-          <span>Ruolo</span>
-          <span>Stato</span>
-          <span>Kill</span>
-        </div>
-        {rows.map(({ id, player }) => (
-          <div
-            key={id}
-            className={`scoreboard-row${id === localId ? " scoreboard-self" : ""}${
-              player.alive ? "" : " scoreboard-dead"
-            }`}
-          >
-            <span>{player.name}</span>
-            <span>{ROLE_LABEL[player.role]}</span>
-            <span>
-              {player.alive
-                ? player.role === "hunter"
-                  ? `Vivo · ${player.hp} HP`
-                  : "Vivo"
-                : "Eliminato"}
-            </span>
-            <span>{player.role === "hunter" ? player.kills : "—"}</span>
+        <StandingsTable ids={ids} meta={meta} localId={localId} />
+      </div>
+    </div>
+  );
+}
+
+function topHunter(ids: string[], meta: MetaMap): PlayerMeta | null {
+  let best: PlayerMeta | null = null;
+  for (const id of ids) {
+    const player = meta[id];
+    if (!player || player.role !== "hunter") continue;
+    if (!best || player.kills > best.kills) best = player;
+  }
+  return best && best.kills > 0 ? best : null;
+}
+
+function ResultScreen({
+  winner,
+  endsAt,
+  ids,
+  meta,
+  localId,
+}: {
+  winner: Winner;
+  endsAt: number;
+  ids: string[];
+  meta: MetaMap;
+  localId: string;
+}) {
+  const mvp = topHunter(ids, meta);
+  return (
+    <div className="result">
+      <div className="result-card">
+        <div className="result-title">{WINNER_LABEL[winner]}</div>
+        {mvp && (
+          <div className="result-mvp">
+            Miglior cacciatore: <b>{mvp.name}</b> · {mvp.kills} kill
           </div>
-        ))}
+        )}
+        <div className="scoreboard-card result-standings">
+          <StandingsTable ids={ids} meta={meta} localId={localId} />
+        </div>
+        <div className="result-next">
+          Nuovo round
+          <Countdown endsAt={endsAt} />
+        </div>
       </div>
     </div>
   );
@@ -450,7 +508,9 @@ export function Game({ connection, onLeave }: GameProps) {
         </div>
       )}
 
-      {phase === "round_end" && winner !== "" && <div className="banner">{WINNER_LABEL[winner]}</div>}
+      {phase === "round_end" && winner !== "" && (
+        <ResultScreen winner={winner} endsAt={phaseEndsAt} ids={ids} meta={meta} localId={sessionId} />
+      )}
 
       {scoreboardOpen && <Scoreboard ids={ids} meta={meta} localId={sessionId} />}
 
