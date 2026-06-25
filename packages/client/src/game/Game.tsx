@@ -300,7 +300,7 @@ export function Game({ connection, onLeave }: GameProps) {
 
   return (
     <>
-      <Canvas shadows camera={{ position: [0, 12, 18], fov: 55 }}>
+      <Canvas dpr={[1, 1.5]} shadows camera={{ position: [0, 12, 18], fov: 55 }}>
         <Scene
           room={room}
           map={map}

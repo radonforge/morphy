@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef, type ReactElement } from "react";
+import { memo, Suspense, useEffect, useMemo, useRef, type ReactElement } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Sky, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
@@ -210,7 +210,19 @@ export function Scene({
       <Sky sunPosition={SUN_POSITION} turbidity={6} rayleigh={1.2} />
       <hemisphereLight args={["#cfe2f7", "#6b6150", 0.8]} />
       <ambientLight intensity={0.5} />
-      <directionalLight position={SUN_POSITION} intensity={1.7} castShadow />
+      <directionalLight
+        position={SUN_POSITION}
+        intensity={1.7}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-near={1}
+        shadow-camera-far={90}
+        shadow-camera-left={-32}
+        shadow-camera-right={32}
+        shadow-camera-top={32}
+        shadow-camera-bottom={-32}
+        shadow-bias={-0.0004}
+      />
       <MapView map={map} />
       <PropPicker room={room} enabled={canTransform} />
       <Shooter room={room} enabled={canShoot} tracerRef={tracerRef} onShoot={onShoot} />
@@ -422,20 +434,50 @@ function FittedModel({
   );
 }
 
-function TileModel({ tile }: { tile: TileInstance }) {
-  const { scene } = useGLTF(tile.model);
-  const object = useMemo(() => {
-    const clone = scene.clone(true);
-    enableShadows(clone);
-    return clone;
+function firstMesh(root: THREE.Object3D): THREE.Mesh {
+  let found: THREE.Mesh | null = null;
+  root.traverse((child) => {
+    if (!found && (child as THREE.Mesh).isMesh) found = child as THREE.Mesh;
+  });
+  if (!found) {
+    throw new Error(`tile GLB has no mesh: ${root.name || "?"}`);
+  }
+  return found;
+}
+
+function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) {
+  const { scene } = useGLTF(url);
+  const { geometry, material } = useMemo(() => {
+    const mesh = firstMesh(scene);
+    return { geometry: mesh.geometry, material: mesh.material };
   }, [scene]);
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    const mesh = meshRef.current;
+    if (!mesh) return;
+    const matrix = new THREE.Matrix4();
+    const quat = new THREE.Quaternion();
+    const scale = new THREE.Vector3(1, 1, 1);
+    const pos = new THREE.Vector3();
+    tiles.forEach((tile, i) => {
+      quat.setFromAxisAngle(UP, tile.rotationY);
+      pos.set(tile.position.x, tile.position.y, tile.position.z);
+      mesh.setMatrixAt(i, matrix.compose(pos, quat, scale));
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [tiles]);
+
   return (
-    <group
-      position={[tile.position.x, tile.position.y, tile.position.z]}
-      rotation-y={tile.rotationY}
-    >
-      <primitive object={object} />
-    </group>
+    <instancedMesh
+      ref={meshRef}
+      args={[geometry, material, tiles.length]}
+      castShadow
+      receiveShadow
+      frustumCulled={false}
+      dispose={null}
+    />
   );
 }
 
@@ -489,11 +531,20 @@ function HunterViewmodel({ enabled }: { enabled: boolean }) {
   );
 }
 
-function MapView({ map }: { map: MapDefinition }) {
+const MapView = memo(function MapView({ map }: { map: MapDefinition }) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
     [map],
   );
+  const tileGroups = useMemo(() => {
+    const groups = new Map<string, TileInstance[]>();
+    for (const tile of map.tiles) {
+      const group = groups.get(tile.model);
+      if (group) group.push(tile);
+      else groups.set(tile.model, [tile]);
+    }
+    return [...groups.entries()];
+  }, [map]);
   const floorWidth = map.bounds.max.x - map.bounds.min.x + 4;
   const floorDepth = map.bounds.max.z - map.bounds.min.z + 4;
 
@@ -505,8 +556,8 @@ function MapView({ map }: { map: MapDefinition }) {
       </mesh>
 
       <Suspense fallback={null}>
-        {map.tiles.map((tile, index) => (
-          <TileModel key={`tile-${index}`} tile={tile} />
+        {tileGroups.map(([url, group]) => (
+          <InstancedTiles key={url} url={url} tiles={group} />
         ))}
       </Suspense>
 
@@ -528,7 +579,7 @@ function MapView({ map }: { map: MapDefinition }) {
       })}
     </>
   );
-}
+});
 
 function Avatar({ color }: { color: string }) {
   return (
