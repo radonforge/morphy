@@ -20,25 +20,38 @@ const DOOR_KEEPOUT = 3;
 const SPAWN_RESERVE = 1.3;
 const GAP_EPS = 0.15;
 const DOOR_NEAR = 5;
-const DECOR_AREA_PER = 70;
-const DECOR_MAX = 5;
-const RING_RADIUS = 1.75;
 const DEFAULT_RADIUS = 0.5;
 
+const RING_RADIUS = 1.75;
+const ROW_SPACING = 1.8;
+const STACK_SPREAD = 1.1;
+
+const WALL_SPACING = 6;
+const WALL_MAX = 4;
+const CORNER_MARGIN = 2.2;
+const WALL_SKIP = 0.15;
+
+const INNER_MARGIN = 3.5;
+const ZONE_SIZE = 8;
+const ANCHOR_JITTER = 1;
+const ISLAND_SKIP = 0.2;
+
+const DECOR_AREA_PER = 90;
+const DECOR_MAX = 4;
 const DECOR: readonly string[] = ["barrel", "barrels", "meteor", "meteor_detailed", "bones"];
+
+const HALF_PI = Math.PI / 2;
 
 function pick<T>(arr: readonly T[], rng: Rng): T {
   return arr[Math.floor(rng() * arr.length)]!;
 }
 
-/** How many props to space along a run of `len` units, one per `per`, clamped. */
-function spanCount(len: number, per: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, Math.round(len / per)));
+function jit(rng: Rng, amount: number): number {
+  return (rng() * 2 - 1) * amount;
 }
 
-/** Length of the room wall on `side` (0/1 run along z, 2/3 run along x). */
-function wallLen(rect: RoomRect, side: Side): number {
-  return side === 0 || side === 1 ? rect.z1 - rect.z0 : rect.x1 - rect.x0;
+function randCardinal(rng: Rng): number {
+  return Math.floor(rng() * 4) * HALF_PI;
 }
 
 /** Yaw so a model at (x, z) faces toward (cx, cz). */
@@ -111,69 +124,145 @@ function makePlacer(
   };
 }
 
-/** Distance a prop's center must sit from a wall so its body clears it. */
-function wallInset(p: Placer, type: string): number {
-  return WALL_GAP + p.radiusOf(type) + 0.1;
+type Group = (p: Placer, x: number, z: number, facing: number, rng: Rng) => void;
+
+/** A single prop facing as told. */
+function one(types: readonly string[]): Group {
+  return (p, x, z, facing, rng) => {
+    p.place(pick(types, rng), x, z, facing);
+  };
 }
 
-type Side = 0 | 1 | 2 | 3;
-
-/** Place a row of `count` props inset along one wall, each facing the room center. */
-function alongWall(p: Placer, side: Side, types: readonly string[], count: number, rng: Rng): void {
-  const { rect, cx, cz } = p;
-  for (let i = 0; i < count; i++) {
-    const type = pick(types, rng);
-    const inset = wallInset(p, type);
-    const frac = count === 1 ? 0.5 : (i + 0.5) / count;
-    let x: number;
-    let z: number;
-    if (side === 0) {
-      x = rect.x0 + inset;
-      z = rect.z0 + 2 + frac * (rect.z1 - rect.z0 - 4);
-    } else if (side === 1) {
-      x = rect.x1 - inset;
-      z = rect.z0 + 2 + frac * (rect.z1 - rect.z0 - 4);
-    } else if (side === 2) {
-      x = rect.x0 + 2 + frac * (rect.x1 - rect.x0 - 4);
-      z = rect.z0 + inset;
-    } else {
-      x = rect.x0 + 2 + frac * (rect.x1 - rect.x0 - 4);
-      z = rect.z1 - inset;
+/** A short row of `lo..hi` props along a random axis, all facing the same way. */
+function row(types: readonly string[], lo: number, hi: number): Group {
+  return (p, x, z, facing, rng) => {
+    const n = lo + Math.floor(rng() * (hi - lo + 1));
+    const axisX = rng() < 0.5;
+    for (let i = 0; i < n; i++) {
+      const off = (i - (n - 1) / 2) * ROW_SPACING;
+      p.place(pick(types, rng), x + (axisX ? off : 0), z + (axisX ? 0 : off), facing, false);
     }
-    p.place(type, x, z, faceCenter(x, z, cx, cz));
-  }
+  };
 }
 
-/** Place a prop in `count` distinct corners of the room. */
-function inCorners(p: Placer, types: readonly string[], count: number, rng: Rng): void {
-  const { rect, cx, cz } = p;
-  const start = Math.floor(rng() * 4);
-  for (let i = 0; i < count; i++) {
-    const type = pick(types, rng);
-    const inset = wallInset(p, type);
-    const corner = (start + i) % 4;
-    const x = corner === 0 || corner === 2 ? rect.x0 + inset : rect.x1 - inset;
-    const z = corner === 0 || corner === 1 ? rect.z0 + inset : rect.z1 - inset;
-    p.place(type, x, z, faceCenter(x, z, cx, cz));
-  }
+/** A loose pile of `lo..hi` props clustered around the anchor. */
+function cluster(types: readonly string[], lo: number, hi: number): Group {
+  return (p, x, z, _facing, rng) => {
+    const n = lo + Math.floor(rng() * (hi - lo + 1));
+    for (let i = 0; i < n; i++) {
+      p.place(
+        pick(types, rng),
+        x + jit(rng, STACK_SPREAD),
+        z + jit(rng, STACK_SPREAD),
+        randCardinal(rng),
+        i > 0,
+      );
+    }
+  };
 }
 
-function tableWithChairs(p: Placer, rng: Rng): boolean {
-  const { cx, cz } = p;
-  const table = p.has("table-large") ? "table-large" : "table";
-  if (!p.place(table, cx, cz, rng() < 0.5 ? 0 : Math.PI / 2, false)) return false;
-  const seats: [number, number, number][] = [
-    [cx + RING_RADIUS, cz, -Math.PI / 2],
-    [cx - RING_RADIUS, cz, Math.PI / 2],
-    [cx, cz + RING_RADIUS, Math.PI],
-    [cx, cz - RING_RADIUS, 0],
+/** A central table ringed by four chairs facing it. */
+const tableChairs: Group = (p, x, z, _facing, rng) => {
+  const table = p.has("table-large") && rng() < 0.6 ? "table-large" : "table";
+  if (!p.place(table, x, z, rng() < 0.5 ? 0 : HALF_PI, false)) return;
+  const seats: readonly [number, number, number][] = [
+    [RING_RADIUS, 0, -HALF_PI],
+    [-RING_RADIUS, 0, HALF_PI],
+    [0, RING_RADIUS, Math.PI],
+    [0, -RING_RADIUS, 0],
   ];
-  for (const [x, z, rot] of seats) p.place("chair", x, z, rot, false);
-  return true;
+  for (const [dx, dz, rot] of seats) p.place("chair", x + dx, z + dz, rot, false);
+};
+
+interface Archetype {
+  wall: readonly string[];
+  islands: Group[];
 }
 
-const opposite = (side: Side): Side => (side ^ 1) as Side;
-const randSide = (rng: Rng): Side => Math.floor(rng() * 4) as Side;
+const CONSOLES = ["computer-system", "computer-wide", "computer", "desk_computerCorner"];
+const CONTAINERS = ["container", "container-tall", "container-wide", "container-flat", "skip"];
+
+const ARCHETYPES: readonly Archetype[] = [
+  {
+    wall: ["table", "table-inset", "chair-armrest", "chair"],
+    islands: [tableChairs, tableChairs, cluster(["barrels", "barrel"], 1, 2)],
+  },
+  {
+    wall: ["bed-single", "bed-double", "bed-single", "desk_computer"],
+    islands: [tableChairs, cluster(["barrel", "barrels"], 1, 2), one(["desk_chair", "chair"])],
+  },
+  {
+    wall: ["computer-system", "computer-wide", "computer", "desk_computerCorner", "chair-armrest"],
+    islands: [one(["machine_generator", "machine_wireless"]), tableChairs, row(CONSOLES, 2, 2)],
+  },
+  {
+    wall: ["container", "container-tall", "container-wide", "container-flat", "skip", "barrel"],
+    islands: [
+      cluster(CONTAINERS, 2, 4),
+      one(["machine_barrel"]),
+      cluster(["barrel", "barrels"], 1, 3),
+    ],
+  },
+  {
+    wall: ["table-display", "table-inset", "computer", "computer-system"],
+    islands: [one(["structure", "structure-barrier"]), tableChairs, one(["machine_generator"])],
+  },
+];
+
+/** Line each wall with furniture from `types`, inset by radius, facing inward. */
+function placeWalls(p: Placer, types: readonly string[], rng: Rng): void {
+  for (let side = 0; side < 4; side++) {
+    const alongZ = side < 2;
+    const span = alongZ ? p.rect.z1 - p.rect.z0 : p.rect.x1 - p.rect.x0;
+    const usable = span - 2 * CORNER_MARGIN;
+    if (usable <= 0) continue;
+    const n = Math.max(1, Math.min(WALL_MAX, Math.round(usable / WALL_SPACING)));
+    for (let k = 0; k < n; k++) {
+      if (rng() < WALL_SKIP) continue;
+      const type = pick(types, rng);
+      const inset = WALL_GAP + p.radiusOf(type) + 0.1;
+      const t = n === 1 ? 0.5 : (k + 0.5) / n;
+      const along = (alongZ ? p.rect.z0 : p.rect.x0) + CORNER_MARGIN + t * usable;
+      let x: number;
+      let z: number;
+      if (side === 0) {
+        x = p.rect.x0 + inset;
+        z = along;
+      } else if (side === 1) {
+        x = p.rect.x1 - inset;
+        z = along;
+      } else if (side === 2) {
+        x = along;
+        z = p.rect.z0 + inset;
+      } else {
+        x = along;
+        z = p.rect.z1 - inset;
+      }
+      p.place(type, x, z, faceCenter(x, z, p.cx, p.cz));
+    }
+  }
+}
+
+/** Fill the room interior (inset from the walls) with free-standing island groups. */
+function placeIslands(p: Placer, islands: Group[], rng: Rng): void {
+  if (islands.length === 0) return;
+  const usableW = p.rect.x1 - p.rect.x0 - 2 * INNER_MARGIN;
+  const usableD = p.rect.z1 - p.rect.z0 - 2 * INNER_MARGIN;
+  if (usableW <= 0 || usableD <= 0) {
+    pick(islands, rng)(p, p.cx, p.cz, randCardinal(rng), rng);
+    return;
+  }
+  const nx = Math.max(1, Math.round(usableW / ZONE_SIZE));
+  const nz = Math.max(1, Math.round(usableD / ZONE_SIZE));
+  for (let i = 0; i < nx; i++) {
+    for (let j = 0; j < nz; j++) {
+      if (rng() < ISLAND_SKIP) continue;
+      const x = p.rect.x0 + INNER_MARGIN + ((i + 0.5) / nx) * usableW + jit(rng, ANCHOR_JITTER);
+      const z = p.rect.z0 + INNER_MARGIN + ((j + 0.5) / nz) * usableD + jit(rng, ANCHOR_JITTER);
+      pick(islands, rng)(p, x, z, randCardinal(rng), rng);
+    }
+  }
+}
 
 function scatterDecor(p: Placer, rng: Rng): void {
   const pool = DECOR.filter((d) => p.has(d));
@@ -181,64 +270,18 @@ function scatterDecor(p: Placer, rng: Rng): void {
   const area = (p.rect.x1 - p.rect.x0) * (p.rect.z1 - p.rect.z0);
   const count = Math.min(DECOR_MAX, Math.round(area / DECOR_AREA_PER));
   for (let i = 0; i < count; i++) {
-    alongWall(p, randSide(rng), pool, 1, rng);
+    const x = p.rect.x0 + INNER_MARGIN + rng() * (p.rect.x1 - p.rect.x0 - 2 * INNER_MARGIN);
+    const z = p.rect.z0 + INNER_MARGIN + rng() * (p.rect.z1 - p.rect.z0 - 2 * INNER_MARGIN);
+    p.place(pick(pool, rng), x, z, randCardinal(rng));
   }
 }
 
-type Archetype = (p: Placer, rng: Rng) => void;
-
-const messHall: Archetype = (p, rng) => {
-  if (!tableWithChairs(p, rng)) {
-    alongWall(p, randSide(rng), ["table", "table-inset"], 1, rng);
-  }
-  const s = randSide(rng);
-  alongWall(p, s, ["table", "table-inset", "barrels"], spanCount(wallLen(p.rect, s), 5, 1, 3), rng);
-  alongWall(p, opposite(s), ["chair-armrest", "chair"], spanCount(wallLen(p.rect, s), 5, 1, 3), rng);
-  scatterDecor(p, rng);
-};
-
-const quarters: Archetype = (p, rng) => {
-  const side = randSide(rng);
-  const beds = ["bed-single", "bed-double"];
-  alongWall(p, side, beds, spanCount(wallLen(p.rect, side), 4, 2, 5), rng);
-  alongWall(p, opposite(side), beds, spanCount(wallLen(p.rect, side), 4, 2, 5), rng);
-  inCorners(p, ["desk_chair", "desk_computer", "chair"], 2, rng);
-  scatterDecor(p, rng);
-};
-
-const controlRoom: Archetype = (p, rng) => {
-  const side = randSide(rng);
-  const consoles = ["computer-system", "computer-wide", "computer", "desk_computerCorner"];
-  alongWall(p, side, consoles, spanCount(wallLen(p.rect, side), 3.5, 2, 6), rng);
-  const opp = opposite(side);
-  alongWall(p, opp, ["chair-armrest", "desk_chair"], spanCount(wallLen(p.rect, opp), 4, 1, 4), rng);
-  inCorners(p, ["machine_wireless", "machine_generator"], 2, rng);
-  scatterDecor(p, rng);
-};
-
-const storageBay: Archetype = (p, rng) => {
-  inCorners(p, ["container", "container-tall", "container-wide", "container-flat", "skip"], 4, rng);
-  const s = randSide(rng);
-  alongWall(p, s, ["barrel", "barrels", "machine_barrel", "container"], spanCount(wallLen(p.rect, s), 3, 2, 6), rng);
-  scatterDecor(p, rng);
-};
-
-const lab: Archetype = (p, rng) => {
-  const side = randSide(rng);
-  alongWall(p, side, ["table-display", "table-inset"], spanCount(wallLen(p.rect, side), 4, 2, 4), rng);
-  const opp = opposite(side);
-  alongWall(p, opp, ["computer", "computer-system", "structure"], spanCount(wallLen(p.rect, opp), 4, 2, 4), rng);
-  inCorners(p, ["machine_generator", "structure-barrier"], 2, rng);
-  scatterDecor(p, rng);
-};
-
-const ARCHETYPES: readonly Archetype[] = [messHall, quarters, controlRoom, storageBay, lab];
-
 /**
- * Furnish one room with a semantically coherent arrangement (tables grouped with
- * chairs, beds along walls, consoles in banks, storage in corners) chosen from a
- * fixed set of archetypes, keeping clear of doorways and the prop spawn point.
- * Appends the resulting prop instances to `out`. Deterministic for a fixed `rng`.
+ * Furnish one room with a semantically coherent arrangement chosen from a fixed
+ * set of archetypes: each wall is lined with appropriate furniture facing inward,
+ * and the interior is filled on a zone grid with free-standing islands
+ * (table+chairs, stacks, machines) so room centers don't read as empty. Keeps
+ * clear of doorways and the prop spawn. Appends to `out`. Deterministic per `rng`.
  */
 export function furnishRoom(opts: {
   rect: RoomRect;
@@ -252,5 +295,9 @@ export function furnishRoom(opts: {
   const radii = new Map(opts.catalog.map((d) => [d.id, computePropBounds(d).radius]));
   const radiusOf = (id: string): number => radii.get(id) ?? DEFAULT_RADIUS;
   const placer = makePlacer(opts.rect, opts.doorways, opts.spawn, available, radiusOf, opts.out);
-  pick(ARCHETYPES, opts.rng)(placer, opts.rng);
+  const archetype = pick(ARCHETYPES, opts.rng);
+
+  placeWalls(placer, archetype.wall, opts.rng);
+  placeIslands(placer, archetype.islands, opts.rng);
+  scatterDecor(placer, opts.rng);
 }
