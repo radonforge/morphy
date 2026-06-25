@@ -1,7 +1,7 @@
 export const ROOM_NAME = "webhunt";
 
 export const DEFAULT_PORT = 2567;
-export const DEFAULT_SERVER_URL = "http://localhost:2567";
+export const COLYSEUS_PROXY_PATH = "/colyseus";
 
 export const MAX_PLAYERS = 12;
 export const MIN_PLAYERS_TO_START = 2;

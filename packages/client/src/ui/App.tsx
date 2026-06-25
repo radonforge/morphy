@@ -1,11 +1,13 @@
 import { useCallback, useState } from "react";
-import { DEFAULT_SERVER_URL, MAX_NAME_LENGTH } from "@webhunt/shared";
+import { COLYSEUS_PROXY_PATH, MAX_NAME_LENGTH } from "@webhunt/shared";
 import { connectToRoom, type Connection } from "../net/connection";
 import { Game } from "../game/Game";
 
 type Status = { kind: "idle" } | { kind: "connecting" } | { kind: "error"; message: string };
 
-const SERVER_URL = (import.meta.env.VITE_SERVER_URL as string | undefined) ?? DEFAULT_SERVER_URL;
+const SERVER_URL =
+  (import.meta.env.VITE_SERVER_URL as string | undefined) ??
+  `${window.location.origin}${COLYSEUS_PROXY_PATH}`;
 
 export function App() {
   const [connection, setConnection] = useState<Connection | null>(null);
@@ -34,7 +36,7 @@ export function App() {
   return (
     <div className="lobby">
       <form
-        className="lobby-card"
+        className="lobby-card panel"
         onSubmit={(e) => {
           e.preventDefault();
           void handleConnect();
