@@ -3,7 +3,9 @@ import { Canvas } from "@react-three/fiber";
 import { Callbacks } from "@colyseus/sdk";
 import {
   MAX_CHAT_LENGTH,
+  MIN_PLAYERS_TO_START,
   MSG_CHAT,
+  MSG_READY,
   MSG_SHOT_RESULT,
   MSG_TAUNT,
   MSG_TELEPORT,
@@ -73,10 +75,12 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
     return (
       ai !== undefined &&
       bi !== undefined &&
+      ai.name === bi.name &&
       ai.role === bi.role &&
       ai.alive === bi.alive &&
       ai.hp === bi.hp &&
-      ai.propType === bi.propType
+      ai.propType === bi.propType &&
+      ai.ready === bi.ready
     );
   });
 }
@@ -218,10 +222,12 @@ export function Game({ connection, onLeave }: GameProps) {
       const next: MetaMap = {};
       for (const [id, player] of playersRef.current) {
         next[id] = {
+          name: player.name,
           role: player.role,
           alive: player.alive,
           hp: player.hp,
           propType: player.propType,
+          ready: player.ready,
         };
       }
       setMeta((prev) => (metaEqual(prev, next) ? prev : next));
@@ -234,6 +240,14 @@ export function Game({ connection, onLeave }: GameProps) {
   const localAlive = localMeta?.alive ?? true;
   const localHp = localMeta?.hp ?? 0;
   const localProp = localMeta?.propType ?? "";
+  const localReady = localMeta?.ready ?? false;
+
+  const toggleReady = useCallback(
+    () => room.send(MSG_READY, { ready: !localReady }),
+    [room, localReady],
+  );
+
+  const readyCount = ids.reduce((n, id) => (meta[id]?.ready ? n + 1 : n), 0);
 
   const canTransform = localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
@@ -283,6 +297,33 @@ export function Game({ connection, onLeave }: GameProps) {
           onShoot={onShoot}
         />
       </Canvas>
+
+      {phase === "lobby" && (
+        <div className="lobby-overlay">
+          <div className="lobby-overlay-card">
+            <h2>In attesa di giocatori</h2>
+            <ul className="ready-list">
+              {ids.map((id) => (
+                <li key={id} className={meta[id]?.ready ? "is-ready" : ""}>
+                  <span>
+                    {meta[id]?.name ?? "?"}
+                    {id === sessionId ? " (tu)" : ""}
+                  </span>
+                  <span>{meta[id]?.ready ? "✔ Pronto" : "… in attesa"}</span>
+                </li>
+              ))}
+            </ul>
+            <button type="button" onClick={toggleReady}>
+              {localReady ? "Annulla" : "Pronto"}
+            </button>
+            <span className="lobby-overlay-meta">
+              {ids.length < MIN_PLAYERS_TO_START
+                ? `Servono almeno ${MIN_PLAYERS_TO_START} giocatori`
+                : `Pronti: ${readyCount}/${ids.length} — si parte quando tutti sono pronti`}
+            </span>
+          </div>
+        </div>
+      )}
 
       {muzzle !== null && <div className="muzzle" />}
 

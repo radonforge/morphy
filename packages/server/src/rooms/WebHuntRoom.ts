@@ -25,6 +25,7 @@ import {
   MSG_TAUNT,
   MSG_CHAT,
   MSG_SHOT_RESULT,
+  MSG_READY,
   computePropBounds,
   type InputMessage,
   type ShootMessage,
@@ -50,6 +51,7 @@ export class PlayerState extends Schema {
   @type("boolean") alive = true;
   @type("number") hp = 0;
   @type("string") propType = "";
+  @type("boolean") ready = false;
 }
 
 export class RoomState extends Schema {
@@ -101,6 +103,12 @@ function parsePropType(payload: unknown): string | null {
   if (typeof payload !== "object" || payload === null) return null;
   const propType = (payload as Record<string, unknown>).propType;
   return typeof propType === "string" ? propType : null;
+}
+
+function parseReady(payload: unknown): boolean | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const ready = (payload as Record<string, unknown>).ready;
+  return typeof ready === "boolean" ? ready : null;
 }
 
 function parseChatText(payload: unknown): string | null {
@@ -179,6 +187,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     this.onMessage(MSG_TRANSFORM, (client, payload) => this.handleTransform(client, payload));
     this.onMessage(MSG_SHOOT, (client, payload) => this.handleShoot(client, payload));
     this.onMessage(MSG_CHAT, (client, payload) => this.handleChat(client, payload));
+    this.onMessage(MSG_READY, (client, payload) => this.handleReady(client, payload));
   }
 
   private handleChat(client: Client, payload: unknown): void {
@@ -208,7 +217,19 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     this.lastShotAt.delete(client.sessionId);
     if (this.state.players.size < MIN_PLAYERS_TO_START && this.state.phase !== "lobby") {
       this.resetToLobby();
+    } else {
+      this.maybeStartRound();
     }
+  }
+
+  private handleReady(client: Client, payload: unknown): void {
+    if (this.state.phase !== "lobby") return;
+    const ready = parseReady(payload);
+    if (ready === null) return;
+    const player = this.state.players.get(client.sessionId);
+    if (!player) return;
+    player.ready = ready;
+    this.maybeStartRound();
   }
 
   private handleInput(client: Client, payload: unknown): void {
@@ -275,9 +296,13 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   }
 
   private maybeStartRound(): void {
-    if (this.state.phase === "lobby" && this.state.players.size >= MIN_PLAYERS_TO_START) {
-      this.startCountdown();
-    }
+    if (this.state.phase !== "lobby") return;
+    if (this.state.players.size < MIN_PLAYERS_TO_START) return;
+    let allReady = true;
+    this.state.players.forEach((player) => {
+      if (!player.ready) allReady = false;
+    });
+    if (allReady) this.startCountdown();
   }
 
   private setPhase(phase: Phase, durationMs: number, next: () => void): void {
@@ -322,11 +347,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   }
 
   private afterRound(): void {
-    if (this.state.players.size >= MIN_PLAYERS_TO_START) {
-      this.startCountdown();
-    } else {
-      this.resetToLobby();
-    }
+    this.resetToLobby();
   }
 
   private resetToLobby(): void {
@@ -337,6 +358,13 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     this.state.phase = "lobby";
     this.state.phaseEndsAt = 0;
     this.state.winner = "";
+    this.state.players.forEach((player) => {
+      player.ready = false;
+      player.role = "prop";
+      player.alive = true;
+      player.hp = 0;
+      player.propType = "";
+    });
   }
 
   private checkRoundEnd(): void {

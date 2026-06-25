@@ -13,6 +13,7 @@ export const MSG_TELEPORT = "teleport";
 export const MSG_TAUNT = "taunt";
 export const MSG_CHAT = "chat";
 export const MSG_SHOT_RESULT = "shot_result";
+export const MSG_READY = "ready";
 
 export interface InputMessage {
   x: number;
@@ -53,4 +54,8 @@ export interface ChatEvent {
 
 export interface ShotResult {
   hit: boolean;
+}
+
+export interface ReadyMessage {
+  ready: boolean;
 }

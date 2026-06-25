@@ -73,6 +73,67 @@ canvas {
   opacity: 0.6;
 }
 
+.lobby-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 7, 11, 0.7);
+}
+
+.lobby-overlay-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: min(360px, 90vw);
+  padding: 1.5rem;
+  color: #e6e6e6;
+  background: #151a23;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.lobby-overlay-card h2 {
+  font-size: 1.2rem;
+}
+
+.ready-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  list-style: none;
+}
+
+.ready-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+  background: #0b0e14;
+  border-radius: 6px;
+  opacity: 0.7;
+}
+
+.ready-list li.is-ready {
+  opacity: 1;
+  color: #44e06a;
+}
+
+.lobby-overlay-card button {
+  padding: 0.6rem 0.8rem;
+  background: #4f8cff;
+  color: #fff;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.lobby-overlay-meta {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
 .hud {
   position: absolute;
   top: 12px;
