@@ -31,6 +31,7 @@ import {
   type ShootMessage,
   type MapDefinition,
   type PropBounds,
+  type Vec3,
   type Phase,
   type Role,
   type Winner,
@@ -39,6 +40,7 @@ import { loadMap } from "../loadMap";
 
 const DEFAULT_MAP_ID = "office-min";
 const FALLBACK_NAME = "Player";
+const SPAWN_CLEARANCE = 1.5;
 
 export class PlayerState extends Schema {
   @type("string") id = "";
@@ -200,8 +202,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   onJoin(client: Client, options: unknown): void {
     const name = sanitizeName((options as { name?: unknown } | undefined)?.name);
-    const spawns = this.map.spawnPoints.props;
-    const spawn = spawns[this.state.players.size % spawns.length] ?? this.map.bounds.min;
+    const spawn = this.pickLobbySpawn();
     const player = new PlayerState();
     player.id = client.sessionId;
     player.name = name;
@@ -230,6 +231,18 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     if (!player) return;
     player.ready = ready;
     this.maybeStartRound();
+  }
+
+  private pickLobbySpawn(): Vec3 {
+    const spawns = this.map.spawnPoints.props;
+    for (const candidate of spawns) {
+      let occupied = false;
+      this.state.players.forEach((p) => {
+        if (Math.hypot(p.x - candidate.x, p.z - candidate.z) < SPAWN_CLEARANCE) occupied = true;
+      });
+      if (!occupied) return candidate;
+    }
+    return spawns[this.state.players.size % spawns.length] ?? this.map.bounds.min;
   }
 
   private handleInput(client: Client, payload: unknown): void {

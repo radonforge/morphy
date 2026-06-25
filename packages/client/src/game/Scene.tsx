@@ -477,6 +477,7 @@ function LocalPlayer({
 
   const spawn = map.spawnPoints.props[0] ?? map.bounds.min;
   const pos = useMemo(() => new THREE.Vector3(spawn.x, 0, spawn.z), [spawn.x, spawn.z]);
+  const spawnApplied = useRef(false);
   const heading = useRef(0);
   const sendAccumMs = useRef(0);
   const stepAccum = useRef(0);
@@ -489,6 +490,15 @@ function LocalPlayer({
   const frozen = !alive || (role === "hunter" && phase === "hiding");
 
   useFrame((_, delta) => {
+    if (!spawnApplied.current) {
+      const self = playersRef.current.get(id);
+      if (self) {
+        pos.set(self.x, 0, self.z);
+        heading.current = self.rot;
+        spawnApplied.current = true;
+      }
+    }
+
     const teleport = teleportRef.current;
     if (teleport) {
       pos.x = teleport.x;
