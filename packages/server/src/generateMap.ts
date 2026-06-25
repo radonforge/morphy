@@ -19,11 +19,25 @@ const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
 const WALL_Y = WALL_HEIGHT / 2;
 const FLOOR_THICKNESS = 1;
 
-const FLOOR_MODEL = "/models/space/template-floor.glb";
 const WALL_MODEL = "/models/space/template-wall.glb";
 const GATE_MODEL = "/models/space/gate.glb";
 const WALL_ROTATION_X = 0;
 const WALL_ROTATION_Z = Math.PI / 2;
+
+interface WeightedModel {
+  model: string;
+  weight: number;
+}
+
+const FLOOR_VARIANTS: WeightedModel[] = [
+  { model: "/models/space/template-floor.glb", weight: 3 },
+  { model: "/models/space/template-floor-detail-a.glb", weight: 1 },
+];
+
+const WALL_VARIANTS: WeightedModel[] = [
+  { model: WALL_MODEL, weight: 7 },
+  { model: "/models/space/template-wall-detail-a.glb", weight: 3 },
+];
 
 const ROOM_MARGIN = 2;
 const PROPS_PER_ROOM_MIN = 2;
@@ -50,6 +64,16 @@ function randRange(rng: () => number, min: number, max: number): number {
 
 function randInt(rng: () => number, min: number, max: number): number {
   return Math.floor(randRange(rng, min, max + 1));
+}
+
+function pickModel(rng: () => number, variants: WeightedModel[]): string {
+  const total = variants.reduce((sum, v) => sum + v.weight, 0);
+  let roll = rng() * total;
+  for (const v of variants) {
+    roll -= v.weight;
+    if (roll < 0) return v.model;
+  }
+  return variants[variants.length - 1]!.model;
 }
 
 /**
@@ -105,26 +129,32 @@ function emitWallTiles(
   axis: "x" | "z",
   line: number,
   present: boolean[],
+  models: string[],
   inwardSign: number,
   tiles: TileInstance[],
 ): void {
   const offset = WALL_HALF_THICKNESS * inwardSign;
   for (let idx = 0; idx < present.length; idx++) {
     if (!present[idx]) continue;
+    const model = models[idx]!;
     if (axis === "x") {
       tiles.push({
-        model: WALL_MODEL,
+        model,
         position: { x: cellCenterX(grid, idx), y: 0, z: line + offset },
         rotationY: inwardSign > 0 ? 0 : Math.PI,
       });
     } else {
       tiles.push({
-        model: WALL_MODEL,
+        model,
         position: { x: line + offset, y: 0, z: cellCenterZ(grid, idx) },
         rotationY: inwardSign > 0 ? Math.PI / 2 : -Math.PI / 2,
       });
     }
   }
+}
+
+function pickWallModels(rng: () => number, count: number): string[] {
+  return Array.from({ length: count }, () => pickModel(rng, WALL_VARIANTS));
 }
 
 /** Merge runs of adjacent present cells along a grid line into box colliders. */
@@ -168,12 +198,13 @@ function emitInteriorWall(
   axis: "x" | "z",
   line: number,
   present: boolean[],
+  models: string[],
   tiles: TileInstance[],
   colliders: BoxCollider[],
 ): void {
   emitWallColliders(grid, axis, line, present, colliders);
-  emitWallTiles(grid, axis, line, present, 1, tiles);
-  emitWallTiles(grid, axis, line, present, -1, tiles);
+  emitWallTiles(grid, axis, line, present, models, 1, tiles);
+  emitWallTiles(grid, axis, line, present, models, -1, tiles);
 }
 
 /** Place an open archway framing a doorway gap left in a wall along `axis`. */
@@ -223,7 +254,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
   for (let i = 0; i < gx; i++) {
     for (let j = 0; j < gz; j++) {
       tiles.push({
-        model: FLOOR_MODEL,
+        model: pickModel(rng, FLOOR_VARIANTS),
         position: { x: cellCenterX(grid, i), y: 0, z: cellCenterZ(grid, j) },
         rotationY: 0,
       });
@@ -240,13 +271,13 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
   const northSouth = new Array<boolean>(gx).fill(true);
   const eastWest = new Array<boolean>(gz).fill(true);
   emitWallColliders(grid, "x", lineZ(grid, 0), northSouth, colliders);
-  emitWallTiles(grid, "x", lineZ(grid, 0), northSouth, 1, tiles);
+  emitWallTiles(grid, "x", lineZ(grid, 0), northSouth, pickWallModels(rng, gx), 1, tiles);
   emitWallColliders(grid, "x", lineZ(grid, gz), northSouth, colliders);
-  emitWallTiles(grid, "x", lineZ(grid, gz), northSouth, -1, tiles);
+  emitWallTiles(grid, "x", lineZ(grid, gz), northSouth, pickWallModels(rng, gx), -1, tiles);
   emitWallColliders(grid, "z", lineX(grid, 0), eastWest, colliders);
-  emitWallTiles(grid, "z", lineX(grid, 0), eastWest, 1, tiles);
+  emitWallTiles(grid, "z", lineX(grid, 0), eastWest, pickWallModels(rng, gz), 1, tiles);
   emitWallColliders(grid, "z", lineX(grid, gx), eastWest, colliders);
-  emitWallTiles(grid, "z", lineX(grid, gx), eastWest, -1, tiles);
+  emitWallTiles(grid, "z", lineX(grid, gx), eastWest, pickWallModels(rng, gz), -1, tiles);
 
   for (let cb = 1; cb < roomCols; cb++) {
     const cell = colBounds[cb]!;
@@ -256,7 +287,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
       present[door] = false;
       pushGate(grid, "z", lineX(grid, cell), door, tiles);
     }
-    emitInteriorWall(grid, "z", lineX(grid, cell), present, tiles, colliders);
+    emitInteriorWall(grid, "z", lineX(grid, cell), present, pickWallModels(rng, gz), tiles, colliders);
   }
   for (let rb = 1; rb < roomRows; rb++) {
     const cell = rowBounds[rb]!;
@@ -266,7 +297,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
       present[door] = false;
       pushGate(grid, "x", lineZ(grid, cell), door, tiles);
     }
-    emitInteriorWall(grid, "x", lineZ(grid, cell), present, tiles, colliders);
+    emitInteriorWall(grid, "x", lineZ(grid, cell), present, pickWallModels(rng, gx), tiles, colliders);
   }
 
   const hunterCol = Math.floor(roomCols / 2);
