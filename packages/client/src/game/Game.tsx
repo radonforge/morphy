@@ -82,7 +82,8 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
       ai.alive === bi.alive &&
       ai.hp === bi.hp &&
       ai.propType === bi.propType &&
-      ai.ready === bi.ready
+      ai.ready === bi.ready &&
+      ai.avatar === bi.avatar
     );
   });
 }
@@ -234,6 +235,7 @@ export function Game({ connection, onLeave }: GameProps) {
           hp: player.hp,
           propType: player.propType,
           ready: player.ready,
+          avatar: player.avatar,
         };
       }
       setMeta((prev) => (metaEqual(prev, next) ? prev : next));

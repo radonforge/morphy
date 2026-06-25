@@ -12,6 +12,7 @@ export interface RemotePlayerView {
   hp: number;
   propType: string;
   ready: boolean;
+  avatar: string;
 }
 
 export type PlayersRef = { readonly current: Map<string, RemotePlayerView> };
@@ -23,6 +24,7 @@ export interface PlayerMeta {
   hp: number;
   propType: string;
   ready: boolean;
+  avatar: string;
 }
 
 export type MetaMap = Record<string, PlayerMeta>;

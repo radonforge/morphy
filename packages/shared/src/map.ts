@@ -19,6 +19,8 @@ export interface PropDefinition {
   id: string;
   name: string;
   parts: PrimitiveSpec[];
+  model?: string;
+  modelScale?: number;
 }
 
 export interface PropInstance {
@@ -121,7 +123,9 @@ function isPropDefinition(value: unknown): value is PropDefinition {
     typeof value.id === "string" &&
     typeof value.name === "string" &&
     Array.isArray(value.parts) &&
-    value.parts.every(isPrimitive)
+    value.parts.every(isPrimitive) &&
+    (value.model === undefined || typeof value.model === "string") &&
+    (value.modelScale === undefined || typeof value.modelScale === "number")
   );
 }
 

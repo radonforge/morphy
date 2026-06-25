@@ -39,10 +39,10 @@ import {
   type Role,
   type Winner,
 } from "@webhunt/shared";
-import { loadMap } from "../loadMap";
 import { generateMap } from "../generateMap";
+import { SPACE_CATALOG } from "../spaceCatalog";
+import { randomAnimal } from "../avatars";
 
-const DEFAULT_MAP_ID = "office-min";
 const FALLBACK_NAME = "Player";
 const SPAWN_CLEARANCE = 1.5;
 
@@ -58,6 +58,7 @@ export class PlayerState extends Schema {
   @type("number") hp = 0;
   @type("string") propType = "";
   @type("boolean") ready = false;
+  @type("string") avatar = "";
 }
 
 export class RoomState extends Schema {
@@ -212,7 +213,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   private lastShotAt = new Map<string, number>();
 
   onCreate(): void {
-    this.catalog = loadMap(DEFAULT_MAP_ID).propCatalog;
+    this.catalog = SPACE_CATALOG;
     this.applyMap(generateMap(nextSeed(), this.catalog));
     this.setPatchRate(PATCH_RATE_MS);
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
@@ -244,6 +245,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     const player = new PlayerState();
     player.id = client.sessionId;
     player.name = name;
+    player.avatar = randomAnimal();
     player.x = spawn.x;
     player.y = spawn.y;
     player.z = spawn.z;

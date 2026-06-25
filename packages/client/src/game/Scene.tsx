@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, type ReactElement } from "react";
+import { Suspense, useEffect, useMemo, useRef, type ReactElement } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
+import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import type { Room } from "@colyseus/sdk";
 import {
@@ -9,6 +10,7 @@ import {
   MSG_TRANSFORM,
   MSG_SHOOT,
   SHOOT_RANGE,
+  computePropBounds,
   type MapDefinition,
   type Phase,
   type PrimitiveSpec,
@@ -39,6 +41,8 @@ const PLAYER_BODY_Y = PLAYER_BODY_LENGTH / 2 + PLAYER_RADIUS;
 const PLAYER_HEAD_Y = PLAYER_BODY_LENGTH + PLAYER_RADIUS * 1.6;
 const HUNTER_COLOR = "#e8564a";
 const PROP_COLOR = "#5bd75b";
+const MODEL_MIN_SIZE = 0.001;
+const animalModel = (id: string): string => `/models/pets/animal-${id}.glb`;
 
 const CAMERA_DISTANCE = 8;
 const CAMERA_TARGET_Y = 1.2;
@@ -219,6 +223,7 @@ export function Scene({
         playersRef={playersRef}
         obstacles={obstacles}
         walls={walls}
+        avatar={localMeta?.avatar ?? ""}
       />
       {ids
         .filter((id) => id !== localId && (meta[id]?.alive ?? true))
@@ -229,6 +234,7 @@ export function Scene({
             catalog={catalog}
             role={meta[id]?.role ?? "prop"}
             propType={meta[id]?.propType ?? ""}
+            avatar={meta[id]?.avatar ?? ""}
             tauntPulseRef={tauntPulseRef}
           />
         ))}
@@ -342,10 +348,10 @@ function geometryFor(part: PrimitiveSpec): ReactElement {
   }
 }
 
-function PropMesh({ def }: { def: PropDefinition }) {
+function PrimitiveParts({ parts }: { parts: PrimitiveSpec[] }) {
   return (
     <>
-      {def.parts.map((part, index) => (
+      {parts.map((part, index) => (
         <mesh
           key={index}
           position={[part.position.x, part.position.y, part.position.z]}
@@ -358,6 +364,72 @@ function PropMesh({ def }: { def: PropDefinition }) {
       ))}
     </>
   );
+}
+
+function enableShadows(object: THREE.Object3D): void {
+  object.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (mesh.isMesh) {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    }
+  });
+}
+
+function FittedModel({
+  url,
+  width,
+  height,
+  baseY,
+  scaleMul = 1,
+}: {
+  url: string;
+  width: number;
+  height: number;
+  baseY: number;
+  scaleMul?: number;
+}) {
+  const { scene } = useGLTF(url);
+  const object = useMemo(() => {
+    const clone = scene.clone(true);
+    enableShadows(clone);
+    return clone;
+  }, [scene]);
+  const { scale, offsetY } = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(object);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const fit =
+      Math.min(
+        width / Math.max(size.x, MODEL_MIN_SIZE),
+        height / Math.max(size.y, MODEL_MIN_SIZE),
+        width / Math.max(size.z, MODEL_MIN_SIZE),
+      ) * scaleMul;
+    return { scale: fit, offsetY: baseY - box.min.y * fit };
+  }, [object, width, height, baseY, scaleMul]);
+  return (
+    <group position={[0, offsetY, 0]} scale={scale}>
+      <primitive object={object} />
+    </group>
+  );
+}
+
+function PropMesh({ def }: { def: PropDefinition }) {
+  const bounds = useMemo(() => computePropBounds(def), [def]);
+  if (def.model) {
+    return (
+      <Suspense fallback={<PrimitiveParts parts={def.parts} />}>
+        <FittedModel
+          url={def.model}
+          width={2 * bounds.radius}
+          height={bounds.yMax - bounds.yMin}
+          baseY={bounds.yMin}
+          scaleMul={def.modelScale ?? 1}
+        />
+      </Suspense>
+    );
+  }
+  return <PrimitiveParts parts={def.parts} />;
 }
 
 function MapView({ map }: { map: MapDefinition }) {
@@ -423,12 +495,36 @@ function Avatar({ color }: { color: string }) {
   );
 }
 
-function PlayerModel({ role, propType, catalog }: { role: Role; propType: string; catalog: Catalog }) {
-  const def = propType ? catalog.get(propType) : undefined;
-  if (def) {
-    return <PropMesh def={def} />;
+function AnimalAvatar({ id, role }: { id: string; role: Role }) {
+  const fallbackColor = role === "hunter" ? HUNTER_COLOR : PROP_COLOR;
+  if (!id) {
+    return <Avatar color={fallbackColor} />;
   }
-  return <Avatar color={role === "hunter" ? HUNTER_COLOR : PROP_COLOR} />;
+  return (
+    <Suspense fallback={<Avatar color={fallbackColor} />}>
+      <FittedModel url={animalModel(id)} width={PLAYER_RADIUS * 2} height={PLAYER_HEAD_Y} baseY={0} />
+    </Suspense>
+  );
+}
+
+function PlayerModel({
+  role,
+  propType,
+  avatar,
+  catalog,
+}: {
+  role: Role;
+  propType: string;
+  avatar: string;
+  catalog: Catalog;
+}) {
+  if (role === "prop" && propType) {
+    const def = catalog.get(propType);
+    if (def) {
+      return <PropMesh def={def} />;
+    }
+  }
+  return <AnimalAvatar id={avatar} role={role} />;
 }
 
 function PropPicker({ room, enabled }: { room: Room; enabled: boolean }) {
@@ -512,6 +608,7 @@ interface LocalPlayerProps {
   playersRef: PlayersRef;
   obstacles: Obstacle[];
   walls: Wall[];
+  avatar: string;
 }
 
 function LocalPlayer({
@@ -529,6 +626,7 @@ function LocalPlayer({
   playersRef,
   obstacles,
   walls,
+  avatar,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!chatOpen);
@@ -706,7 +804,9 @@ function LocalPlayer({
 
   return (
     <group ref={groupRef}>
-      {alive && role !== "hunter" && <PlayerModel role={role} propType={propType} catalog={catalog} />}
+      {alive && role !== "hunter" && (
+        <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
+      )}
     </group>
   );
 }
@@ -716,10 +816,11 @@ interface RemotePlayerProps {
   catalog: Catalog;
   role: Role;
   propType: string;
+  avatar: string;
   tauntPulseRef: TauntPulseRef;
 }
 
-function RemotePlayer({ view, catalog, role, propType, tauntPulseRef }: RemotePlayerProps) {
+function RemotePlayer({ view, catalog, role, propType, avatar, tauntPulseRef }: RemotePlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
@@ -739,7 +840,7 @@ function RemotePlayer({ view, catalog, role, propType, tauntPulseRef }: RemotePl
   }
   return (
     <group ref={groupRef}>
-      <PlayerModel role={role} propType={propType} catalog={catalog} />
+      <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
     </group>
   );
 }
