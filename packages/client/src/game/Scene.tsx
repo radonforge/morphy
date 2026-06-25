@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, type ReactElement } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
+import { Sky, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import type { Room } from "@colyseus/sdk";
 import {
@@ -16,6 +16,7 @@ import {
   type PrimitiveSpec,
   type PropDefinition,
   type Role,
+  type TileInstance,
 } from "@webhunt/shared";
 import { useControls } from "./useControls";
 import { playShot, playStep } from "./audio";
@@ -67,6 +68,7 @@ const TP_PITCH_MIN = -0.15;
 const TP_PITCH_MAX = 1.2;
 const DEFAULT_PITCH = 0.5;
 const EYE_HEIGHT = 1.6;
+const SUN_POSITION: [number, number, number] = [14, 26, 10];
 const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 
@@ -204,10 +206,11 @@ export function Scene({
 
   return (
     <>
-      <color attach="background" args={["#aecbe8"]} />
-      <hemisphereLight args={["#ffffff", "#404a5c", 1.0]} />
-      <ambientLight intensity={0.35} />
-      <directionalLight position={[12, 22, 8]} intensity={1.2} castShadow />
+      <color attach="background" args={["#adcdec"]} />
+      <Sky sunPosition={SUN_POSITION} turbidity={6} rayleigh={1.2} />
+      <hemisphereLight args={["#cfe2f7", "#6b6150", 0.8]} />
+      <ambientLight intensity={0.5} />
+      <directionalLight position={SUN_POSITION} intensity={1.7} castShadow />
       <MapView map={map} />
       <PropPicker room={room} enabled={canTransform} />
       <Shooter room={room} enabled={canShoot} tracerRef={tracerRef} onShoot={onShoot} />
@@ -419,6 +422,23 @@ function FittedModel({
   );
 }
 
+function TileModel({ tile }: { tile: TileInstance }) {
+  const { scene } = useGLTF(tile.model);
+  const object = useMemo(() => {
+    const clone = scene.clone(true);
+    enableShadows(clone);
+    return clone;
+  }, [scene]);
+  return (
+    <group
+      position={[tile.position.x, tile.position.y, tile.position.z]}
+      rotation-y={tile.rotationY}
+    >
+      <primitive object={object} />
+    </group>
+  );
+}
+
 function PropMesh({ def }: { def: PropDefinition }) {
   const bounds = useMemo(() => computePropBounds(def), [def]);
   if (def.model) {
@@ -474,28 +494,21 @@ function MapView({ map }: { map: MapDefinition }) {
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
     [map],
   );
-  const floorWidth = map.bounds.max.x - map.bounds.min.x + 2;
-  const floorDepth = map.bounds.max.z - map.bounds.min.z + 2;
+  const floorWidth = map.bounds.max.x - map.bounds.min.x + 4;
+  const floorDepth = map.bounds.max.z - map.bounds.min.z + 4;
 
   return (
     <>
-      <mesh rotation-x={-Math.PI / 2} receiveShadow>
+      <mesh rotation-x={-Math.PI / 2} position={[0, -0.1, 0]} receiveShadow>
         <planeGeometry args={[floorWidth, floorDepth]} />
-        <meshStandardMaterial color="#cfd6df" />
+        <meshStandardMaterial color="#48515f" />
       </mesh>
 
-      {map.colliders
-        .filter((collider) => collider.position.y > 0)
-        .map((collider, index) => (
-          <mesh
-            key={`wall-${index}`}
-            position={[collider.position.x, collider.position.y, collider.position.z]}
-            receiveShadow
-          >
-            <boxGeometry args={[collider.size.x, collider.size.y, collider.size.z]} />
-            <meshStandardMaterial color="#e8ebf0" />
-          </mesh>
+      <Suspense fallback={null}>
+        {map.tiles.map((tile, index) => (
+          <TileModel key={`tile-${index}`} tile={tile} />
         ))}
+      </Suspense>
 
       {map.props.map((instance, index) => {
         const def = catalog.get(instance.type);

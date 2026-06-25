@@ -67,6 +67,13 @@ export interface BoxCollider {
   size: Vec3;
 }
 
+/** A modular glTF piece (floor/wall) placed at a grid-snapped pose for rendering. */
+export interface TileInstance {
+  model: string;
+  position: Vec3;
+  rotationY: number;
+}
+
 export interface MapBounds {
   min: Vec3;
   max: Vec3;
@@ -78,6 +85,7 @@ export interface MapDefinition {
   bounds: MapBounds;
   spawnPoints: { hunters: Vec3[]; props: Vec3[] };
   colliders: BoxCollider[];
+  tiles: TileInstance[];
   props: PropInstance[];
   propCatalog: PropDefinition[];
 }
@@ -142,6 +150,15 @@ function isBoxCollider(value: unknown): value is BoxCollider {
   return isRecord(value) && isVec3(value.position) && isVec3(value.size);
 }
 
+function isTileInstance(value: unknown): value is TileInstance {
+  return (
+    isRecord(value) &&
+    typeof value.model === "string" &&
+    isVec3(value.position) &&
+    typeof value.rotationY === "number"
+  );
+}
+
 /**
  * Parse and validate a map loaded from an untrusted source (file / bundle).
  * Throws {@link MapValidationError} with an actionable message on malformed input.
@@ -170,6 +187,9 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
   if (!Array.isArray(raw.colliders) || !raw.colliders.every(isBoxCollider)) {
     throw new MapValidationError(id, "field 'colliders' must be BoxCollider[]");
   }
+  if (!Array.isArray(raw.tiles) || !raw.tiles.every(isTileInstance)) {
+    throw new MapValidationError(id, "field 'tiles' must be TileInstance[]");
+  }
   if (!Array.isArray(raw.props) || !raw.props.every(isPropInstance)) {
     throw new MapValidationError(id, "field 'props' must be PropInstance[]");
   }
@@ -190,6 +210,7 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
     bounds: { min: raw.bounds.min, max: raw.bounds.max },
     spawnPoints: { hunters: raw.spawnPoints.hunters, props: raw.spawnPoints.props },
     colliders: raw.colliders,
+    tiles: raw.tiles,
     props: raw.props,
     propCatalog: raw.propCatalog,
   };
