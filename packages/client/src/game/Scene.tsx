@@ -43,6 +43,10 @@ const HUNTER_COLOR = "#e8564a";
 const PROP_COLOR = "#5bd75b";
 const MODEL_MIN_SIZE = 0.001;
 const animalModel = (id: string): string => `/models/pets/animal-${id}.glb`;
+const BLASTER_MODEL = "/models/blaster/blaster-a.glb";
+const WEAPON_SCALE = 0.32;
+const WEAPON_OFFSET: [number, number, number] = [0.2, -0.22, -0.6];
+const WEAPON_ROTATION: [number, number, number] = [0, Math.PI, 0];
 
 const CAMERA_DISTANCE = 8;
 const CAMERA_TARGET_Y = 1.2;
@@ -208,6 +212,7 @@ export function Scene({
       <PropPicker room={room} enabled={canTransform} />
       <Shooter room={room} enabled={canShoot} tracerRef={tracerRef} onShoot={onShoot} />
       <Tracer tracerRef={tracerRef} />
+      <HunterViewmodel enabled={localRole === "hunter" && localAlive} />
       <LocalPlayer
         room={room}
         map={map}
@@ -430,6 +435,38 @@ function PropMesh({ def }: { def: PropDefinition }) {
     );
   }
   return <PrimitiveParts parts={def.parts} />;
+}
+
+function WeaponModel({ url, scale }: { url: string; scale: number }) {
+  const { scene } = useGLTF(url);
+  const object = useMemo(() => {
+    const clone = scene.clone(true);
+    clone.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) {
+        mesh.castShadow = false;
+        mesh.raycast = () => {};
+      }
+    });
+    return clone;
+  }, [scene]);
+  return <primitive object={object} scale={scale} />;
+}
+
+function HunterViewmodel({ enabled }: { enabled: boolean }) {
+  const camera = useThree((state) => state.camera);
+  if (!enabled) {
+    return null;
+  }
+  return (
+    <primitive object={camera}>
+      <group position={WEAPON_OFFSET} rotation={WEAPON_ROTATION}>
+        <Suspense fallback={null}>
+          <WeaponModel url={BLASTER_MODEL} scale={WEAPON_SCALE} />
+        </Suspense>
+      </group>
+    </primitive>
+  );
 }
 
 function MapView({ map }: { map: MapDefinition }) {
