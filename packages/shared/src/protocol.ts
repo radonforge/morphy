@@ -17,7 +17,7 @@ export const MSG_READY = "ready";
 export const MSG_MAP = "map";
 export const MSG_KILL = "kill";
 
-export type KillReason = "shot" | "self";
+export type KillReason = "shot" | "self" | "converted";
 
 export interface KillEvent {
   byId: string;

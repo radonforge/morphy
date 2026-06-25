@@ -348,14 +348,17 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     });
 
     if (target) {
-      target.alive = false;
+      target.role = "hunter";
+      target.alive = true;
+      target.hp = HUNTER_MAX_HP;
+      target.propType = "";
       player.kills += 1;
       this.broadcast(MSG_KILL, {
         byId: player.id,
         byName: player.name,
         victimId: target.id,
         victimName: target.name,
-        reason: "shot",
+        reason: "converted",
       } satisfies KillEvent);
     } else {
       player.hp = Math.max(0, player.hp - WRONG_SHOT_DAMAGE);
