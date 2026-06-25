@@ -8,10 +8,10 @@ import type {
 } from "@webhunt/shared";
 
 const TILE = 4;
-const CELLS_MIN = 5;
-const CELLS_MAX = 7;
+const CELLS_MIN = 8;
+const CELLS_MAX = 12;
 const ROOMS_PER_AXIS_MIN = 2;
-const ROOMS_PER_AXIS_MAX = 3;
+const ROOMS_PER_AXIS_MAX = 4;
 const MIN_ROOM_CELLS = 2;
 const WALL_HEIGHT = 4.25;
 const WALL_THICKNESS = 1;
@@ -41,10 +41,11 @@ const WALL_VARIANTS: WeightedModel[] = [
 
 const ROOM_MARGIN = 2;
 const PROPS_PER_ROOM_MIN = 2;
-const PROPS_PER_ROOM_MAX = 5;
+const PROPS_PER_ROOM_MAX = 8;
+const PROP_DENSITY = 0.45;
 const PROP_MIN_GAP = 1.6;
 const SPAWN_RESERVE = 2.2;
-const MAX_PLACE_ATTEMPTS = 12;
+const MAX_PLACE_ATTEMPTS = 16;
 const HUNTER_SPAWN_OFFSET = 1.4;
 
 function makeRng(seed: number): () => number {
@@ -326,7 +327,12 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
       const pz1 = z1 - ROOM_MARGIN;
       if (types.length === 0 || px1 <= px0 || pz1 <= pz0) continue;
 
-      const count = randInt(rng, PROPS_PER_ROOM_MIN, PROPS_PER_ROOM_MAX);
+      const roomCells =
+        (colBounds[rc + 1]! - colBounds[rc]!) * (rowBounds[rr + 1]! - rowBounds[rr]!);
+      const count = Math.max(
+        PROPS_PER_ROOM_MIN,
+        Math.min(PROPS_PER_ROOM_MAX, Math.round(roomCells * PROP_DENSITY)),
+      );
       for (let k = 0; k < count; k++) {
         for (let attempt = 0; attempt < MAX_PLACE_ATTEMPTS; attempt++) {
           const px = randRange(rng, px0, px1);
