@@ -27,8 +27,10 @@ import {
   MSG_SHOT_RESULT,
   MSG_READY,
   MSG_MAP,
+  MSG_KILL,
   computePropBounds,
   type InputMessage,
+  type KillEvent,
   type ShootMessage,
   type MapDefinition,
   type PropBounds,
@@ -56,6 +58,7 @@ export class PlayerState extends Schema {
   @type("string") role: Role = "prop";
   @type("boolean") alive = true;
   @type("number") hp = 0;
+  @type("number") kills = 0;
   @type("string") propType = "";
   @type("boolean") ready = false;
   @type("string") avatar = "";
@@ -346,10 +349,25 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
     if (target) {
       target.alive = false;
+      player.kills += 1;
+      this.broadcast(MSG_KILL, {
+        byId: player.id,
+        byName: player.name,
+        victimId: target.id,
+        victimName: target.name,
+        reason: "shot",
+      } satisfies KillEvent);
     } else {
       player.hp = Math.max(0, player.hp - WRONG_SHOT_DAMAGE);
       if (player.hp === 0) {
         player.alive = false;
+        this.broadcast(MSG_KILL, {
+          byId: "",
+          byName: "",
+          victimId: player.id,
+          victimName: player.name,
+          reason: "self",
+        } satisfies KillEvent);
       }
     }
     client.send(MSG_SHOT_RESULT, { hit: target !== undefined });
@@ -467,6 +485,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       player.role = index < hunterCount ? "hunter" : "prop";
       player.alive = true;
       player.hp = player.role === "hunter" ? HUNTER_MAX_HP : 0;
+      player.kills = 0;
       player.propType = "";
     });
   }

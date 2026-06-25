@@ -10,6 +10,7 @@ export interface RemotePlayerView {
   role: Role;
   alive: boolean;
   hp: number;
+  kills: number;
   propType: string;
   ready: boolean;
   avatar: string;
@@ -22,6 +23,7 @@ export interface PlayerMeta {
   role: Role;
   alive: boolean;
   hp: number;
+  kills: number;
   propType: string;
   ready: boolean;
   avatar: string;

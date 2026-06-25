@@ -8,9 +8,11 @@ import {
   MSG_MAP,
   MSG_READY,
   MSG_SHOT_RESULT,
+  MSG_KILL,
   MSG_TAUNT,
   MSG_TELEPORT,
   parseMapDefinition,
+  type KillEvent,
   type MapDefinition,
   type Phase,
   type Role,
@@ -19,7 +21,7 @@ import {
 import { type Connection } from "../net/connection";
 import { Scene, TAUNT_PULSE_SECONDS } from "./Scene";
 import { playHitConfirm, playMiss, playTaunt } from "./audio";
-import type { MetaMap, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
+import type { MetaMap, PlayerMeta, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
 
 const STATE_POLL_MS = 200;
 const COUNTDOWN_TICK_MS = 250;
@@ -27,6 +29,8 @@ const TAUNT_MAX_DISTANCE = 40;
 const CHAT_HISTORY = 6;
 const SHOT_FX_MS = 220;
 const MUZZLE_MS = 60;
+const KILL_FEED_MS = 5000;
+const KILL_FEED_MAX = 5;
 
 interface GameProps {
   connection: Connection;
@@ -43,6 +47,17 @@ interface ChatLine {
   key: number;
   name: string;
   text: string;
+}
+
+interface KillLine {
+  key: number;
+  text: string;
+}
+
+function killText(event: KillEvent): string {
+  return event.reason === "self"
+    ? `${event.victimName} si è auto-eliminato`
+    : `${event.byName} ha eliminato ${event.victimName}`;
 }
 
 const PHASE_LABEL: Record<Phase, string> = {
@@ -81,11 +96,55 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
       ai.role === bi.role &&
       ai.alive === bi.alive &&
       ai.hp === bi.hp &&
+      ai.kills === bi.kills &&
       ai.propType === bi.propType &&
       ai.ready === bi.ready &&
       ai.avatar === bi.avatar
     );
   });
+}
+
+function Scoreboard({ ids, meta, localId }: { ids: string[]; meta: MetaMap; localId: string }) {
+  const rows = ids
+    .map((id) => ({ id, player: meta[id] }))
+    .filter((row): row is { id: string; player: PlayerMeta } => row.player !== undefined)
+    .sort((a, b) => {
+      if (a.player.role !== b.player.role) return a.player.role === "hunter" ? -1 : 1;
+      if (b.player.kills !== a.player.kills) return b.player.kills - a.player.kills;
+      return a.player.name.localeCompare(b.player.name);
+    });
+
+  return (
+    <div className="scoreboard">
+      <div className="scoreboard-card">
+        <div className="scoreboard-row scoreboard-head">
+          <span>Giocatore</span>
+          <span>Ruolo</span>
+          <span>Stato</span>
+          <span>Kill</span>
+        </div>
+        {rows.map(({ id, player }) => (
+          <div
+            key={id}
+            className={`scoreboard-row${id === localId ? " scoreboard-self" : ""}${
+              player.alive ? "" : " scoreboard-dead"
+            }`}
+          >
+            <span>{player.name}</span>
+            <span>{ROLE_LABEL[player.role]}</span>
+            <span>
+              {player.alive
+                ? player.role === "hunter"
+                  ? `Vivo · ${player.hp} HP`
+                  : "Vivo"
+                : "Eliminato"}
+            </span>
+            <span>{player.role === "hunter" ? player.kills : "—"}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function Countdown({ endsAt }: { endsAt: number }) {
@@ -116,10 +175,12 @@ export function Game({ connection, onLeave }: GameProps) {
   const [phaseEndsAt, setPhaseEndsAt] = useState(0);
   const [winner, setWinner] = useState<Winner>("");
   const [messages, setMessages] = useState<ChatLine[]>([]);
+  const [killFeed, setKillFeed] = useState<KillLine[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatDraft, setChatDraft] = useState("");
   const [shotFx, setShotFx] = useState<{ kind: "hit" | "miss"; seq: number } | null>(null);
   const [muzzle, setMuzzle] = useState<number | null>(null);
+  const [scoreboardOpen, setScoreboardOpen] = useState(false);
 
   chatOpenRef.current = chatOpen;
 
@@ -179,6 +240,15 @@ export function Game({ connection, onLeave }: GameProps) {
       setShotFx({ kind: hit ? "hit" : "miss", seq: fxSeq.current++ });
     });
 
+    room.onMessage(MSG_KILL, (message: unknown) => {
+      if (typeof message !== "object" || message === null) return;
+      const event = message as KillEvent;
+      if (typeof event.victimName !== "string" || typeof event.reason !== "string") return;
+      const key = fxSeq.current++;
+      setKillFeed((prev) => [...prev.slice(-(KILL_FEED_MAX - 1)), { key, text: killText(event) }]);
+      setTimeout(() => setKillFeed((prev) => prev.filter((line) => line.key !== key)), KILL_FEED_MS);
+    });
+
     room.onMessage(MSG_MAP, (raw: unknown) => setMap(parseMapDefinition(raw)));
     room.send(MSG_MAP);
 
@@ -220,6 +290,26 @@ export function Game({ connection, onLeave }: GameProps) {
   }, []);
 
   useEffect(() => {
+    const onDown = (e: KeyboardEvent) => {
+      if (e.code !== "Tab") return;
+      e.preventDefault();
+      if (!chatOpenRef.current) setScoreboardOpen(true);
+    };
+    const onUp = (e: KeyboardEvent) => {
+      if (e.code === "Tab") setScoreboardOpen(false);
+    };
+    const onBlur = () => setScoreboardOpen(false);
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, []);
+
+  useEffect(() => {
     const poll = setInterval(() => {
       const view = room.state as unknown as RoomStateView;
       setPhase((prev) => (prev === view.phase ? prev : view.phase));
@@ -233,6 +323,7 @@ export function Game({ connection, onLeave }: GameProps) {
           role: player.role,
           alive: player.alive,
           hp: player.hp,
+          kills: player.kills,
           propType: player.propType,
           ready: player.ready,
           avatar: player.avatar,
@@ -360,6 +451,16 @@ export function Game({ connection, onLeave }: GameProps) {
       )}
 
       {phase === "round_end" && winner !== "" && <div className="banner">{WINNER_LABEL[winner]}</div>}
+
+      {scoreboardOpen && <Scoreboard ids={ids} meta={meta} localId={sessionId} />}
+
+      <div className="killfeed">
+        {killFeed.map((line) => (
+          <div key={line.key} className="killfeed-line">
+            {line.text}
+          </div>
+        ))}
+      </div>
 
       <div className="chat">
         {messages.map((m) => (

@@ -15,6 +15,17 @@ export const MSG_CHAT = "chat";
 export const MSG_SHOT_RESULT = "shot_result";
 export const MSG_READY = "ready";
 export const MSG_MAP = "map";
+export const MSG_KILL = "kill";
+
+export type KillReason = "shot" | "self";
+
+export interface KillEvent {
+  byId: string;
+  byName: string;
+  victimId: string;
+  victimName: string;
+  reason: KillReason;
+}
 
 export interface InputMessage {
   x: number;
