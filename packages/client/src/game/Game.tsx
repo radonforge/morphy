@@ -2,8 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Callbacks } from "@colyseus/sdk";
 import {
+  HIDE_DURATION_MS,
+  HUNTER_MAX_HP,
   MAX_CHAT_LENGTH,
   MIN_PLAYERS_TO_START,
+  ROUND_DURATION_MS,
+  ROUND_END_MS,
+  START_COUNTDOWN_MS,
   MSG_CHAT,
   MSG_MAP,
   MSG_READY,
@@ -20,7 +25,19 @@ import {
 } from "@webhunt/shared";
 import { type Connection } from "../net/connection";
 import { Scene, TAUNT_PULSE_SECONDS } from "./Scene";
-import { playHitConfirm, playMiss, playTaunt } from "./audio";
+import {
+  isMuted,
+  playDeath,
+  playHitConfirm,
+  playKill,
+  playMiss,
+  playRoundEnd,
+  playRoundStart,
+  playTaunt,
+  startAmbient,
+  stopAmbient,
+  toggleMuted,
+} from "./audio";
 import type { MetaMap, PlayerMeta, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
 
 const STATE_POLL_MS = 200;
@@ -31,6 +48,18 @@ const SHOT_FX_MS = 220;
 const MUZZLE_MS = 60;
 const KILL_FEED_MS = 5000;
 const KILL_FEED_MAX = 5;
+const LOW_TIME_MS = 10000;
+const HP_LOW_THRESHOLD = 40;
+const RING_RADIUS = 19;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+const PHASE_DURATION_MS: Record<Phase, number> = {
+  lobby: 0,
+  starting: START_COUNTDOWN_MS,
+  hiding: HIDE_DURATION_MS,
+  hunting: ROUND_DURATION_MS,
+  round_end: ROUND_END_MS,
+};
 
 interface GameProps {
   connection: Connection;
@@ -55,9 +84,14 @@ interface KillLine {
 }
 
 function killText(event: KillEvent): string {
-  return event.reason === "self"
-    ? `${event.victimName} si è auto-eliminato`
-    : `${event.byName} ha eliminato ${event.victimName}`;
+  switch (event.reason) {
+    case "self":
+      return `${event.victimName} si è auto-eliminato`;
+    case "converted":
+      return `${event.byName} ha catturato ${event.victimName}`;
+    default:
+      return `${event.byName} ha eliminato ${event.victimName}`;
+  }
 }
 
 const PHASE_LABEL: Record<Phase, string> = {
@@ -135,7 +169,7 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
           }`}
         >
           <span>{player.name}</span>
-          <span>{ROLE_LABEL[player.role]}</span>
+          <span className={`role-${player.role}`}>{ROLE_LABEL[player.role]}</span>
           <span>
             {player.alive
               ? player.role === "hunter"
@@ -150,10 +184,37 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
   );
 }
 
+function SpeakerIcon({ muted }: { muted: boolean }) {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 6h2.3L8.2 3.4v9.2L5.3 10H3z" fill="currentColor" stroke="none" />
+      {muted ? (
+        <path d="M10.6 6l3 4M13.6 6l-3 4" />
+      ) : (
+        <>
+          <path d="M10.4 6.1a2.6 2.6 0 0 1 0 3.8" />
+          <path d="M12.2 4.6a5 5 0 0 1 0 6.8" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 function Scoreboard({ ids, meta, localId }: { ids: string[]; meta: MetaMap; localId: string }) {
   return (
     <div className="scoreboard">
-      <div className="scoreboard-card">
+      <div className="scoreboard-card panel">
+        <div className="eyebrow standings-title">Classifica</div>
         <StandingsTable ids={ids} meta={meta} localId={localId} />
       </div>
     </div>
@@ -184,16 +245,21 @@ function ResultScreen({
   localId: string;
 }) {
   const mvp = topHunter(ids, meta);
+  const role = meta[localId]?.role ?? "prop";
+  const won =
+    (role === "hunter" && winner === "hunters") || (role === "prop" && winner === "props");
   return (
     <div className="result">
-      <div className="result-card">
-        <div className="result-title">{WINNER_LABEL[winner]}</div>
+      <div className="result-card panel">
+        <div className={`result-title ${won ? "result-win" : "result-lose"}`}>
+          {WINNER_LABEL[winner]}
+        </div>
         {mvp && (
           <div className="result-mvp">
-            Miglior cacciatore: <b>{mvp.name}</b> · {mvp.kills} kill
+            Miglior cacciatore: {mvp.name} · {mvp.kills} kill
           </div>
         )}
-        <div className="scoreboard-card result-standings">
+        <div className="result-standings">
           <StandingsTable ids={ids} meta={meta} localId={localId} />
         </div>
         <div className="result-next">
@@ -214,6 +280,40 @@ function Countdown({ endsAt }: { endsAt: number }) {
   if (endsAt <= 0) return null;
   const remaining = Math.max(0, Math.ceil((endsAt - now) / 1000));
   return <span> · {remaining}s</span>;
+}
+
+function formatClock(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function RingTimer({ endsAt, total }: { endsAt: number; total: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), COUNTDOWN_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+  const remaining = Math.max(0, endsAt - now);
+  const fraction = total > 0 ? Math.min(1, remaining / total) : 0;
+  const low = remaining > 0 && remaining <= LOW_TIME_MS;
+  return (
+    <div className={`ring${low ? " ring-low" : ""}`}>
+      <svg viewBox="0 0 46 46" width="46" height="46">
+        <circle className="ring-track" cx="23" cy="23" r={RING_RADIUS} />
+        <circle
+          className="ring-fill"
+          cx="23"
+          cy="23"
+          r={RING_RADIUS}
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={RING_CIRCUMFERENCE * (1 - fraction)}
+        />
+      </svg>
+      <span className="ring-label">{formatClock(remaining)}</span>
+    </div>
+  );
 }
 
 export function Game({ connection, onLeave }: GameProps) {
@@ -239,6 +339,8 @@ export function Game({ connection, onLeave }: GameProps) {
   const [shotFx, setShotFx] = useState<{ kind: "hit" | "miss"; seq: number } | null>(null);
   const [muzzle, setMuzzle] = useState<number | null>(null);
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
+  const [muted, setMuted] = useState(() => isMuted());
+  const prevPhaseRef = useRef<Phase>("lobby");
 
   chatOpenRef.current = chatOpen;
 
@@ -305,6 +407,15 @@ export function Game({ connection, onLeave }: GameProps) {
       const key = fxSeq.current++;
       setKillFeed((prev) => [...prev.slice(-(KILL_FEED_MAX - 1)), { key, text: killText(event) }]);
       setTimeout(() => setKillFeed((prev) => prev.filter((line) => line.key !== key)), KILL_FEED_MS);
+      if (event.victimId === sessionId) {
+        if (event.reason === "converted") {
+          playRoundStart();
+        } else {
+          playDeath();
+        }
+      } else if (event.byId !== sessionId) {
+        playKill();
+      }
     });
 
     room.onMessage(MSG_MAP, (raw: unknown) => setMap(parseMapDefinition(raw)));
@@ -335,17 +446,39 @@ export function Game({ connection, onLeave }: GameProps) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === "KeyT" && !chatOpenRef.current) {
+      if (chatOpenRef.current) return;
+      if (e.code === "KeyT") {
         e.preventDefault();
         if (document.pointerLockElement) {
           document.exitPointerLock();
         }
         setChatOpen(true);
+      } else if (e.code === "KeyM") {
+        setMuted(toggleMuted());
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  useEffect(() => {
+    startAmbient();
+    return () => stopAmbient();
+  }, []);
+
+  useEffect(() => {
+    const prev = prevPhaseRef.current;
+    prevPhaseRef.current = phase;
+    if (phase === prev) return;
+    if (phase === "hiding") {
+      playRoundStart();
+    } else if (phase === "round_end") {
+      const role = meta[sessionId]?.role ?? "prop";
+      const won =
+        (role === "hunter" && winner === "hunters") || (role === "prop" && winner === "props");
+      playRoundEnd(won);
+    }
+  }, [phase, winner, meta, sessionId]);
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
@@ -396,7 +529,6 @@ export function Game({ connection, onLeave }: GameProps) {
   const localRole: Role = localMeta?.role ?? "prop";
   const localAlive = localMeta?.alive ?? true;
   const localHp = localMeta?.hp ?? 0;
-  const localProp = localMeta?.propType ?? "";
   const localReady = localMeta?.ready ?? false;
 
   const toggleReady = useCallback(
@@ -405,6 +537,10 @@ export function Game({ connection, onLeave }: GameProps) {
   );
 
   const readyCount = ids.reduce((n, id) => (meta[id]?.ready ? n + 1 : n), 0);
+  const aliveProps = ids.reduce((n, id) => {
+    const player = meta[id];
+    return player && player.role === "prop" && player.alive ? n + 1 : n;
+  }, 0);
 
   const canTransform = localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
@@ -430,12 +566,12 @@ export function Game({ connection, onLeave }: GameProps) {
   const hint = !localAlive
     ? "Eliminato — guardi da spettatore"
     : canShoot
-      ? "Click per sparare · sbagliare costa vita · T chat"
+      ? "Click spara · Shift corri · Spazio salta · sbagliare costa vita · T chat · Tab classifica · M audio"
       : canTransform
-        ? "Guarda un oggetto e premi E · T chat"
+        ? "Guarda un oggetto e premi E · Shift corri · T chat · Tab classifica · M audio"
         : localRole === "hunter" && phase === "hiding"
           ? "Sei accecato… attendi la caccia"
-          : "WASD muovi · click+mouse visuale · T chat";
+          : "WASD muovi · Shift corri · click+mouse visuale · T chat · Tab classifica · M audio";
 
   if (!map) {
     return (
@@ -467,7 +603,7 @@ export function Game({ connection, onLeave }: GameProps) {
 
       {phase === "lobby" && (
         <div className="lobby-overlay">
-          <div className="lobby-overlay-card">
+          <div className="lobby-overlay-card panel">
             <h2>In attesa di giocatori</h2>
             <ul className="ready-list">
               {ids.map((id) => (
@@ -494,13 +630,21 @@ export function Game({ connection, onLeave }: GameProps) {
 
       {muzzle !== null && <div className="muzzle" />}
 
-      {showCrosshair && <div className={`crosshair${shotFx ? ` ${shotFx.kind}` : ""}`} />}
+      {showCrosshair && (
+        <div className={`reticle${shotFx ? ` ${shotFx.kind}` : ""}`}>
+          <i className="tick tick-n" />
+          <i className="tick tick-e" />
+          <i className="tick tick-s" />
+          <i className="tick tick-w" />
+          <span className="reticle-dot" />
+        </div>
+      )}
 
       {shotFx?.kind === "miss" && <div className="vignette" />}
 
       {localRole === "hunter" && phase === "hiding" && (
         <div className="blindout">
-          <div>I prop si stanno nascondendo…</div>
+          <div className="blindout-title">I prop si stanno nascondendo</div>
           <div className="blindout-timer">
             La caccia inizia
             <Countdown endsAt={phaseEndsAt} />
@@ -541,23 +685,47 @@ export function Game({ connection, onLeave }: GameProps) {
         )}
       </div>
 
-      <div className="hud">
-        <div>
-          <b>{PHASE_LABEL[phase]}</b>
-          <Countdown endsAt={phaseEndsAt} />
-        </div>
-        <div>
-          Ruolo: <b>{ROLE_LABEL[localRole]}</b>
-          {localProp ? ` (${localProp})` : ""}
-        </div>
-        {localRole === "hunter" && (
-          <div>
-            HP: <b>{localHp}</b>
+      {phase !== "lobby" && (
+        <div className="topbar panel">
+          <div className="topbar-phase">
+            <span className="eyebrow">Round</span>
+            <span className="topbar-phase-name">{PHASE_LABEL[phase]}</span>
           </div>
-        )}
-        <div>Giocatori: {ids.length}</div>
-        <div style={{ marginTop: 6, opacity: 0.8 }}>{hint}</div>
-      </div>
+          {phaseEndsAt > 0 && <RingTimer endsAt={phaseEndsAt} total={PHASE_DURATION_MS[phase]} />}
+          <div className="topbar-meta">
+            <span className={`badge badge-${localRole}`}>{ROLE_LABEL[localRole]}</span>
+            {(phase === "hiding" || phase === "hunting") && (
+              <span className="targets" title="Prop ancora in gioco">
+                <span className="targets-dot" />
+                {aliveProps}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            className={`topbar-mute${muted ? " is-muted" : ""}`}
+            onClick={() => setMuted(toggleMuted())}
+            title={muted ? "Riattiva audio (M)" : "Disattiva audio (M)"}
+            aria-label={muted ? "Riattiva audio" : "Disattiva audio"}
+          >
+            <SpeakerIcon muted={muted} />
+          </button>
+        </div>
+      )}
+
+      {localRole === "hunter" && localAlive && phase !== "lobby" && (
+        <div className={`vitals panel${localHp <= HP_LOW_THRESHOLD ? " hp-low" : ""}`}>
+          <span className="eyebrow">Integrità</span>
+          <div className="vitals-row">
+            <div className="hp">
+              <div className="hp-fill" style={{ width: `${(localHp / HUNTER_MAX_HP) * 100}%` }} />
+            </div>
+            <span className="hp-val">{localHp}</span>
+          </div>
+        </div>
+      )}
+
+      {phase !== "lobby" && <div className="hint">{hint}</div>}
     </>
   );
 }
