@@ -43,6 +43,9 @@ const PROP_COLOR = "#5bd75b";
 const CAMERA_DISTANCE = 8;
 const CAMERA_TARGET_Y = 1.2;
 const CAMERA_DAMP = 0.0008;
+const CAMERA_WALL_MARGIN = 0.35;
+const CAMERA_MIN_DISTANCE = 0.2;
+const CAMERA_SLAB_EPSILON = 1e-4;
 const REMOTE_DAMP = 0.0009;
 export const TAUNT_PULSE_SECONDS = 0.5;
 const TAUNT_AMPLITUDE = 0.18;
@@ -83,6 +86,59 @@ function buildObstacles(map: MapDefinition, catalog: Catalog): Obstacle[] {
     }
   }
   return obstacles;
+}
+
+interface Wall {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
+function buildWalls(map: MapDefinition): Wall[] {
+  return map.colliders
+    .filter((collider) => collider.position.y > 0)
+    .map((collider) => ({
+      minX: collider.position.x - collider.size.x / 2,
+      maxX: collider.position.x + collider.size.x / 2,
+      minZ: collider.position.z - collider.size.z / 2,
+      maxZ: collider.position.z + collider.size.z / 2,
+    }));
+}
+
+function nearestWallDistanceXZ(
+  fromX: number,
+  fromZ: number,
+  dirX: number,
+  dirZ: number,
+  maxDist: number,
+  walls: Wall[],
+): number {
+  let nearest = maxDist;
+  for (const wall of walls) {
+    let tEnter = 0;
+    let tExit = maxDist;
+    if (Math.abs(dirX) < CAMERA_SLAB_EPSILON) {
+      if (fromX < wall.minX || fromX > wall.maxX) continue;
+    } else {
+      let t1 = (wall.minX - fromX) / dirX;
+      let t2 = (wall.maxX - fromX) / dirX;
+      if (t1 > t2) [t1, t2] = [t2, t1];
+      if (t1 > tEnter) tEnter = t1;
+      if (t2 < tExit) tExit = t2;
+    }
+    if (Math.abs(dirZ) < CAMERA_SLAB_EPSILON) {
+      if (fromZ < wall.minZ || fromZ > wall.maxZ) continue;
+    } else {
+      let t1 = (wall.minZ - fromZ) / dirZ;
+      let t2 = (wall.maxZ - fromZ) / dirZ;
+      if (t1 > t2) [t1, t2] = [t2, t1];
+      if (t1 > tEnter) tEnter = t1;
+      if (t2 < tExit) tExit = t2;
+    }
+    if (tEnter <= tExit && tEnter < nearest) nearest = tEnter;
+  }
+  return nearest;
 }
 
 interface TracerState {
@@ -129,6 +185,7 @@ export function Scene({
     [map],
   );
   const obstacles = useMemo(() => buildObstacles(map, catalog), [map, catalog]);
+  const walls = useMemo(() => buildWalls(map), [map]);
   const tracerRef = useRef<TracerState | null>(null);
   const localMeta = meta[localId];
   const localRole: Role = localMeta?.role ?? "prop";
@@ -161,6 +218,7 @@ export function Scene({
         chatOpen={chatOpen}
         playersRef={playersRef}
         obstacles={obstacles}
+        walls={walls}
       />
       {ids
         .filter((id) => id !== localId && (meta[id]?.alive ?? true))
@@ -453,6 +511,7 @@ interface LocalPlayerProps {
   chatOpen: boolean;
   playersRef: PlayersRef;
   obstacles: Obstacle[];
+  walls: Wall[];
 }
 
 function LocalPlayer({
@@ -469,6 +528,7 @@ function LocalPlayer({
   chatOpen,
   playersRef,
   obstacles,
+  walls,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!chatOpen);
@@ -484,8 +544,7 @@ function LocalPlayer({
   const forwardVec = useMemo(() => new THREE.Vector3(), []);
   const rightVec = useMemo(() => new THREE.Vector3(), []);
   const moveVec = useMemo(() => new THREE.Vector3(), []);
-  const camOffset = useMemo(() => new THREE.Vector3(), []);
-  const camTarget = useMemo(() => new THREE.Vector3(), []);
+  const camDistRef = useRef(CAMERA_DISTANCE);
 
   const frozen = !alive || (role === "hunter" && phase === "hiding");
 
@@ -561,6 +620,30 @@ function LocalPlayer({
           pos.z += (dz / dist) * push;
         }
       }
+      for (const wall of walls) {
+        const nearestX = THREE.MathUtils.clamp(pos.x, wall.minX, wall.maxX);
+        const nearestZ = THREE.MathUtils.clamp(pos.z, wall.minZ, wall.maxZ);
+        const dx = pos.x - nearestX;
+        const dz = pos.z - nearestZ;
+        const distSq = dx * dx + dz * dz;
+        if (distSq >= PLAYER_RADIUS * PLAYER_RADIUS) continue;
+        if (distSq > 1e-8) {
+          const dist = Math.sqrt(distSq);
+          const push = PLAYER_RADIUS - dist;
+          pos.x += (dx / dist) * push;
+          pos.z += (dz / dist) * push;
+        } else {
+          const toMinX = pos.x - wall.minX;
+          const toMaxX = wall.maxX - pos.x;
+          const toMinZ = pos.z - wall.minZ;
+          const toMaxZ = wall.maxZ - pos.z;
+          const minPen = Math.min(toMinX, toMaxX, toMinZ, toMaxZ);
+          if (minPen === toMinX) pos.x = wall.minX - PLAYER_RADIUS;
+          else if (minPen === toMaxX) pos.x = wall.maxX + PLAYER_RADIUS;
+          else if (minPen === toMinZ) pos.z = wall.minZ - PLAYER_RADIUS;
+          else pos.z = wall.maxZ + PLAYER_RADIUS;
+        }
+      }
       const { min, max } = map.bounds;
       pos.x = THREE.MathUtils.clamp(pos.x, min.x + PLAYER_RADIUS, max.x - PLAYER_RADIUS);
       pos.z = THREE.MathUtils.clamp(pos.z, min.z + PLAYER_RADIUS, max.z - PLAYER_RADIUS);
@@ -584,12 +667,33 @@ function LocalPlayer({
     } else {
       const localPitch = THREE.MathUtils.clamp(pitch, TP_PITCH_MIN, TP_PITCH_MAX);
       const cosPitch = Math.cos(localPitch);
-      camOffset
-        .set(Math.sin(yaw) * cosPitch, Math.sin(localPitch), Math.cos(yaw) * cosPitch)
-        .multiplyScalar(CAMERA_DISTANCE);
-      camTarget.copy(pos).add(camOffset);
-      camTarget.y += CAMERA_TARGET_Y;
-      camera.position.lerp(camTarget, 1 - Math.pow(CAMERA_DAMP, delta));
+      const dirX = Math.sin(yaw) * cosPitch;
+      const dirY = Math.sin(localPitch);
+      const dirZ = Math.cos(yaw) * cosPitch;
+
+      let desired = CAMERA_DISTANCE;
+      const hitXZ = nearestWallDistanceXZ(
+        pos.x,
+        pos.z,
+        Math.sin(yaw),
+        Math.cos(yaw),
+        CAMERA_DISTANCE * cosPitch,
+        walls,
+      );
+      const wallDistance = hitXZ / cosPitch;
+      if (wallDistance < desired) {
+        desired = Math.max(wallDistance - CAMERA_WALL_MARGIN, CAMERA_MIN_DISTANCE);
+      }
+
+      const current = camDistRef.current;
+      camDistRef.current =
+        desired < current
+          ? desired
+          : current + (desired - current) * (1 - Math.pow(CAMERA_DAMP, delta));
+      const d = camDistRef.current;
+
+      const pivotY = pos.y + CAMERA_TARGET_Y;
+      camera.position.set(pos.x + dirX * d, pivotY + dirY * d, pos.z + dirZ * d);
       camera.lookAt(pos.x, CAMERA_TARGET_Y, pos.z);
     }
 

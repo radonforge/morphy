@@ -32,12 +32,15 @@ import {
   type ShootMessage,
   type MapDefinition,
   type PropBounds,
+  type PropDefinition,
+  type BoxCollider,
   type Vec3,
   type Phase,
   type Role,
   type Winner,
 } from "@webhunt/shared";
 import { loadMap } from "../loadMap";
+import { generateMap } from "../generateMap";
 
 const DEFAULT_MAP_ID = "office-min";
 const FALLBACK_NAME = "Player";
@@ -136,23 +139,18 @@ const UNTRANSFORMED_PROP_BOUNDS: PropBounds = {
 
 const SLAB_EPSILON = 1e-6;
 
-/**
- * Distance along the ray to the prop's axis-aligned bounding box, or null if it
- * misses or lies beyond `maxDist`. The box is the prop's bounding cylinder
- * squared off in X/Z and spanning [yMin, yMax] in Y, centered at (cx, cz).
- */
-function rayHitsBox(
+type Vec3Tuple = [number, number, number];
+
+/** Distance along the ray to an axis-aligned box (slab method), or null if it misses or lies beyond `maxDist`. */
+function rayAabb(
   origin: { x: number; y: number; z: number },
   dir: { x: number; y: number; z: number },
-  cx: number,
-  cz: number,
-  bounds: PropBounds,
+  min: Vec3Tuple,
+  max: Vec3Tuple,
   maxDist: number,
 ): number | null {
-  const min = [cx - bounds.radius, bounds.yMin, cz - bounds.radius];
-  const max = [cx + bounds.radius, bounds.yMax, cz + bounds.radius];
-  const o = [origin.x, origin.y, origin.z];
-  const d = [dir.x, dir.y, dir.z];
+  const o: Vec3Tuple = [origin.x, origin.y, origin.z];
+  const d: Vec3Tuple = [dir.x, dir.y, dir.z];
   let tEnter = 0;
   let tExit = maxDist;
   for (let axis = 0; axis < 3; axis++) {
@@ -170,10 +168,43 @@ function rayHitsBox(
   return tEnter;
 }
 
+/**
+ * Distance along the ray to the prop's hit box: its bounding cylinder squared
+ * off in X/Z and spanning [yMin, yMax] in Y, centered at (cx, cz).
+ */
+function rayHitsBox(
+  origin: { x: number; y: number; z: number },
+  dir: { x: number; y: number; z: number },
+  cx: number,
+  cz: number,
+  bounds: PropBounds,
+  maxDist: number,
+): number | null {
+  return rayAabb(
+    origin,
+    dir,
+    [cx - bounds.radius, bounds.yMin, cz - bounds.radius],
+    [cx + bounds.radius, bounds.yMax, cz + bounds.radius],
+    maxDist,
+  );
+}
+
+function colliderAabb(c: BoxCollider): { min: Vec3Tuple; max: Vec3Tuple } {
+  return {
+    min: [c.position.x - c.size.x / 2, c.position.y - c.size.y / 2, c.position.z - c.size.z / 2],
+    max: [c.position.x + c.size.x / 2, c.position.y + c.size.y / 2, c.position.z + c.size.z / 2],
+  };
+}
+
+function nextSeed(): number {
+  return Math.floor(Math.random() * 0x1_0000_0000);
+}
+
 export class WebHuntRoom extends Room<{ state: RoomState }> {
   maxClients = MAX_PLAYERS;
   state = new RoomState();
   private map!: MapDefinition;
+  private catalog: PropDefinition[] = [];
   private catalogIds = new Set<string>();
   private propBounds = new Map<string, PropBounds>();
   private phaseTimer?: ClearableTimer;
@@ -181,10 +212,8 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   private lastShotAt = new Map<string, number>();
 
   onCreate(): void {
-    this.map = loadMap(DEFAULT_MAP_ID);
-    this.catalogIds = new Set(this.map.propCatalog.map((def) => def.id));
-    this.propBounds = new Map(this.map.propCatalog.map((def) => [def.id, computePropBounds(def)]));
-    this.state.mapId = this.map.id;
+    this.catalog = loadMap(DEFAULT_MAP_ID).propCatalog;
+    this.applyMap(generateMap(nextSeed(), this.catalog));
     this.setPatchRate(PATCH_RATE_MS);
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
     this.onMessage(MSG_TRANSFORM, (client, payload) => this.handleTransform(client, payload));
@@ -192,6 +221,13 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     this.onMessage(MSG_CHAT, (client, payload) => this.handleChat(client, payload));
     this.onMessage(MSG_READY, (client, payload) => this.handleReady(client, payload));
     this.onMessage(MSG_MAP, (client) => client.send(MSG_MAP, this.map));
+  }
+
+  private applyMap(map: MapDefinition): void {
+    this.map = map;
+    this.catalogIds = new Set(map.propCatalog.map((def) => def.id));
+    this.propBounds = new Map(map.propCatalog.map((def) => [def.id, computePropBounds(def)]));
+    this.state.mapId = map.id;
   }
 
   private handleChat(client: Client, payload: unknown): void {
@@ -284,6 +320,14 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     if (len === 0) return;
     const dir = { x: ray.dir.x / len, y: ray.dir.y / len, z: ray.dir.z / len };
 
+    let wallDist = SHOOT_RANGE;
+    for (const collider of this.map.colliders) {
+      if (collider.position.y <= 0) continue;
+      const { min, max } = colliderAabb(collider);
+      const t = rayAabb(ray.origin, dir, min, max, SHOOT_RANGE);
+      if (t !== null && t < wallDist) wallDist = t;
+    }
+
     let bestT = Infinity;
     let target: PlayerState | undefined;
     this.state.players.forEach((candidate) => {
@@ -292,7 +336,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
         (candidate.propType ? this.propBounds.get(candidate.propType) : undefined) ??
         UNTRANSFORMED_PROP_BOUNDS;
       const t = rayHitsBox(ray.origin, dir, candidate.x, candidate.z, bounds, SHOOT_RANGE);
-      if (t !== null && t < bestT) {
+      if (t !== null && t < wallDist && t < bestT) {
         bestT = t;
         target = candidate;
       }
@@ -333,6 +377,8 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   }
 
   private beginHiding(): void {
+    this.applyMap(generateMap(nextSeed(), this.catalog));
+    this.broadcast(MSG_MAP, this.map);
     this.assignRoles();
     this.respawnPlayers();
     this.setPhase("hiding", HIDE_DURATION_MS, () => this.beginHunting());
