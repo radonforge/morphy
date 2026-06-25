@@ -32,7 +32,7 @@ Il cuore del bilanciamento. Il cacciatore spara; sbagliare costa.
 
 - **Click sinistro = sparo**, con cooldown (`FIRE_COOLDOWN_MS`) anti-spam.
 - Il client invia `shoot { origin, direction }`. Il **server fa il raycast** contro le posizioni autoritative dei prop vivi (entro `SHOOT_RANGE`):
-  - **Colpito un giocatore-prop** → eliminato, diventa **spettatore** per il round.
+  - **Colpito un giocatore-prop** → **catturato**: passa al team dei **cacciatori** (resta in gioco, prima persona + arma) anziché diventare spettatore. Modalità "infezione": il round finisce quando l'ultimo prop viene convertito.
   - **Nessun giocatore-prop colpito** (muro, prop finto, vuoto) → **colpo sbagliato**: il cacciatore subisce `WRONG_SHOT_DAMAGE`.
 - Il cacciatore a 0 HP (`HUNTER_MAX_HP`) è **fuori per il round**.
 
@@ -47,6 +47,8 @@ Perché funziona: la penalità trasforma lo "sparare a caso" in **deduzione** �
 | Input | Azione |
 |---|---|
 | `WASD` | Movimento |
+| `Shift` | Corsa (tutti; cacciatore più veloce del prop) |
+| `Spazio` | Salto (solo cacciatore) |
 | Mouse | Rotazione vista (e del prop) |
 | Click sx | Sparo (solo cacciatore) |
 | `E` | Trasformazione (solo prop): guarda un prop nella mappa e premi `E` per assumerne il mesh |
