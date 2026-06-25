@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.9.0",
   "engines": {
     "node": ">=20"
   },
@@ -11,6 +12,14 @@
     "dev:server": "pnpm --filter @webhunt/server dev",
     "dev:client": "pnpm --filter @webhunt/client dev",
     "tunnel": "ngrok http 5173 ${NGROK_DOMAIN:+--url=https://$NGROK_DOMAIN}",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "check": "biome check .",
+    "check:write": "biome check --write .",
+    "ci": "biome ci ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.1"
   }
 }
