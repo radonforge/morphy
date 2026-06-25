@@ -27,6 +27,39 @@ export interface PropInstance {
   rotation: number;
 }
 
+/** Vertical bounding cylinder of a prop, around its (x, z) origin, in world space. */
+export interface PropBounds {
+  radius: number;
+  yMin: number;
+  yMax: number;
+}
+
+/**
+ * Derive a prop's bounding volume from its visual parts so server-side hit
+ * detection matches what the player sees through the crosshair. Each part is a
+ * primitive centered at `position` with full extents `size`; the horizontal
+ * reach is rotation-agnostic (a circle) and the vertical span is the union of
+ * all parts.
+ */
+export function computePropBounds(def: PropDefinition): PropBounds {
+  let radius = 0;
+  let yMin = Infinity;
+  let yMax = -Infinity;
+  for (const part of def.parts) {
+    const reach =
+      Math.hypot(part.position.x, part.position.z) + Math.max(part.size.x, part.size.z) / 2;
+    if (reach > radius) radius = reach;
+    const bottom = part.position.y - part.size.y / 2;
+    const top = part.position.y + part.size.y / 2;
+    if (bottom < yMin) yMin = bottom;
+    if (top > yMax) yMax = top;
+  }
+  if (!Number.isFinite(yMin) || !Number.isFinite(yMax)) {
+    return { radius: 0, yMin: 0, yMax: 0 };
+  }
+  return { radius, yMin, yMax };
+}
+
 export interface BoxCollider {
   position: Vec3;
   size: Vec3;

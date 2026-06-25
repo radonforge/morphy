@@ -16,8 +16,8 @@ import {
   WRONG_SHOT_DAMAGE,
   FIRE_COOLDOWN_MS,
   SHOOT_RANGE,
-  PROP_HIT_RADIUS,
-  CATCH_HEIGHT,
+  UNTRANSFORMED_PROP_RADIUS,
+  UNTRANSFORMED_PROP_HEIGHT,
   MSG_INPUT,
   MSG_TRANSFORM,
   MSG_SHOOT,
@@ -25,9 +25,11 @@ import {
   MSG_TAUNT,
   MSG_CHAT,
   MSG_SHOT_RESULT,
+  computePropBounds,
   type InputMessage,
   type ShootMessage,
   type MapDefinition,
+  type PropBounds,
   type Phase,
   type Role,
   type Winner,
@@ -115,23 +117,46 @@ function sanitizeName(raw: unknown): string {
   return trimmed.length > 0 ? trimmed : FALLBACK_NAME;
 }
 
-function rayHitDistance(
+const UNTRANSFORMED_PROP_BOUNDS: PropBounds = {
+  radius: UNTRANSFORMED_PROP_RADIUS,
+  yMin: 0,
+  yMax: UNTRANSFORMED_PROP_HEIGHT,
+};
+
+const SLAB_EPSILON = 1e-6;
+
+/**
+ * Distance along the ray to the prop's axis-aligned bounding box, or null if it
+ * misses or lies beyond `maxDist`. The box is the prop's bounding cylinder
+ * squared off in X/Z and spanning [yMin, yMax] in Y, centered at (cx, cz).
+ */
+function rayHitsBox(
   origin: { x: number; y: number; z: number },
   dir: { x: number; y: number; z: number },
-  center: { x: number; y: number; z: number },
-  radius: number,
+  cx: number,
+  cz: number,
+  bounds: PropBounds,
   maxDist: number,
 ): number | null {
-  const ex = center.x - origin.x;
-  const ey = center.y - origin.y;
-  const ez = center.z - origin.z;
-  const t = ex * dir.x + ey * dir.y + ez * dir.z;
-  if (t < 0 || t > maxDist) return null;
-  const px = origin.x + dir.x * t;
-  const py = origin.y + dir.y * t;
-  const pz = origin.z + dir.z * t;
-  const distSq = (px - center.x) ** 2 + (py - center.y) ** 2 + (pz - center.z) ** 2;
-  return distSq <= radius * radius ? t : null;
+  const min = [cx - bounds.radius, bounds.yMin, cz - bounds.radius];
+  const max = [cx + bounds.radius, bounds.yMax, cz + bounds.radius];
+  const o = [origin.x, origin.y, origin.z];
+  const d = [dir.x, dir.y, dir.z];
+  let tEnter = 0;
+  let tExit = maxDist;
+  for (let axis = 0; axis < 3; axis++) {
+    if (Math.abs(d[axis]!) < SLAB_EPSILON) {
+      if (o[axis]! < min[axis]! || o[axis]! > max[axis]!) return null;
+      continue;
+    }
+    let t1 = (min[axis]! - o[axis]!) / d[axis]!;
+    let t2 = (max[axis]! - o[axis]!) / d[axis]!;
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    if (t1 > tEnter) tEnter = t1;
+    if (t2 < tExit) tExit = t2;
+    if (tEnter > tExit) return null;
+  }
+  return tEnter;
 }
 
 export class WebHuntRoom extends Room<{ state: RoomState }> {
@@ -139,6 +164,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   state = new RoomState();
   private map!: MapDefinition;
   private catalogIds = new Set<string>();
+  private propBounds = new Map<string, PropBounds>();
   private phaseTimer?: ClearableTimer;
   private tauntTimer?: ClearableTimer;
   private lastShotAt = new Map<string, number>();
@@ -146,6 +172,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   onCreate(): void {
     this.map = loadMap(DEFAULT_MAP_ID);
     this.catalogIds = new Set(this.map.propCatalog.map((def) => def.id));
+    this.propBounds = new Map(this.map.propCatalog.map((def) => [def.id, computePropBounds(def)]));
     this.state.mapId = this.map.id;
     this.setPatchRate(PATCH_RATE_MS);
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
@@ -225,13 +252,10 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     let target: PlayerState | undefined;
     this.state.players.forEach((candidate) => {
       if (candidate === player || candidate.role !== "prop" || !candidate.alive) return;
-      const t = rayHitDistance(
-        ray.origin,
-        dir,
-        { x: candidate.x, y: CATCH_HEIGHT, z: candidate.z },
-        PROP_HIT_RADIUS,
-        SHOOT_RANGE,
-      );
+      const bounds =
+        (candidate.propType ? this.propBounds.get(candidate.propType) : undefined) ??
+        UNTRANSFORMED_PROP_BOUNDS;
+      const t = rayHitsBox(ray.origin, dir, candidate.x, candidate.z, bounds, SHOOT_RANGE);
       if (t !== null && t < bestT) {
         bestT = t;
         target = candidate;
