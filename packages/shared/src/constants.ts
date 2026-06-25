@@ -21,6 +21,10 @@ export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 
 export const MOVE_SPEED = 5;
+export const RUN_MULTIPLIER_HUNTER = 1.7;
+export const RUN_MULTIPLIER_PROP = 1.5;
+export const JUMP_SPEED = 6;
+export const GRAVITY = 20;
 
 export const PATCH_RATE_MS = 50;
 export const INPUT_SEND_RATE_MS = 50;

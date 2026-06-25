@@ -5,6 +5,8 @@ export interface MoveKeys {
   back: boolean;
   left: boolean;
   right: boolean;
+  run: boolean;
+  jump: boolean;
 }
 
 const KEY_MAP: Record<string, keyof MoveKeys> = {
@@ -16,9 +18,19 @@ const KEY_MAP: Record<string, keyof MoveKeys> = {
   ArrowLeft: "left",
   KeyD: "right",
   ArrowRight: "right",
+  ShiftLeft: "run",
+  ShiftRight: "run",
+  Space: "jump",
 };
 
-const NO_KEYS: MoveKeys = { forward: false, back: false, left: false, right: false };
+const NO_KEYS: MoveKeys = {
+  forward: false,
+  back: false,
+  left: false,
+  right: false,
+  run: false,
+  jump: false,
+};
 
 export function useControls(active: boolean) {
   const keys = useRef<MoveKeys>({ ...NO_KEYS });
@@ -32,15 +44,16 @@ export function useControls(active: boolean) {
   }, [active]);
 
   useEffect(() => {
-    const apply = (code: string, value: boolean) => {
+    const apply = (e: KeyboardEvent, value: boolean) => {
       if (!activeRef.current) return;
-      const key = KEY_MAP[code];
+      const key = KEY_MAP[e.code];
       if (key) {
+        e.preventDefault();
         keys.current[key] = value;
       }
     };
-    const onDown = (e: KeyboardEvent) => apply(e.code, true);
-    const onUp = (e: KeyboardEvent) => apply(e.code, false);
+    const onDown = (e: KeyboardEvent) => apply(e, true);
+    const onUp = (e: KeyboardEvent) => apply(e, false);
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
     return () => {
