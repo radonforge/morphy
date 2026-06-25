@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
 import { COLYSEUS_PROXY_PATH, MAX_NAME_LENGTH } from "@webhunt/shared";
-import { connectToRoom, type Connection } from "../net/connection";
+import { useCallback, useState } from "react";
 import { Game } from "../game/Game";
+import { type Connection, connectToRoom } from "../net/connection";
 
 type Status = { kind: "idle" } | { kind: "connecting" } | { kind: "error"; message: string };
 

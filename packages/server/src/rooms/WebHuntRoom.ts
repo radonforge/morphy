@@ -1,49 +1,49 @@
-import { Room, type Client } from "@colyseus/core";
-import { Schema, MapSchema, type } from "@colyseus/schema";
+import { type Client, Room } from "@colyseus/core";
+import { MapSchema, Schema, type } from "@colyseus/schema";
 import {
-  MAX_PLAYERS,
-  MAX_NAME_LENGTH,
-  MIN_PLAYERS_TO_START,
-  HUNTER_RATIO,
-  START_COUNTDOWN_MS,
-  HIDE_DURATION_MS,
-  ROUND_DURATION_MS,
-  ROUND_END_MS,
-  TAUNT_INTERVAL_MS,
-  MAX_CHAT_LENGTH,
-  PATCH_RATE_MS,
-  HUNTER_MAX_HP,
-  WRONG_SHOT_DAMAGE,
-  FIRE_COOLDOWN_MS,
-  SHOOT_RANGE,
-  UNTRANSFORMED_PROP_RADIUS,
-  UNTRANSFORMED_PROP_HEIGHT,
-  MSG_INPUT,
-  MSG_TRANSFORM,
-  MSG_SHOOT,
-  MSG_TELEPORT,
-  MSG_TAUNT,
-  MSG_CHAT,
-  MSG_SHOT_RESULT,
-  MSG_READY,
-  MSG_MAP,
-  MSG_KILL,
+  type BoxCollider,
   computePropBounds,
+  FIRE_COOLDOWN_MS,
+  HIDE_DURATION_MS,
+  HUNTER_MAX_HP,
+  HUNTER_RATIO,
   type InputMessage,
   type KillEvent,
-  type ShootMessage,
+  MAX_CHAT_LENGTH,
+  MAX_NAME_LENGTH,
+  MAX_PLAYERS,
   type MapDefinition,
+  MIN_PLAYERS_TO_START,
+  MSG_CHAT,
+  MSG_INPUT,
+  MSG_KILL,
+  MSG_MAP,
+  MSG_READY,
+  MSG_SHOOT,
+  MSG_SHOT_RESULT,
+  MSG_TAUNT,
+  MSG_TELEPORT,
+  MSG_TRANSFORM,
+  PATCH_RATE_MS,
+  type Phase,
   type PropBounds,
   type PropDefinition,
-  type BoxCollider,
-  type Vec3,
-  type Phase,
+  ROUND_DURATION_MS,
+  ROUND_END_MS,
   type Role,
+  SHOOT_RANGE,
+  type ShootMessage,
+  START_COUNTDOWN_MS,
+  TAUNT_INTERVAL_MS,
+  UNTRANSFORMED_PROP_HEIGHT,
+  UNTRANSFORMED_PROP_RADIUS,
+  type Vec3,
   type Winner,
+  WRONG_SHOT_DAMAGE,
 } from "@webhunt/shared";
+import { randomAnimal } from "../avatars";
 import { generateMap } from "../generateMap";
 import { SPACE_CATALOG } from "../spaceCatalog";
-import { randomAnimal } from "../avatars";
 
 const FALLBACK_NAME = "Player";
 const SPAWN_CLEARANCE = 1.5;
@@ -94,7 +94,12 @@ function parseVec3(value: unknown): { x: number; y: number; z: number } | null {
 function parseInput(payload: unknown): InputMessage | null {
   if (typeof payload !== "object" || payload === null) return null;
   const p = payload as Record<string, unknown>;
-  if (!isFiniteNumber(p.x) || !isFiniteNumber(p.y) || !isFiniteNumber(p.z) || !isFiniteNumber(p.rot)) {
+  if (
+    !isFiniteNumber(p.x) ||
+    !isFiniteNumber(p.y) ||
+    !isFiniteNumber(p.z) ||
+    !isFiniteNumber(p.rot)
+  ) {
     return null;
   }
   return { x: p.x, y: p.y, z: p.z, rot: p.rot };

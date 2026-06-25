@@ -1,33 +1,38 @@
-import { memo, Suspense, useEffect, useMemo, useRef, type ReactElement } from "react";
-import { useFrame, useThree } from "@react-three/fiber";
-import { Sky, useGLTF } from "@react-three/drei";
-import * as THREE from "three";
 import type { Room } from "@colyseus/sdk";
+import { Sky, useGLTF } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
 import {
-  INPUT_SEND_RATE_MS,
-  MOVE_SPEED,
-  RUN_MULTIPLIER_HUNTER,
-  RUN_MULTIPLIER_PROP,
-  JUMP_SPEED,
-  GRAVITY,
-  MSG_INPUT,
-  MSG_TRANSFORM,
-  MSG_SHOOT,
-  SHOOT_RANGE,
   computePropBounds,
+  GRAVITY,
+  INPUT_SEND_RATE_MS,
+  JUMP_SPEED,
   type MapDefinition,
+  MOVE_SPEED,
+  MSG_INPUT,
+  MSG_SHOOT,
+  MSG_TRANSFORM,
   type Phase,
   type PrimitiveSpec,
   type PropDefinition,
   type Role,
+  RUN_MULTIPLIER_HUNTER,
+  RUN_MULTIPLIER_PROP,
   type SceneryInstance,
+  SHOOT_RANGE,
   type TileInstance,
 } from "@webhunt/shared";
-import { useControls } from "./useControls";
+import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
 import { playShot, playStep } from "./audio";
 import type { MetaMap, PlayersRef, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
+import { useControls } from "./useControls";
 
-function applyTauntPulse(group: THREE.Group, pulses: TauntPulseRef, id: string, delta: number): void {
+function applyTauntPulse(
+  group: THREE.Group,
+  pulses: TauntPulseRef,
+  id: string,
+  delta: number,
+): void {
   const remaining = pulses.current.get(id) ?? 0;
   if (remaining <= 0) {
     group.scale.setScalar(1);
@@ -655,7 +660,12 @@ function AnimalAvatar({ id, role }: { id: string; role: Role }) {
   }
   return (
     <Suspense fallback={<Avatar color={fallbackColor} />}>
-      <FittedModel url={animalModel(id)} width={PLAYER_RADIUS * 2} height={PLAYER_HEAD_Y} baseY={0} />
+      <FittedModel
+        url={animalModel(id)}
+        width={PLAYER_RADIUS * 2}
+        height={PLAYER_HEAD_Y}
+        baseY={0}
+      />
     </Suspense>
   );
 }
@@ -986,9 +996,7 @@ function LocalPlayer({
 
       const current = camDistRef.current;
       camDistRef.current =
-        desired < current
-          ? desired
-          : current + (desired - current) * (1 - Math.pow(CAMERA_DAMP, delta));
+        desired < current ? desired : current + (desired - current) * (1 - CAMERA_DAMP ** delta);
       const d = camDistRef.current;
 
       const pivotY = pos.y + CAMERA_TARGET_Y;
@@ -1029,7 +1037,7 @@ function RemotePlayer({ view, catalog, role, propType, avatar, tauntPulseRef }: 
     if (!group || !view) {
       return;
     }
-    const t = 1 - Math.pow(REMOTE_DAMP, delta);
+    const t = 1 - REMOTE_DAMP ** delta;
     group.position.x += (view.x - group.position.x) * t;
     group.position.y += (view.y - group.position.y) * t;
     group.position.z += (view.z - group.position.z) * t;

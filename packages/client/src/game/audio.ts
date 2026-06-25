@@ -206,7 +206,9 @@ export function startAmbient(): void {
     stop: () => {
       const now = ctx.currentTime;
       ambGain.gain.setTargetAtTime(0.0001, now, AMBIENT_FADE_OUT_S);
-      oscs.forEach((osc) => osc.stop(now + AMBIENT_FADE_OUT_S * 4));
+      oscs.forEach((osc) => {
+        osc.stop(now + AMBIENT_FADE_OUT_S * 4);
+      });
     },
   };
 }

@@ -1,7 +1,7 @@
-import { defineServer, defineRoom } from "@colyseus/core";
+import { defineRoom, defineServer } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import cors from "cors";
 import { DEFAULT_PORT, ROOM_NAME } from "@webhunt/shared";
+import cors from "cors";
 import { WebHuntRoom } from "./rooms/WebHuntRoom";
 
 const port = Number(process.env.PORT ?? DEFAULT_PORT);

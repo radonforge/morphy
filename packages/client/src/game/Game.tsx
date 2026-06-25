@@ -1,30 +1,29 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
 import { Callbacks } from "@colyseus/sdk";
+import { Canvas } from "@react-three/fiber";
 import {
   HIDE_DURATION_MS,
   HUNTER_MAX_HP,
+  type KillEvent,
   MAX_CHAT_LENGTH,
+  type MapDefinition,
   MIN_PLAYERS_TO_START,
-  ROUND_DURATION_MS,
-  ROUND_END_MS,
-  START_COUNTDOWN_MS,
   MSG_CHAT,
+  MSG_KILL,
   MSG_MAP,
   MSG_READY,
   MSG_SHOT_RESULT,
-  MSG_KILL,
   MSG_TAUNT,
   MSG_TELEPORT,
-  parseMapDefinition,
-  type KillEvent,
-  type MapDefinition,
   type Phase,
+  parseMapDefinition,
+  ROUND_DURATION_MS,
+  ROUND_END_MS,
   type Role,
+  START_COUNTDOWN_MS,
   type Winner,
 } from "@webhunt/shared";
-import { type Connection } from "../net/connection";
-import { Scene, TAUNT_PULSE_SECONDS } from "./Scene";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Connection } from "../net/connection";
 import {
   isMuted,
   playDeath,
@@ -38,6 +37,7 @@ import {
   stopAmbient,
   toggleMuted,
 } from "./audio";
+import { Scene, TAUNT_PULSE_SECONDS } from "./Scene";
 import type { MetaMap, PlayerMeta, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
 
 const STATE_POLL_MS = 200;
@@ -138,10 +138,7 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
   });
 }
 
-function sortStandings(
-  ids: string[],
-  meta: MetaMap,
-): { id: string; player: PlayerMeta }[] {
+function sortStandings(ids: string[], meta: MetaMap): { id: string; player: PlayerMeta }[] {
   return ids
     .map((id) => ({ id, player: meta[id] }))
     .filter((row): row is { id: string; player: PlayerMeta } => row.player !== undefined)
@@ -406,7 +403,10 @@ export function Game({ connection, onLeave }: GameProps) {
       if (typeof event.victimName !== "string" || typeof event.reason !== "string") return;
       const key = fxSeq.current++;
       setKillFeed((prev) => [...prev.slice(-(KILL_FEED_MAX - 1)), { key, text: killText(event) }]);
-      setTimeout(() => setKillFeed((prev) => prev.filter((line) => line.key !== key)), KILL_FEED_MS);
+      setTimeout(
+        () => setKillFeed((prev) => prev.filter((line) => line.key !== key)),
+        KILL_FEED_MS,
+      );
       if (event.victimId === sessionId) {
         if (event.reason === "converted") {
           playRoundStart();
@@ -542,7 +542,8 @@ export function Game({ connection, onLeave }: GameProps) {
     return player && player.role === "prop" && player.alive ? n + 1 : n;
   }, 0);
 
-  const canTransform = localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
+  const canTransform =
+    localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
   const showCrosshair = (canTransform || canShoot) && !chatOpen;
 
@@ -653,7 +654,13 @@ export function Game({ connection, onLeave }: GameProps) {
       )}
 
       {phase === "round_end" && winner !== "" && (
-        <ResultScreen winner={winner} endsAt={phaseEndsAt} ids={ids} meta={meta} localId={sessionId} />
+        <ResultScreen
+          winner={winner}
+          endsAt={phaseEndsAt}
+          ids={ids}
+          meta={meta}
+          localId={sessionId}
+        />
       )}
 
       {scoreboardOpen && <Scoreboard ids={ids} meta={meta} localId={sessionId} />}
