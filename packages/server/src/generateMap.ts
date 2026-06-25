@@ -94,36 +94,47 @@ function lineZ(grid: Grid, cell: number): number {
 }
 
 /**
- * Emit one wall tile per present cell along a grid line, and merge runs of
- * adjacent present cells into single box colliders (doorway gaps break runs).
- * `axis` is the direction the wall runs: "x" → a wall on a z-line spanning the
- * x cells, "z" → a wall on an x-line spanning the z cells.
+ * Emit one wall tile per present cell along a grid line. `inwardSign` (±1) is
+ * the direction along the wall's normal toward the room the face should front;
+ * the tile is shifted by half its thickness and rotated so its detailed face
+ * looks that way while its body stays centered on `line`. `axis` is the
+ * direction the wall runs: "x" → a wall on a z-line, "z" → a wall on an x-line.
  */
-function emitWallLine(
+function emitWallTiles(
   grid: Grid,
   axis: "x" | "z",
   line: number,
   present: boolean[],
+  inwardSign: number,
   tiles: TileInstance[],
-  colliders: BoxCollider[],
 ): void {
+  const offset = WALL_HALF_THICKNESS * inwardSign;
   for (let idx = 0; idx < present.length; idx++) {
     if (!present[idx]) continue;
     if (axis === "x") {
       tiles.push({
         model: WALL_MODEL,
-        position: { x: cellCenterX(grid, idx), y: 0, z: line + WALL_HALF_THICKNESS },
-        rotationY: WALL_ROTATION_X,
+        position: { x: cellCenterX(grid, idx), y: 0, z: line + offset },
+        rotationY: inwardSign > 0 ? 0 : Math.PI,
       });
     } else {
       tiles.push({
         model: WALL_MODEL,
-        position: { x: line + WALL_HALF_THICKNESS, y: 0, z: cellCenterZ(grid, idx) },
-        rotationY: WALL_ROTATION_Z,
+        position: { x: line + offset, y: 0, z: cellCenterZ(grid, idx) },
+        rotationY: inwardSign > 0 ? Math.PI / 2 : -Math.PI / 2,
       });
     }
   }
+}
 
+/** Merge runs of adjacent present cells along a grid line into box colliders. */
+function emitWallColliders(
+  grid: Grid,
+  axis: "x" | "z",
+  line: number,
+  present: boolean[],
+  colliders: BoxCollider[],
+): void {
   let runStart = -1;
   for (let idx = 0; idx <= present.length; idx++) {
     const here = idx < present.length && present[idx];
@@ -149,6 +160,20 @@ function emitWallLine(
       runStart = -1;
     }
   }
+}
+
+/** A wall bordering two rooms: collider once, a tile facing into each room. */
+function emitInteriorWall(
+  grid: Grid,
+  axis: "x" | "z",
+  line: number,
+  present: boolean[],
+  tiles: TileInstance[],
+  colliders: BoxCollider[],
+): void {
+  emitWallColliders(grid, axis, line, present, colliders);
+  emitWallTiles(grid, axis, line, present, 1, tiles);
+  emitWallTiles(grid, axis, line, present, -1, tiles);
 }
 
 /** Place an open archway framing a doorway gap left in a wall along `axis`. */
@@ -212,10 +237,16 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
     },
   ];
 
-  emitWallLine(grid, "x", lineZ(grid, 0), new Array<boolean>(gx).fill(true), tiles, colliders);
-  emitWallLine(grid, "x", lineZ(grid, gz), new Array<boolean>(gx).fill(true), tiles, colliders);
-  emitWallLine(grid, "z", lineX(grid, 0), new Array<boolean>(gz).fill(true), tiles, colliders);
-  emitWallLine(grid, "z", lineX(grid, gx), new Array<boolean>(gz).fill(true), tiles, colliders);
+  const northSouth = new Array<boolean>(gx).fill(true);
+  const eastWest = new Array<boolean>(gz).fill(true);
+  emitWallColliders(grid, "x", lineZ(grid, 0), northSouth, colliders);
+  emitWallTiles(grid, "x", lineZ(grid, 0), northSouth, 1, tiles);
+  emitWallColliders(grid, "x", lineZ(grid, gz), northSouth, colliders);
+  emitWallTiles(grid, "x", lineZ(grid, gz), northSouth, -1, tiles);
+  emitWallColliders(grid, "z", lineX(grid, 0), eastWest, colliders);
+  emitWallTiles(grid, "z", lineX(grid, 0), eastWest, 1, tiles);
+  emitWallColliders(grid, "z", lineX(grid, gx), eastWest, colliders);
+  emitWallTiles(grid, "z", lineX(grid, gx), eastWest, -1, tiles);
 
   for (let cb = 1; cb < roomCols; cb++) {
     const cell = colBounds[cb]!;
@@ -225,7 +256,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
       present[door] = false;
       pushGate(grid, "z", lineX(grid, cell), door, tiles);
     }
-    emitWallLine(grid, "z", lineX(grid, cell), present, tiles, colliders);
+    emitInteriorWall(grid, "z", lineX(grid, cell), present, tiles, colliders);
   }
   for (let rb = 1; rb < roomRows; rb++) {
     const cell = rowBounds[rb]!;
@@ -235,7 +266,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
       present[door] = false;
       pushGate(grid, "x", lineZ(grid, cell), door, tiles);
     }
-    emitWallLine(grid, "x", lineZ(grid, cell), present, tiles, colliders);
+    emitInteriorWall(grid, "x", lineZ(grid, cell), present, tiles, colliders);
   }
 
   const hunterCol = Math.floor(roomCols / 2);
