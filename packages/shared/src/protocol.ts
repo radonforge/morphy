@@ -14,6 +14,7 @@ export const MSG_TAUNT = "taunt";
 export const MSG_CHAT = "chat";
 export const MSG_SHOT_RESULT = "shot_result";
 export const MSG_READY = "ready";
+export const MSG_MAP = "map";
 
 export interface InputMessage {
   x: number;

@@ -26,6 +26,7 @@ import {
   MSG_CHAT,
   MSG_SHOT_RESULT,
   MSG_READY,
+  MSG_MAP,
   computePropBounds,
   type InputMessage,
   type ShootMessage,
@@ -190,6 +191,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     this.onMessage(MSG_SHOOT, (client, payload) => this.handleShoot(client, payload));
     this.onMessage(MSG_CHAT, (client, payload) => this.handleChat(client, payload));
     this.onMessage(MSG_READY, (client, payload) => this.handleReady(client, payload));
+    this.onMessage(MSG_MAP, (client) => client.send(MSG_MAP, this.map));
   }
 
   private handleChat(client: Client, payload: unknown): void {

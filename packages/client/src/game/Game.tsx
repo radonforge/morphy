@@ -5,16 +5,18 @@ import {
   MAX_CHAT_LENGTH,
   MIN_PLAYERS_TO_START,
   MSG_CHAT,
+  MSG_MAP,
   MSG_READY,
   MSG_SHOT_RESULT,
   MSG_TAUNT,
   MSG_TELEPORT,
+  parseMapDefinition,
+  type MapDefinition,
   type Phase,
   type Role,
   type Winner,
 } from "@webhunt/shared";
 import { type Connection } from "../net/connection";
-import { officeMap } from "../officeMap";
 import { Scene, TAUNT_PULSE_SECONDS } from "./Scene";
 import { playHitConfirm, playMiss, playTaunt } from "./audio";
 import type { MetaMap, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
@@ -106,6 +108,7 @@ export function Game({ connection, onLeave }: GameProps) {
   const fxSeq = useRef(0);
   const muzzleSeq = useRef(0);
 
+  const [map, setMap] = useState<MapDefinition | null>(null);
   const [ids, setIds] = useState<string[]>([]);
   const [meta, setMeta] = useState<MetaMap>({});
   const [phase, setPhase] = useState<Phase>("lobby");
@@ -174,6 +177,9 @@ export function Game({ connection, onLeave }: GameProps) {
       }
       setShotFx({ kind: hit ? "hit" : "miss", seq: fxSeq.current++ });
     });
+
+    room.onMessage(MSG_MAP, (raw: unknown) => setMap(parseMapDefinition(raw)));
+    room.send(MSG_MAP);
 
     room.onError((code, errMessage) => {
       console.error("[webhunt] room error", code, errMessage);
@@ -280,12 +286,22 @@ export function Game({ connection, onLeave }: GameProps) {
           ? "Sei accecato… attendi la caccia"
           : "WASD muovi · click+mouse visuale · T chat";
 
+  if (!map) {
+    return (
+      <div className="lobby">
+        <div className="lobby-card">
+          <h1>Caricamento mappa…</h1>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <Canvas shadows camera={{ position: [0, 12, 18], fov: 55 }}>
         <Scene
           room={room}
-          map={officeMap}
+          map={map}
           localId={sessionId}
           ids={ids}
           playersRef={playersRef}
