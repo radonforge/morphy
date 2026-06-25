@@ -74,6 +74,18 @@ export interface TileInstance {
   rotationY: number;
 }
 
+/**
+ * A full glTF model placed as decorative exterior scenery (rockets, hangars,
+ * craft, debris). Rendered un-instanced so multi-mesh models display in full,
+ * and uniformly scaled. Purely visual — never produces a collider.
+ */
+export interface SceneryInstance {
+  model: string;
+  position: Vec3;
+  rotationY: number;
+  scale: number;
+}
+
 export interface MapBounds {
   min: Vec3;
   max: Vec3;
@@ -86,6 +98,7 @@ export interface MapDefinition {
   spawnPoints: { hunters: Vec3[]; props: Vec3[] };
   colliders: BoxCollider[];
   tiles: TileInstance[];
+  scenery: SceneryInstance[];
   props: PropInstance[];
   propCatalog: PropDefinition[];
 }
@@ -159,6 +172,16 @@ function isTileInstance(value: unknown): value is TileInstance {
   );
 }
 
+function isSceneryInstance(value: unknown): value is SceneryInstance {
+  return (
+    isRecord(value) &&
+    typeof value.model === "string" &&
+    isVec3(value.position) &&
+    typeof value.rotationY === "number" &&
+    typeof value.scale === "number"
+  );
+}
+
 /**
  * Parse and validate a map loaded from an untrusted source (file / bundle).
  * Throws {@link MapValidationError} with an actionable message on malformed input.
@@ -190,6 +213,13 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
   if (!Array.isArray(raw.tiles) || !raw.tiles.every(isTileInstance)) {
     throw new MapValidationError(id, "field 'tiles' must be TileInstance[]");
   }
+  let scenery: SceneryInstance[] = [];
+  if (raw.scenery !== undefined) {
+    if (!Array.isArray(raw.scenery) || !raw.scenery.every(isSceneryInstance)) {
+      throw new MapValidationError(id, "field 'scenery' must be SceneryInstance[]");
+    }
+    scenery = raw.scenery;
+  }
   if (!Array.isArray(raw.props) || !raw.props.every(isPropInstance)) {
     throw new MapValidationError(id, "field 'props' must be PropInstance[]");
   }
@@ -211,6 +241,7 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
     spawnPoints: { hunters: raw.spawnPoints.hunters, props: raw.spawnPoints.props },
     colliders: raw.colliders,
     tiles: raw.tiles,
+    scenery,
     props: raw.props,
     propCatalog: raw.propCatalog,
   };

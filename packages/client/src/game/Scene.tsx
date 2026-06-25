@@ -6,6 +6,10 @@ import type { Room } from "@colyseus/sdk";
 import {
   INPUT_SEND_RATE_MS,
   MOVE_SPEED,
+  RUN_MULTIPLIER_HUNTER,
+  RUN_MULTIPLIER_PROP,
+  JUMP_SPEED,
+  GRAVITY,
   MSG_INPUT,
   MSG_TRANSFORM,
   MSG_SHOOT,
@@ -16,6 +20,7 @@ import {
   type PrimitiveSpec,
   type PropDefinition,
   type Role,
+  type SceneryInstance,
   type TileInstance,
 } from "@webhunt/shared";
 import { useControls } from "./useControls";
@@ -42,7 +47,9 @@ const PLAYER_BODY_Y = PLAYER_BODY_LENGTH / 2 + PLAYER_RADIUS;
 const PLAYER_HEAD_Y = PLAYER_BODY_LENGTH + PLAYER_RADIUS * 1.6;
 const HUNTER_COLOR = "#e8564a";
 const PROP_COLOR = "#5bd75b";
+const GROUND_COLOR = "#9c5a40";
 const MODEL_MIN_SIZE = 0.001;
+const BASE_PLANE_MARGIN = 8;
 const animalModel = (id: string): string => `/models/pets/animal-${id}.glb`;
 const BLASTER_MODEL = "/models/blaster/blaster-a.glb";
 const WEAPON_SCALE = 0.32;
@@ -71,6 +78,8 @@ const EYE_HEIGHT = 1.6;
 const SUN_POSITION: [number, number, number] = [14, 26, 10];
 const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
+const LOCAL_AVATAR_KEY = "localAvatar";
+const TRANSFORM_REACH = 3.5;
 
 type Catalog = Map<string, PropDefinition>;
 
@@ -162,6 +171,7 @@ interface TracerState {
 }
 
 type TracerRef = { current: TracerState | null };
+type PlayerPosRef = { readonly current: THREE.Vector3 };
 
 interface SceneProps {
   room: Room;
@@ -197,6 +207,7 @@ export function Scene({
   const obstacles = useMemo(() => buildObstacles(map, catalog), [map, catalog]);
   const walls = useMemo(() => buildWalls(map), [map]);
   const tracerRef = useRef<TracerState | null>(null);
+  const localGroundRef = useRef(new THREE.Vector3());
   const localMeta = meta[localId];
   const localRole: Role = localMeta?.role ?? "prop";
   const localAlive = localMeta?.alive ?? true;
@@ -224,7 +235,7 @@ export function Scene({
         shadow-bias={-0.0004}
       />
       <MapView map={map} />
-      <PropPicker room={room} enabled={canTransform} />
+      <PropPicker room={room} enabled={canTransform} playerPos={localGroundRef} />
       <Shooter room={room} enabled={canShoot} tracerRef={tracerRef} onShoot={onShoot} />
       <Tracer tracerRef={tracerRef} />
       <HunterViewmodel enabled={localRole === "hunter" && localAlive} />
@@ -244,6 +255,7 @@ export function Scene({
         obstacles={obstacles}
         walls={walls}
         avatar={localMeta?.avatar ?? ""}
+        playerPos={localGroundRef}
       />
       {ids
         .filter((id) => id !== localId && (meta[id]?.alive ?? true))
@@ -415,20 +427,25 @@ function FittedModel({
     enableShadows(clone);
     return clone;
   }, [scene]);
-  const { scale, offsetY } = useMemo(() => {
+  const { scale, offset } = useMemo(() => {
     const box = new THREE.Box3().setFromObject(object);
     const size = new THREE.Vector3();
     box.getSize(size);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
     const fit =
       Math.min(
         width / Math.max(size.x, MODEL_MIN_SIZE),
         height / Math.max(size.y, MODEL_MIN_SIZE),
         width / Math.max(size.z, MODEL_MIN_SIZE),
       ) * scaleMul;
-    return { scale: fit, offsetY: baseY - box.min.y * fit };
+    return {
+      scale: fit,
+      offset: [-center.x * fit, baseY - box.min.y * fit, -center.z * fit] as const,
+    };
   }, [object, width, height, baseY, scaleMul]);
   return (
-    <group position={[0, offsetY, 0]} scale={scale}>
+    <group position={[offset[0], offset[1], offset[2]]} scale={scale}>
       <primitive object={object} />
     </group>
   );
@@ -478,6 +495,24 @@ function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) 
       frustumCulled={false}
       dispose={null}
     />
+  );
+}
+
+function SceneryModel({ inst }: { inst: SceneryInstance }) {
+  const { scene } = useGLTF(inst.model);
+  const object = useMemo(() => {
+    const clone = scene.clone(true);
+    enableShadows(clone);
+    return clone;
+  }, [scene]);
+  return (
+    <group
+      position={[inst.position.x, inst.position.y, inst.position.z]}
+      rotation-y={inst.rotationY}
+      scale={inst.scale}
+    >
+      <primitive object={object} />
+    </group>
   );
 }
 
@@ -545,19 +580,36 @@ const MapView = memo(function MapView({ map }: { map: MapDefinition }) {
     }
     return [...groups.entries()];
   }, [map]);
-  const floorWidth = map.bounds.max.x - map.bounds.min.x + 4;
-  const floorDepth = map.bounds.max.z - map.bounds.min.z + 4;
+  const floorSize = useMemo(() => {
+    let maxX = map.bounds.max.x;
+    let maxZ = map.bounds.max.z;
+    for (const tile of map.tiles) {
+      maxX = Math.max(maxX, Math.abs(tile.position.x));
+      maxZ = Math.max(maxZ, Math.abs(tile.position.z));
+    }
+    for (const inst of map.scenery) {
+      maxX = Math.max(maxX, Math.abs(inst.position.x));
+      maxZ = Math.max(maxZ, Math.abs(inst.position.z));
+    }
+    return { width: maxX * 2 + BASE_PLANE_MARGIN, depth: maxZ * 2 + BASE_PLANE_MARGIN };
+  }, [map]);
 
   return (
     <>
       <mesh rotation-x={-Math.PI / 2} position={[0, -0.1, 0]} receiveShadow>
-        <planeGeometry args={[floorWidth, floorDepth]} />
-        <meshStandardMaterial color="#48515f" />
+        <planeGeometry args={[floorSize.width, floorSize.depth]} />
+        <meshStandardMaterial color={GROUND_COLOR} />
       </mesh>
 
       <Suspense fallback={null}>
         {tileGroups.map(([url, group]) => (
           <InstancedTiles key={url} url={url} tiles={group} />
+        ))}
+      </Suspense>
+
+      <Suspense fallback={null}>
+        {map.scenery.map((inst, index) => (
+          <SceneryModel key={`scn-${index}`} inst={inst} />
         ))}
       </Suspense>
 
@@ -628,7 +680,15 @@ function PlayerModel({
   return <AnimalAvatar id={avatar} role={role} />;
 }
 
-function PropPicker({ room, enabled }: { room: Room; enabled: boolean }) {
+function PropPicker({
+  room,
+  enabled,
+  playerPos,
+}: {
+  room: Room;
+  enabled: boolean;
+  playerPos: PlayerPosRef;
+}) {
   const { camera, scene } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
 
@@ -644,19 +704,36 @@ function PropPicker({ room, enabled }: { room: Room; enabled: boolean }) {
       const hits = raycaster.intersectObjects(scene.children, true);
       for (const hit of hits) {
         let obj: THREE.Object3D | null = hit.object;
+        let propType: string | undefined;
+        let isSelf = false;
         while (obj) {
-          const propType = obj.userData?.propType;
-          if (typeof propType === "string" && propType) {
-            room.send(MSG_TRANSFORM, { propType });
-            return;
+          if (obj.userData?.[LOCAL_AVATAR_KEY]) {
+            isSelf = true;
+          }
+          const pt = obj.userData?.propType;
+          if (typeof pt === "string" && pt) {
+            propType = pt;
+            break;
           }
           obj = obj.parent;
         }
+        if (propType) {
+          const dx = hit.point.x - playerPos.current.x;
+          const dz = hit.point.z - playerPos.current.z;
+          if (dx * dx + dz * dz <= TRANSFORM_REACH * TRANSFORM_REACH) {
+            room.send(MSG_TRANSFORM, { propType });
+          }
+          return;
+        }
+        if (isSelf) {
+          continue;
+        }
+        return;
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled, camera, scene, raycaster, room]);
+  }, [enabled, camera, scene, raycaster, room, playerPos]);
 
   return null;
 }
@@ -710,6 +787,7 @@ interface LocalPlayerProps {
   obstacles: Obstacle[];
   walls: Wall[];
   avatar: string;
+  playerPos: PlayerPosRef;
 }
 
 function LocalPlayer({
@@ -728,6 +806,7 @@ function LocalPlayer({
   obstacles,
   walls,
   avatar,
+  playerPos,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!chatOpen);
@@ -740,6 +819,8 @@ function LocalPlayer({
   const heading = useRef(0);
   const sendAccumMs = useRef(0);
   const stepAccum = useRef(0);
+  const velocityY = useRef(0);
+  const jumpHeld = useRef(false);
   const forwardVec = useMemo(() => new THREE.Vector3(), []);
   const rightVec = useMemo(() => new THREE.Vector3(), []);
   const moveVec = useMemo(() => new THREE.Vector3(), []);
@@ -777,17 +858,35 @@ function LocalPlayer({
         .addScaledVector(forwardVec, forwardInput)
         .addScaledVector(rightVec, strafeInput);
 
+      const runMultiplier = role === "hunter" ? RUN_MULTIPLIER_HUNTER : RUN_MULTIPLIER_PROP;
+      const speed = k.run ? MOVE_SPEED * runMultiplier : MOVE_SPEED;
+
       if (moveVec.lengthSq() > 0) {
         moveVec.normalize();
-        pos.x += moveVec.x * MOVE_SPEED * delta;
-        pos.z += moveVec.z * MOVE_SPEED * delta;
+        pos.x += moveVec.x * speed * delta;
+        pos.z += moveVec.z * speed * delta;
         heading.current = Math.atan2(moveVec.x, moveVec.z);
-        stepAccum.current += MOVE_SPEED * delta;
-        if (stepAccum.current >= STEP_DISTANCE) {
-          stepAccum.current = 0;
-          playStep();
+        if (pos.y <= 0) {
+          stepAccum.current += speed * delta;
+          if (stepAccum.current >= STEP_DISTANCE) {
+            stepAccum.current = 0;
+            playStep();
+          }
         }
       }
+
+      if (role === "hunter") {
+        if (k.jump && !jumpHeld.current && pos.y <= 0 && velocityY.current <= 0) {
+          velocityY.current = JUMP_SPEED;
+        }
+        velocityY.current -= GRAVITY * delta;
+        pos.y += velocityY.current * delta;
+        if (pos.y <= 0) {
+          pos.y = 0;
+          velocityY.current = 0;
+        }
+      }
+      jumpHeld.current = k.jump;
 
       const { min, max } = map.bounds;
       pos.x = THREE.MathUtils.clamp(pos.x, min.x + PLAYER_RADIUS, max.x - PLAYER_RADIUS);
@@ -848,19 +947,20 @@ function LocalPlayer({
       pos.z = THREE.MathUtils.clamp(pos.z, min.z + PLAYER_RADIUS, max.z - PLAYER_RADIUS);
     }
 
+    playerPos.current.set(pos.x, 0, pos.z);
     const group = groupRef.current;
     if (group) {
-      group.position.set(pos.x, 0, pos.z);
+      group.position.set(pos.x, pos.y, pos.z);
       group.rotation.y = heading.current;
       applyTauntPulse(group, tauntPulseRef, id, delta);
     }
 
     if (role === "hunter") {
       const cosPitch = Math.cos(pitch);
-      camera.position.set(pos.x, EYE_HEIGHT, pos.z);
+      camera.position.set(pos.x, pos.y + EYE_HEIGHT, pos.z);
       camera.lookAt(
         pos.x - Math.sin(yaw) * cosPitch,
-        EYE_HEIGHT - Math.sin(pitch),
+        pos.y + EYE_HEIGHT - Math.sin(pitch),
         pos.z - Math.cos(yaw) * cosPitch,
       );
     } else {
@@ -899,12 +999,12 @@ function LocalPlayer({
     sendAccumMs.current += delta * 1000;
     if (sendAccumMs.current >= INPUT_SEND_RATE_MS) {
       sendAccumMs.current = 0;
-      room.send(MSG_INPUT, { x: pos.x, y: 0, z: pos.z, rot: heading.current });
+      room.send(MSG_INPUT, { x: pos.x, y: pos.y, z: pos.z, rot: heading.current });
     }
   });
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} userData={{ [LOCAL_AVATAR_KEY]: true }}>
       {alive && role !== "hunter" && (
         <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
       )}
@@ -931,6 +1031,7 @@ function RemotePlayer({ view, catalog, role, propType, avatar, tauntPulseRef }: 
     }
     const t = 1 - Math.pow(REMOTE_DAMP, delta);
     group.position.x += (view.x - group.position.x) * t;
+    group.position.y += (view.y - group.position.y) * t;
     group.position.z += (view.z - group.position.z) * t;
     group.rotation.y = view.rot;
     applyTauntPulse(group, tauntPulseRef, view.id, delta);

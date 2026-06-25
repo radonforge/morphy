@@ -3,16 +3,18 @@ import type {
   MapDefinition,
   PropDefinition,
   PropInstance,
+  SceneryInstance,
   TileInstance,
   Vec3,
 } from "@webhunt/shared";
+import { furnishRoom, type Doorway, type RoomRect } from "./furnish";
 
 const TILE = 4;
-const CELLS_MIN = 8;
-const CELLS_MAX = 12;
+const CELLS_MIN = 11;
+const CELLS_MAX = 15;
 const ROOMS_PER_AXIS_MIN = 2;
-const ROOMS_PER_AXIS_MAX = 4;
-const MIN_ROOM_CELLS = 2;
+const ROOMS_PER_AXIS_MAX = 3;
+const MIN_ROOM_CELLS = 3;
 const WALL_HEIGHT = 4.25;
 const WALL_THICKNESS = 1;
 const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
@@ -39,14 +41,35 @@ const WALL_VARIANTS: WeightedModel[] = [
   { model: "/models/space/template-wall-detail-a.glb", weight: 3 },
 ];
 
-const ROOM_MARGIN = 2;
-const PROPS_PER_ROOM_MIN = 2;
-const PROPS_PER_ROOM_MAX = 8;
-const PROP_DENSITY = 0.45;
-const PROP_MIN_GAP = 1.6;
-const SPAWN_RESERVE = 2.2;
 const MAX_PLACE_ATTEMPTS = 16;
 const HUNTER_SPAWN_OFFSET = 1.4;
+const SPAWN_CORNER_INSET = 2.2;
+
+const APRON_MARGIN = 14;
+const sk = (name: string): string => `/models/space-kit/${name}.glb`;
+
+const ROCKET_SCALE = 3;
+const ROCKET_PARTS: { model: string; y: number }[] = [
+  { model: "rocket_finsA", y: 0 },
+  { model: "rocket_baseA", y: 0 },
+  { model: "rocket_sidesA", y: 1.6 },
+  { model: "rocket_topA", y: 2.6 },
+];
+const ROCKET_INSET = 6;
+
+const HANGAR_MODELS = ["hangar_largeA", "hangar_smallA", "hangar_roundA"];
+const HANGAR_SCALE = 3.2;
+const HANGAR_INSET = 7;
+
+const CRAFT_MODELS = ["craft_racer", "craft_speederA", "craft_cargoA", "craft_miner"];
+const CRAFT_SCALE = 2.6;
+const CRAFT_COUNT = 3;
+
+const GROUND_DETAIL_MODELS = ["meteor", "meteor_detailed", "crater", "craterLarge"];
+const GROUND_DETAIL_DENSITY = 0.01;
+const GROUND_DETAIL_MAX = 36;
+const DETAIL_SCALE_MIN = 1.5;
+const DETAIL_SCALE_MAX = 3.2;
 
 function makeRng(seed: number): () => number {
   let s = seed >>> 0;
@@ -231,6 +254,99 @@ function pushGate(
   }
 }
 
+/** Stack the modular rocket parts into one standing rocket at (x, z). */
+function pushRocket(scenery: SceneryInstance[], x: number, z: number, rng: () => number): void {
+  const rotationY = rng() * Math.PI * 2;
+  for (const part of ROCKET_PARTS) {
+    scenery.push({
+      model: sk(part.model),
+      position: { x, y: part.y * ROCKET_SCALE, z },
+      rotationY,
+      scale: ROCKET_SCALE,
+    });
+  }
+}
+
+/**
+ * Dress the Martian ground around the building with space-kit set pieces:
+ * a rocket towering at each corner, hangars on two edges facing in, a few
+ * parked craft and scattered meteors/craters. Purely visual (no colliders) —
+ * the play area stays bounded by the perimeter walls. Deterministic per seed.
+ */
+function emitScenery(grid: Grid, rng: () => number, scenery: SceneryInstance[]): void {
+  const { halfW, halfD } = grid;
+  const exHalfW = halfW + APRON_MARGIN;
+  const exHalfD = halfD + APRON_MARGIN;
+
+  const rx = halfW + ROCKET_INSET;
+  const rz = halfD + ROCKET_INSET;
+  pushRocket(scenery, -rx, -rz, rng);
+  pushRocket(scenery, rx, -rz, rng);
+  pushRocket(scenery, -rx, rz, rng);
+  pushRocket(scenery, rx, rz, rng);
+
+  const hz = halfD + HANGAR_INSET;
+  scenery.push({
+    model: sk(HANGAR_MODELS[Math.floor(rng() * HANGAR_MODELS.length)]!),
+    position: { x: 0, y: 0, z: -hz },
+    rotationY: 0,
+    scale: HANGAR_SCALE,
+  });
+  scenery.push({
+    model: sk(HANGAR_MODELS[Math.floor(rng() * HANGAR_MODELS.length)]!),
+    position: { x: 0, y: 0, z: hz },
+    rotationY: Math.PI,
+    scale: HANGAR_SCALE,
+  });
+
+  const insideBuilding = (x: number, z: number): boolean =>
+    Math.abs(x) < halfW + TILE && Math.abs(z) < halfD + TILE;
+  const scatter = (model: string, scale: number): void => {
+    for (let attempt = 0; attempt < MAX_PLACE_ATTEMPTS; attempt++) {
+      const x = randRange(rng, -exHalfW, exHalfW);
+      const z = randRange(rng, -exHalfD, exHalfD);
+      if (insideBuilding(x, z)) continue;
+      scenery.push({ model, position: { x, y: 0, z }, rotationY: rng() * Math.PI * 2, scale });
+      return;
+    }
+  };
+
+  for (let c = 0; c < CRAFT_COUNT; c++) {
+    scatter(sk(CRAFT_MODELS[Math.floor(rng() * CRAFT_MODELS.length)]!), CRAFT_SCALE);
+  }
+
+  const apronArea = exHalfW * exHalfD * 4 - halfW * halfD * 4;
+  const detailCount = Math.min(GROUND_DETAIL_MAX, Math.round(apronArea * GROUND_DETAIL_DENSITY));
+  for (let d = 0; d < detailCount; d++) {
+    scatter(
+      sk(GROUND_DETAIL_MODELS[Math.floor(rng() * GROUND_DETAIL_MODELS.length)]!),
+      randRange(rng, DETAIL_SCALE_MIN, DETAIL_SCALE_MAX),
+    );
+  }
+}
+
+/** The room-interior corner (inset from walls) that sits farthest from any doorway. */
+function pickSpawnCorner(rect: RoomRect, doorways: Doorway[]): { x: number; z: number } {
+  const inset = SPAWN_CORNER_INSET;
+  const candidates = [
+    { x: rect.x0 + inset, z: rect.z0 + inset },
+    { x: rect.x1 - inset, z: rect.z0 + inset },
+    { x: rect.x0 + inset, z: rect.z1 - inset },
+    { x: rect.x1 - inset, z: rect.z1 - inset },
+  ];
+  let best = candidates[0]!;
+  let bestDist = -1;
+  for (const c of candidates) {
+    let nearest = Infinity;
+    for (const d of doorways) nearest = Math.min(nearest, Math.hypot(c.x - d.x, c.z - d.z));
+    if (nearest > bestDist) {
+      bestDist = nearest;
+      best = c;
+    }
+  }
+  return best;
+}
+
 /**
  * Build a procedural "rooms + corridors" map for the given seed on a fixed tile
  * grid: an outer walled rectangle partitioned into rooms, every interior
@@ -280,6 +396,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
   emitWallColliders(grid, "z", lineX(grid, gx), eastWest, colliders);
   emitWallTiles(grid, "z", lineX(grid, gx), eastWest, pickWallModels(rng, gz), -1, tiles);
 
+  const doorways: Doorway[] = [];
   for (let cb = 1; cb < roomCols; cb++) {
     const cell = colBounds[cb]!;
     const present = new Array<boolean>(gz).fill(true);
@@ -287,6 +404,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
       const door = randInt(rng, rowBounds[r]!, rowBounds[r + 1]! - 1);
       present[door] = false;
       pushGate(grid, "z", lineX(grid, cell), door, tiles);
+      doorways.push({ x: lineX(grid, cell), z: cellCenterZ(grid, door) });
     }
     emitInteriorWall(grid, "z", lineX(grid, cell), present, pickWallModels(rng, gz), tiles, colliders);
   }
@@ -297,6 +415,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
       const door = randInt(rng, colBounds[c]!, colBounds[c + 1]! - 1);
       present[door] = false;
       pushGate(grid, "x", lineZ(grid, cell), door, tiles);
+      doorways.push({ x: cellCenterX(grid, door), z: lineZ(grid, cell) });
     }
     emitInteriorWall(grid, "x", lineZ(grid, cell), present, pickWallModels(rng, gx), tiles, colliders);
   }
@@ -306,47 +425,28 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
 
   const props: PropInstance[] = [];
   const propSpawns: Vec3[] = [];
-  const placed: { x: number; z: number }[] = [];
-  const types = catalog.map((def) => def.id);
 
   for (let rc = 0; rc < roomCols; rc++) {
     for (let rr = 0; rr < roomRows; rr++) {
-      const x0 = lineX(grid, colBounds[rc]!);
-      const x1 = lineX(grid, colBounds[rc + 1]!);
-      const z0 = lineZ(grid, rowBounds[rr]!);
-      const z1 = lineZ(grid, rowBounds[rr + 1]!);
-      const cx = (x0 + x1) / 2;
-      const cz = (z0 + z1) / 2;
-      if (!(rc === hunterCol && rr === hunterRow)) {
-        propSpawns.push({ x: cx, y: 0, z: cz });
+      const rect: RoomRect = {
+        x0: lineX(grid, colBounds[rc]!),
+        x1: lineX(grid, colBounds[rc + 1]!),
+        z0: lineZ(grid, rowBounds[rr]!),
+        z1: lineZ(grid, rowBounds[rr + 1]!),
+      };
+      if (rc === hunterCol && rr === hunterRow) {
+        const spawn = { x: (rect.x0 + rect.x1) / 2, z: (rect.z0 + rect.z1) / 2 };
+        furnishRoom({ rect, doorways, spawn, catalog, rng, out: props });
+        continue;
       }
-
-      const px0 = x0 + ROOM_MARGIN;
-      const px1 = x1 - ROOM_MARGIN;
-      const pz0 = z0 + ROOM_MARGIN;
-      const pz1 = z1 - ROOM_MARGIN;
-      if (types.length === 0 || px1 <= px0 || pz1 <= pz0) continue;
-
-      const roomCells =
-        (colBounds[rc + 1]! - colBounds[rc]!) * (rowBounds[rr + 1]! - rowBounds[rr]!);
-      const count = Math.max(
-        PROPS_PER_ROOM_MIN,
-        Math.min(PROPS_PER_ROOM_MAX, Math.round(roomCells * PROP_DENSITY)),
-      );
-      for (let k = 0; k < count; k++) {
-        for (let attempt = 0; attempt < MAX_PLACE_ATTEMPTS; attempt++) {
-          const px = randRange(rng, px0, px1);
-          const pz = randRange(rng, pz0, pz1);
-          if (Math.hypot(px - cx, pz - cz) < SPAWN_RESERVE) continue;
-          if (placed.some((p) => Math.hypot(px - p.x, pz - p.z) < PROP_MIN_GAP)) continue;
-          const type = types[Math.floor(rng() * types.length)]!;
-          props.push({ type, position: { x: px, y: 0, z: pz }, rotation: rng() * Math.PI * 2 });
-          placed.push({ x: px, z: pz });
-          break;
-        }
-      }
+      const spawn = pickSpawnCorner(rect, doorways);
+      propSpawns.push({ x: spawn.x, y: 0, z: spawn.z });
+      furnishRoom({ rect, doorways, spawn, catalog, rng, out: props });
     }
   }
+
+  const scenery: SceneryInstance[] = [];
+  emitScenery(grid, rng, scenery);
 
   const hcx = (lineX(grid, colBounds[hunterCol]!) + lineX(grid, colBounds[hunterCol + 1]!)) / 2;
   const hcz = (lineZ(grid, rowBounds[hunterRow]!) + lineZ(grid, rowBounds[hunterRow + 1]!)) / 2;
@@ -364,6 +464,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
     spawnPoints: { hunters: hunterSpawns, props: propSpawns },
     colliders,
     tiles,
+    scenery,
     props,
     propCatalog: catalog,
   };
