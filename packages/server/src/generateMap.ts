@@ -7,7 +7,7 @@ import type {
   TileInstance,
   Vec3,
 } from "@webhunt/shared";
-import { furnishRoom, type Doorway, type RoomRect } from "./furnish";
+import { type Doorway, furnishRoom, type RoomRect } from "./furnish";
 
 const TILE = 4;
 const CELLS_MIN = 11;
@@ -70,6 +70,13 @@ const GROUND_DETAIL_DENSITY = 0.01;
 const GROUND_DETAIL_MAX = 36;
 const DETAIL_SCALE_MIN = 1.5;
 const DETAIL_SCALE_MAX = 3.2;
+
+const APRON_WALK = 16;
+const ROCKET_FOOT = 5.6;
+const ROCKET_COLLIDER_HEIGHT = 9;
+const HANGAR_FOOT_X = 6.6;
+const HANGAR_FOOT_Z = 9.8;
+const HANGAR_COLLIDER_HEIGHT = 3.4;
 
 function makeRng(seed: number): () => number {
   let s = seed >>> 0;
@@ -268,36 +275,52 @@ function pushRocket(scenery: SceneryInstance[], x: number, z: number, rng: () =>
 }
 
 /**
- * Dress the Martian ground around the building with space-kit set pieces:
- * a rocket towering at each corner, hangars on two edges facing in, a few
- * parked craft and scattered meteors/craters. Purely visual (no colliders) —
- * the play area stays bounded by the perimeter walls. Deterministic per seed.
+ * Dress the now-walkable Martian apron with space-kit set pieces: a rocket
+ * towering at each corner, a hangar on the north and south edges, a few parked
+ * craft and scattered meteors/craters. Rockets and hangars get solid colliders
+ * so players bump into them; small debris stays decorative. Deterministic per seed.
  */
-function emitScenery(grid: Grid, rng: () => number, scenery: SceneryInstance[]): void {
+function emitScenery(
+  grid: Grid,
+  rng: () => number,
+  scenery: SceneryInstance[],
+  colliders: BoxCollider[],
+): void {
   const { halfW, halfD } = grid;
   const exHalfW = halfW + APRON_MARGIN;
   const exHalfD = halfD + APRON_MARGIN;
 
   const rx = halfW + ROCKET_INSET;
   const rz = halfD + ROCKET_INSET;
-  pushRocket(scenery, -rx, -rz, rng);
-  pushRocket(scenery, rx, -rz, rng);
-  pushRocket(scenery, -rx, rz, rng);
-  pushRocket(scenery, rx, rz, rng);
+  for (const [x, z] of [
+    [-rx, -rz],
+    [rx, -rz],
+    [-rx, rz],
+    [rx, rz],
+  ] as const) {
+    pushRocket(scenery, x, z, rng);
+    colliders.push({
+      position: { x, y: ROCKET_COLLIDER_HEIGHT / 2, z },
+      size: { x: ROCKET_FOOT, y: ROCKET_COLLIDER_HEIGHT, z: ROCKET_FOOT },
+    });
+  }
 
   const hz = halfD + HANGAR_INSET;
-  scenery.push({
-    model: sk(HANGAR_MODELS[Math.floor(rng() * HANGAR_MODELS.length)]!),
-    position: { x: 0, y: 0, z: -hz },
-    rotationY: 0,
-    scale: HANGAR_SCALE,
-  });
-  scenery.push({
-    model: sk(HANGAR_MODELS[Math.floor(rng() * HANGAR_MODELS.length)]!),
-    position: { x: 0, y: 0, z: hz },
-    rotationY: Math.PI,
-    scale: HANGAR_SCALE,
-  });
+  for (const [z, rotationY] of [
+    [-hz, 0],
+    [hz, Math.PI],
+  ] as const) {
+    scenery.push({
+      model: sk(HANGAR_MODELS[Math.floor(rng() * HANGAR_MODELS.length)]!),
+      position: { x: 0, y: 0, z },
+      rotationY,
+      scale: HANGAR_SCALE,
+    });
+    colliders.push({
+      position: { x: 0, y: HANGAR_COLLIDER_HEIGHT / 2, z },
+      size: { x: HANGAR_FOOT_X, y: HANGAR_COLLIDER_HEIGHT, z: HANGAR_FOOT_Z },
+    });
+  }
 
   const insideBuilding = (x: number, z: number): boolean =>
     Math.abs(x) < halfW + TILE && Math.abs(z) < halfD + TILE;
@@ -381,22 +404,31 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
   const colliders: BoxCollider[] = [
     {
       position: { x: 0, y: -FLOOR_THICKNESS / 2, z: 0 },
-      size: { x: width, y: FLOOR_THICKNESS, z: depth },
+      size: { x: width + 2 * APRON_WALK, y: FLOOR_THICKNESS, z: depth + 2 * APRON_WALK },
     },
   ];
 
-  const northSouth = new Array<boolean>(gx).fill(true);
-  const eastWest = new Array<boolean>(gz).fill(true);
-  emitWallColliders(grid, "x", lineZ(grid, 0), northSouth, colliders);
-  emitWallTiles(grid, "x", lineZ(grid, 0), northSouth, pickWallModels(rng, gx), 1, tiles);
-  emitWallColliders(grid, "x", lineZ(grid, gz), northSouth, colliders);
-  emitWallTiles(grid, "x", lineZ(grid, gz), northSouth, pickWallModels(rng, gx), -1, tiles);
-  emitWallColliders(grid, "z", lineX(grid, 0), eastWest, colliders);
-  emitWallTiles(grid, "z", lineX(grid, 0), eastWest, pickWallModels(rng, gz), 1, tiles);
-  emitWallColliders(grid, "z", lineX(grid, gx), eastWest, colliders);
-  emitWallTiles(grid, "z", lineX(grid, gx), eastWest, pickWallModels(rng, gz), -1, tiles);
-
   const doorways: Doorway[] = [];
+  const north = new Array<boolean>(gx).fill(true);
+  const south = new Array<boolean>(gx).fill(true);
+  const west = new Array<boolean>(gz).fill(true);
+  const east = new Array<boolean>(gz).fill(true);
+  const exitCol = Math.floor(gx / 2);
+  north[exitCol] = false;
+  south[exitCol] = false;
+  pushGate(grid, "x", lineZ(grid, 0), exitCol, tiles);
+  pushGate(grid, "x", lineZ(grid, gz), exitCol, tiles);
+  doorways.push({ x: cellCenterX(grid, exitCol), z: lineZ(grid, 0) });
+  doorways.push({ x: cellCenterX(grid, exitCol), z: lineZ(grid, gz) });
+
+  emitWallColliders(grid, "x", lineZ(grid, 0), north, colliders);
+  emitWallTiles(grid, "x", lineZ(grid, 0), north, pickWallModels(rng, gx), 1, tiles);
+  emitWallColliders(grid, "x", lineZ(grid, gz), south, colliders);
+  emitWallTiles(grid, "x", lineZ(grid, gz), south, pickWallModels(rng, gx), -1, tiles);
+  emitWallColliders(grid, "z", lineX(grid, 0), west, colliders);
+  emitWallTiles(grid, "z", lineX(grid, 0), west, pickWallModels(rng, gz), 1, tiles);
+  emitWallColliders(grid, "z", lineX(grid, gx), east, colliders);
+  emitWallTiles(grid, "z", lineX(grid, gx), east, pickWallModels(rng, gz), -1, tiles);
   for (let cb = 1; cb < roomCols; cb++) {
     const cell = colBounds[cb]!;
     const present = new Array<boolean>(gz).fill(true);
@@ -406,7 +438,15 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
       pushGate(grid, "z", lineX(grid, cell), door, tiles);
       doorways.push({ x: lineX(grid, cell), z: cellCenterZ(grid, door) });
     }
-    emitInteriorWall(grid, "z", lineX(grid, cell), present, pickWallModels(rng, gz), tiles, colliders);
+    emitInteriorWall(
+      grid,
+      "z",
+      lineX(grid, cell),
+      present,
+      pickWallModels(rng, gz),
+      tiles,
+      colliders,
+    );
   }
   for (let rb = 1; rb < roomRows; rb++) {
     const cell = rowBounds[rb]!;
@@ -417,7 +457,15 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
       pushGate(grid, "x", lineZ(grid, cell), door, tiles);
       doorways.push({ x: cellCenterX(grid, door), z: lineZ(grid, cell) });
     }
-    emitInteriorWall(grid, "x", lineZ(grid, cell), present, pickWallModels(rng, gx), tiles, colliders);
+    emitInteriorWall(
+      grid,
+      "x",
+      lineZ(grid, cell),
+      present,
+      pickWallModels(rng, gx),
+      tiles,
+      colliders,
+    );
   }
 
   const hunterCol = Math.floor(roomCols / 2);
@@ -446,7 +494,7 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
   }
 
   const scenery: SceneryInstance[] = [];
-  emitScenery(grid, rng, scenery);
+  emitScenery(grid, rng, scenery, colliders);
 
   const hcx = (lineX(grid, colBounds[hunterCol]!) + lineX(grid, colBounds[hunterCol + 1]!)) / 2;
   const hcz = (lineZ(grid, rowBounds[hunterRow]!) + lineZ(grid, rowBounds[hunterRow + 1]!)) / 2;
@@ -460,7 +508,10 @@ export function generateMap(seed: number, catalog: PropDefinition[]): MapDefinit
   return {
     id: `gen-${seed >>> 0}`,
     name: `Procedurale ${roomRows}×${roomCols}`,
-    bounds: { min: { x: -grid.halfW, y: 0, z: -grid.halfD }, max: { x: grid.halfW, y: WALL_HEIGHT, z: grid.halfD } },
+    bounds: {
+      min: { x: -(grid.halfW + APRON_WALK), y: 0, z: -(grid.halfD + APRON_WALK) },
+      max: { x: grid.halfW + APRON_WALK, y: WALL_HEIGHT, z: grid.halfD + APRON_WALK },
+    },
     spawnPoints: { hunters: hunterSpawns, props: propSpawns },
     colliders,
     tiles,
