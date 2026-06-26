@@ -224,11 +224,11 @@ export function Scene({
     <>
       <color attach="background" args={["#adcdec"]} />
       <Sky sunPosition={SUN_POSITION} turbidity={6} rayleigh={1.2} />
-      <hemisphereLight args={["#cfe2f7", "#6b6150", 0.8]} />
-      <ambientLight intensity={0.5} />
+      <hemisphereLight args={["#cfe2f7", "#7a6e5c", 1.0]} />
+      <ambientLight intensity={0.7} />
       <directionalLight
         position={SUN_POSITION}
-        intensity={1.7}
+        intensity={1.4}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-near={1}
@@ -406,9 +406,13 @@ function PrimitiveParts({ parts }: { parts: PrimitiveSpec[] }) {
 function enableShadows(object: THREE.Object3D): void {
   object.traverse((child) => {
     const mesh = child as THREE.Mesh;
-    if (mesh.isMesh) {
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const material of materials) {
+      const standard = material as THREE.MeshStandardMaterial;
+      if (standard.isMeshStandardMaterial) standard.metalness = 0;
     }
   });
 }
