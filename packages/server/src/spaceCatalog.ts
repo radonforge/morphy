@@ -6,7 +6,7 @@ function obj(
   width: number,
   height: number,
   color: string,
-  kit = "space-station",
+  kit = "space/station",
 ): PropDefinition {
   return {
     id,
@@ -30,7 +30,7 @@ function sk(
   height: number,
   color: string,
 ): PropDefinition {
-  return obj(id, name, width, height, color, "space-kit");
+  return obj(id, name, width, height, color, "space/exterior");
 }
 
 export const SPACE_CATALOG: PropDefinition[] = [

@@ -21,8 +21,8 @@ const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
 const WALL_Y = WALL_HEIGHT / 2;
 const FLOOR_THICKNESS = 1;
 
-const WALL_MODEL = "/models/space/template-wall.glb";
-const GATE_MODEL = "/models/space/gate.glb";
+const WALL_MODEL = "/models/space/modular/template-wall.glb";
+const GATE_MODEL = "/models/space/modular/gate.glb";
 const WALL_ROTATION_X = 0;
 const WALL_ROTATION_Z = Math.PI / 2;
 
@@ -32,13 +32,13 @@ interface WeightedModel {
 }
 
 const FLOOR_VARIANTS: WeightedModel[] = [
-  { model: "/models/space/template-floor.glb", weight: 3 },
-  { model: "/models/space/template-floor-detail-a.glb", weight: 1 },
+  { model: "/models/space/modular/template-floor.glb", weight: 3 },
+  { model: "/models/space/modular/template-floor-detail-a.glb", weight: 1 },
 ];
 
 const WALL_VARIANTS: WeightedModel[] = [
   { model: WALL_MODEL, weight: 7 },
-  { model: "/models/space/template-wall-detail-a.glb", weight: 3 },
+  { model: "/models/space/modular/template-wall-detail-a.glb", weight: 3 },
 ];
 
 const MAX_PLACE_ATTEMPTS = 16;
@@ -46,7 +46,7 @@ const HUNTER_SPAWN_OFFSET = 1.4;
 const SPAWN_CORNER_INSET = 2.2;
 
 const APRON_MARGIN = 14;
-const sk = (name: string): string => `/models/space-kit/${name}.glb`;
+const sk = (name: string): string => `/models/space/exterior/${name}.glb`;
 
 const ROCKET_SCALE = 3;
 const ROCKET_PARTS: { model: string; y: number }[] = [
@@ -291,7 +291,7 @@ function pushRocket(scenery: SceneryInstance[], x: number, z: number, rng: () =>
 }
 
 /**
- * Dress the now-walkable Martian apron with space-kit set pieces: a rocket
+ * Dress the now-walkable Martian apron with space/exterior set pieces: a rocket
  * towering at each corner, a hangar on the north and south edges, a few parked
  * craft and scattered meteors/craters. Rockets and hangars get solid colliders
  * so players bump into them; small debris stays decorative. Deterministic per seed.
