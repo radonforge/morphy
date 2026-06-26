@@ -15,6 +15,7 @@ import {
   parseMapDefinition,
   type Intent,
   type MapDefinition,
+  type MapId,
   type Observation,
   type Phase,
   type Role,
@@ -59,6 +60,7 @@ function behaviorChanged(prev: Intent, next: Intent): boolean {
 export interface BotOptions {
   serverUrl: string;
   name: string;
+  map: MapId;
   difficulty: number;
   readyAtPlayers: number;
   policy: Policy;
@@ -118,7 +120,7 @@ export class Bot {
   async connect(): Promise<void> {
     const client = new Client(this.options.serverUrl);
     const room = await withTimeout(
-      client.joinOrCreate(ROOM_NAME, { name: this.options.name }),
+      client.joinOrCreate(ROOM_NAME, { name: this.options.name, map: this.options.map }),
       CONNECT_TIMEOUT_MS,
       `bot ${this.options.name} connect`,
     );

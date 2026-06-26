@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname, extname } from "node:path";
-import { MAX_NAME_LENGTH, type Visibility } from "@webhunt/shared";
+import { DEFAULT_MAP_ID, MAX_NAME_LENGTH, type MapId, isMapId, type Visibility } from "@webhunt/shared";
 import { Bot } from "./bot";
 import {
   BOT_NAMES,
@@ -18,6 +18,7 @@ type PolicyKind = "scripted";
 interface CliArgs {
   count: number;
   url: string;
+  map: MapId;
   difficulty: number;
   namePrefix: string | null;
   readyAtPlayers: number | null;
@@ -31,6 +32,11 @@ function parsePolicy(value: string): PolicyKind {
   throw new Error(`unknown --policy '${value}' (supported: scripted)`);
 }
 
+function parseMap(value: string): MapId {
+  if (isMapId(value)) return value;
+  throw new Error(`unknown --map '${value}' (supported: station, mars, urban)`);
+}
+
 function parseVisibility(value: string): Visibility {
   if (value === "full" || value === "limited") return value;
   throw new Error(`unknown --visibility '${value}' (supported: full, limited)`);
@@ -40,6 +46,7 @@ function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
     count: DEFAULT_BOT_COUNT,
     url: defaultServerUrl(),
+    map: DEFAULT_MAP_ID,
     difficulty: DEFAULT_DIFFICULTY,
     namePrefix: null,
     readyAtPlayers: null,
@@ -61,6 +68,13 @@ function parseArgs(argv: string[]): CliArgs {
       case "--url":
         if (value) {
           args.url = value;
+          i++;
+        }
+        break;
+      case "--map":
+      case "-m":
+        if (value) {
+          args.map = parseMap(value);
           i++;
         }
         break;
@@ -142,8 +156,8 @@ async function main(): Promise<void> {
   const readyAtPlayers = args.readyAtPlayers ?? args.count + 1;
   if (args.trace) mkdirSync(dirname(traceFileFor(args.trace, "x")), { recursive: true });
   console.log(
-    `[bot] spawning ${args.count} bot(s) → ${args.url} · policy ${args.policy} · visibility ${args.visibility} · ` +
-      `difficulty ${args.difficulty} · ready when ${readyAtPlayers} player(s) present` +
+    `[bot] spawning ${args.count} bot(s) → ${args.url} · map ${args.map} · policy ${args.policy} · ` +
+      `visibility ${args.visibility} · difficulty ${args.difficulty} · ready when ${readyAtPlayers} player(s) present` +
       (args.trace ? ` · tracing to ${args.trace}` : ""),
   );
 
@@ -153,6 +167,7 @@ async function main(): Promise<void> {
     const bot = new Bot({
       serverUrl: args.url,
       name,
+      map: args.map,
       difficulty: args.difficulty,
       readyAtPlayers,
       policy: createPolicy(args.policy, args.difficulty),
