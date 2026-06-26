@@ -27,6 +27,16 @@ export const ENGAGE_RANGE_MAX = SHOOT_RANGE;
 export const REACTION_MS_MAX = 950;
 export const REACTION_MS_MIN = 180;
 
+/**
+ * Combat aim is a bounded turn, not a snap: the bot may only rotate toward a
+ * target this fast and can fire only once aligned within {@link AIM_TOLERANCE_RAD}.
+ * Difficulty lerps the rate — a low-difficulty bot visibly swings its aim around
+ * and a strafing player can stay ahead of it, instead of being instantly locked.
+ */
+export const AIM_TURN_RATE_MIN = 1.6;
+export const AIM_TURN_RATE_MAX = 14;
+export const AIM_TOLERANCE_RAD = (4 * Math.PI) / 180;
+
 export const NAV_CELL_SIZE = 1.0;
 export const NAV_INFLATION_EPS = 0.05;
 export const NAV_SNAP_RADIUS_CELLS = 8;

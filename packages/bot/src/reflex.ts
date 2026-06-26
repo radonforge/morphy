@@ -17,6 +17,9 @@ import {
   type Visibility,
 } from "@webhunt/shared";
 import {
+  AIM_TOLERANCE_RAD,
+  AIM_TURN_RATE_MAX,
+  AIM_TURN_RATE_MIN,
   ARRIVE_EPSILON,
   BOT_BODY_RADIUS,
   BOT_EYE_HEIGHT,
@@ -57,6 +60,11 @@ import { canHitTarget, lineOfSightClear, normalize3, type Vec3 } from "./raycast
 import type { BotPlayer } from "./view";
 
 const STEER_MIN_DIST = 1e-4;
+
+/** Wrap any angle into (-π, π] so rotation always takes the shortest path. */
+function wrapAngle(angle: number): number {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
 
 const UNTRANSFORMED_BOUNDS: PropBounds = {
   radius: UNTRANSFORMED_PROP_RADIUS,
@@ -448,7 +456,12 @@ export class Reflex {
 
     if (canHit && dir) {
       this.follower.clear();
-      this.faceToward(target.x, target.z);
+      const turnRate = lerp(AIM_TURN_RATE_MIN, AIM_TURN_RATE_MAX, this.difficulty);
+      const aimError = this.turnToward(target.x, target.z, turnRate * dt);
+      if (aimError > AIM_TOLERANCE_RAD) {
+        this.aimTargetId = null;
+        return null;
+      }
       if (this.aimTargetId !== target.id) {
         this.aimTargetId = target.id;
         this.aimAcquiredAt = now;
@@ -482,6 +495,15 @@ export class Reflex {
 
   private faceToward(tx: number, tz: number): void {
     this.rot = Math.atan2(tx - this.posX, tz - this.posZ);
+  }
+
+  /** Rotate at most `maxStep` radians toward (tx,tz); returns the angular error still remaining. */
+  private turnToward(tx: number, tz: number, maxStep: number): number {
+    const desired = Math.atan2(tx - this.posX, tz - this.posZ);
+    const delta = wrapAngle(desired - this.rot);
+    const step = Math.max(-maxStep, Math.min(maxStep, delta));
+    this.rot = wrapAngle(this.rot + step);
+    return Math.abs(delta - step);
   }
 
   private pickPatrolTarget(): void {
