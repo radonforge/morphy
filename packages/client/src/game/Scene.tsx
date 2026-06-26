@@ -1,5 +1,5 @@
 import type { Room } from "@colyseus/sdk";
-import { Sky, useGLTF } from "@react-three/drei";
+import { Billboard, Sky, Text, useGLTF } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   computePropBounds,
@@ -60,6 +60,11 @@ const BLASTER_MODEL = "/models/blaster/blaster-a.glb";
 const WEAPON_SCALE = 0.32;
 const WEAPON_OFFSET: [number, number, number] = [0.2, -0.22, -0.6];
 const WEAPON_ROTATION: [number, number, number] = [0, Math.PI, 0];
+const NAMEPLATE_HEIGHT = 2.4;
+const NAMEPLATE_FONT_SIZE = 0.34;
+const NAMEPLATE_COLOR = "#eef4ff";
+const NAMEPLATE_OUTLINE_COLOR = "#11161f";
+const NAMEPLATE_OUTLINE_WIDTH = 0.03;
 
 const CAMERA_DISTANCE = 8;
 const CAMERA_TARGET_Y = 1.2;
@@ -275,6 +280,7 @@ export function Scene({
             view={playersRef.current.get(id)}
             catalog={catalog}
             role={meta[id]?.role ?? "prop"}
+            localRole={localRole}
             propType={meta[id]?.propType ?? ""}
             avatar={meta[id]?.avatar ?? ""}
             tauntPulseRef={tauntPulseRef}
@@ -1030,16 +1036,42 @@ function LocalPlayer({
   );
 }
 
+function AllyNameplate({ name }: { name: string }) {
+  return (
+    <Billboard position={[0, NAMEPLATE_HEIGHT, 0]}>
+      <Text
+        fontSize={NAMEPLATE_FONT_SIZE}
+        color={NAMEPLATE_COLOR}
+        outlineWidth={NAMEPLATE_OUTLINE_WIDTH}
+        outlineColor={NAMEPLATE_OUTLINE_COLOR}
+        anchorX="center"
+        anchorY="middle"
+      >
+        {name}
+      </Text>
+    </Billboard>
+  );
+}
+
 interface RemotePlayerProps {
   view: RemotePlayerView | undefined;
   catalog: Catalog;
   role: Role;
+  localRole: Role;
   propType: string;
   avatar: string;
   tauntPulseRef: TauntPulseRef;
 }
 
-function RemotePlayer({ view, catalog, role, propType, avatar, tauntPulseRef }: RemotePlayerProps) {
+function RemotePlayer({
+  view,
+  catalog,
+  role,
+  localRole,
+  propType,
+  avatar,
+  tauntPulseRef,
+}: RemotePlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
 
   useFrame((_, delta) => {
@@ -1058,9 +1090,11 @@ function RemotePlayer({ view, catalog, role, propType, avatar, tauntPulseRef }: 
   if (!view) {
     return null;
   }
+  const showName = localRole === role && view.name.length > 0;
   return (
     <group ref={groupRef}>
       <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
+      {showName ? <AllyNameplate name={view.name} /> : null}
     </group>
   );
 }
