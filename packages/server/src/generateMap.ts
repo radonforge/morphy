@@ -71,8 +71,23 @@ const GROUND_DETAIL_MAX = 36;
 const DETAIL_SCALE_MIN = 1.5;
 const DETAIL_SCALE_MAX = 3.2;
 
+/**
+ * Local-space footprint radius (max horizontal half-extent, from each GLB's
+ * bounds) for solid scatter models, scaled per instance into a world-space
+ * circular obstacle. Flat ground decals (crater, craterLarge) are omitted so
+ * they stay walkable.
+ */
+const SCENERY_COLLIDER_RADIUS: Record<string, number> = {
+  meteor: 0.43,
+  meteor_detailed: 0.43,
+  craft_racer: 1.01,
+  craft_speederA: 1.05,
+  craft_cargoA: 1.23,
+  craft_miner: 1.3,
+};
+
 const APRON_WALK = 16;
-const ROCKET_FOOT = 5.6;
+const ROCKET_FOOT = 3.8;
 const ROCKET_COLLIDER_HEIGHT = 9;
 const HANGAR_FOOT_X = 6.6;
 const HANGAR_FOOT_Z = 9.8;
@@ -324,25 +339,32 @@ function emitScenery(
 
   const insideBuilding = (x: number, z: number): boolean =>
     Math.abs(x) < halfW + TILE && Math.abs(z) < halfD + TILE;
-  const scatter = (model: string, scale: number): void => {
+  const scatter = (name: string, scale: number): void => {
     for (let attempt = 0; attempt < MAX_PLACE_ATTEMPTS; attempt++) {
       const x = randRange(rng, -exHalfW, exHalfW);
       const z = randRange(rng, -exHalfD, exHalfD);
       if (insideBuilding(x, z)) continue;
-      scenery.push({ model, position: { x, y: 0, z }, rotationY: rng() * Math.PI * 2, scale });
+      const localRadius = SCENERY_COLLIDER_RADIUS[name];
+      scenery.push({
+        model: sk(name),
+        position: { x, y: 0, z },
+        rotationY: rng() * Math.PI * 2,
+        scale,
+        ...(localRadius !== undefined ? { colliderRadius: localRadius * scale } : {}),
+      });
       return;
     }
   };
 
   for (let c = 0; c < CRAFT_COUNT; c++) {
-    scatter(sk(CRAFT_MODELS[Math.floor(rng() * CRAFT_MODELS.length)]!), CRAFT_SCALE);
+    scatter(CRAFT_MODELS[Math.floor(rng() * CRAFT_MODELS.length)]!, CRAFT_SCALE);
   }
 
   const apronArea = exHalfW * exHalfD * 4 - halfW * halfD * 4;
   const detailCount = Math.min(GROUND_DETAIL_MAX, Math.round(apronArea * GROUND_DETAIL_DENSITY));
   for (let d = 0; d < detailCount; d++) {
     scatter(
-      sk(GROUND_DETAIL_MODELS[Math.floor(rng() * GROUND_DETAIL_MODELS.length)]!),
+      GROUND_DETAIL_MODELS[Math.floor(rng() * GROUND_DETAIL_MODELS.length)]!,
       randRange(rng, DETAIL_SCALE_MIN, DETAIL_SCALE_MAX),
     );
   }

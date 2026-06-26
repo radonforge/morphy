@@ -77,13 +77,16 @@ export interface TileInstance {
 /**
  * A full glTF model placed as decorative exterior scenery (rockets, hangars,
  * craft, debris). Rendered un-instanced so multi-mesh models display in full,
- * and uniformly scaled. Purely visual — never produces a collider.
+ * and uniformly scaled. Solid pieces carry `colliderRadius` (world units) and
+ * block the player as a circular obstacle; flat decals (craters) omit it and
+ * stay walkable.
  */
 export interface SceneryInstance {
   model: string;
   position: Vec3;
   rotationY: number;
   scale: number;
+  colliderRadius?: number;
 }
 
 export interface MapBounds {
@@ -178,7 +181,8 @@ function isSceneryInstance(value: unknown): value is SceneryInstance {
     typeof value.model === "string" &&
     isVec3(value.position) &&
     typeof value.rotationY === "number" &&
-    typeof value.scale === "number"
+    typeof value.scale === "number" &&
+    (value.colliderRadius === undefined || typeof value.colliderRadius === "number")
   );
 }
 

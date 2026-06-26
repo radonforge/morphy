@@ -109,6 +109,11 @@ function buildObstacles(map: MapDefinition, catalog: Catalog): Obstacle[] {
       obstacles.push({ x: instance.position.x, z: instance.position.z, radius });
     }
   }
+  for (const inst of map.scenery) {
+    if (inst.colliderRadius !== undefined && inst.colliderRadius > 0) {
+      obstacles.push({ x: inst.position.x, z: inst.position.z, radius: inst.colliderRadius });
+    }
+  }
   return obstacles;
 }
 
