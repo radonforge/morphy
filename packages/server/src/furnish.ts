@@ -182,6 +182,15 @@ interface Archetype {
 const CONSOLES = ["computer-system", "computer-wide", "computer", "desk_computerCorner"];
 const CONTAINERS = ["container", "container-tall", "container-wide", "container-flat", "skip"];
 
+/** Named indices into {@link ARCHETYPES}, for hand-authored maps that theme rooms. */
+export const ARCHETYPE = {
+  MESS: 0,
+  QUARTERS: 1,
+  CONTROL: 2,
+  STORAGE: 3,
+  LAB: 4,
+} as const;
+
 const ARCHETYPES: readonly Archetype[] = [
   {
     wall: ["table", "table-inset", "chair-armrest", "chair"],
@@ -290,12 +299,18 @@ export function furnishRoom(opts: {
   catalog: PropDefinition[];
   rng: Rng;
   out: PropInstance[];
+  /** Force a specific archetype (index into the internal set); random when omitted. */
+  archetype?: number;
 }): void {
   const available = new Set(opts.catalog.map((d) => d.id));
   const radii = new Map(opts.catalog.map((d) => [d.id, computePropBounds(d).radius]));
   const radiusOf = (id: string): number => radii.get(id) ?? DEFAULT_RADIUS;
   const placer = makePlacer(opts.rect, opts.doorways, opts.spawn, available, radiusOf, opts.out);
-  const archetype = pick(ARCHETYPES, opts.rng);
+  const forced = opts.archetype;
+  const archetype =
+    forced !== undefined && forced >= 0 && forced < ARCHETYPES.length
+      ? ARCHETYPES[forced]!
+      : pick(ARCHETYPES, opts.rng);
 
   placeWalls(placer, archetype.wall, opts.rng);
   placeIslands(placer, archetype.islands, opts.rng);

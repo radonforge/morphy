@@ -1,4 +1,10 @@
-import { COLYSEUS_PROXY_PATH, MAX_NAME_LENGTH } from "@webhunt/shared";
+import {
+  COLYSEUS_PROXY_PATH,
+  DEFAULT_MAP_ID,
+  MAP_CATALOG,
+  type MapId,
+  MAX_NAME_LENGTH,
+} from "@webhunt/shared";
 import { useCallback, useState } from "react";
 import { Game } from "../game/Game";
 import { type Connection, connectToRoom } from "../net/connection";
@@ -12,6 +18,7 @@ const SERVER_URL =
 export function App() {
   const [connection, setConnection] = useState<Connection | null>(null);
   const [name, setName] = useState("");
+  const [selectedMap, setSelectedMap] = useState<MapId>(DEFAULT_MAP_ID);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   const handleLeave = useCallback(() => setConnection(null), []);
@@ -19,14 +26,14 @@ export function App() {
   const handleConnect = useCallback(async () => {
     setStatus({ kind: "connecting" });
     try {
-      const conn = await connectToRoom(SERVER_URL, name);
+      const conn = await connectToRoom(SERVER_URL, name, selectedMap);
       setConnection(conn);
       setStatus({ kind: "idle" });
     } catch (error) {
       const message = error instanceof Error ? error.message : "connessione fallita";
       setStatus({ kind: "error", message });
     }
-  }, [name]);
+  }, [name, selectedMap]);
 
   if (connection) {
     return <Game connection={connection} onLeave={handleLeave} />;
@@ -50,6 +57,21 @@ export function App() {
           onChange={(e) => setName(e.target.value)}
           autoFocus
         />
+        <div className="map-picker">
+          <span className="eyebrow">Mappa</span>
+          {MAP_CATALOG.map((info) => (
+            <button
+              type="button"
+              key={info.id}
+              className={`map-card${selectedMap === info.id ? " is-selected" : ""}`}
+              onClick={() => setSelectedMap(info.id)}
+              aria-pressed={selectedMap === info.id}
+            >
+              <span className="map-card-name">{info.name}</span>
+              <span className="map-card-blurb">{info.blurb}</span>
+            </button>
+          ))}
+        </div>
         <button type="submit" disabled={connecting}>
           {connecting ? "Connessione…" : "Entra"}
         </button>

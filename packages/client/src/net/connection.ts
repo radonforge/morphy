@@ -1,5 +1,5 @@
 import { Client, type Room } from "@colyseus/sdk";
-import { ROOM_NAME } from "@webhunt/shared";
+import { type MapId, ROOM_NAME } from "@webhunt/shared";
 
 const CONNECT_TIMEOUT_MS = 8_000;
 
@@ -24,10 +24,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-export async function connectToRoom(serverUrl: string, name: string): Promise<Connection> {
+export async function connectToRoom(
+  serverUrl: string,
+  name: string,
+  map: MapId,
+): Promise<Connection> {
   const client = new Client(serverUrl);
   const room = await withTimeout(
-    client.joinOrCreate(ROOM_NAME, { name }),
+    client.joinOrCreate(ROOM_NAME, { name, map }),
     CONNECT_TIMEOUT_MS,
     "connessione al server",
   );

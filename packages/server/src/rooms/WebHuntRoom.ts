@@ -3,16 +3,19 @@ import { MapSchema, Schema, type } from "@colyseus/schema";
 import {
   type BoxCollider,
   computePropBounds,
+  DEFAULT_MAP_ID,
   FIRE_COOLDOWN_MS,
   HIDE_DURATION_MS,
   HUNTER_MAX_HP,
   HUNTER_RATIO,
   type InputMessage,
+  isMapId,
   type KillEvent,
+  type MapDefinition,
+  type MapId,
   MAX_CHAT_LENGTH,
   MAX_NAME_LENGTH,
   MAX_PLAYERS,
-  type MapDefinition,
   MIN_PLAYERS_TO_START,
   MSG_CHAT,
   MSG_INPUT,
@@ -26,7 +29,6 @@ import {
   PATCH_RATE_MS,
   type Phase,
   type PropBounds,
-  type PropDefinition,
   ROUND_DURATION_MS,
   ROUND_END_MS,
   type Role,
@@ -41,8 +43,7 @@ import {
   WRONG_SHOT_DAMAGE,
 } from "@webhunt/shared";
 import { randomAnimal } from "../avatars";
-import { generateMap } from "../generateMap";
-import { SPACE_CATALOG } from "../spaceCatalog";
+import { buildMap } from "../maps";
 
 const FALLBACK_NAME = "Player";
 const SPAWN_CLEARANCE = 1.5;
@@ -213,16 +214,16 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   maxClients = MAX_PLAYERS;
   state = new RoomState();
   private map!: MapDefinition;
-  private catalog: PropDefinition[] = [];
   private catalogIds = new Set<string>();
   private propBounds = new Map<string, PropBounds>();
   private phaseTimer?: ClearableTimer;
   private tauntTimer?: ClearableTimer;
   private lastShotAt = new Map<string, number>();
 
-  onCreate(): void {
-    this.catalog = SPACE_CATALOG;
-    this.applyMap(generateMap(nextSeed(), this.catalog));
+  onCreate(options: unknown): void {
+    const requested = (options as { map?: unknown } | undefined)?.map;
+    const mapId: MapId = isMapId(requested) ? requested : DEFAULT_MAP_ID;
+    this.applyMap(buildMap(mapId, nextSeed()));
     this.setPatchRate(PATCH_RATE_MS);
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
     this.onMessage(MSG_TRANSFORM, (client, payload) => this.handleTransform(client, payload));

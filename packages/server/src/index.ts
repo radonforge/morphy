@@ -9,7 +9,7 @@ const port = Number(process.env.PORT ?? DEFAULT_PORT);
 const server = defineServer({
   transport: new WebSocketTransport(),
   rooms: {
-    [ROOM_NAME]: defineRoom(WebHuntRoom),
+    [ROOM_NAME]: defineRoom(WebHuntRoom).filterBy(["map"]),
   },
   express: (app) => {
     app.use(cors());

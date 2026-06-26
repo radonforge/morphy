@@ -6,6 +6,7 @@ import {
   GRAVITY,
   INPUT_SEND_RATE_MS,
   JUMP_SPEED,
+  MAP_CATALOG,
   type MapDefinition,
   MOVE_SPEED,
   MSG_INPUT,
@@ -52,7 +53,6 @@ const PLAYER_BODY_Y = PLAYER_BODY_LENGTH / 2 + PLAYER_RADIUS;
 const PLAYER_HEAD_Y = PLAYER_BODY_LENGTH + PLAYER_RADIUS * 1.6;
 const HUNTER_COLOR = "#e8564a";
 const PROP_COLOR = "#5bd75b";
-const GROUND_COLOR = "#9c5a40";
 const MODEL_MIN_SIZE = 0.001;
 const BASE_PLANE_MARGIN = 8;
 const animalModel = (id: string): string => `/models/pets/animal-${id}.glb`;
@@ -90,6 +90,77 @@ const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 const LOCAL_AVATAR_KEY = "localAvatar";
 const TRANSFORM_REACH = 3.5;
+
+/** Per-theme sky/light/ground preset, keyed by `MapInfo.theme`; falls back to {@link DEFAULT_THEME}. */
+interface ThemePreset {
+  ground: string;
+  background: string;
+  hemiSky: string;
+  hemiGround: string;
+  hemiIntensity: number;
+  ambient: number;
+  dir: number;
+  sky: boolean;
+  turbidity: number;
+  rayleigh: number;
+}
+
+const DEFAULT_THEME: ThemePreset = {
+  ground: "#9c5a40",
+  background: "#adcdec",
+  hemiSky: "#cfe2f7",
+  hemiGround: "#7a6e5c",
+  hemiIntensity: 1.0,
+  ambient: 0.7,
+  dir: 1.4,
+  sky: true,
+  turbidity: 6,
+  rayleigh: 1.2,
+};
+
+const THEMES: Record<string, ThemePreset> = {
+  station: {
+    ground: "#3a414e",
+    background: "#0e131b",
+    hemiSky: "#b8c8de",
+    hemiGround: "#42474f",
+    hemiIntensity: 1.05,
+    ambient: 0.85,
+    dir: 1.15,
+    sky: true,
+    turbidity: 9,
+    rayleigh: 0.5,
+  },
+  mars: {
+    ground: "#9c5a40",
+    background: "#c89a78",
+    hemiSky: "#e8b48f",
+    hemiGround: "#5a3a2c",
+    hemiIntensity: 1.1,
+    ambient: 0.8,
+    dir: 1.5,
+    sky: false,
+    turbidity: 6,
+    rayleigh: 1.2,
+  },
+  urban: {
+    ground: "#5b5f66",
+    background: "#acc6e0",
+    hemiSky: "#d4e3f6",
+    hemiGround: "#6a6f78",
+    hemiIntensity: 1.0,
+    ambient: 0.8,
+    dir: 1.45,
+    sky: true,
+    turbidity: 4,
+    rayleigh: 1.4,
+  },
+};
+
+function themeFor(mapId: string): ThemePreset {
+  const theme = MAP_CATALOG.find((m) => m.id === mapId)?.theme;
+  return (theme && THEMES[theme]) || DEFAULT_THEME;
+}
 
 type Catalog = Map<string, PropDefinition>;
 
@@ -221,6 +292,7 @@ export function Scene({
   );
   const obstacles = useMemo(() => buildObstacles(map, catalog), [map, catalog]);
   const walls = useMemo(() => buildWalls(map), [map]);
+  const theme = useMemo(() => themeFor(map.id), [map.id]);
   const tracerRef = useRef<TracerState | null>(null);
   const localGroundRef = useRef(new THREE.Vector3());
   const localMeta = meta[localId];
@@ -232,13 +304,15 @@ export function Scene({
 
   return (
     <>
-      <color attach="background" args={["#adcdec"]} />
-      <Sky sunPosition={SUN_POSITION} turbidity={6} rayleigh={1.2} />
-      <hemisphereLight args={["#cfe2f7", "#7a6e5c", 1.0]} />
-      <ambientLight intensity={0.7} />
+      <color attach="background" args={[theme.background]} />
+      {theme.sky && (
+        <Sky sunPosition={SUN_POSITION} turbidity={theme.turbidity} rayleigh={theme.rayleigh} />
+      )}
+      <hemisphereLight args={[theme.hemiSky, theme.hemiGround, theme.hemiIntensity]} />
+      <ambientLight intensity={theme.ambient} />
       <directionalLight
         position={SUN_POSITION}
-        intensity={1.4}
+        intensity={theme.dir}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-near={1}
@@ -249,7 +323,7 @@ export function Scene({
         shadow-camera-bottom={-32}
         shadow-bias={-0.0004}
       />
-      <MapView map={map} />
+      <MapView map={map} groundColor={theme.ground} />
       <PropPicker room={room} enabled={canTransform} playerPos={localGroundRef} />
       <Shooter room={room} enabled={canShoot} tracerRef={tracerRef} onShoot={onShoot} />
       <Tracer tracerRef={tracerRef} />
@@ -500,6 +574,7 @@ function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) 
     tiles.forEach((tile, i) => {
       quat.setFromAxisAngle(UP, tile.rotationY);
       pos.set(tile.position.x, tile.position.y, tile.position.z);
+      scale.setScalar(tile.scale ?? 1);
       mesh.setMatrixAt(i, matrix.compose(pos, quat, scale));
     });
     mesh.instanceMatrix.needsUpdate = true;
@@ -586,7 +661,13 @@ function HunterViewmodel({ enabled }: { enabled: boolean }) {
   );
 }
 
-const MapView = memo(function MapView({ map }: { map: MapDefinition }) {
+const MapView = memo(function MapView({
+  map,
+  groundColor,
+}: {
+  map: MapDefinition;
+  groundColor: string;
+}) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
     [map],
@@ -618,7 +699,7 @@ const MapView = memo(function MapView({ map }: { map: MapDefinition }) {
     <>
       <mesh rotation-x={-Math.PI / 2} position={[0, -0.1, 0]} receiveShadow>
         <planeGeometry args={[floorSize.width, floorSize.depth]} />
-        <meshStandardMaterial color={GROUND_COLOR} />
+        <meshStandardMaterial color={groundColor} />
       </mesh>
 
       <Suspense fallback={null}>

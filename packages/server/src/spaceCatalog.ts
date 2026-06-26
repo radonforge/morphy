@@ -1,37 +1,11 @@
 import type { PropDefinition } from "@webhunt/shared";
+import { boxProp } from "./propDef";
 
-function obj(
-  id: string,
-  name: string,
-  width: number,
-  height: number,
-  color: string,
-  kit = "space/station",
-): PropDefinition {
-  return {
-    id,
-    name,
-    model: `/models/${kit}/${id}.glb`,
-    parts: [
-      {
-        kind: "box",
-        position: { x: 0, y: height / 2, z: 0 },
-        size: { x: width, y: height, z: width },
-        color,
-      },
-    ],
-  };
-}
+const obj = (id: string, name: string, w: number, h: number, color: string): PropDefinition =>
+  boxProp("space/station", id, name, w, h, color);
 
-function sk(
-  id: string,
-  name: string,
-  width: number,
-  height: number,
-  color: string,
-): PropDefinition {
-  return obj(id, name, width, height, color, "space/exterior");
-}
+const sk = (id: string, name: string, w: number, h: number, color: string): PropDefinition =>
+  boxProp("space/exterior", id, name, w, h, color);
 
 export const SPACE_CATALOG: PropDefinition[] = [
   obj("chair", "Sedia", 0.9, 1.0, "#9aa3b0"),

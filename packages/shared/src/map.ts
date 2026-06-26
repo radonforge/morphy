@@ -72,6 +72,8 @@ export interface TileInstance {
   model: string;
   position: Vec3;
   rotationY: number;
+  /** Uniform scale applied per instance (default 1). Lets small unit-sized kits tile at world scale. */
+  scale?: number;
 }
 
 /**
@@ -98,7 +100,7 @@ export interface MapDefinition {
   id: string;
   name: string;
   bounds: MapBounds;
-  spawnPoints: { hunters: Vec3[]; props: Vec3[] };
+  spawnPoints: { props: Vec3[] };
   colliders: BoxCollider[];
   tiles: TileInstance[];
   scenery: SceneryInstance[];
@@ -171,7 +173,8 @@ function isTileInstance(value: unknown): value is TileInstance {
     isRecord(value) &&
     typeof value.model === "string" &&
     isVec3(value.position) &&
-    typeof value.rotationY === "number"
+    typeof value.rotationY === "number" &&
+    (value.scale === undefined || typeof value.scale === "number")
   );
 }
 
@@ -204,12 +207,8 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
   if (!isRecord(raw.bounds) || !isVec3(raw.bounds.min) || !isVec3(raw.bounds.max)) {
     throw new MapValidationError(id, "field 'bounds' must have Vec3 'min' and 'max'");
   }
-  if (
-    !isRecord(raw.spawnPoints) ||
-    !vec3List(raw.spawnPoints.hunters) ||
-    !vec3List(raw.spawnPoints.props)
-  ) {
-    throw new MapValidationError(id, "field 'spawnPoints' must have Vec3[] 'hunters' and 'props'");
+  if (!isRecord(raw.spawnPoints) || !vec3List(raw.spawnPoints.props)) {
+    throw new MapValidationError(id, "field 'spawnPoints' must have Vec3[] 'props'");
   }
   if (!Array.isArray(raw.colliders) || !raw.colliders.every(isBoxCollider)) {
     throw new MapValidationError(id, "field 'colliders' must be BoxCollider[]");
@@ -242,7 +241,7 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
     id,
     name: raw.name,
     bounds: { min: raw.bounds.min, max: raw.bounds.max },
-    spawnPoints: { hunters: raw.spawnPoints.hunters, props: raw.spawnPoints.props },
+    spawnPoints: { props: raw.spawnPoints.props },
     colliders: raw.colliders,
     tiles: raw.tiles,
     scenery,
