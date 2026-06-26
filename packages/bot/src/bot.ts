@@ -21,6 +21,7 @@ import {
   type Visibility,
 } from "@webhunt/shared";
 import {
+  ARRIVE_EPSILON,
   BOT_VISION_RANGE,
   CONNECT_TIMEOUT_MS,
   DECIDE_INTERVAL_MS,
@@ -33,6 +34,27 @@ import type { Trace } from "./trace";
 import { snapshot } from "./view";
 
 const BOOTSTRAP_INTENT: Intent = { kind: "patrol", seq: 0 };
+
+/**
+ * Whether two intents differ in what the reflex should *do*, ignoring `seq`. A
+ * new decision with the same behaviour (e.g. the same `hideAs` spot re-issued
+ * every ~700ms) must NOT reset the reflex's path, or the bot re-plans and
+ * micro-steps each cycle — the back-and-forth jitter while "parked".
+ */
+function behaviorChanged(prev: Intent, next: Intent): boolean {
+  if (prev.kind !== next.kind) return true;
+  if (prev.kind === "moveTo" && next.kind === "moveTo") {
+    return prev.run !== next.run || Math.hypot(prev.x - next.x, prev.z - next.z) > ARRIVE_EPSILON;
+  }
+  if (prev.kind === "hideAs" && next.kind === "hideAs") {
+    return prev.propType !== next.propType || Math.hypot(prev.x - next.x, prev.z - next.z) > ARRIVE_EPSILON;
+  }
+  if (prev.kind === "inspect" && next.kind === "inspect") return prev.targetId !== next.targetId;
+  if (prev.kind === "shootTarget" && next.kind === "shootTarget") return prev.targetId !== next.targetId;
+  if (prev.kind === "transform" && next.kind === "transform") return prev.propType !== next.propType;
+  if (prev.kind === "chat" && next.kind === "chat") return prev.text !== next.text;
+  return false;
+}
 
 export interface BotOptions {
   serverUrl: string;
@@ -292,8 +314,9 @@ export class Bot {
   private onDecided(intent: Intent, obs: Observation): void {
     if (intent.seq !== this.decideSeq) return;
     this.decideErrored = false;
+    const changed = behaviorChanged(this.currentIntent, intent);
     this.currentIntent = intent;
-    this.reflex.onIntentChanged();
+    if (changed) this.reflex.onIntentChanged();
     this.speak(intent);
     this.options.trace?.recordDecision(this.options.policy.name, obs, intent, Date.now());
   }

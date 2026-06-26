@@ -115,6 +115,7 @@ export class Reflex {
   private stuckTicks = 0;
   private replanCount = 0;
   private pathBlocked = false;
+  private settled = false;
   private arrivalEdge = false;
   private blockedEdge = false;
 
@@ -178,6 +179,7 @@ export class Reflex {
     this.follower.clear();
     this.pathGoal = null;
     this.pathBlocked = false;
+    this.settled = false;
     this.stuckTicks = 0;
     this.replanCount = 0;
     this.arrivalEdge = false;
@@ -326,23 +328,34 @@ export class Reflex {
   }
 
   private runMoveTo(gx: number, gz: number, run: boolean, world: ReflexWorld, dt: number, now: number): void {
-    if (this.arrivedAt(gx, gz)) {
-      this.markArrived();
-      return;
-    }
-    this.ensurePath(gx, gz, now, false);
-    const wp = this.follower.advance(this.posX, this.posZ);
-    if (wp) this.steer(wp, run, world.self.role, dt);
+    this.runStatic(gx, gz, run, world.self.role, dt, now);
   }
 
   private runHideAs(gx: number, gz: number, world: ReflexWorld, dt: number, now: number): void {
+    this.runStatic(gx, gz, world.phase === "hiding", world.self.role, dt, now);
+  }
+
+  /**
+   * Move toward a fixed goal, then *stay put*. Once the planned path is consumed
+   * (or the exact goal is reached), the goal is "settled": the bot holds still and
+   * stops re-planning until the intent changes. Settling on path-exhaustion — not
+   * on a tight epsilon against the policy's exact coordinate — is what stops the
+   * back-and-forth jitter when a hide spot lands on a cell centre or inside the
+   * inflated furniture ring it can't quite touch.
+   */
+  private runStatic(gx: number, gz: number, run: boolean, role: BotPlayer["role"], dt: number, now: number): void {
+    if (this.settled) return;
     if (this.arrivedAt(gx, gz)) {
-      this.markArrived();
+      this.settle();
       return;
     }
     this.ensurePath(gx, gz, now, false);
     const wp = this.follower.advance(this.posX, this.posZ);
-    if (wp) this.steer(wp, world.phase === "hiding", world.self.role, dt);
+    if (wp) {
+      this.steer(wp, run, role, dt);
+      return;
+    }
+    if (!this.pathBlocked) this.settle();
   }
 
   private runPatrol(world: ReflexWorld, dt: number, now: number): void {
@@ -410,8 +423,9 @@ export class Reflex {
     return Math.hypot(this.posX - gx, this.posZ - gz) <= ARRIVE_EPSILON;
   }
 
-  private markArrived(): void {
-    if (this.follower.hasPath) this.arrivalEdge = true;
+  private settle(): void {
+    if (!this.settled) this.arrivalEdge = true;
+    this.settled = true;
     this.follower.clear();
   }
 
