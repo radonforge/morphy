@@ -2,10 +2,6 @@ import { Client, type Room } from "@colyseus/sdk";
 import {
   ROOM_NAME,
   INPUT_SEND_RATE_MS,
-  MOVE_SPEED,
-  RUN_MULTIPLIER_HUNTER,
-  RUN_MULTIPLIER_PROP,
-  FIRE_COOLDOWN_MS,
   MSG_INPUT,
   MSG_TRANSFORM,
   MSG_SHOOT,
@@ -16,31 +12,36 @@ import {
   MSG_KILL,
   MSG_CHAT,
   MSG_SHOT_RESULT,
-  computePropBounds,
   parseMapDefinition,
+  type Intent,
   type MapDefinition,
-  type PropBounds,
+  type Observation,
+  type Phase,
   type Role,
+  type Visibility,
 } from "@webhunt/shared";
 import {
-  ARRIVE_EPSILON,
-  AVOID_ANGLE,
-  AVOID_MS,
+  BOT_VISION_RANGE,
   CONNECT_TIMEOUT_MS,
-  STUCK_PROGRESS_FRACTION,
-  STUCK_TICK_LIMIT,
+  DECIDE_INTERVAL_MS,
+  DECIDE_TIMEOUT_MS,
+  MAX_TICK_SECONDS,
 } from "./config";
-import { snapshot, type BotPlayer } from "./view";
-import { buildObstacles, buildWalls, resolveCollisions, type Obstacle, type Wall } from "./collision";
-import { HunterBrain, PropBrain, type Brain, type Decision } from "./behaviors";
+import { Reflex, type ReflexWorld } from "./reflex";
+import type { Policy } from "./policy/types";
+import type { Trace } from "./trace";
+import { snapshot } from "./view";
 
-const MAX_TICK_SECONDS = 0.25;
+const BOOTSTRAP_INTENT: Intent = { kind: "patrol", seq: 0 };
 
 export interface BotOptions {
   serverUrl: string;
   name: string;
   difficulty: number;
   readyAtPlayers: number;
+  policy: Policy;
+  visibility: Visibility;
+  trace: Trace | null;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -59,27 +60,38 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
+/**
+ * The async/sync bridge. Every 20 Hz tick runs the synchronous reflex against
+ * the current intent (never awaits); a single-flight, abortable `decide` runs in
+ * the background at ~1.4 Hz or on events and swaps the intent in when it lands —
+ * stale results (a slow decide that resolved after a newer one started) are
+ * dropped by sequence number, so the bot keeps moving fluidly on its last good
+ * intent no matter how slow or flaky the policy is.
+ */
 export class Bot {
   private room: Room | null = null;
   private ticker: ReturnType<typeof setInterval> | null = null;
-  private map: MapDefinition | null = null;
-  private walls: Wall[] = [];
-  private obstacles: Obstacle[] = [];
-  private propBounds = new Map<string, PropBounds>();
-  private posX = 0;
-  private posZ = 0;
-  private rot = 0;
+  private readonly reflex: Reflex;
+
+  private currentIntent: Intent = BOOTSTRAP_INTENT;
+  private decideSeq = 0;
+  private decideInFlight = false;
+  private decideController: AbortController | null = null;
+  private lastDecideAt = 0;
+  private decideErrored = false;
+
   private spawnSynced = false;
   private lastTickAt = 0;
-  private lastShotAt = 0;
-  private prevPhase = "lobby";
-  private brain: Brain = new PropBrain();
-  private brainRole: Role = "prop";
-  private stuckTicks = 0;
-  private avoidUntil = 0;
-  private avoidSign = 1;
+  private prevPhase: Phase = "lobby";
 
-  constructor(private readonly options: BotOptions) {}
+  private eventPhase: Phase = "lobby";
+  private eventRole: Role = "prop";
+  private eventHp = 0;
+  private losIds = new Set<string>();
+
+  constructor(private readonly options: BotOptions) {
+    this.reflex = new Reflex(options.difficulty);
+  }
 
   async connect(): Promise<void> {
     const client = new Client(this.options.serverUrl);
@@ -92,7 +104,8 @@ export class Bot {
 
     room.onMessage(MSG_MAP, (raw: unknown) => this.applyMap(raw));
     room.onMessage(MSG_TELEPORT, (message: unknown) => this.onTeleport(message));
-    for (const ignored of [MSG_TAUNT, MSG_KILL, MSG_CHAT, MSG_SHOT_RESULT]) {
+    room.onMessage(MSG_KILL, (message: unknown) => this.onKill(message));
+    for (const ignored of [MSG_TAUNT, MSG_CHAT, MSG_SHOT_RESULT]) {
       room.onMessage(ignored, () => {});
     }
     room.onError((code: number, message?: string) =>
@@ -112,8 +125,10 @@ export class Bot {
       clearInterval(this.ticker);
       this.ticker = null;
     }
+    this.decideController?.abort();
     const room = this.room;
     this.room = null;
+    if (this.options.trace) await this.options.trace.close();
     if (room) {
       try {
         await room.leave();
@@ -131,26 +146,35 @@ export class Bot {
       console.error(`[bot ${this.options.name}] ignoring invalid map: ${(error as Error).message}`);
       return;
     }
-    this.map = map;
-    this.walls = buildWalls(map);
-    this.obstacles = buildObstacles(map);
-    this.propBounds = new Map(map.propCatalog.map((def) => [def.id, computePropBounds(def)] as const));
+    this.reflex.setMap(map);
   }
 
   private onTeleport(message: unknown): void {
     if (typeof message !== "object" || message === null) return;
     const m = message as Record<string, unknown>;
     if (typeof m.x === "number" && typeof m.z === "number") {
-      this.posX = m.x;
-      this.posZ = m.z;
+      this.reflex.syncPosition(m.x, m.z);
       this.spawnSynced = true;
     }
   }
 
+  private onKill(message: unknown): void {
+    const trace = this.options.trace;
+    if (!trace || typeof message !== "object" || message === null) return;
+    const m = message as Record<string, unknown>;
+    trace.recordKill(
+      {
+        byId: typeof m.byId === "string" ? m.byId : "",
+        victimId: typeof m.victimId === "string" ? m.victimId : "",
+        reason: typeof m.reason === "string" ? m.reason : "",
+      },
+      Date.now(),
+    );
+  }
+
   private tick(): void {
     const room = this.room;
-    const map = this.map;
-    if (!room || !map) return;
+    if (!room || !this.reflex.ready) return;
 
     const now = Date.now();
     const dt = Math.min(MAX_TICK_SECONDS, (now - this.lastTickAt) / 1000);
@@ -161,14 +185,18 @@ export class Bot {
     if (!self) return;
 
     if (!this.spawnSynced) {
-      this.posX = self.x;
-      this.posZ = self.z;
-      this.rot = self.rot;
+      this.reflex.syncPosition(self.x, self.z, self.rot);
       this.spawnSynced = true;
     }
 
     if (world.phase !== this.prevPhase) {
-      if (world.phase === "hiding") this.brain.reset();
+      if (world.phase === "hiding") {
+        this.currentIntent = BOOTSTRAP_INTENT;
+        this.reflex.onIntentChanged();
+      }
+      if (world.phase === "round_end" && this.options.trace) {
+        this.options.trace.recordRoundEnd(world.winner, now);
+      }
       this.prevPhase = world.phase;
     }
 
@@ -182,85 +210,103 @@ export class Bot {
 
     if (!self.alive) return;
 
-    this.syncBrainRole(self.role);
-    const decision = this.brain.decide({
-      phase: world.phase,
-      self,
-      others: world.others,
-      map,
-      propBounds: this.propBounds,
-      difficulty: this.options.difficulty,
-      now,
-    });
-    this.applyDecision(decision, self, map, dt, now, room);
+    const reflexWorld: ReflexWorld = { phase: world.phase, self, others: world.others };
+    const motor = this.reflex.executeIntent(this.currentIntent, reflexWorld, dt, now);
+    room.send(MSG_INPUT, motor.input);
+    if (motor.transformTo && self.propType !== motor.transformTo) {
+      room.send(MSG_TRANSFORM, { propType: motor.transformTo });
+    }
+    if (motor.shoot) {
+      room.send(MSG_SHOOT, { origin: motor.shoot.origin, dir: motor.shoot.dir });
+    }
+
+    this.maybeKickDecide(reflexWorld, now);
   }
 
-  private syncBrainRole(role: Role): void {
-    if (role === this.brainRole) return;
-    this.brainRole = role;
-    this.brain = role === "hunter" ? new HunterBrain() : new PropBrain();
+  private maybeKickDecide(world: ReflexWorld, now: number): void {
+    if (this.decideInFlight) return;
+    const due = now - this.lastDecideAt >= DECIDE_INTERVAL_MS;
+    const event = this.detectEvent(world);
+    if (!due && !event) return;
+    this.launchDecide(world, now);
   }
 
-  private applyDecision(
-    decision: Decision,
-    self: BotPlayer,
-    map: MapDefinition,
-    dt: number,
-    now: number,
-    room: Room,
-  ): void {
-    if (decision.move) {
-      const toX = decision.move.x - this.posX;
-      const toZ = decision.move.z - this.posZ;
-      const dist = Math.hypot(toX, toZ);
-      if (dist > 1e-4) {
-        let dirX = toX / dist;
-        let dirZ = toZ / dist;
-        if (now < this.avoidUntil) {
-          const angle = this.avoidSign * AVOID_ANGLE;
-          const cos = Math.cos(angle);
-          const sin = Math.sin(angle);
-          [dirX, dirZ] = [dirX * cos - dirZ * sin, dirX * sin + dirZ * cos];
-        }
-        const runMultiplier = this.brainRole === "hunter" ? RUN_MULTIPLIER_HUNTER : RUN_MULTIPLIER_PROP;
-        const speed = MOVE_SPEED * (decision.run ? runMultiplier : 1);
-        const step = Math.min(dist, speed * dt);
-        const prevX = this.posX;
-        const prevZ = this.posZ;
-        const resolved = resolveCollisions(
-          { x: this.posX + dirX * step, z: this.posZ + dirZ * step },
-          this.walls,
-          this.obstacles,
-          map.bounds,
-        );
-        this.posX = resolved.x;
-        this.posZ = resolved.z;
-        this.rot = Math.atan2(dirX, dirZ);
+  /** Cheap per-tick triggers that wake the policy early; ground-truth role here
+   * is scheduling only (the policy still gets the visibility-filtered obs). */
+  private detectEvent(world: ReflexWorld): boolean {
+    const self = world.self;
+    let event = false;
 
-        const moved = Math.hypot(this.posX - prevX, this.posZ - prevZ);
-        if (dist > ARRIVE_EPSILON && moved < step * STUCK_PROGRESS_FRACTION) {
-          this.stuckTicks += 1;
-          if (this.stuckTicks >= STUCK_TICK_LIMIT) {
-            this.avoidUntil = now + AVOID_MS;
-            this.avoidSign = -this.avoidSign;
-            this.stuckTicks = 0;
-          }
-        } else {
-          this.stuckTicks = 0;
-        }
-      }
+    if (world.phase !== this.eventPhase) {
+      this.eventPhase = world.phase;
+      event = true;
     }
-    if (decision.face !== null) this.rot = decision.face;
-
-    room.send(MSG_INPUT, { x: this.posX, y: 0, z: this.posZ, rot: this.rot });
-
-    if (decision.transformTo && self.propType !== decision.transformTo) {
-      room.send(MSG_TRANSFORM, { propType: decision.transformTo });
+    if (self.role !== this.eventRole) {
+      this.eventRole = self.role;
+      event = true;
     }
+    if (self.hp < this.eventHp) event = true;
+    this.eventHp = self.hp;
 
-    if (decision.shoot && now - this.lastShotAt >= FIRE_COOLDOWN_MS) {
-      this.lastShotAt = now;
-      room.send(MSG_SHOOT, { origin: decision.shoot.origin, dir: decision.shoot.dir });
+    if (this.detectLineOfSightGain(world)) event = true;
+    if (this.reflex.consumeArrivalEvent()) event = true;
+    if (this.reflex.consumeBlockedEvent()) event = true;
+
+    return event;
+  }
+
+  private detectLineOfSightGain(world: ReflexWorld): boolean {
+    const wantHostile: Role = world.self.role === "hunter" ? "prop" : "hunter";
+    const seen = new Set<string>();
+    let gained = false;
+    for (const other of world.others) {
+      if (!other.alive || other.role !== wantHostile) continue;
+      const dist = Math.hypot(other.x - this.reflex.x, other.z - this.reflex.z);
+      if (dist > BOT_VISION_RANGE || !this.reflex.canSee(other.x, other.z)) continue;
+      seen.add(other.id);
+      if (!this.losIds.has(other.id)) gained = true;
     }
+    this.losIds = seen;
+    return gained;
+  }
+
+  private launchDecide(world: ReflexWorld, now: number): void {
+    const seq = ++this.decideSeq;
+    const controller = new AbortController();
+    this.decideController = controller;
+    this.decideInFlight = true;
+    this.lastDecideAt = now;
+    const obs = this.reflex.buildObservation(world, seq, this.options.visibility, now);
+    const timer = setTimeout(() => controller.abort(), DECIDE_TIMEOUT_MS);
+
+    this.options.policy
+      .decide(obs, controller.signal)
+      .then((intent) => this.onDecided(intent, obs))
+      .catch((error: unknown) => this.onDecideError(error))
+      .finally(() => {
+        clearTimeout(timer);
+        this.decideInFlight = false;
+      });
+  }
+
+  private onDecided(intent: Intent, obs: Observation): void {
+    if (intent.seq !== this.decideSeq) return;
+    this.decideErrored = false;
+    this.currentIntent = intent;
+    this.reflex.onIntentChanged();
+    this.speak(intent);
+    this.options.trace?.recordDecision(this.options.policy.name, obs, intent, Date.now());
+  }
+
+  private onDecideError(error: unknown): void {
+    if (this.decideErrored) return;
+    this.decideErrored = true;
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    console.error(`[bot ${this.options.name}] decide failed, holding last intent — ${detail}`);
+  }
+
+  private speak(intent: Intent): void {
+    const text = intent.kind === "chat" ? intent.text : intent.say;
+    if (text && this.room) this.room.send(MSG_CHAT, { text });
   }
 }

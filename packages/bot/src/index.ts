@@ -1,4 +1,6 @@
-import { MAX_NAME_LENGTH } from "@webhunt/shared";
+import { mkdirSync } from "node:fs";
+import { dirname, extname } from "node:path";
+import { MAX_NAME_LENGTH, type Visibility } from "@webhunt/shared";
 import { Bot } from "./bot";
 import {
   BOT_NAMES,
@@ -7,6 +9,11 @@ import {
   clampDifficulty,
   defaultServerUrl,
 } from "./config";
+import { ScriptedPolicy } from "./policy/scripted";
+import type { Policy } from "./policy/types";
+import { Trace } from "./trace";
+
+type PolicyKind = "scripted";
 
 interface CliArgs {
   count: number;
@@ -14,6 +21,19 @@ interface CliArgs {
   difficulty: number;
   namePrefix: string | null;
   readyAtPlayers: number | null;
+  policy: PolicyKind;
+  visibility: Visibility;
+  trace: string | null;
+}
+
+function parsePolicy(value: string): PolicyKind {
+  if (value === "scripted") return value;
+  throw new Error(`unknown --policy '${value}' (supported: scripted)`);
+}
+
+function parseVisibility(value: string): Visibility {
+  if (value === "full" || value === "limited") return value;
+  throw new Error(`unknown --visibility '${value}' (supported: full, limited)`);
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -23,6 +43,9 @@ function parseArgs(argv: string[]): CliArgs {
     difficulty: DEFAULT_DIFFICULTY,
     namePrefix: null,
     readyAtPlayers: null,
+    policy: "scripted",
+    visibility: "full",
+    trace: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
@@ -60,6 +83,24 @@ function parseArgs(argv: string[]): CliArgs {
           i++;
         }
         break;
+      case "--policy":
+        if (value) {
+          args.policy = parsePolicy(value);
+          i++;
+        }
+        break;
+      case "--visibility":
+        if (value) {
+          args.visibility = parseVisibility(value);
+          i++;
+        }
+        break;
+      case "--trace":
+        if (value) {
+          args.trace = value;
+          i++;
+        }
+        break;
       default:
         break;
     }
@@ -75,18 +116,49 @@ function botName(prefix: string | null, index: number): string {
   return name.slice(0, MAX_NAME_LENGTH);
 }
 
+function createPolicy(kind: PolicyKind, difficulty: number): Policy {
+  switch (kind) {
+    case "scripted":
+      return new ScriptedPolicy(difficulty);
+  }
+}
+
+/** Per-bot trace file derived from the `--trace` base path, so streams never interleave. */
+function traceFileFor(base: string, name: string): string {
+  const ext = extname(base);
+  const stem = ext ? base.slice(0, -ext.length) : base;
+  return `${stem}.${name}${ext || ".jsonl"}`;
+}
+
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+  let args: CliArgs;
+  try {
+    args = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error(`[bot] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
+
   const readyAtPlayers = args.readyAtPlayers ?? args.count + 1;
+  if (args.trace) mkdirSync(dirname(traceFileFor(args.trace, "x")), { recursive: true });
   console.log(
-    `[bot] spawning ${args.count} bot(s) → ${args.url} · difficulty ${args.difficulty} · ` +
-      `ready when ${readyAtPlayers} player(s) present`,
+    `[bot] spawning ${args.count} bot(s) → ${args.url} · policy ${args.policy} · visibility ${args.visibility} · ` +
+      `difficulty ${args.difficulty} · ready when ${readyAtPlayers} player(s) present` +
+      (args.trace ? ` · tracing to ${args.trace}` : ""),
   );
 
   const bots: Bot[] = [];
   for (let i = 0; i < args.count; i++) {
     const name = botName(args.namePrefix, i);
-    const bot = new Bot({ serverUrl: args.url, name, difficulty: args.difficulty, readyAtPlayers });
+    const bot = new Bot({
+      serverUrl: args.url,
+      name,
+      difficulty: args.difficulty,
+      readyAtPlayers,
+      policy: createPolicy(args.policy, args.difficulty),
+      visibility: args.visibility,
+      trace: args.trace ? new Trace(traceFileFor(args.trace, name), name) : null,
+    });
     try {
       await bot.connect();
       bots.push(bot);
