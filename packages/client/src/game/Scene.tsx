@@ -1016,7 +1016,8 @@ function LocalPlayer({
     sendAccumMs.current += delta * 1000;
     if (sendAccumMs.current >= INPUT_SEND_RATE_MS) {
       sendAccumMs.current = 0;
-      room.send(MSG_INPUT, { x: pos.x, y: pos.y, z: pos.z, rot: heading.current });
+      const aim = Math.atan2(forwardVec.x, forwardVec.z);
+      room.send(MSG_INPUT, { x: pos.x, y: pos.y, z: pos.z, rot: heading.current, aim });
     }
   });
 

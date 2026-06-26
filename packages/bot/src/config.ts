@@ -17,6 +17,11 @@ export const HIDE_OFFSET_MAX = 2.4;
 export const PANIC_RADIUS = 7;
 export const WAYPOINT_MARGIN = 1.5;
 
+/** A contact counts as "watching me" when its aim is within this half-angle cone of the bearing to the bot. */
+export const FACING_CONE_COS = Math.cos((35 * Math.PI) / 180);
+/** A watched prop freezes (rather than relocating) only when the watcher is within this range. */
+export const FREEZE_RADIUS = 20;
+
 export const ENGAGE_RANGE_MIN = 14;
 export const ENGAGE_RANGE_MAX = SHOOT_RANGE;
 export const REACTION_MS_MAX = 950;

@@ -2,6 +2,7 @@ import type { Intent, MapBounds, Observation, ObservedEntity, Phase, Role } from
 import {
   ENGAGE_RANGE_MAX,
   ENGAGE_RANGE_MIN,
+  FREEZE_RADIUS,
   HIDE_OFFSET_MAX,
   HIDE_OFFSET_MIN,
   PANIC_RADIUS,
@@ -84,9 +85,15 @@ export class ScriptedPolicy implements Policy {
     if (!spot || !type) return { kind: "idle", seq };
 
     const threat = obs.visibility === "limited" ? this.nearestThreatLimited(obs) : this.nearestHunter(obs);
-    if (threat && threat.distance < PANIC_RADIUS) {
-      const flee = this.fleeFrom(obs, threat);
-      return { kind: "moveTo", x: flee.x, z: flee.z, run: true, seq };
+    if (threat) {
+      if (threat.facingMe === true && threat.distance < FREEZE_RADIUS) {
+        return { kind: "transform", propType: type, seq };
+      }
+      if (threat.distance < PANIC_RADIUS) {
+        this.clearHidePlan();
+        const flee = this.fleeFrom(obs, threat);
+        return { kind: "moveTo", x: flee.x, z: flee.z, run: true, seq };
+      }
     }
     return { kind: "hideAs", propType: type, x: spot.x, z: spot.z, seq };
   }

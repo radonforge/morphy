@@ -31,7 +31,10 @@ export interface InputMessage {
   x: number;
   y: number;
   z: number;
+  /** Body heading (movement direction), forward = (sin rot, cos rot). Drives mesh orientation. */
   rot: number;
+  /** Look/aim heading in the same convention as {@link rot}; what the player is facing/aiming at. */
+  aim: number;
 }
 
 export interface TransformMessage {

@@ -24,6 +24,7 @@ import {
   DOORWAY_TILE_MARKER,
   ENGAGE_RANGE_MAX,
   ENGAGE_RANGE_MIN,
+  FACING_CONE_COS,
   MAX_REPLANS_BEFORE_BLOCKED,
   MOVED_RECENTLY_MIN_DIST,
   MOVED_RECENTLY_MS,
@@ -71,7 +72,7 @@ export interface ReflexWorld {
 
 /** The synchronous motor commands the bot ships to the server this tick. */
 export interface MotorOutput {
-  input: { x: number; y: number; z: number; rot: number };
+  input: { x: number; y: number; z: number; rot: number; aim: number };
   transformTo: string | null;
   shoot: { origin: Vec3; dir: Vec3 } | null;
 }
@@ -83,7 +84,7 @@ interface MovementSample {
 }
 
 const HOLD = (x: number, z: number, rot: number): MotorOutput => ({
-  input: { x, y: 0, z, rot },
+  input: { x, y: 0, z, rot, aim: rot },
   transformTo: null,
   shoot: null,
 });
@@ -221,6 +222,7 @@ export class Reflex {
       const hasLineOfSight = lineOfSightClear(origin, { x: other.x, y: aimY, z: other.z }, colliders);
       const movedRecently = this.trackMovement(other, now);
       const looksLikeProp = other.propType !== "" && !movedRecently;
+      const facingMe = hasLineOfSight && this.isAimedAtMe(other);
       if (visibility === "full") {
         entities.push({
           id: other.id,
@@ -233,13 +235,14 @@ export class Reflex {
           propType: other.propType,
           looksLikeProp,
           movedRecently,
+          facingMe,
         });
         continue;
       }
       const sensed =
         (hasLineOfSight && distance <= BOT_VISION_RANGE) || (movedRecently && distance <= BOT_HEARING_RADIUS);
       if (!sensed) continue;
-      entities.push({ id: other.id, x: other.x, z: other.z, distance, hasLineOfSight, looksLikeProp, movedRecently });
+      entities.push({ id: other.id, x: other.x, z: other.z, distance, hasLineOfSight, looksLikeProp, movedRecently, facingMe });
     }
 
     return {
@@ -288,6 +291,14 @@ export class Reflex {
     return now - prev.lastMovedAt <= MOVED_RECENTLY_MS;
   }
 
+  private isAimedAtMe(other: BotPlayer): boolean {
+    const dx = this.posX - other.x;
+    const dz = this.posZ - other.z;
+    const len = Math.hypot(dx, dz);
+    if (len < STEER_MIN_DIST) return true;
+    return (Math.sin(other.aim) * dx + Math.cos(other.aim) * dz) / len >= FACING_CONE_COS;
+  }
+
   executeIntent(intent: Intent, world: ReflexWorld, dt: number, now: number): MotorOutput {
     if (!this.grid || !this.map) return HOLD(this.posX, this.posZ, this.rot);
     const self = world.self;
@@ -324,7 +335,7 @@ export class Reflex {
         break;
     }
 
-    return { input: { x: this.posX, y: 0, z: this.posZ, rot: this.rot }, transformTo, shoot };
+    return { input: { x: this.posX, y: 0, z: this.posZ, rot: this.rot, aim: this.rot }, transformTo, shoot };
   }
 
   private runMoveTo(gx: number, gz: number, run: boolean, world: ReflexWorld, dt: number, now: number): void {

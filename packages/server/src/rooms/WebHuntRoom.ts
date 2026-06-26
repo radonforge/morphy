@@ -55,6 +55,7 @@ export class PlayerState extends Schema {
   @type("number") y = 0;
   @type("number") z = 0;
   @type("number") rot = 0;
+  @type("number") aim = 0;
   @type("string") role: Role = "prop";
   @type("boolean") alive = true;
   @type("number") hp = 0;
@@ -102,7 +103,7 @@ function parseInput(payload: unknown): InputMessage | null {
   ) {
     return null;
   }
-  return { x: p.x, y: p.y, z: p.z, rot: p.rot };
+  return { x: p.x, y: p.y, z: p.z, rot: p.rot, aim: isFiniteNumber(p.aim) ? p.aim : p.rot };
 }
 
 function parseShoot(payload: unknown): ShootMessage | null {
@@ -304,6 +305,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     player.y = clamp(input.y, min.y, max.y);
     player.z = clamp(input.z, min.z, max.z);
     player.rot = input.rot;
+    player.aim = input.aim;
   }
 
   private handleTransform(client: Client, payload: unknown): void {

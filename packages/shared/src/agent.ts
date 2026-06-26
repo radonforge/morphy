@@ -71,6 +71,8 @@ export interface ObservedEntity {
   propType?: string;
   looksLikeProp?: boolean;
   movedRecently?: boolean;
+  /** This entity has line of sight to the bot and is aiming roughly at it — i.e. it is watching the bot right now. */
+  facingMe?: boolean;
 }
 
 export interface ObservedDoorway {
@@ -224,6 +226,7 @@ function parseObservedEntity(raw: unknown): ObservedEntity {
   if (raw.propType !== undefined) entity.propType = plainString(raw.propType, "entity.propType", ObservationValidationError);
   if (raw.looksLikeProp !== undefined) entity.looksLikeProp = raw.looksLikeProp === true;
   if (raw.movedRecently !== undefined) entity.movedRecently = raw.movedRecently === true;
+  if (raw.facingMe !== undefined) entity.facingMe = raw.facingMe === true;
   return entity;
 }
 
