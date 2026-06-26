@@ -11,6 +11,7 @@
     "dev": "pnpm --parallel --filter @webhunt/server --filter @webhunt/client dev",
     "dev:server": "pnpm --filter @webhunt/server dev",
     "dev:client": "pnpm --filter @webhunt/client dev",
+    "bot": "pnpm --filter @webhunt/bot start",
     "tunnel": "ngrok http 5173 ${NGROK_DOMAIN:+--url=https://$NGROK_DOMAIN}",
     "typecheck": "pnpm -r typecheck",
     "format": "biome format --write .",
