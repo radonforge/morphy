@@ -22,7 +22,6 @@ import {
   MSG_SHOOT,
   MSG_SHOT_RESULT,
   MSG_TAUNT,
-  MSG_TELEPORT,
   MSG_TRANSFORM,
   PATCH_RATE_MS,
   type Phase,
@@ -407,10 +406,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   }
 
   private beginHiding(): void {
-    this.applyMap(generateMap(nextSeed(), this.catalog));
-    this.broadcast(MSG_MAP, this.map);
     this.assignRoles();
-    this.respawnPlayers();
     this.setPhase("hiding", HIDE_DURATION_MS, () => this.beginHunting());
   }
 
@@ -497,23 +493,6 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       player.hp = player.role === "hunter" ? HUNTER_MAX_HP : 0;
       player.kills = 0;
       player.propType = "";
-    });
-  }
-
-  private respawnPlayers(): void {
-    let hunterIndex = 0;
-    let propIndex = 0;
-    this.clients.forEach((client) => {
-      const player = this.state.players.get(client.sessionId);
-      if (!player) return;
-      const isHunter = player.role === "hunter";
-      const spawns = isHunter ? this.map.spawnPoints.hunters : this.map.spawnPoints.props;
-      const index = isHunter ? hunterIndex++ : propIndex++;
-      const spawn = spawns[index % spawns.length] ?? this.map.bounds.min;
-      player.x = spawn.x;
-      player.y = spawn.y;
-      player.z = spawn.z;
-      client.send(MSG_TELEPORT, { x: spawn.x, z: spawn.z });
     });
   }
 }
