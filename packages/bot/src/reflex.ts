@@ -18,6 +18,7 @@ import {
 } from "@webhunt/shared";
 import {
   ARRIVE_EPSILON,
+  BOT_BODY_RADIUS,
   BOT_EYE_HEIGHT,
   BOT_HEARING_RADIUS,
   BOT_VISION_RANGE,
@@ -335,7 +336,46 @@ export class Reflex {
         break;
     }
 
+    this.separateFromCrowd(world.others);
     return { input: { x: this.posX, y: 0, z: this.posZ, rot: this.rot, aim: this.rot }, transformTo, shoot };
+  }
+
+  /**
+   * Nudge out of any overlapping player body and re-resolve against the static
+   * world. Runs every tick — including while settled or frozen — because nothing
+   * else separates one bot from another: the client only pushes the *local*
+   * player apart and the server merely clamps. Mirrors the client's own
+   * player-vs-player resolution so stacked disguises drift apart instead of
+   * fusing into one silhouette.
+   */
+  private separateFromCrowd(others: readonly BotPlayer[]): void {
+    if (!this.map) return;
+    const minSep = BOT_BODY_RADIUS * 2;
+    const minSepSq = minSep * minSep;
+    let x = this.posX;
+    let z = this.posZ;
+    let pushed = false;
+    for (const other of others) {
+      if (!other.alive) continue;
+      const dx = x - other.x;
+      const dz = z - other.z;
+      const distSq = dx * dx + dz * dz;
+      if (distSq >= minSepSq) continue;
+      if (distSq > 1e-8) {
+        const dist = Math.sqrt(distSq);
+        const scale = (minSep - dist) / dist;
+        x += dx * scale;
+        z += dz * scale;
+      } else {
+        x += Math.sin(this.rot) * minSep;
+        z += Math.cos(this.rot) * minSep;
+      }
+      pushed = true;
+    }
+    if (!pushed) return;
+    const resolved = resolveCollisions({ x, z }, this.walls, this.obstacles, this.map.bounds);
+    this.posX = resolved.x;
+    this.posZ = resolved.z;
   }
 
   private runMoveTo(gx: number, gz: number, run: boolean, world: ReflexWorld, dt: number, now: number): void {
