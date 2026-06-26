@@ -60,6 +60,7 @@ const ROCKET_INSET = 6;
 const HANGAR_MODELS = ["hangar_largeA", "hangar_smallA", "hangar_roundA"];
 const HANGAR_SCALE = 3.2;
 const HANGAR_INSET = 7;
+const HANGAR_EDGE_FRACTION = 0.5;
 
 const CRAFT_MODELS = ["craft_racer", "craft_speederA", "craft_cargoA", "craft_miner"];
 const CRAFT_SCALE = 2.6;
@@ -321,18 +322,19 @@ function emitScenery(
   }
 
   const hz = halfD + HANGAR_INSET;
-  for (const [z, rotationY] of [
-    [-hz, 0],
-    [hz, Math.PI],
+  const hx = halfW * HANGAR_EDGE_FRACTION;
+  for (const [x, z, rotationY] of [
+    [-hx, -hz, 0],
+    [hx, hz, Math.PI],
   ] as const) {
     scenery.push({
       model: sk(HANGAR_MODELS[Math.floor(rng() * HANGAR_MODELS.length)]!),
-      position: { x: 0, y: 0, z },
+      position: { x, y: 0, z },
       rotationY,
       scale: HANGAR_SCALE,
     });
     colliders.push({
-      position: { x: 0, y: HANGAR_COLLIDER_HEIGHT / 2, z },
+      position: { x, y: HANGAR_COLLIDER_HEIGHT / 2, z },
       size: { x: HANGAR_FOOT_X, y: HANGAR_COLLIDER_HEIGHT, z: HANGAR_FOOT_Z },
     });
   }
