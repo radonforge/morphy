@@ -1,4 +1,4 @@
-import { COLYSEUS_PROXY_PATH, type MapId } from "@webhunt/shared";
+import { type AvatarId, COLYSEUS_PROXY_PATH, type MapId } from "@webhunt/shared";
 import { useCallback, useState } from "react";
 import { Game } from "../game/Game";
 import { type Connection, connectToRoom } from "../net/connection";
@@ -14,10 +14,10 @@ export function App() {
 
   const handleLeave = useCallback(() => setConnection(null), []);
 
-  const handleConnect = useCallback(async (name: string, map: MapId) => {
+  const handleConnect = useCallback(async (name: string, map: MapId, avatar: AvatarId) => {
     setStatus({ kind: "connecting" });
     try {
-      const conn = await connectToRoom(SERVER_URL, { name, map });
+      const conn = await connectToRoom(SERVER_URL, { name, map, avatar });
       setConnection(conn);
       setStatus({ kind: "idle" });
     } catch (error) {

@@ -906,6 +906,59 @@ canvas {
   box-shadow: inset 0 0 0 1px rgba(255, 178, 74, 0.4);
 }
 
+.menu-pc-emoji {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.menu-avatars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 10px;
+}
+.menu-avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  padding: 14px 8px 11px;
+  background: linear-gradient(180deg, rgba(22, 33, 52, 0.7), rgba(12, 20, 34, 0.45));
+  border: 1px solid rgba(53, 224, 255, 0.32);
+  border-radius: 8px;
+  color: var(--text);
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease,
+    transform 0.12s ease;
+}
+.menu-avatar:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+.menu-avatar-emoji {
+  font-size: 32px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
+.menu-avatar-name {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  text-align: center;
+}
+.menu-avatar.sel {
+  background: linear-gradient(180deg, rgba(53, 224, 255, 0.18), rgba(53, 224, 255, 0.03));
+  border-color: var(--cyan);
+  box-shadow:
+    0 0 0 1px var(--cyan),
+    0 10px 26px rgba(0, 0, 0, 0.4);
+}
+.menu-avatar.sel .menu-avatar-name {
+  color: var(--cyan);
+}
+
 @media (max-width: 880px) {
   .menu-body {
     grid-template-columns: 1fr;

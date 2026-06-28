@@ -1,5 +1,5 @@
 import { Client, type Room } from "@colyseus/sdk";
-import { type MapId, ROOM_NAME } from "@webhunt/shared";
+import { type AvatarId, type MapId, ROOM_NAME } from "@webhunt/shared";
 
 const CONNECT_TIMEOUT_MS = 8_000;
 
@@ -12,6 +12,7 @@ export interface Connection {
 export interface JoinOptions {
   name: string;
   map: MapId;
+  avatar: AvatarId;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {

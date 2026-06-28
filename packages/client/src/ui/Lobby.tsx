@@ -1,4 +1,10 @@
-import { MAP_CATALOG, type MapId, MAX_NAME_LENGTH } from "@webhunt/shared";
+import {
+  AVATAR_CATALOG,
+  type AvatarId,
+  MAP_CATALOG,
+  type MapId,
+  MAX_NAME_LENGTH,
+} from "@webhunt/shared";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { isMuted, setMuted } from "../game/audio";
 import { loadPrefs, savePrefs } from "./prefs";
@@ -10,7 +16,7 @@ export type ConnectStatus =
 
 interface LobbyProps {
   status: ConnectStatus;
-  onConnect: (name: string, map: MapId) => void;
+  onConnect: (name: string, map: MapId, avatar: AvatarId) => void;
 }
 
 type PaneId = "play" | "avatar" | "private" | "stats" | "options";
@@ -32,6 +38,30 @@ const MAP_TAG: Record<MapId, string> = {
   station: "Interni",
   mars: "Aperto",
   urban: "Folla",
+};
+
+const AVATAR_EMOJI: Record<AvatarId, string> = {
+  fox: "🦊",
+  cat: "🐱",
+  dog: "🐶",
+  panda: "🐼",
+  tiger: "🐯",
+  lion: "🦁",
+  bunny: "🐰",
+  deer: "🦌",
+  koala: "🐨",
+  penguin: "🐧",
+  parrot: "🦜",
+  monkey: "🐵",
+  elephant: "🐘",
+  giraffe: "🦒",
+  cow: "🐮",
+  pig: "🐷",
+  hog: "🐗",
+  polar: "🐻‍❄️",
+  beaver: "🦫",
+  chick: "🐤",
+  crab: "🦀",
 };
 
 function MapArt({ id }: { id: MapId }): ReactNode {
@@ -74,7 +104,6 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: "avatar",
     label: "Avatar",
-    soon: true,
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
         <circle cx="12" cy="8" r="4" />
@@ -118,19 +147,20 @@ const NAV_ITEMS: NavItem[] = [
 export function Lobby({ status, onConnect }: LobbyProps) {
   const [name, setName] = useState(() => loadPrefs().name);
   const [selectedMap, setSelectedMap] = useState<MapId>(() => loadPrefs().map);
+  const [selectedAvatar, setSelectedAvatar] = useState<AvatarId>(() => loadPrefs().avatar);
   const [pane, setPane] = useState<PaneId>("play");
   const [muted, setMutedState] = useState(() => isMuted());
 
   useEffect(() => {
-    savePrefs({ name, map: selectedMap });
-  }, [name, selectedMap]);
+    savePrefs({ name, map: selectedMap, avatar: selectedAvatar });
+  }, [name, selectedMap, selectedAvatar]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      onConnect(name, selectedMap);
+      onConnect(name, selectedMap, selectedAvatar);
     },
-    [name, selectedMap, onConnect],
+    [name, selectedMap, selectedAvatar, onConnect],
   );
 
   const toggleAudio = useCallback(() => {
@@ -159,21 +189,9 @@ export function Lobby({ status, onConnect }: LobbyProps) {
         </div>
         <div className="menu-playercard panel">
           <div className="menu-pc-av">
-            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path
-                d="M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"
-                opacity=".25"
-              />
-              <circle cx="9.5" cy="10" r="1.4" />
-              <circle cx="14.5" cy="10" r="1.4" />
-              <path
-                d="M9 14.5c1.8 1.3 4.2 1.3 6 0"
-                stroke="currentColor"
-                strokeWidth="1.4"
-                fill="none"
-                strokeLinecap="round"
-              />
-            </svg>
+            <span className="menu-pc-emoji" aria-hidden="true">
+              {AVATAR_EMOJI[selectedAvatar]}
+            </span>
           </div>
           <div className="menu-pc-info">
             <span className="menu-pc-name">{trimmedName || "Ospite"}</span>
@@ -254,21 +272,24 @@ export function Lobby({ status, onConnect }: LobbyProps) {
           {pane === "avatar" && (
             <section className="menu-pane">
               <div className="menu-pane-head">
-                <h2>Avatar</h2>
+                <h2>Scegli l'avatar</h2>
+                <span className="menu-pane-hint">{AVATAR_CATALOG.length} cube-pet</span>
               </div>
-              <div className="panel menu-empty">
-                <span className="menu-empty-ring">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-                    <circle cx="12" cy="8" r="4" />
-                    <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
-                  </svg>
-                </span>
-                <span className="menu-empty-tag">In arrivo</span>
-                <b>Scegli il tuo personaggio</b>
-                <p>
-                  24 cube-pet e 12 personaggi umanoidi sono già pronti. Presto potrai sceglierne uno
-                  invece di riceverlo a caso a inizio partita.
-                </p>
+              <div className="menu-avatars">
+                {AVATAR_CATALOG.map((info) => (
+                  <button
+                    type="button"
+                    key={info.id}
+                    className={`menu-avatar${selectedAvatar === info.id ? " sel" : ""}`}
+                    onClick={() => setSelectedAvatar(info.id)}
+                    aria-pressed={selectedAvatar === info.id}
+                  >
+                    <span className="menu-avatar-emoji" aria-hidden="true">
+                      {AVATAR_EMOJI[info.id]}
+                    </span>
+                    <span className="menu-avatar-name">{info.name}</span>
+                  </button>
+                ))}
               </div>
             </section>
           )}
