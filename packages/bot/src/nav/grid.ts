@@ -1,6 +1,6 @@
 import type { MapBounds } from "@webhunt/shared";
-import { BOT_BODY_RADIUS, NAV_CELL_SIZE, NAV_INFLATION_EPS } from "../config";
 import type { Obstacle, Wall } from "../collision";
+import { BOT_BODY_RADIUS, NAV_CELL_SIZE, NAV_INFLATION_EPS } from "../config";
 
 /**
  * A uniform occupancy grid over the map interior. A cell is blocked when its

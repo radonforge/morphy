@@ -1,21 +1,28 @@
 import {
-  FIRE_COOLDOWN_MS,
-  MOVE_SPEED,
-  RUN_MULTIPLIER_HUNTER,
-  RUN_MULTIPLIER_PROP,
-  UNTRANSFORMED_PROP_HEIGHT,
-  UNTRANSFORMED_PROP_RADIUS,
   computePropBounds,
+  FIRE_COOLDOWN_MS,
   type Intent,
   type MapDefinition,
+  MOVE_SPEED,
   type Observation,
   type ObservedEntity,
   type ObservedMap,
   type ObservedSelf,
   type Phase,
   type PropBounds,
+  RUN_MULTIPLIER_HUNTER,
+  RUN_MULTIPLIER_PROP,
+  UNTRANSFORMED_PROP_HEIGHT,
+  UNTRANSFORMED_PROP_RADIUS,
   type Visibility,
 } from "@webhunt/shared";
+import {
+  buildObstacles,
+  buildWalls,
+  type Obstacle,
+  resolveCollisions,
+  type Wall,
+} from "./collision";
 import {
   AIM_TOLERANCE_RAD,
   AIM_TURN_RATE_MAX,
@@ -29,6 +36,7 @@ import {
   ENGAGE_RANGE_MAX,
   ENGAGE_RANGE_MIN,
   FACING_CONE_COS,
+  lerp,
   MAX_REPLANS_BEFORE_BLOCKED,
   MOVED_RECENTLY_MIN_DIST,
   MOVED_RECENTLY_MS,
@@ -43,17 +51,15 @@ import {
   STUCK_TICK_LIMIT,
   TARGET_MOVE_REPLAN_CELLS,
   WAYPOINT_MARGIN,
-  lerp,
 } from "./config";
-import { buildObstacles, buildWalls, resolveCollisions, type Obstacle, type Wall } from "./collision";
 import { findPath } from "./nav/astar";
 import {
   buildNavGrid,
   cellCenter,
-  nearestFreeCell,
-  worldToCell,
   type NavGrid,
+  nearestFreeCell,
   type Point2,
+  worldToCell,
 } from "./nav/grid";
 import { PathFollower, smoothPath } from "./nav/path";
 import { canHitTarget, lineOfSightClear, normalize3, type Vec3 } from "./raycast";
@@ -164,7 +170,9 @@ export class Reflex {
     this.walls = buildWalls(map);
     this.obstacles = buildObstacles(map);
     this.grid = buildNavGrid(map.bounds, this.walls, this.obstacles);
-    this.propBounds = new Map(map.propCatalog.map((def) => [def.id, computePropBounds(def)] as const));
+    this.propBounds = new Map(
+      map.propCatalog.map((def) => [def.id, computePropBounds(def)] as const),
+    );
     this.doorways = map.tiles
       .filter((tile) => tile.model.includes(DOORWAY_TILE_MARKER))
       .map((tile) => ({ x: tile.position.x, z: tile.position.z }));
@@ -208,7 +216,12 @@ export class Reflex {
     return v;
   }
 
-  buildObservation(world: ReflexWorld, seq: number, visibility: Visibility, now: number): Observation {
+  buildObservation(
+    world: ReflexWorld,
+    seq: number,
+    visibility: Visibility,
+    now: number,
+  ): Observation {
     const self = world.self;
     const selfObs: ObservedSelf = {
       role: self.role,
@@ -228,7 +241,11 @@ export class Reflex {
       const distance = Math.hypot(other.x - this.posX, other.z - this.posZ);
       const bounds = this.propBounds.get(other.propType) ?? UNTRANSFORMED_BOUNDS;
       const aimY = (bounds.yMin + bounds.yMax) / 2;
-      const hasLineOfSight = lineOfSightClear(origin, { x: other.x, y: aimY, z: other.z }, colliders);
+      const hasLineOfSight = lineOfSightClear(
+        origin,
+        { x: other.x, y: aimY, z: other.z },
+        colliders,
+      );
       const movedRecently = this.trackMovement(other, now);
       const looksLikeProp = other.propType !== "" && !movedRecently;
       const facingMe = hasLineOfSight && this.isAimedAtMe(other);
@@ -249,9 +266,19 @@ export class Reflex {
         continue;
       }
       const sensed =
-        (hasLineOfSight && distance <= BOT_VISION_RANGE) || (movedRecently && distance <= BOT_HEARING_RADIUS);
+        (hasLineOfSight && distance <= BOT_VISION_RANGE) ||
+        (movedRecently && distance <= BOT_HEARING_RADIUS);
       if (!sensed) continue;
-      entities.push({ id: other.id, x: other.x, z: other.z, distance, hasLineOfSight, looksLikeProp, movedRecently, facingMe });
+      entities.push({
+        id: other.id,
+        x: other.x,
+        z: other.z,
+        distance,
+        hasLineOfSight,
+        looksLikeProp,
+        movedRecently,
+        facingMe,
+      });
     }
 
     return {
@@ -276,7 +303,9 @@ export class Reflex {
       };
     }
     const nearbyProps = map.props
-      .filter((p) => Math.hypot(p.position.x - this.posX, p.position.z - this.posZ) <= NEARBY_PROP_RADIUS)
+      .filter(
+        (p) => Math.hypot(p.position.x - this.posX, p.position.z - this.posZ) <= NEARBY_PROP_RADIUS,
+      )
       .map((p) => ({ type: p.type, x: p.position.x, z: p.position.z }));
     return {
       bounds: map.bounds,
@@ -345,7 +374,11 @@ export class Reflex {
     }
 
     this.separateFromCrowd(world.others);
-    return { input: { x: this.posX, y: 0, z: this.posZ, rot: this.rot, aim: this.rot }, transformTo, shoot };
+    return {
+      input: { x: this.posX, y: 0, z: this.posZ, rot: this.rot, aim: this.rot },
+      transformTo,
+      shoot,
+    };
   }
 
   /**
@@ -386,7 +419,14 @@ export class Reflex {
     this.posZ = resolved.z;
   }
 
-  private runMoveTo(gx: number, gz: number, run: boolean, world: ReflexWorld, dt: number, now: number): void {
+  private runMoveTo(
+    gx: number,
+    gz: number,
+    run: boolean,
+    world: ReflexWorld,
+    dt: number,
+    now: number,
+  ): void {
     this.runStatic(gx, gz, run, world.self.role, dt, now);
   }
 
@@ -402,7 +442,14 @@ export class Reflex {
    * back-and-forth jitter when a hide spot lands on a cell centre or inside the
    * inflated furniture ring it can't quite touch.
    */
-  private runStatic(gx: number, gz: number, run: boolean, role: BotPlayer["role"], dt: number, now: number): void {
+  private runStatic(
+    gx: number,
+    gz: number,
+    run: boolean,
+    role: BotPlayer["role"],
+    dt: number,
+    now: number,
+  ): void {
     if (this.settled) return;
     if (this.arrivedAt(gx, gz)) {
       this.settle();
@@ -429,7 +476,13 @@ export class Reflex {
     if (wp) this.steer(wp, false, world.self.role, dt);
   }
 
-  private runApproach(targetId: string, run: boolean, world: ReflexWorld, dt: number, now: number): void {
+  private runApproach(
+    targetId: string,
+    run: boolean,
+    world: ReflexWorld,
+    dt: number,
+    now: number,
+  ): void {
     const target = world.others.find((o) => o.id === targetId);
     if (!target || !target.alive) return;
     this.ensurePath(target.x, target.z, now, true);
@@ -438,7 +491,12 @@ export class Reflex {
     else this.faceToward(target.x, target.z);
   }
 
-  private runShoot(targetId: string, world: ReflexWorld, dt: number, now: number): MotorOutput["shoot"] {
+  private runShoot(
+    targetId: string,
+    world: ReflexWorld,
+    dt: number,
+    now: number,
+  ): MotorOutput["shoot"] {
     const map = this.map;
     const target = world.others.find((o) => o.id === targetId);
     if (!target || !target.alive || !map) {
@@ -452,7 +510,9 @@ export class Reflex {
     const dist = Math.hypot(target.x - this.posX, target.z - this.posZ);
     const engageRange = lerp(ENGAGE_RANGE_MIN, ENGAGE_RANGE_MAX, this.difficulty);
     const canHit =
-      dir !== null && dist <= engageRange && canHitTarget(origin, dir, target.x, target.z, bounds, map.colliders);
+      dir !== null &&
+      dist <= engageRange &&
+      canHitTarget(origin, dir, target.x, target.z, bounds, map.colliders);
 
     if (canHit && dir) {
       this.follower.clear();
@@ -530,7 +590,8 @@ export class Reflex {
   private ensurePath(gx: number, gz: number, now: number, dynamic: boolean): void {
     const cell = this.grid?.cellSize ?? NAV_CELL_SIZE;
     const goalMoved =
-      this.pathGoal === null || Math.hypot(this.pathGoal.x - gx, this.pathGoal.z - gz) > cell * TARGET_MOVE_REPLAN_CELLS;
+      this.pathGoal === null ||
+      Math.hypot(this.pathGoal.x - gx, this.pathGoal.z - gz) > cell * TARGET_MOVE_REPLAN_CELLS;
     const sinceReplan = now - this.lastReplanAt;
     let replan = false;
     if (goalMoved) replan = true;
@@ -546,12 +607,25 @@ export class Reflex {
     this.stuckTicks = 0;
     this.pathGoal = { x: gx, z: gz };
     const grid = this.grid;
-    if (!grid) return this.failPath();
-    const start = nearestFreeCell(grid, worldToCell(grid, this.posX, this.posZ), NAV_SNAP_RADIUS_CELLS);
+    if (!grid) {
+      this.failPath();
+      return;
+    }
+    const start = nearestFreeCell(
+      grid,
+      worldToCell(grid, this.posX, this.posZ),
+      NAV_SNAP_RADIUS_CELLS,
+    );
     const goal = nearestFreeCell(grid, worldToCell(grid, gx, gz), NAV_SNAP_RADIUS_CELLS);
-    if (!start || !goal) return this.failPath();
+    if (!start || !goal) {
+      this.failPath();
+      return;
+    }
     const cells = findPath(grid, start, goal);
-    if (!cells) return this.failPath();
+    if (!cells) {
+      this.failPath();
+      return;
+    }
     this.follower.setPath(smoothPath(grid, cells));
     this.pathBlocked = false;
     this.replanCount = 0;

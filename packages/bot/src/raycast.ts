@@ -1,4 +1,4 @@
-import { SHOOT_RANGE, type BoxCollider, type PropBounds } from "@webhunt/shared";
+import { type BoxCollider, type PropBounds, SHOOT_RANGE } from "@webhunt/shared";
 
 export interface Vec3 {
   x: number;
@@ -11,7 +11,13 @@ type Triple = [number, number, number];
 const SLAB_EPSILON = 1e-6;
 
 /** Distance along the ray to an axis-aligned box (slab method), or null if it misses or lies beyond `maxDist`. Mirrors the server's `rayAabb`. */
-function rayAabb(origin: Vec3, dir: Vec3, min: Triple, max: Triple, maxDist: number): number | null {
+function rayAabb(
+  origin: Vec3,
+  dir: Vec3,
+  min: Triple,
+  max: Triple,
+  maxDist: number,
+): number | null {
   const o: Triple = [origin.x, origin.y, origin.z];
   const d: Triple = [dir.x, dir.y, dir.z];
   let tEnter = 0;
@@ -57,7 +63,13 @@ function wallDistance(origin: Vec3, dir: Vec3, colliders: BoxCollider[]): number
   return nearest;
 }
 
-function rayHitsProp(origin: Vec3, dir: Vec3, cx: number, cz: number, bounds: PropBounds): number | null {
+function rayHitsProp(
+  origin: Vec3,
+  dir: Vec3,
+  cx: number,
+  cz: number,
+  bounds: PropBounds,
+): number | null {
   return rayAabb(
     origin,
     dir,

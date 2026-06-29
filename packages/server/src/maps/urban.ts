@@ -171,7 +171,8 @@ export function buildUrban(seed: number): MapDefinition {
       const cx = cellCenter(i);
       const cz = cellCenter(j);
       const isLot =
-        !onStreet && !buildingObstacles.some((b) => Math.abs(b.x - cx) < 1 && Math.abs(b.z - cz) < 1);
+        !onStreet &&
+        !buildingObstacles.some((b) => Math.abs(b.x - cx) < 1 && Math.abs(b.z - cz) < 1);
       if (!onStreet && !isLot) continue;
       const count = onStreet
         ? PROP_PER_STREET_MIN + Math.floor(rng() * (PROP_PER_STREET_MAX - PROP_PER_STREET_MIN + 1))

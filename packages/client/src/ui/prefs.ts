@@ -4,8 +4,8 @@ import {
   DEFAULT_MAP_ID,
   isAvatarId,
   isMapId,
-  type MapId,
   MAX_NAME_LENGTH,
+  type MapId,
 } from "@webhunt/shared";
 
 /**
@@ -32,7 +32,8 @@ export function loadPrefs(): LobbyPrefs {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return { ...DEFAULTS };
     const record = parsed as Record<string, unknown>;
-    const name = typeof record.name === "string" ? record.name.slice(0, MAX_NAME_LENGTH) : DEFAULTS.name;
+    const name =
+      typeof record.name === "string" ? record.name.slice(0, MAX_NAME_LENGTH) : DEFAULTS.name;
     const map = isMapId(record.map) ? record.map : DEFAULTS.map;
     const avatar = isAvatarId(record.avatar) ? record.avatar : DEFAULTS.avatar;
     return { name, map, avatar };

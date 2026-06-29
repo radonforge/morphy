@@ -2,8 +2,8 @@ import {
   AVATAR_CATALOG,
   type AvatarId,
   MAP_CATALOG,
-  type MapId,
   MAX_NAME_LENGTH,
+  type MapId,
 } from "@webhunt/shared";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { isMuted, setMuted } from "../game/audio";
@@ -105,7 +105,13 @@ const NAV_ITEMS: NavItem[] = [
     id: "avatar",
     label: "Avatar",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        aria-hidden="true"
+      >
         <circle cx="12" cy="8" r="4" />
         <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
       </svg>
@@ -116,7 +122,13 @@ const NAV_ITEMS: NavItem[] = [
     label: "Privato",
     soon: true,
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        aria-hidden="true"
+      >
         <rect x="5" y="11" width="14" height="9" rx="1.5" />
         <path d="M8 11V8a4 4 0 0 1 8 0v3" />
       </svg>
@@ -127,7 +139,13 @@ const NAV_ITEMS: NavItem[] = [
     label: "Stats",
     soon: true,
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        aria-hidden="true"
+      >
         <path d="M5 19V10m7 9V5m7 14v-7" />
       </svg>
     ),
@@ -136,7 +154,13 @@ const NAV_ITEMS: NavItem[] = [
     id: "options",
     label: "Opzioni",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        aria-hidden="true"
+      >
         <circle cx="12" cy="12" r="3" />
         <path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1M7.7 16.3l-2.1 2.1" />
       </svg>
@@ -237,7 +261,13 @@ export function Lobby({ status, onConnect }: LobbyProps) {
                     <MapArt id={info.id} />
                     <span className="menu-map-tag">{MAP_TAG[info.id]}</span>
                     <span className="menu-check">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        aria-hidden="true"
+                      >
                         <path d="M5 13l4 4L19 7" />
                       </svg>
                     </span>
@@ -301,7 +331,13 @@ export function Lobby({ status, onConnect }: LobbyProps) {
               </div>
               <div className="panel menu-empty">
                 <span className="menu-empty-ring">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    aria-hidden="true"
+                  >
                     <rect x="5" y="11" width="14" height="9" rx="1.5" />
                     <path d="M8 11V8a4 4 0 0 1 8 0v3" />
                   </svg>
@@ -309,8 +345,8 @@ export function Lobby({ status, onConnect }: LobbyProps) {
                 <span className="menu-empty-tag">In arrivo</span>
                 <b>Gioca solo con chi inviti</b>
                 <p>
-                  Crea una stanza protetta da codice e condividila con i tuoi amici, oppure entra con
-                  un codice ricevuto.
+                  Crea una stanza protetta da codice e condividila con i tuoi amici, oppure entra
+                  con un codice ricevuto.
                 </p>
               </div>
             </section>
@@ -323,7 +359,13 @@ export function Lobby({ status, onConnect }: LobbyProps) {
               </div>
               <div className="panel menu-empty">
                 <span className="menu-empty-ring">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    aria-hidden="true"
+                  >
                     <path d="M5 19V10m7 9V5m7 14v-7" />
                   </svg>
                 </span>

@@ -1,23 +1,23 @@
 import { Client, type Room } from "@colyseus/sdk";
 import {
-  ROOM_NAME,
   INPUT_SEND_RATE_MS,
-  MSG_INPUT,
-  MSG_TRANSFORM,
-  MSG_SHOOT,
-  MSG_READY,
-  MSG_MAP,
-  MSG_TELEPORT,
-  MSG_TAUNT,
-  MSG_KILL,
-  MSG_CHAT,
-  MSG_SHOT_RESULT,
-  parseMapDefinition,
   type Intent,
   type MapDefinition,
   type MapId,
+  MSG_CHAT,
+  MSG_INPUT,
+  MSG_KILL,
+  MSG_MAP,
+  MSG_READY,
+  MSG_SHOOT,
+  MSG_SHOT_RESULT,
+  MSG_TAUNT,
+  MSG_TELEPORT,
+  MSG_TRANSFORM,
   type Observation,
   type Phase,
+  parseMapDefinition,
+  ROOM_NAME,
   type Role,
   type Visibility,
 } from "@webhunt/shared";
@@ -29,8 +29,8 @@ import {
   DECIDE_TIMEOUT_MS,
   MAX_TICK_SECONDS,
 } from "./config";
-import { Reflex, type ReflexWorld } from "./reflex";
 import type { Policy } from "./policy/types";
+import { Reflex, type ReflexWorld } from "./reflex";
 import type { Trace } from "./trace";
 import { snapshot } from "./view";
 
@@ -48,11 +48,16 @@ function behaviorChanged(prev: Intent, next: Intent): boolean {
     return prev.run !== next.run || Math.hypot(prev.x - next.x, prev.z - next.z) > ARRIVE_EPSILON;
   }
   if (prev.kind === "hideAs" && next.kind === "hideAs") {
-    return prev.propType !== next.propType || Math.hypot(prev.x - next.x, prev.z - next.z) > ARRIVE_EPSILON;
+    return (
+      prev.propType !== next.propType ||
+      Math.hypot(prev.x - next.x, prev.z - next.z) > ARRIVE_EPSILON
+    );
   }
   if (prev.kind === "inspect" && next.kind === "inspect") return prev.targetId !== next.targetId;
-  if (prev.kind === "shootTarget" && next.kind === "shootTarget") return prev.targetId !== next.targetId;
-  if (prev.kind === "transform" && next.kind === "transform") return prev.propType !== next.propType;
+  if (prev.kind === "shootTarget" && next.kind === "shootTarget")
+    return prev.targetId !== next.targetId;
+  if (prev.kind === "transform" && next.kind === "transform")
+    return prev.propType !== next.propType;
   if (prev.kind === "chat" && next.kind === "chat") return prev.text !== next.text;
   return false;
 }

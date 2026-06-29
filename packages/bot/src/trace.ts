@@ -19,7 +19,10 @@ export class Trace {
   private readonly stream: WriteStream;
   private closed = false;
 
-  constructor(path: string, private readonly botName: string) {
+  constructor(
+    path: string,
+    private readonly botName: string,
+  ) {
     this.stream = createWriteStream(path, { flags: "a", encoding: "utf8" });
     this.stream.on("error", (error) => {
       this.closed = true;

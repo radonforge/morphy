@@ -1,10 +1,4 @@
-import type {
-  BoxCollider,
-  MapDefinition,
-  PropInstance,
-  TileInstance,
-  Vec3,
-} from "@webhunt/shared";
+import type { BoxCollider, MapDefinition, PropInstance, TileInstance, Vec3 } from "@webhunt/shared";
 import { ARCHETYPE, type Doorway, furnishRoom, type RoomRect } from "../furnish";
 import { SPACE_CATALOG } from "../spaceCatalog";
 import {
@@ -133,7 +127,15 @@ export function buildStation(seed: number): MapDefinition {
     const keepout = spawns[0]
       ? { x: spawns[0].x, z: spawns[0].z }
       : { x: (rect.x0 + rect.x1) / 2, z: (rect.z0 + rect.z1) / 2 };
-    furnishRoom({ rect, doorways, spawn: keepout, catalog: SPACE_CATALOG, rng, out: props, archetype: room.archetype });
+    furnishRoom({
+      rect,
+      doorways,
+      spawn: keepout,
+      catalog: SPACE_CATALOG,
+      rng,
+      out: props,
+      archetype: room.archetype,
+    });
     propSpawns.push(...spawns);
   }
 

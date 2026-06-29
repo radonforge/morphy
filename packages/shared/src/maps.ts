@@ -27,7 +27,8 @@ export const MAP_CATALOG = [
     id: "mars",
     name: "Avamposto Ares",
     theme: "mars",
-    blurb: "Apron marziano a cielo aperto attorno a una piccola base: poche coperture, lunghe linee di tiro.",
+    blurb:
+      "Apron marziano a cielo aperto attorno a una piccola base: poche coperture, lunghe linee di tiro.",
   },
   {
     id: "urban",

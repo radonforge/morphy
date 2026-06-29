@@ -62,7 +62,14 @@ const BIG_ROCKS: { model: string; scale: number; radius: number }[] = [
 ];
 const BIG_ROCK_COUNT = 12;
 
-const DECOR = ["crater", "craterLarge", "meteor", "meteor_detailed", "rocks_smallA", "rocks_smallB"];
+const DECOR = [
+  "crater",
+  "craterLarge",
+  "meteor",
+  "meteor_detailed",
+  "rocks_smallA",
+  "rocks_smallB",
+];
 const DECOR_COUNT = 26;
 
 const BARRIER_ROCK_STEP = 9;

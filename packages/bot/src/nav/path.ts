@@ -1,5 +1,5 @@
 import { ARRIVE_EPSILON } from "../config";
-import { type Cell, type NavGrid, type Point2, cellCenter, isBlocked } from "./grid";
+import { type Cell, cellCenter, isBlocked, type NavGrid, type Point2 } from "./grid";
 
 function initialTMax(pos: number, step: number, delta: number): number {
   if (step === 0) return Infinity;
@@ -13,7 +13,13 @@ function initialTMax(pos: number, step: number, delta: number): number {
  * (no sampling gaps). This is the line-of-sight test the string-pull relies on
  * to drop interior waypoints without cutting through a wall.
  */
-export function hasLineOfSight(grid: NavGrid, ax: number, az: number, bx: number, bz: number): boolean {
+export function hasLineOfSight(
+  grid: NavGrid,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+): boolean {
   const cs = grid.cellSize;
   const x0 = (ax - grid.originX) / cs;
   const z0 = (az - grid.originZ) / cs;

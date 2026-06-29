@@ -1,5 +1,5 @@
 import { ASTAR_MAX_EXPANDED } from "../config";
-import { type Cell, type NavGrid, inGrid, isBlocked } from "./grid";
+import { type Cell, inGrid, isBlocked, type NavGrid } from "./grid";
 
 const SQRT2 = Math.SQRT2;
 const DIAGONAL_EXTRA = SQRT2 - 2;

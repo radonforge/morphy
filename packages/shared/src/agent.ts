@@ -160,7 +160,8 @@ function parseRole(value: unknown, Err: ErrorCtor): Role {
 export function parseIntent(raw: unknown): Intent {
   if (!isRecord(raw)) throw new IntentValidationError("root is not an object");
   const meta: IntentMeta = { seq: finiteNumber(raw.seq, "seq", IntentValidationError) };
-  if (raw.say !== undefined) meta.say = plainString(raw.say, "say", IntentValidationError).slice(0, MAX_CHAT_LENGTH);
+  if (raw.say !== undefined)
+    meta.say = plainString(raw.say, "say", IntentValidationError).slice(0, MAX_CHAT_LENGTH);
 
   switch (raw.kind) {
     case "idle":
@@ -186,13 +187,29 @@ export function parseIntent(raw: unknown): Intent {
         ...meta,
       };
     case "inspect":
-      return { kind: "inspect", targetId: nonEmptyString(raw.targetId, "targetId", IntentValidationError), ...meta };
+      return {
+        kind: "inspect",
+        targetId: nonEmptyString(raw.targetId, "targetId", IntentValidationError),
+        ...meta,
+      };
     case "shootTarget":
-      return { kind: "shootTarget", targetId: nonEmptyString(raw.targetId, "targetId", IntentValidationError), ...meta };
+      return {
+        kind: "shootTarget",
+        targetId: nonEmptyString(raw.targetId, "targetId", IntentValidationError),
+        ...meta,
+      };
     case "transform":
-      return { kind: "transform", propType: nonEmptyString(raw.propType, "propType", IntentValidationError), ...meta };
+      return {
+        kind: "transform",
+        propType: nonEmptyString(raw.propType, "propType", IntentValidationError),
+        ...meta,
+      };
     case "chat":
-      return { kind: "chat", text: plainString(raw.text, "text", IntentValidationError).slice(0, MAX_CHAT_LENGTH), ...meta };
+      return {
+        kind: "chat",
+        text: plainString(raw.text, "text", IntentValidationError).slice(0, MAX_CHAT_LENGTH),
+        ...meta,
+      };
     default:
       throw new IntentValidationError(`unknown kind '${String(raw.kind)}'`);
   }
@@ -223,7 +240,8 @@ function parseObservedEntity(raw: unknown): ObservedEntity {
   };
   if (raw.role !== undefined) entity.role = parseRole(raw.role, ObservationValidationError);
   if (raw.alive !== undefined) entity.alive = raw.alive === true;
-  if (raw.propType !== undefined) entity.propType = plainString(raw.propType, "entity.propType", ObservationValidationError);
+  if (raw.propType !== undefined)
+    entity.propType = plainString(raw.propType, "entity.propType", ObservationValidationError);
   if (raw.looksLikeProp !== undefined) entity.looksLikeProp = raw.looksLikeProp === true;
   if (raw.movedRecently !== undefined) entity.movedRecently = raw.movedRecently === true;
   if (raw.facingMe !== undefined) entity.facingMe = raw.facingMe === true;
@@ -253,9 +271,12 @@ function parseBounds(raw: unknown): MapBounds {
 
 function parseObservedMap(raw: unknown): ObservedMap {
   if (!isRecord(raw)) throw new ObservationValidationError("field 'map' is not an object");
-  if (!Array.isArray(raw.doorways)) throw new ObservationValidationError("field 'map.doorways' must be an array");
-  if (!Array.isArray(raw.nearbyProps)) throw new ObservationValidationError("field 'map.nearbyProps' must be an array");
-  if (!Array.isArray(raw.propCatalogIds)) throw new ObservationValidationError("field 'map.propCatalogIds' must be an array");
+  if (!Array.isArray(raw.doorways))
+    throw new ObservationValidationError("field 'map.doorways' must be an array");
+  if (!Array.isArray(raw.nearbyProps))
+    throw new ObservationValidationError("field 'map.nearbyProps' must be an array");
+  if (!Array.isArray(raw.propCatalogIds))
+    throw new ObservationValidationError("field 'map.propCatalogIds' must be an array");
   return {
     bounds: parseBounds(raw.bounds),
     doorways: raw.doorways.map((d) => {
@@ -273,7 +294,9 @@ function parseObservedMap(raw: unknown): ObservedMap {
         z: finiteNumber(p.z, "nearbyProp.z", ObservationValidationError),
       };
     }),
-    propCatalogIds: raw.propCatalogIds.map((id) => nonEmptyString(id, "propCatalogId", ObservationValidationError)),
+    propCatalogIds: raw.propCatalogIds.map((id) =>
+      nonEmptyString(id, "propCatalogId", ObservationValidationError),
+    ),
   };
 }
 
@@ -289,10 +312,17 @@ export function parseObservation(raw: unknown): Observation {
     throw new ObservationValidationError("field 'visibility' must be 'full' or 'limited'");
   }
   const phase = raw.phase;
-  if (phase !== "lobby" && phase !== "starting" && phase !== "hiding" && phase !== "hunting" && phase !== "round_end") {
+  if (
+    phase !== "lobby" &&
+    phase !== "starting" &&
+    phase !== "hiding" &&
+    phase !== "hunting" &&
+    phase !== "round_end"
+  ) {
     throw new ObservationValidationError(`field 'phase' has unknown value '${String(phase)}'`);
   }
-  if (!Array.isArray(raw.entities)) throw new ObservationValidationError("field 'entities' must be an array");
+  if (!Array.isArray(raw.entities))
+    throw new ObservationValidationError("field 'entities' must be an array");
   return {
     seq: finiteNumber(raw.seq, "seq", ObservationValidationError),
     visibility: raw.visibility,

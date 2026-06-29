@@ -5,9 +5,9 @@ import {
   FREEZE_RADIUS,
   HIDE_OFFSET_MAX,
   HIDE_OFFSET_MIN,
+  lerp,
   PANIC_RADIUS,
   WAYPOINT_MARGIN,
-  lerp,
 } from "../config";
 import type { Policy } from "./types";
 
@@ -84,7 +84,8 @@ export class ScriptedPolicy implements Policy {
     const type = this.hideType;
     if (!spot || !type) return { kind: "idle", seq };
 
-    const threat = obs.visibility === "limited" ? this.nearestThreatLimited(obs) : this.nearestHunter(obs);
+    const threat =
+      obs.visibility === "limited" ? this.nearestThreatLimited(obs) : this.nearestHunter(obs);
     if (threat) {
       if (threat.facingMe === true && threat.distance < FREEZE_RADIUS) {
         return { kind: "transform", propType: type, seq };

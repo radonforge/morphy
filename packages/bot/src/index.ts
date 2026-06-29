@@ -1,12 +1,18 @@
 import { mkdirSync } from "node:fs";
 import { dirname, extname } from "node:path";
-import { DEFAULT_MAP_ID, MAX_NAME_LENGTH, type MapId, isMapId, type Visibility } from "@webhunt/shared";
+import {
+  DEFAULT_MAP_ID,
+  isMapId,
+  MAX_NAME_LENGTH,
+  type MapId,
+  type Visibility,
+} from "@webhunt/shared";
 import { Bot } from "./bot";
 import {
   BOT_NAMES,
+  clampDifficulty,
   DEFAULT_BOT_COUNT,
   DEFAULT_DIFFICULTY,
-  clampDifficulty,
   defaultServerUrl,
 } from "./config";
 import { ScriptedPolicy } from "./policy/scripted";
@@ -179,7 +185,9 @@ async function main(): Promise<void> {
       bots.push(bot);
       console.log(`[bot] ${name} connected`);
     } catch (error) {
-      console.error(`[bot] ${name} failed to connect: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `[bot] ${name} failed to connect: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
