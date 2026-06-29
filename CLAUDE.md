@@ -63,7 +63,7 @@ GLB models live in `packages/client/public/models/<kit>/`: `blaster` (weapon vie
 
 ## Conventions
 
-- All user-facing strings are **Italian**.
+- All user-facing strings are **English**.
 - Gameplay constants → `shared/constants.ts`. Rendering/layout constants → module-level `const` at the top of the file that uses them. No inline magic numbers in logic.
 - `VITE_SERVER_URL` overrides the server URL on the client (default: same-origin `/colyseus`, proxied by Vite to `:2567`). Server `PORT` env overrides `2567`.
 - The Vite dev server proxies `COLYSEUS_PROXY_PATH` (`/colyseus`) to the game server and needs `fs.allow: ["../.."]` to import shared source; `vite.config.ts` imports `shared/src/constants` directly.

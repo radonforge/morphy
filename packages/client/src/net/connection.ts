@@ -17,7 +17,7 @@ export interface JoinOptions {
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label}: timeout dopo ${ms}ms`)), ms);
+    const timer = setTimeout(() => reject(new Error(`${label}: timed out after ${ms}ms`)), ms);
     promise.then(
       (value) => {
         clearTimeout(timer);
@@ -36,7 +36,7 @@ export async function connectToRoom(serverUrl: string, options: JoinOptions): Pr
   const room = await withTimeout(
     client.joinOrCreate(ROOM_NAME, options),
     CONNECT_TIMEOUT_MS,
-    "connessione al server",
+    "server connection",
   );
   return { room, sessionId: room.sessionId };
 }

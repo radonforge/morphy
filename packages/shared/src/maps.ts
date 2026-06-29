@@ -19,22 +19,21 @@ export interface MapInfo {
 export const MAP_CATALOG = [
   {
     id: "station",
-    name: "Stazione Kepler-9",
+    name: "Kepler-9 Station",
     theme: "station",
-    blurb: "Moduli pressurizzati e corridoi stretti: mimetizzati tra arredi e container.",
+    blurb: "Pressurized modules and tight corridors: blend in among furniture and containers.",
   },
   {
     id: "mars",
-    name: "Avamposto Ares",
+    name: "Ares Outpost",
     theme: "mars",
-    blurb:
-      "Apron marziano a cielo aperto attorno a una piccola base: poche coperture, lunghe linee di tiro.",
+    blurb: "Open-air Martian apron around a small base: little cover, long sightlines.",
   },
   {
     id: "urban",
-    name: "Distretto Nord",
+    name: "North District",
     theme: "urban",
-    blurb: "Isolati e strade: confonditi tra i passanti del quartiere.",
+    blurb: "Blocks and streets: blend in with the neighborhood's pedestrians.",
   },
 ] as const satisfies readonly MapInfo[];
 

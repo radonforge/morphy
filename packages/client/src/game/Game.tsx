@@ -86,30 +86,30 @@ interface KillLine {
 function killText(event: KillEvent): string {
   switch (event.reason) {
     case "self":
-      return `${event.victimName} si è auto-eliminato`;
+      return `${event.victimName} self-eliminated`;
     case "converted":
-      return `${event.byName} ha catturato ${event.victimName}`;
+      return `${event.byName} captured ${event.victimName}`;
     default:
-      return `${event.byName} ha eliminato ${event.victimName}`;
+      return `${event.byName} eliminated ${event.victimName}`;
   }
 }
 
 const PHASE_LABEL: Record<Phase, string> = {
-  lobby: "In attesa di giocatori",
-  starting: "Si parte…",
-  hiding: "Nascondetevi!",
-  hunting: "Caccia!",
-  round_end: "Fine round",
+  lobby: "Waiting for players",
+  starting: "Starting…",
+  hiding: "Hide!",
+  hunting: "Hunt!",
+  round_end: "Round over",
 };
 
 const ROLE_LABEL: Record<Role, string> = {
-  hunter: "Cacciatore",
+  hunter: "Hunter",
   prop: "Prop",
 };
 
 const WINNER_LABEL: Record<Winner, string> = {
-  hunters: "Hanno vinto i Cacciatori!",
-  props: "Hanno vinto i Prop!",
+  hunters: "Hunters win!",
+  props: "Props win!",
   "": "",
 };
 
@@ -153,10 +153,10 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
   return (
     <>
       <div className="scoreboard-row scoreboard-head">
-        <span>Giocatore</span>
-        <span>Ruolo</span>
-        <span>Stato</span>
-        <span>Kill</span>
+        <span>Player</span>
+        <span>Role</span>
+        <span>Status</span>
+        <span>Kills</span>
       </div>
       {sortStandings(ids, meta).map(({ id, player }) => (
         <div
@@ -170,9 +170,9 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
           <span>
             {player.alive
               ? player.role === "hunter"
-                ? `Vivo · ${player.hp} HP`
-                : "Vivo"
-              : "Eliminato"}
+                ? `Alive · ${player.hp} HP`
+                : "Alive"
+              : "Eliminated"}
           </span>
           <span>{player.role === "hunter" ? player.kills : "—"}</span>
         </div>
@@ -211,7 +211,7 @@ function Scoreboard({ ids, meta, localId }: { ids: string[]; meta: MetaMap; loca
   return (
     <div className="scoreboard">
       <div className="scoreboard-card panel">
-        <div className="eyebrow standings-title">Classifica</div>
+        <div className="eyebrow standings-title">Standings</div>
         <StandingsTable ids={ids} meta={meta} localId={localId} />
       </div>
     </div>
@@ -253,14 +253,14 @@ function ResultScreen({
         </div>
         {mvp && (
           <div className="result-mvp">
-            Miglior cacciatore: {mvp.name} · {mvp.kills} kill
+            Top hunter: {mvp.name} · {mvp.kills} kills
           </div>
         )}
         <div className="result-standings">
           <StandingsTable ids={ids} meta={meta} localId={localId} />
         </div>
         <div className="result-next">
-          Nuovo round
+          New round
           <Countdown endsAt={endsAt} />
         </div>
       </div>
@@ -565,20 +565,20 @@ export function Game({ connection, onLeave }: GameProps) {
   };
 
   const hint = !localAlive
-    ? "Eliminato — guardi da spettatore"
+    ? "Eliminated — spectating"
     : canShoot
-      ? "Click spara · Shift corri · Spazio salta · sbagliare costa vita · T chat · Tab classifica · M audio"
+      ? "Click to shoot · Shift run · Space jump · misses cost HP · T chat · Tab standings · M audio"
       : canTransform
-        ? "Guarda un oggetto e premi E · Shift corri · T chat · Tab classifica · M audio"
+        ? "Look at an object and press E · Shift run · T chat · Tab standings · M audio"
         : localRole === "hunter" && phase === "hiding"
-          ? "Sei accecato… attendi la caccia"
-          : "WASD muovi · Shift corri · click+mouse visuale · T chat · Tab classifica · M audio";
+          ? "You're blinded… wait for the hunt"
+          : "WASD move · Shift run · click+mouse to look · T chat · Tab standings · M audio";
 
   if (!map) {
     return (
       <div className="lobby">
         <div className="lobby-card">
-          <h1>Caricamento mappa…</h1>
+          <h1>Loading map…</h1>
         </div>
       </div>
     );
@@ -605,25 +605,25 @@ export function Game({ connection, onLeave }: GameProps) {
       {phase === "lobby" && (
         <div className="lobby-overlay">
           <div className="lobby-overlay-card panel">
-            <h2>In attesa di giocatori</h2>
+            <h2>Waiting for players</h2>
             <ul className="ready-list">
               {ids.map((id) => (
                 <li key={id} className={meta[id]?.ready ? "is-ready" : ""}>
                   <span>
                     {meta[id]?.name ?? "?"}
-                    {id === sessionId ? " (tu)" : ""}
+                    {id === sessionId ? " (you)" : ""}
                   </span>
-                  <span>{meta[id]?.ready ? "✔ Pronto" : "… in attesa"}</span>
+                  <span>{meta[id]?.ready ? "✔ Ready" : "… waiting"}</span>
                 </li>
               ))}
             </ul>
             <button type="button" onClick={toggleReady}>
-              {localReady ? "Annulla" : "Pronto"}
+              {localReady ? "Cancel" : "Ready"}
             </button>
             <span className="lobby-overlay-meta">
               {ids.length < MIN_PLAYERS_TO_START
-                ? `Servono almeno ${MIN_PLAYERS_TO_START} giocatori`
-                : `Pronti: ${readyCount}/${ids.length} — si parte quando tutti sono pronti`}
+                ? `Need at least ${MIN_PLAYERS_TO_START} players`
+                : `Ready: ${readyCount}/${ids.length} — starts when everyone is ready`}
             </span>
           </div>
         </div>
@@ -645,9 +645,9 @@ export function Game({ connection, onLeave }: GameProps) {
 
       {localRole === "hunter" && phase === "hiding" && (
         <div className="blindout">
-          <div className="blindout-title">I prop si stanno nascondendo</div>
+          <div className="blindout-title">The props are hiding</div>
           <div className="blindout-timer">
-            La caccia inizia
+            The hunt begins
             <Countdown endsAt={phaseEndsAt} />
           </div>
         </div>
@@ -687,7 +687,7 @@ export function Game({ connection, onLeave }: GameProps) {
             value={chatDraft}
             onChange={(e) => setChatDraft(e.target.value)}
             onKeyDown={onChatKeyDown}
-            placeholder="Messaggio… (Invio invia, Esc chiudi)"
+            placeholder="Message… (Enter to send, Esc to close)"
           />
         )}
       </div>
@@ -702,7 +702,7 @@ export function Game({ connection, onLeave }: GameProps) {
           <div className="topbar-meta">
             <span className={`badge badge-${localRole}`}>{ROLE_LABEL[localRole]}</span>
             {(phase === "hiding" || phase === "hunting") && (
-              <span className="targets" title="Prop ancora in gioco">
+              <span className="targets" title="Props still in play">
                 <span className="targets-dot" />
                 {aliveProps}
               </span>
@@ -712,8 +712,8 @@ export function Game({ connection, onLeave }: GameProps) {
             type="button"
             className={`topbar-mute${muted ? " is-muted" : ""}`}
             onClick={() => setMuted(toggleMuted())}
-            title={muted ? "Riattiva audio (M)" : "Disattiva audio (M)"}
-            aria-label={muted ? "Riattiva audio" : "Disattiva audio"}
+            title={muted ? "Unmute audio (M)" : "Mute audio (M)"}
+            aria-label={muted ? "Unmute audio" : "Mute audio"}
           >
             <SpeakerIcon muted={muted} />
           </button>
@@ -722,7 +722,7 @@ export function Game({ connection, onLeave }: GameProps) {
 
       {localRole === "hunter" && localAlive && phase !== "lobby" && (
         <div className={`vitals panel${localHp <= HP_LOW_THRESHOLD ? " hp-low" : ""}`}>
-          <span className="eyebrow">Integrità</span>
+          <span className="eyebrow">Integrity</span>
           <div className="vitals-row">
             <div className="hp">
               <div className="hp-fill" style={{ width: `${(localHp / HUNTER_MAX_HP) * 100}%` }} />

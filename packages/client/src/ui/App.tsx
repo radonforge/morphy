@@ -21,7 +21,7 @@ export function App() {
       setConnection(conn);
       setStatus({ kind: "idle" });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "connessione fallita";
+      const message = error instanceof Error ? error.message : "connection failed";
       setStatus({ kind: "error", message });
     }
   }, []);

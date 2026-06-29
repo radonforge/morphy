@@ -35,9 +35,9 @@ const MAP_ACCENT: Record<MapId, string> = {
 };
 
 const MAP_TAG: Record<MapId, string> = {
-  station: "Interni",
-  mars: "Aperto",
-  urban: "Folla",
+  station: "Indoor",
+  mars: "Open",
+  urban: "Crowd",
 };
 
 const AVATAR_EMOJI: Record<AvatarId, string> = {
@@ -94,7 +94,7 @@ function MapArt({ id }: { id: MapId }): ReactNode {
 const NAV_ITEMS: NavItem[] = [
   {
     id: "play",
-    label: "Gioca",
+    label: "Play",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M8 5v14l11-7z" />
@@ -119,7 +119,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     id: "private",
-    label: "Privato",
+    label: "Private",
     soon: true,
     icon: (
       <svg
@@ -152,7 +152,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     id: "options",
-    label: "Opzioni",
+    label: "Options",
     icon: (
       <svg
         viewBox="0 0 24 24"
@@ -218,8 +218,8 @@ export function Lobby({ status, onConnect }: LobbyProps) {
             </span>
           </div>
           <div className="menu-pc-info">
-            <span className="menu-pc-name">{trimmedName || "Ospite"}</span>
-            <span className="menu-pc-sub">{trimmedName ? "Pronto" : "Imposta nome →"}</span>
+            <span className="menu-pc-name">{trimmedName || "Guest"}</span>
+            <span className="menu-pc-sub">{trimmedName ? "Ready" : "Set name →"}</span>
           </div>
         </div>
       </header>
@@ -236,7 +236,7 @@ export function Lobby({ status, onConnect }: LobbyProps) {
             >
               <span className="menu-ic">{item.icon}</span>
               <span className="menu-lbl">{item.label}</span>
-              {item.soon && <span className="menu-mini">Presto</span>}
+              {item.soon && <span className="menu-mini">Soon</span>}
             </button>
           ))}
         </nav>
@@ -245,8 +245,8 @@ export function Lobby({ status, onConnect }: LobbyProps) {
           {pane === "play" && (
             <form className="menu-pane" onSubmit={handleSubmit}>
               <div className="menu-pane-head">
-                <h2>Scegli il settore</h2>
-                <span className="menu-pane-hint">3 mappe · 6 giocatori · ~8 min</span>
+                <h2>Choose your sector</h2>
+                <span className="menu-pane-hint">3 maps · 6 players · ~8 min</span>
               </div>
               <div className="menu-maps">
                 {MAP_CATALOG.map((info) => (
@@ -280,19 +280,19 @@ export function Lobby({ status, onConnect }: LobbyProps) {
               </div>
               <div className="menu-deploybar">
                 <div className="menu-name-field">
-                  <label htmlFor="player-name">Nome giocatore</label>
+                  <label htmlFor="player-name">Player name</label>
                   <input
                     id="player-name"
                     value={name}
                     maxLength={MAX_NAME_LENGTH}
-                    placeholder="Il tuo nome"
+                    placeholder="Your name"
                     onChange={(e) => setName(e.target.value)}
                     autoFocus
                   />
                 </div>
                 <button type="submit" className="menu-deploy" disabled={connecting}>
-                  <span className="big">▶ {connecting ? "Connessione…" : "Entra"}</span>
-                  <span className="small">In partita pubblica</span>
+                  <span className="big">▶ {connecting ? "Connecting…" : "Join"}</span>
+                  <span className="small">Public match</span>
                 </button>
               </div>
               {status.kind === "error" && <span className="menu-error">{status.message}</span>}
@@ -302,7 +302,7 @@ export function Lobby({ status, onConnect }: LobbyProps) {
           {pane === "avatar" && (
             <section className="menu-pane">
               <div className="menu-pane-head">
-                <h2>Scegli l'avatar</h2>
+                <h2>Choose your avatar</h2>
                 <span className="menu-pane-hint">{AVATAR_CATALOG.length} cube-pet</span>
               </div>
               <div className="menu-avatars">
@@ -327,7 +327,7 @@ export function Lobby({ status, onConnect }: LobbyProps) {
           {pane === "private" && (
             <section className="menu-pane">
               <div className="menu-pane-head">
-                <h2>Stanza privata</h2>
+                <h2>Private room</h2>
               </div>
               <div className="panel menu-empty">
                 <span className="menu-empty-ring">
@@ -342,11 +342,11 @@ export function Lobby({ status, onConnect }: LobbyProps) {
                     <path d="M8 11V8a4 4 0 0 1 8 0v3" />
                   </svg>
                 </span>
-                <span className="menu-empty-tag">In arrivo</span>
-                <b>Gioca solo con chi inviti</b>
+                <span className="menu-empty-tag">Coming soon</span>
+                <b>Play only with people you invite</b>
                 <p>
-                  Crea una stanza protetta da codice e condividila con i tuoi amici, oppure entra
-                  con un codice ricevuto.
+                  Create a code-protected room and share it with your friends, or join with a code
+                  you received.
                 </p>
               </div>
             </section>
@@ -355,7 +355,7 @@ export function Lobby({ status, onConnect }: LobbyProps) {
           {pane === "stats" && (
             <section className="menu-pane">
               <div className="menu-pane-head">
-                <h2>Statistiche</h2>
+                <h2>Statistics</h2>
               </div>
               <div className="panel menu-empty">
                 <span className="menu-empty-ring">
@@ -369,11 +369,11 @@ export function Lobby({ status, onConnect }: LobbyProps) {
                     <path d="M5 19V10m7 9V5m7 14v-7" />
                   </svg>
                 </span>
-                <span className="menu-empty-tag">In arrivo</span>
-                <b>Le tue partite, in numeri</b>
+                <span className="menu-empty-tag">Coming soon</span>
+                <b>Your matches, in numbers</b>
                 <p>
-                  Partite giocate, prede stanate, round vinti e tempo sopravvissuto. Arriva insieme
-                  all'accesso con account.
+                  Matches played, props flushed out, rounds won and time survived. Comes with
+                  account login.
                 </p>
               </div>
             </section>
@@ -382,20 +382,20 @@ export function Lobby({ status, onConnect }: LobbyProps) {
           {pane === "options" && (
             <section className="menu-pane">
               <div className="menu-pane-head">
-                <h2>Opzioni</h2>
+                <h2>Options</h2>
               </div>
               <div className="panel menu-card">
                 <div className="menu-opt-row">
                   <span className="l">
                     <b>Audio</b>
-                    <span>Effetti e ambiente sintetizzati a runtime</span>
+                    <span>Effects and ambience synthesized at runtime</span>
                   </span>
                   <button
                     type="button"
                     className={`menu-toggle${muted ? "" : " on"}`}
                     onClick={toggleAudio}
                     aria-pressed={!muted}
-                    aria-label={muted ? "Attiva audio" : "Disattiva audio"}
+                    aria-label={muted ? "Unmute audio" : "Mute audio"}
                   />
                 </div>
               </div>
