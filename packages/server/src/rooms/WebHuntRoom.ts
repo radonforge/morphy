@@ -9,6 +9,7 @@ import {
   HUNTER_MAX_HP,
   HUNTER_RATIO,
   type InputMessage,
+  isAvatarId,
   isMapId,
   type KillEvent,
   type MapDefinition,
@@ -29,6 +30,7 @@ import {
   PATCH_RATE_MS,
   type Phase,
   type PropBounds,
+  randomAvatarId,
   ROUND_DURATION_MS,
   ROUND_END_MS,
   type Role,
@@ -42,7 +44,6 @@ import {
   type Winner,
   WRONG_SHOT_DAMAGE,
 } from "@webhunt/shared";
-import { randomAnimal } from "../avatars";
 import { buildMap } from "../maps";
 
 const FALLBACK_NAME = "Player";
@@ -250,11 +251,12 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   onJoin(client: Client, options: unknown): void {
     const name = sanitizeName((options as { name?: unknown } | undefined)?.name);
+    const rawAvatar = (options as { avatar?: unknown } | undefined)?.avatar;
     const spawn = this.pickLobbySpawn();
     const player = new PlayerState();
     player.id = client.sessionId;
     player.name = name;
-    player.avatar = randomAnimal();
+    player.avatar = isAvatarId(rawAvatar) ? rawAvatar : randomAvatarId();
     player.x = spawn.x;
     player.y = spawn.y;
     player.z = spawn.z;
