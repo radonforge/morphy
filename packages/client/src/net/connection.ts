@@ -8,6 +8,12 @@ export interface Connection {
   sessionId: string;
 }
 
+/** Options sent with `joinOrCreate`; the contract lobby pickers extend (avatar, …). */
+export interface JoinOptions {
+  name: string;
+  map: MapId;
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`${label}: timeout dopo ${ms}ms`)), ms);
@@ -24,14 +30,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-export async function connectToRoom(
-  serverUrl: string,
-  name: string,
-  map: MapId,
-): Promise<Connection> {
+export async function connectToRoom(serverUrl: string, options: JoinOptions): Promise<Connection> {
   const client = new Client(serverUrl);
   const room = await withTimeout(
-    client.joinOrCreate(ROOM_NAME, { name, map }),
+    client.joinOrCreate(ROOM_NAME, options),
     CONNECT_TIMEOUT_MS,
     "connessione al server",
   );
