@@ -30,6 +30,37 @@ const FIELD = 51;
 
 const ex = (name: string): string => `/models/space/exterior/${name}.glb`;
 
+/**
+ * Every glTF in the Kenney space/exterior kit bakes a fixed node translation of
+ * (2, 0, 1.5) local units, so a piece's visible mesh sits that far from its
+ * instance origin (scaled, then rotated by `rotationY`). Solid colliders must
+ * hug the rendered mesh, not the origin, so placement projects this offset to
+ * world space — otherwise the box lands where the object only appears to be.
+ * Symmetric pieces (craft, rockets, hangars) center exactly on this; organic
+ * rocks deviate by a few cm and carry a refined per-model offset (see {@link SolidModel}).
+ */
+const KIT_OFFSET_X = 2;
+const KIT_OFFSET_Z = 1.5;
+
+/** Horizontal margin (world units) added around each solid box so the mesh is strictly enclosed. */
+const COLLIDER_PAD = 0.05;
+
+/** Project a kit model's local mesh-center offset `(ox, oz)` to the world position of an instance placed at `(x, z)`, scaled by `scale` and rotated by `rot` (Y axis). */
+function kitCenter(
+  x: number,
+  z: number,
+  rot: number,
+  scale: number,
+  ox: number,
+  oz: number,
+): { cx: number; cz: number } {
+  const offX = scale * ox;
+  const offZ = scale * oz;
+  const cos = Math.cos(rot);
+  const sin = Math.sin(rot);
+  return { cx: x + offX * cos + offZ * sin, cz: z - offX * sin + offZ * cos };
+}
+
 const ROCKET_PARTS: { model: string; y: number }[] = [
   { model: "rocket_finsA", y: 0 },
   { model: "rocket_baseA", y: 0 },
@@ -45,36 +76,63 @@ const HANGAR_FOOT_X = 6.6;
 const HANGAR_FOOT_Z = 9.8;
 const HANGAR_COLLIDER_H = 3.4;
 
-const CRAFT: { model: string; radius: number }[] = [
-  { model: "craft_speederA", radius: 2.7 },
-  { model: "craft_cargoA", radius: 3.2 },
-  { model: "craft_miner", radius: 3.3 },
-  { model: "craft_racer", radius: 2.6 },
+/**
+ * A solid exterior model, measured from its GLB bounds in the kit's local frame.
+ * `ox`/`oz` are the mesh-center offset on X/Z (≈ {@link KIT_OFFSET_X}/`_Z`, refined
+ * per model), `hx`/`hz` the AABB half-extents, and `hy` the full height. `scale`
+ * is the uniform instance scale; placement multiplies these by `scale` to size a
+ * footprint-hugging collider box around the rendered mesh.
+ */
+interface SolidModel {
+  model: string;
+  scale: number;
+  ox: number;
+  oz: number;
+  hx: number;
+  hz: number;
+  hy: number;
+}
+
+const CRAFT: SolidModel[] = [
+  { model: "craft_speederA", scale: 2.6, ox: 2.0, oz: 1.5, hx: 1.0, hz: 1.05, hy: 0.8 },
+  { model: "craft_cargoA", scale: 2.6, ox: 2.0, oz: 1.5, hx: 0.8, hz: 1.225, hy: 0.8 },
+  { model: "craft_miner", scale: 2.6, ox: 2.0, oz: 1.5, hx: 0.9, hz: 1.3, hy: 0.7 },
+  { model: "craft_racer", scale: 2.6, ox: 2.0, oz: 1.5, hx: 0.6, hz: 1.013, hy: 0.75 },
 ];
-const CRAFT_SCALE = 2.6;
 const CRAFT_COUNT = 4;
 
-const BIG_ROCKS: { model: string; scale: number; radius: number }[] = [
-  { model: "rock_largeA", scale: 3, radius: 2.2 },
-  { model: "rock_largeB", scale: 3, radius: 2.2 },
-  { model: "rock_crystalsLargeA", scale: 2.6, radius: 1.9 },
-  { model: "rock_crystalsLargeB", scale: 2.6, radius: 1.9 },
+const BIG_ROCKS: SolidModel[] = [
+  { model: "rock_largeA", scale: 3, ox: 2.007, oz: 1.485, hx: 0.46, hz: 0.417, hy: 0.5 },
+  { model: "rock_largeB", scale: 3, ox: 1.994, oz: 1.51, hx: 0.464, hz: 0.47, hy: 0.5 },
+  {
+    model: "rock_crystalsLargeA",
+    scale: 2.6,
+    ox: 2.015,
+    oz: 1.507,
+    hx: 0.417,
+    hz: 0.46,
+    hy: 0.541,
+  },
+  { model: "rock_crystalsLargeB", scale: 2.6, ox: 1.99, oz: 1.492, hx: 0.47, hz: 0.466, hy: 0.55 },
 ];
 const BIG_ROCK_COUNT = 12;
 
-const DECOR = [
-  "crater",
-  "craterLarge",
-  "meteor",
-  "meteor_detailed",
-  "rocks_smallA",
-  "rocks_smallB",
+const SOLID_DEBRIS: SolidModel[] = [
+  { model: "meteor", scale: 2.8, ox: 2.0, oz: 1.5, hx: 0.433, hz: 0.375, hy: 0.735 },
+  { model: "meteor_detailed", scale: 2.6, ox: 2.0, oz: 1.5, hx: 0.433, hz: 0.413, hy: 0.735 },
 ];
-const DECOR_COUNT = 26;
+const SOLID_DEBRIS_COUNT = 8;
+
+const FLAT_DECOR = ["crater", "craterLarge", "rocks_smallA", "rocks_smallB"];
+const FLAT_DECOR_COUNT = 18;
 
 const BARRIER_ROCK_STEP = 9;
-const BARRIER_ROCKS = ["rock_largeA", "rock_largeB", "rock", "meteor_detailed"];
-const BARRIER_ROCK_SCALE = 3.2;
+const BARRIER_ROCKS: SolidModel[] = [
+  { model: "rock_largeA", scale: 3.2, ox: 2.007, oz: 1.485, hx: 0.46, hz: 0.417, hy: 0.5 },
+  { model: "rock_largeB", scale: 3.2, ox: 1.994, oz: 1.51, hx: 0.464, hz: 0.47, hy: 0.5 },
+  { model: "rock", scale: 3.2, ox: 1.971, oz: 1.546, hx: 0.401, hz: 0.426, hy: 0.3 },
+  { model: "meteor_detailed", scale: 3.2, ox: 2.0, oz: 1.5, hx: 0.433, hz: 0.413, hy: 0.735 },
+];
 
 const PROP_COUNT = 56;
 const PROP_SPAWN_TARGET = 16;
@@ -164,6 +222,36 @@ export function buildMars(seed: number): MapDefinition {
   const scenery: SceneryInstance[] = [];
   const obstacles: Obstacle[] = [];
 
+  /** World-space footprint of a solid model placed at `(x, z)` with rotation `rot`. */
+  const solidBox = (
+    item: SolidModel,
+    x: number,
+    z: number,
+    rot: number,
+  ): { cx: number; cz: number; hx: number; hz: number; h: number; r: number } => {
+    const { cx, cz } = kitCenter(x, z, rot, item.scale, item.ox, item.oz);
+    const cos = Math.abs(Math.cos(rot));
+    const sin = Math.abs(Math.sin(rot));
+    const ax = item.hx * item.scale;
+    const az = item.hz * item.scale;
+    const hx = ax * cos + az * sin + COLLIDER_PAD;
+    const hz = ax * sin + az * cos + COLLIDER_PAD;
+    const h = item.hy * item.scale;
+    return { cx, cz, hx, hz, h, r: Math.hypot(hx, hz) };
+  };
+
+  const pushSolid = (item: SolidModel, x: number, z: number, rot: number): void => {
+    const { cx, cz, hx, hz, h, r } = solidBox(item, x, z, rot);
+    scenery.push({
+      model: ex(item.model),
+      position: { x, y: 0, z },
+      rotationY: rot,
+      scale: item.scale,
+    });
+    colliders.push({ position: { x: cx, y: h / 2, z: cz }, size: { x: 2 * hx, y: h, z: 2 * hz } });
+    obstacles.push({ x: cx, z: cz, r });
+  };
+
   for (let t = -BARRIER + BARRIER_ROCK_STEP / 2; t < BARRIER; t += BARRIER_ROCK_STEP) {
     for (const [x, z] of [
       [t, -BARRIER],
@@ -171,12 +259,7 @@ export function buildMars(seed: number): MapDefinition {
       [-BARRIER, t],
       [BARRIER, t],
     ] as const) {
-      scenery.push({
-        model: ex(pick(BARRIER_ROCKS, rng)),
-        position: { x, y: 0, z },
-        rotationY: rng() * Math.PI * 2,
-        scale: BARRIER_ROCK_SCALE,
-      });
+      pushSolid(pick(BARRIER_ROCKS, rng), x, z, rng() * Math.PI * 2);
     }
   }
 
@@ -193,71 +276,63 @@ export function buildMars(seed: number): MapDefinition {
         scale: ROCKET_SCALE,
       });
     }
+    const { cx, cz } = kitCenter(x, z, rot, ROCKET_SCALE, KIT_OFFSET_X, KIT_OFFSET_Z);
     colliders.push({
-      position: { x, y: ROCKET_COLLIDER_H / 2, z },
+      position: { x: cx, y: ROCKET_COLLIDER_H / 2, z: cz },
       size: { x: ROCKET_FOOT, y: ROCKET_COLLIDER_H, z: ROCKET_FOOT },
     });
-    obstacles.push({ x, z, r: ROCKET_FOOT / 2 + 0.5 });
+    obstacles.push({ x: cx, z: cz, r: ROCKET_FOOT / 2 + 0.5 });
   }
 
   {
     const x = -46;
     const z = 4;
+    const rot = Math.PI / 2;
     scenery.push({
       model: ex("hangar_largeA"),
       position: { x, y: 0, z },
-      rotationY: Math.PI / 2,
+      rotationY: rot,
       scale: HANGAR_SCALE,
     });
+    const { cx, cz } = kitCenter(x, z, rot, HANGAR_SCALE, KIT_OFFSET_X, KIT_OFFSET_Z);
     colliders.push({
-      position: { x, y: HANGAR_COLLIDER_H / 2, z },
+      position: { x: cx, y: HANGAR_COLLIDER_H / 2, z: cz },
       size: { x: HANGAR_FOOT_Z, y: HANGAR_COLLIDER_H, z: HANGAR_FOOT_X },
     });
-    obstacles.push({ x, z, r: HANGAR_FOOT_Z / 2 + 0.5 });
+    obstacles.push({ x: cx, z: cz, r: HANGAR_FOOT_Z / 2 + 0.5 });
   }
 
   const walls = wallsOf(colliders);
   const inBase = (x: number, z: number): boolean => x > -18 && x < 18 && z > -50 && z < -26;
   const nearCenter = (x: number, z: number, clear: number): boolean => Math.hypot(x, z) < clear;
 
-  const scatterSolid = (
-    list: { model: string; scale: number; radius: number }[],
-    count: number,
-  ): void => {
+  const scatterSolid = (list: SolidModel[], count: number): void => {
     for (let n = 0; n < count; n++) {
       for (let a = 0; a < PLACE_ATTEMPTS; a++) {
+        const item = pick(list, rng);
         const x = randRange(rng, -FIELD, FIELD);
         const z = randRange(rng, -FIELD, FIELD);
-        const item = pick(list, rng);
-        const r = item.radius;
-        if (inBase(x, z) || nearCenter(x, z, PLAZA_CLEAR)) continue;
-        if (!farFromWalls(x, z, r + 1, walls)) continue;
-        if (!clearOf(x, z, r, obstacles, SCENERY_GAP)) continue;
-        scenery.push({
-          model: ex(item.model),
-          position: { x, y: 0, z },
-          rotationY: rng() * Math.PI * 2,
-          scale: item.scale,
-          colliderRadius: r,
-        });
-        obstacles.push({ x, z, r });
+        const rot = rng() * Math.PI * 2;
+        const { cx, cz, r } = solidBox(item, x, z, rot);
+        if (inBase(cx, cz) || nearCenter(cx, cz, PLAZA_CLEAR)) continue;
+        if (!farFromWalls(cx, cz, r + 1, walls)) continue;
+        if (!clearOf(cx, cz, r, obstacles, SCENERY_GAP)) continue;
+        pushSolid(item, x, z, rot);
         break;
       }
     }
   };
 
-  scatterSolid(
-    CRAFT.map((c) => ({ model: c.model, scale: CRAFT_SCALE, radius: c.radius })),
-    CRAFT_COUNT,
-  );
+  scatterSolid(CRAFT, CRAFT_COUNT);
   scatterSolid(BIG_ROCKS, BIG_ROCK_COUNT);
+  scatterSolid(SOLID_DEBRIS, SOLID_DEBRIS_COUNT);
 
-  for (let n = 0; n < DECOR_COUNT; n++) {
+  for (let n = 0; n < FLAT_DECOR_COUNT; n++) {
     const x = randRange(rng, -FIELD, FIELD);
     const z = randRange(rng, -FIELD, FIELD);
     if (!farFromWalls(x, z, 1, walls)) continue;
     scenery.push({
-      model: ex(pick(DECOR, rng)),
+      model: ex(pick(FLAT_DECOR, rng)),
       position: { x, y: 0, z },
       rotationY: rng() * Math.PI * 2,
       scale: randRange(rng, 1.6, 3),
