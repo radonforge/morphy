@@ -31,3 +31,6 @@ export const INPUT_SEND_RATE_MS = 50;
 
 export const MAX_NAME_LENGTH = 16;
 export const MAX_CHAT_LENGTH = 200;
+
+export const PARTY_CODE_LENGTH = 5;
+export const PARTY_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
