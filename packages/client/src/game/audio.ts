@@ -1,3 +1,5 @@
+import type { WeaponId } from "@webhunt/shared";
+
 const MASTER_VOLUME = 0.6;
 const MUTE_STORAGE_KEY = "webhunt:muted";
 const MUTE_FADE_S = 0.05;
@@ -128,19 +130,86 @@ export function playHitConfirm(): void {
   tone(e.ctx, e.master, { type: "triangle", f0: 880, f1: 1320, peak: 0.25, dur: 0.16 });
 }
 
-/** Beefy blaster crack: a filtered noise transient over a falling tonal body. */
-export function playShot(): void {
+/**
+ * Weapon-specific blaster report: pistol crack, shotgun boom, rifle snap.
+ * `volume` is 0..1 (1 for the local shooter, by distance for others).
+ */
+export function playWeaponShot(weapon: WeaponId, volume = 1): void {
   const e = ensure();
-  if (!e) return;
-  noiseBurst(e.ctx, e.master, { peak: 0.35, dur: 0.06, filterHz: 1800 });
-  tone(e.ctx, e.master, { type: "square", f0: 700, f1: 160, fTime: 0.08, peak: 0.22, dur: 0.1 });
+  if (!e || volume <= 0) return;
+  const level = Math.min(1, volume);
+  switch (weapon) {
+    case "shotgun":
+      noiseBurst(e.ctx, e.master, { peak: 0.42 * level, dur: 0.13, filterHz: 850 });
+      tone(e.ctx, e.master, {
+        type: "square",
+        f0: 300,
+        f1: 85,
+        fTime: 0.11,
+        peak: 0.26 * level,
+        dur: 0.17,
+      });
+      break;
+    case "rifle":
+      noiseBurst(e.ctx, e.master, { peak: 0.3 * level, dur: 0.05, filterHz: 2600 });
+      tone(e.ctx, e.master, {
+        type: "square",
+        f0: 1150,
+        f1: 220,
+        fTime: 0.05,
+        peak: 0.2 * level,
+        dur: 0.09,
+      });
+      break;
+    default:
+      noiseBurst(e.ctx, e.master, { peak: 0.35 * level, dur: 0.06, filterHz: 1800 });
+      tone(e.ctx, e.master, {
+        type: "square",
+        f0: 700,
+        f1: 160,
+        fTime: 0.08,
+        peak: 0.22 * level,
+        dur: 0.1,
+      });
+  }
 }
 
-/** Soft low thud for a local footstep. */
-export function playStep(): void {
+/** Soft low thud for a footstep. `volume` is 0..1 (1 for the local player, by distance for others). */
+export function playStep(volume = 1): void {
+  const e = ensure();
+  if (!e || volume <= 0) return;
+  tone(e.ctx, e.master, {
+    type: "sine",
+    f0: 120,
+    f1: 70,
+    fTime: 0.05,
+    peak: 0.08 * Math.min(1, volume),
+    dur: 0.07,
+  });
+}
+
+/** Quick rising whoosh as the local player leaves the ground. */
+export function playJump(): void {
   const e = ensure();
   if (!e) return;
-  tone(e.ctx, e.master, { type: "sine", f0: 120, f1: 70, fTime: 0.05, peak: 0.08, dur: 0.07 });
+  tone(e.ctx, e.master, { type: "sine", f0: 160, f1: 250, fTime: 0.09, peak: 0.06, dur: 0.12 });
+}
+
+/** Weighty thud when the local player lands; `intensity` is 0..1 and scales the impact. */
+export function playLand(intensity: number): void {
+  const e = ensure();
+  if (!e) return;
+  const level = Math.min(1, Math.max(0, intensity));
+  if (level <= 0) return;
+  noiseBurst(e.ctx, e.master, { peak: 0.04 + 0.12 * level, dur: 0.08, filterHz: 320 });
+  tone(e.ctx, e.master, {
+    type: "sine",
+    f0: 110,
+    f1: 60,
+    fTime: 0.06,
+    peak: 0.04 + 0.1 * level,
+    dur: 0.1,
+  });
 }
 
 /** Low thunk for a wasted shot (hunter took the wrong-shot penalty). */

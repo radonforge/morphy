@@ -2,12 +2,18 @@ import type { Room } from "@colyseus/sdk";
 import { Billboard, Sky, Text, useGLTF } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
+  AIR_CONTROL,
   computePropBounds,
+  FALL_GRAVITY_MULT,
   GRAVITY,
   INPUT_SEND_RATE_MS,
+  JUMP_BUFFER_MS,
+  JUMP_RELEASE_GRAVITY_MULT,
   JUMP_SPEED,
   MAP_CATALOG,
   type MapDefinition,
+  MOVE_ACCEL,
+  MOVE_DECEL,
   MOVE_SPEED,
   MSG_INPUT,
   MSG_SHOOT,
@@ -19,13 +25,21 @@ import {
   RUN_MULTIPLIER_HUNTER,
   RUN_MULTIPLIER_PROP,
   type SceneryInstance,
-  SHOOT_RANGE,
   type TileInstance,
+  WEAPONS,
+  type WeaponId,
 } from "@webhunt/shared";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { playShot, playStep } from "./audio";
-import type { MetaMap, PlayersRef, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
+import { playJump, playLand, playStep, playWeaponShot } from "./audio";
+import type {
+  MetaMap,
+  PlayersRef,
+  RemotePlayerView,
+  ShotsRef,
+  TauntPulseRef,
+  TeleportRef,
+} from "./types";
 import { useControls } from "./useControls";
 
 function applyTauntPulse(
@@ -56,7 +70,6 @@ const PROP_COLOR = "#5bd75b";
 const MODEL_MIN_SIZE = 0.001;
 const BASE_PLANE_MARGIN = 8;
 const animalModel = (id: string): string => `/models/pets/animal-${id}.glb`;
-const BLASTER_MODEL = "/models/blaster/blaster-a.glb";
 const WEAPON_SCALE = 0.32;
 const WEAPON_OFFSET: [number, number, number] = [0.2, -0.22, -0.6];
 const WEAPON_ROTATION: [number, number, number] = [0, Math.PI, 0];
@@ -75,9 +88,12 @@ const CAMERA_SLAB_EPSILON = 1e-4;
 const REMOTE_DAMP = 0.0009;
 export const TAUNT_PULSE_SECONDS = 0.5;
 const TAUNT_AMPLITUDE = 0.18;
-const TRACER_TTL = 0.09;
-const TRACER_COLOR = "#fff34d";
+const TRACER_TTL = 0.12;
+const MAX_TRACERS = 16;
 const STEP_DISTANCE = 2.2;
+const REMOTE_STEP_MAX_DISTANCE = 24;
+const REMOTE_STEP_VOLUME = 0.8;
+const REMOTE_STEP_TELEPORT_SKIP = 2;
 const LOOK_SENSITIVITY = 0.0025;
 const PITCH_MIN = -1.4;
 const PITCH_MAX = 1.4;
@@ -90,6 +106,25 @@ const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 const LOCAL_AVATAR_KEY = "localAvatar";
 const TRANSFORM_REACH = 3.5;
+
+export const GAME_FOV = 55;
+const SPRINT_FOV_ADD = 7;
+const FOV_DAMP = 0.02;
+const FOV_EPSILON = 0.05;
+const HEADING_MIN_SPEED = 0.4;
+const HEADING_DAMP = 1e-8;
+const RECOIL_MAX_PITCH = 0.045;
+const RECOIL_DAMP = 1e-8;
+const LAND_DIP_Y = 0.16;
+const LAND_DAMP = 5e-7;
+const WEAPON_BOB_FREQ = 1.9;
+const WEAPON_BOB_X = 0.014;
+const WEAPON_BOB_Y = 0.011;
+const WEAPON_SWAY = 0.9;
+const WEAPON_SWAY_MAX = 0.06;
+const WEAPON_SWAY_DAMP = 1e-5;
+const WEAPON_KICK_Z = 0.11;
+const WEAPON_KICK_ROT = 0.12;
 
 /** Per-theme sky/light/ground preset, keyed by `MapInfo.theme`; falls back to {@link DEFAULT_THEME}. */
 interface ThemePreset {
@@ -249,10 +284,22 @@ interface TracerState {
   ey: number;
   ez: number;
   ttl: number;
+  color: string;
 }
 
-type TracerRef = { current: TracerState | null };
 type PlayerPosRef = { readonly current: THREE.Vector3 };
+
+interface LocalMotion {
+  speed: number;
+  sprinting: boolean;
+  grounded: boolean;
+  yaw: number;
+  pitch: number;
+  recoil: number;
+  landing: number;
+}
+
+type LocalMotionRef = { readonly current: LocalMotion };
 
 interface SceneProps {
   room: Room;
@@ -264,6 +311,8 @@ interface SceneProps {
   phase: Phase;
   teleportRef: TeleportRef;
   tauntPulseRef: TauntPulseRef;
+  shotsRef: ShotsRef;
+  weapon: WeaponId;
   chatOpen: boolean;
   onShoot: () => void;
 }
@@ -278,6 +327,8 @@ export function Scene({
   phase,
   teleportRef,
   tauntPulseRef,
+  shotsRef,
+  weapon,
   chatOpen,
   onShoot,
 }: SceneProps) {
@@ -288,8 +339,16 @@ export function Scene({
   const obstacles = useMemo(() => buildObstacles(map, catalog), [map, catalog]);
   const walls = useMemo(() => buildWalls(map), [map]);
   const theme = useMemo(() => themeFor(map.id), [map.id]);
-  const tracerRef = useRef<TracerState | null>(null);
   const localGroundRef = useRef(new THREE.Vector3());
+  const motionRef = useRef<LocalMotion>({
+    speed: 0,
+    sprinting: false,
+    grounded: true,
+    yaw: 0,
+    pitch: DEFAULT_PITCH,
+    recoil: 0,
+    landing: 0,
+  });
   const localMeta = meta[localId];
   const localRole: Role = localMeta?.role ?? "prop";
   const localAlive = localMeta?.alive ?? true;
@@ -320,9 +379,19 @@ export function Scene({
       />
       <MapView map={map} groundColor={theme.ground} />
       <PropPicker room={room} enabled={canTransform} playerPos={localGroundRef} />
-      <Shooter room={room} enabled={canShoot} tracerRef={tracerRef} onShoot={onShoot} />
-      <Tracer tracerRef={tracerRef} />
-      <HunterViewmodel enabled={localRole === "hunter" && localAlive} />
+      <Shooter
+        room={room}
+        enabled={canShoot}
+        weapon={weapon}
+        motionRef={motionRef}
+        onShoot={onShoot}
+      />
+      <Tracers shotsRef={shotsRef} />
+      <HunterViewmodel
+        enabled={localRole === "hunter" && localAlive}
+        weapon={weapon}
+        motionRef={motionRef}
+      />
       <LocalPlayer
         room={room}
         map={map}
@@ -340,6 +409,7 @@ export function Scene({
         walls={walls}
         avatar={localMeta?.avatar ?? ""}
         playerPos={localGroundRef}
+        motionRef={motionRef}
       />
       {ids
         .filter((id) => id !== localId && (meta[id]?.alive ?? true))
@@ -353,6 +423,7 @@ export function Scene({
             propType={meta[id]?.propType ?? ""}
             avatar={meta[id]?.avatar ?? ""}
             tauntPulseRef={tauntPulseRef}
+            localPos={localGroundRef}
           />
         ))}
     </>
@@ -362,16 +433,19 @@ export function Scene({
 function Shooter({
   room,
   enabled,
-  tracerRef,
+  weapon,
+  motionRef,
   onShoot,
 }: {
   room: Room;
   enabled: boolean;
-  tracerRef: TracerRef;
+  weapon: WeaponId;
+  motionRef: LocalMotionRef;
   onShoot: () => void;
 }) {
-  const { camera, gl, scene } = useThree();
+  const { camera, gl } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
+  const lastShotAt = useRef(0);
 
   useEffect(() => {
     if (!enabled) {
@@ -382,6 +456,12 @@ function Shooter({
       if (document.pointerLockElement !== el) {
         return;
       }
+      const spec = WEAPONS[weapon];
+      const now = performance.now();
+      if (now - lastShotAt.current < spec.cooldownMs) {
+        return;
+      }
+      lastShotAt.current = now;
       raycaster.setFromCamera(SCREEN_CENTER, camera);
       const o = raycaster.ray.origin;
       const d = raycaster.ray.direction;
@@ -389,65 +469,79 @@ function Shooter({
         origin: { x: o.x, y: o.y, z: o.z },
         dir: { x: d.x, y: d.y, z: d.z },
       });
-      playShot();
+      playWeaponShot(weapon);
       onShoot();
-      const hits = raycaster.intersectObjects(scene.children, true);
-      const end = hits[0]?.point;
-      tracerRef.current = {
-        ox: o.x,
-        oy: o.y,
-        oz: o.z,
-        ex: end ? end.x : o.x + d.x * SHOOT_RANGE,
-        ey: end ? end.y : o.y + d.y * SHOOT_RANGE,
-        ez: end ? end.z : o.z + d.z * SHOOT_RANGE,
-        ttl: TRACER_TTL,
-      };
+      motionRef.current.recoil = spec.recoil;
     };
     el.addEventListener("click", onClick);
     return () => el.removeEventListener("click", onClick);
-  }, [enabled, camera, gl, scene, raycaster, room, tracerRef, onShoot]);
+  }, [enabled, camera, gl, raycaster, room, weapon, motionRef, onShoot]);
 
   return null;
 }
 
-function Tracer({ tracerRef }: { tracerRef: TracerRef }) {
-  const geometry = useMemo(() => {
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
-    return geom;
+function Tracers({ shotsRef }: { shotsRef: ShotsRef }) {
+  const tracersRef = useRef<TracerState[]>([]);
+  const pool = useMemo(() => {
+    const group = new THREE.Group();
+    for (let i = 0; i < MAX_TRACERS; i++) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3));
+      const material = new THREE.LineBasicMaterial({ transparent: true });
+      const line = new THREE.Line(geometry, material);
+      line.visible = false;
+      line.frustumCulled = false;
+      group.add(line);
+    }
+    return group;
   }, []);
-  const material = useMemo(
-    () => new THREE.LineBasicMaterial({ color: TRACER_COLOR, transparent: true }),
-    [],
-  );
-  const line = useMemo(() => {
-    const l = new THREE.Line(geometry, material);
-    l.visible = false;
-    l.frustumCulled = false;
-    return l;
-  }, [geometry, material]);
 
   useFrame((_, delta) => {
-    const tracer = tracerRef.current;
-    if (!tracer) {
-      line.visible = false;
-      return;
+    const tracers = tracersRef.current;
+    for (const shot of shotsRef.current) {
+      const color = WEAPONS[shot.weapon].tracerColor;
+      for (const end of shot.ends) {
+        tracers.push({
+          ox: shot.origin.x,
+          oy: shot.origin.y,
+          oz: shot.origin.z,
+          ex: end.x,
+          ey: end.y,
+          ez: end.z,
+          ttl: TRACER_TTL,
+          color,
+        });
+      }
     }
-    tracer.ttl -= delta;
-    if (tracer.ttl <= 0) {
-      tracerRef.current = null;
-      line.visible = false;
-      return;
+    shotsRef.current.length = 0;
+    for (let i = tracers.length - 1; i >= 0; i--) {
+      const tracer = tracers[i];
+      if (!tracer) continue;
+      tracer.ttl -= delta;
+      if (tracer.ttl <= 0) tracers.splice(i, 1);
     }
-    const position = geometry.getAttribute("position") as THREE.BufferAttribute;
-    position.setXYZ(0, tracer.ox, tracer.oy, tracer.oz);
-    position.setXYZ(1, tracer.ex, tracer.ey, tracer.ez);
-    position.needsUpdate = true;
-    material.opacity = tracer.ttl / TRACER_TTL;
-    line.visible = true;
+    if (tracers.length > MAX_TRACERS) tracers.splice(0, tracers.length - MAX_TRACERS);
+    pool.children.forEach((child, i) => {
+      const line = child as THREE.Line;
+      const tracer = tracers[i];
+      if (!tracer) {
+        line.visible = false;
+        return;
+      }
+      const position = (line.geometry as THREE.BufferGeometry).getAttribute(
+        "position",
+      ) as THREE.BufferAttribute;
+      position.setXYZ(0, tracer.ox, tracer.oy, tracer.oz);
+      position.setXYZ(1, tracer.ex, tracer.ey, tracer.ez);
+      position.needsUpdate = true;
+      const material = line.material as THREE.LineBasicMaterial;
+      material.color.set(tracer.color);
+      material.opacity = tracer.ttl / TRACER_TTL;
+      line.visible = true;
+    });
   });
 
-  return <primitive object={line} />;
+  return <primitive object={pool} />;
 }
 
 function geometryFor(part: PrimitiveSpec): ReactElement {
@@ -640,16 +734,58 @@ function WeaponModel({ url, scale }: { url: string; scale: number }) {
   return <primitive object={object} scale={scale} />;
 }
 
-function HunterViewmodel({ enabled }: { enabled: boolean }) {
+function HunterViewmodel({
+  enabled,
+  weapon,
+  motionRef,
+}: {
+  enabled: boolean;
+  weapon: WeaponId;
+  motionRef: LocalMotionRef;
+}) {
   const camera = useThree((state) => state.camera);
+  const groupRef = useRef<THREE.Group>(null);
+  const bobPhase = useRef(0);
+  const sway = useRef({ x: 0, y: 0, prevYaw: 0, prevPitch: 0 });
+
+  useFrame((_, delta) => {
+    const group = groupRef.current;
+    if (!group) return;
+    const motion = motionRef.current;
+    if (motion.grounded) bobPhase.current += motion.speed * delta * WEAPON_BOB_FREQ;
+    const bobAmount = Math.min(motion.speed / (MOVE_SPEED * RUN_MULTIPLIER_HUNTER), 1);
+    const s = sway.current;
+    const dYaw = motion.yaw - s.prevYaw;
+    const dPitch = motion.pitch - s.prevPitch;
+    s.prevYaw = motion.yaw;
+    s.prevPitch = motion.pitch;
+    const settle = WEAPON_SWAY_DAMP ** delta;
+    s.x = THREE.MathUtils.clamp(
+      (s.x + dYaw * WEAPON_SWAY) * settle,
+      -WEAPON_SWAY_MAX,
+      WEAPON_SWAY_MAX,
+    );
+    s.y = THREE.MathUtils.clamp(
+      (s.y - dPitch * WEAPON_SWAY) * settle,
+      -WEAPON_SWAY_MAX,
+      WEAPON_SWAY_MAX,
+    );
+    group.position.set(
+      WEAPON_OFFSET[0] + Math.sin(bobPhase.current) * WEAPON_BOB_X * bobAmount + s.x,
+      WEAPON_OFFSET[1] + Math.sin(bobPhase.current * 2) * WEAPON_BOB_Y * bobAmount + s.y,
+      WEAPON_OFFSET[2] + motion.recoil * WEAPON_KICK_Z,
+    );
+    group.rotation.x = motion.recoil * WEAPON_KICK_ROT;
+  });
+
   if (!enabled) {
     return null;
   }
   return (
     <primitive object={camera}>
-      <group position={WEAPON_OFFSET} rotation={WEAPON_ROTATION}>
+      <group ref={groupRef} position={WEAPON_OFFSET} rotation={WEAPON_ROTATION}>
         <Suspense fallback={null}>
-          <WeaponModel url={BLASTER_MODEL} scale={WEAPON_SCALE} />
+          <WeaponModel url={WEAPONS[weapon].model} scale={WEAPON_SCALE} />
         </Suspense>
       </group>
     </primitive>
@@ -889,6 +1025,7 @@ interface LocalPlayerProps {
   walls: Wall[];
   avatar: string;
   playerPos: PlayerPosRef;
+  motionRef: LocalMotionRef;
 }
 
 function LocalPlayer({
@@ -908,6 +1045,7 @@ function LocalPlayer({
   walls,
   avatar,
   playerPos,
+  motionRef,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!chatOpen);
@@ -920,8 +1058,10 @@ function LocalPlayer({
   const heading = useRef(0);
   const sendAccumMs = useRef(0);
   const stepAccum = useRef(0);
+  const velocity = useMemo(() => new THREE.Vector3(), []);
   const velocityY = useRef(0);
   const jumpHeld = useRef(false);
+  const jumpBufferMs = useRef(0);
   const forwardVec = useMemo(() => new THREE.Vector3(), []);
   const rightVec = useMemo(() => new THREE.Vector3(), []);
   const moveVec = useMemo(() => new THREE.Vector3(), []);
@@ -950,6 +1090,9 @@ function LocalPlayer({
     forwardVec.set(-Math.sin(yaw), 0, -Math.cos(yaw));
     rightVec.crossVectors(forwardVec, UP);
 
+    let horizSpeed = 0;
+    let sprinting = false;
+
     if (!frozen) {
       const k = keys.current;
       const forwardInput = (k.forward ? 1 : 0) - (k.back ? 1 : 0);
@@ -958,17 +1101,30 @@ function LocalPlayer({
         .set(0, 0, 0)
         .addScaledVector(forwardVec, forwardInput)
         .addScaledVector(rightVec, strafeInput);
+      const hasInput = moveVec.lengthSq() > 0;
+      if (hasInput) moveVec.normalize();
 
       const runMultiplier = role === "hunter" ? RUN_MULTIPLIER_HUNTER : RUN_MULTIPLIER_PROP;
       const speed = k.run ? MOVE_SPEED * runMultiplier : MOVE_SPEED;
+      const grounded = pos.y <= 0;
+      const rate = (hasInput ? MOVE_ACCEL : MOVE_DECEL) * (grounded ? 1 : AIR_CONTROL) * delta;
+      const dvx = moveVec.x * speed - velocity.x;
+      const dvz = moveVec.z * speed - velocity.z;
+      const dvLen = Math.hypot(dvx, dvz);
+      const blend = dvLen > rate ? rate / dvLen : 1;
+      velocity.x += dvx * blend;
+      velocity.z += dvz * blend;
+      pos.x += velocity.x * delta;
+      pos.z += velocity.z * delta;
 
-      if (moveVec.lengthSq() > 0) {
-        moveVec.normalize();
-        pos.x += moveVec.x * speed * delta;
-        pos.z += moveVec.z * speed * delta;
-        heading.current = Math.atan2(moveVec.x, moveVec.z);
-        if (pos.y <= 0) {
-          stepAccum.current += speed * delta;
+      horizSpeed = Math.hypot(velocity.x, velocity.z);
+      sprinting = k.run && horizSpeed > MOVE_SPEED;
+      if (horizSpeed > HEADING_MIN_SPEED) {
+        const target = Math.atan2(velocity.x, velocity.z);
+        const turn = ((target - heading.current + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+        heading.current += turn * (1 - HEADING_DAMP ** delta);
+        if (grounded) {
+          stepAccum.current += horizSpeed * delta;
           if (stepAccum.current >= STEP_DISTANCE) {
             stepAccum.current = 0;
             playStep();
@@ -976,22 +1132,36 @@ function LocalPlayer({
         }
       }
 
-      if (role === "hunter") {
-        if (k.jump && !jumpHeld.current && pos.y <= 0 && velocityY.current <= 0) {
-          velocityY.current = JUMP_SPEED;
+      if (k.jump && !jumpHeld.current) jumpBufferMs.current = JUMP_BUFFER_MS;
+      if (jumpBufferMs.current > 0 && grounded && velocityY.current <= 0) {
+        jumpBufferMs.current = 0;
+        velocityY.current = JUMP_SPEED;
+        playJump();
+      } else {
+        jumpBufferMs.current = Math.max(0, jumpBufferMs.current - delta * 1000);
+      }
+      let gravity = GRAVITY;
+      if (velocityY.current > 0 && !k.jump) gravity *= JUMP_RELEASE_GRAVITY_MULT;
+      else if (velocityY.current < 0) gravity *= FALL_GRAVITY_MULT;
+      velocityY.current -= gravity * delta;
+      const airborne = pos.y > 0;
+      pos.y += velocityY.current * delta;
+      if (pos.y <= 0) {
+        if (airborne) {
+          const impact = Math.min(1, -velocityY.current / (JUMP_SPEED * 2));
+          motionRef.current.landing = Math.max(motionRef.current.landing, impact);
+          playLand(impact);
         }
-        velocityY.current -= GRAVITY * delta;
-        pos.y += velocityY.current * delta;
-        if (pos.y <= 0) {
-          pos.y = 0;
-          velocityY.current = 0;
-        }
+        pos.y = 0;
+        velocityY.current = 0;
       }
       jumpHeld.current = k.jump;
 
       const { min, max } = map.bounds;
       pos.x = THREE.MathUtils.clamp(pos.x, min.x + PLAYER_RADIUS, max.x - PLAYER_RADIUS);
       pos.z = THREE.MathUtils.clamp(pos.z, min.z + PLAYER_RADIUS, max.z - PLAYER_RADIUS);
+    } else {
+      velocity.set(0, 0, 0);
     }
 
     if (alive) {
@@ -1056,12 +1226,30 @@ function LocalPlayer({
       applyTauntPulse(group, tauntPulseRef, id, delta);
     }
 
+    const motion = motionRef.current;
+    motion.recoil *= RECOIL_DAMP ** delta;
+    motion.landing *= LAND_DAMP ** delta;
+    motion.speed = horizSpeed;
+    motion.sprinting = sprinting;
+    motion.grounded = pos.y <= 0;
+    motion.yaw = yaw;
+    motion.pitch = pitch;
+
+    const perspective = camera as THREE.PerspectiveCamera;
+    const targetFov = GAME_FOV + (sprinting ? SPRINT_FOV_ADD : 0);
+    if (Math.abs(perspective.fov - targetFov) > FOV_EPSILON) {
+      perspective.fov += (targetFov - perspective.fov) * (1 - FOV_DAMP ** delta);
+      perspective.updateProjectionMatrix();
+    }
+
     if (role === "hunter") {
-      const cosPitch = Math.cos(pitch);
-      camera.position.set(pos.x, pos.y + EYE_HEIGHT, pos.z);
+      const aimPitch = pitch - motion.recoil * RECOIL_MAX_PITCH;
+      const cosPitch = Math.cos(aimPitch);
+      const eyeY = pos.y + EYE_HEIGHT - motion.landing * LAND_DIP_Y;
+      camera.position.set(pos.x, eyeY, pos.z);
       camera.lookAt(
         pos.x - Math.sin(yaw) * cosPitch,
-        pos.y + EYE_HEIGHT - Math.sin(pitch),
+        eyeY - Math.sin(aimPitch),
         pos.z - Math.cos(yaw) * cosPitch,
       );
     } else {
@@ -1092,7 +1280,7 @@ function LocalPlayer({
 
       const pivotY = pos.y + CAMERA_TARGET_Y;
       camera.position.set(pos.x + dirX * d, pivotY + dirY * d, pos.z + dirZ * d);
-      camera.lookAt(pos.x, CAMERA_TARGET_Y, pos.z);
+      camera.lookAt(pos.x, pivotY, pos.z);
     }
 
     sendAccumMs.current += delta * 1000;
@@ -1137,6 +1325,7 @@ interface RemotePlayerProps {
   propType: string;
   avatar: string;
   tauntPulseRef: TauntPulseRef;
+  localPos: PlayerPosRef;
 }
 
 function RemotePlayer({
@@ -1147,8 +1336,11 @@ function RemotePlayer({
   propType,
   avatar,
   tauntPulseRef,
+  localPos,
 }: RemotePlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const stepAccum = useRef(0);
+  const lastStepPos = useRef<{ x: number; z: number } | null>(null);
 
   const nameplateY = useMemo(() => {
     if (role === "prop" && propType) {
@@ -1171,6 +1363,28 @@ function RemotePlayer({
     group.position.z += (view.z - group.position.z) * t;
     group.rotation.y = view.rot;
     applyTauntPulse(group, tauntPulseRef, view.id, delta);
+
+    if (role === "hunter") {
+      const last = lastStepPos.current;
+      if (last) {
+        const moved = Math.hypot(group.position.x - last.x, group.position.z - last.z);
+        if (moved < REMOTE_STEP_TELEPORT_SKIP) {
+          stepAccum.current += moved;
+          if (stepAccum.current >= STEP_DISTANCE) {
+            stepAccum.current = 0;
+            const dist = Math.hypot(
+              group.position.x - localPos.current.x,
+              group.position.z - localPos.current.z,
+            );
+            playStep(REMOTE_STEP_VOLUME * Math.max(0, 1 - dist / REMOTE_STEP_MAX_DISTANCE));
+          }
+        }
+        last.x = group.position.x;
+        last.z = group.position.z;
+      } else {
+        lastStepPos.current = { x: group.position.x, z: group.position.z };
+      }
+    }
   });
 
   if (!view) {

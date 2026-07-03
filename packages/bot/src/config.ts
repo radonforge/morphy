@@ -1,4 +1,4 @@
-import { DEFAULT_PORT, SHOOT_RANGE } from "@webhunt/shared";
+import { DEFAULT_PORT, DEFAULT_WEAPON, SHOOT_RANGE, WEAPONS } from "@webhunt/shared";
 
 export const CONNECT_TIMEOUT_MS = 8_000;
 
@@ -23,7 +23,8 @@ export const FACING_CONE_COS = Math.cos((35 * Math.PI) / 180);
 export const FREEZE_RADIUS = 20;
 
 export const ENGAGE_RANGE_MIN = 14;
-export const ENGAGE_RANGE_MAX = SHOOT_RANGE;
+export const ENGAGE_RANGE_MAX = WEAPONS[DEFAULT_WEAPON].range;
+export const BOT_FIRE_COOLDOWN_MS = WEAPONS[DEFAULT_WEAPON].cooldownMs;
 export const REACTION_MS_MAX = 950;
 export const REACTION_MS_MIN = 180;
 

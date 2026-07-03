@@ -5,7 +5,7 @@ import {
   type BoxCollider,
   computePropBounds,
   DEFAULT_MAP_ID,
-  FIRE_COOLDOWN_MS,
+  DEFAULT_WEAPON,
   generatePartyCode,
   HIDE_DURATION_MS,
   HUNTER_MAX_HP,
@@ -13,6 +13,7 @@ import {
   type InputMessage,
   isAvatarId,
   isMapId,
+  isWeaponId,
   type KillEvent,
   MAX_CHAT_LENGTH,
   MAX_NAME_LENGTH,
@@ -27,7 +28,9 @@ import {
   MSG_READY,
   MSG_SET_MAP,
   MSG_SET_PROFILE,
+  MSG_SET_WEAPON,
   MSG_SHOOT,
+  MSG_SHOT_FIRED,
   MSG_SHOT_RESULT,
   MSG_START,
   MSG_TAUNT,
@@ -40,15 +43,17 @@ import {
   ROUND_END_MS,
   type Role,
   randomAvatarId,
-  SHOOT_RANGE,
+  SHOOT_ORIGIN_SLACK,
   type ShootMessage,
+  type ShotFiredEvent,
   START_COUNTDOWN_MS,
   TAUNT_INTERVAL_MS,
   UNTRANSFORMED_PROP_HEIGHT,
   UNTRANSFORMED_PROP_RADIUS,
   type Vec3,
+  WEAPONS,
+  type WeaponId,
   type Winner,
-  WRONG_SHOT_DAMAGE,
 } from "@webhunt/shared";
 import { buildMap } from "../maps";
 
@@ -72,6 +77,7 @@ export class PlayerState extends Schema {
   @type("string") propType = "";
   @type("boolean") ready = false;
   @type("string") avatar = "";
+  @type("string") weapon: WeaponId = DEFAULT_WEAPON;
 }
 
 export class RoomState extends Schema {
@@ -158,6 +164,12 @@ function parseSetMap(payload: unknown): MapId | null {
   return isMapId(map) ? map : null;
 }
 
+function parseWeapon(payload: unknown): WeaponId | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const weapon = (payload as Record<string, unknown>).weapon;
+  return isWeaponId(weapon) ? weapon : null;
+}
+
 function parseProfile(payload: unknown): { name: string; avatar: AvatarId } | null {
   if (typeof payload !== "object" || payload === null) return null;
   const p = payload as Record<string, unknown>;
@@ -204,12 +216,14 @@ function rayAabb(
 
 /**
  * Distance along the ray to the prop's hit box: its bounding cylinder squared
- * off in X/Z and spanning [yMin, yMax] in Y, centered at (cx, cz).
+ * off in X/Z and spanning [yMin, yMax] in Y, centered at (cx, cz) and lifted
+ * by the player's current height `cy` so airborne props stay hittable.
  */
 function rayHitsBox(
   origin: { x: number; y: number; z: number },
   dir: { x: number; y: number; z: number },
   cx: number,
+  cy: number,
   cz: number,
   bounds: PropBounds,
   maxDist: number,
@@ -217,8 +231,8 @@ function rayHitsBox(
   return rayAabb(
     origin,
     dir,
-    [cx - bounds.radius, bounds.yMin, cz - bounds.radius],
-    [cx + bounds.radius, bounds.yMax, cz + bounds.radius],
+    [cx - bounds.radius, cy + bounds.yMin, cz - bounds.radius],
+    [cx + bounds.radius, cy + bounds.yMax, cz + bounds.radius],
     maxDist,
   );
 }
@@ -228,6 +242,26 @@ function colliderAabb(c: BoxCollider): { min: Vec3Tuple; max: Vec3Tuple } {
     min: [c.position.x - c.size.x / 2, c.position.y - c.size.y / 2, c.position.z - c.size.z / 2],
     max: [c.position.x + c.size.x / 2, c.position.y + c.size.y / 2, c.position.z + c.size.z / 2],
   };
+}
+
+/** Random direction within a cone of half-angle `spreadRad` around unit vector `dir`. */
+function jitterDir(dir: Vec3, spreadRad: number): Vec3 {
+  if (spreadRad <= 0) return dir;
+  const pivot = Math.abs(dir.y) > 0.99 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  const ux = dir.y * pivot.z - dir.z * pivot.y;
+  const uy = dir.z * pivot.x - dir.x * pivot.z;
+  const uz = dir.x * pivot.y - dir.y * pivot.x;
+  const uLen = Math.hypot(ux, uy, uz);
+  const vx = uy * dir.z - uz * dir.y;
+  const vy = uz * dir.x - ux * dir.z;
+  const vz = ux * dir.y - uy * dir.x;
+  const spread = Math.tan(spreadRad * Math.sqrt(Math.random()));
+  const phi = Math.random() * Math.PI * 2;
+  const ox = ((ux * Math.cos(phi) + vx * Math.sin(phi)) / uLen) * spread;
+  const oy = ((uy * Math.cos(phi) + vy * Math.sin(phi)) / uLen) * spread;
+  const oz = ((uz * Math.cos(phi) + vz * Math.sin(phi)) / uLen) * spread;
+  const len = Math.hypot(dir.x + ox, dir.y + oy, dir.z + oz);
+  return { x: (dir.x + ox) / len, y: (dir.y + oy) / len, z: (dir.z + oz) / len };
 }
 
 function nextSeed(): number {
@@ -242,7 +276,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   private propBounds = new Map<string, PropBounds>();
   private phaseTimer?: ClearableTimer;
   private tauntTimer?: ClearableTimer;
-  private lastShotAt = new Map<string, number>();
+  private nextShotAt = new Map<string, number>();
 
   async onCreate(options: unknown): Promise<void> {
     const requested = (options as { map?: unknown } | undefined)?.map;
@@ -263,6 +297,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     this.onMessage(MSG_START, (client) => this.handleStart(client));
     this.onMessage(MSG_SET_MAP, (client, payload) => this.handleSetMap(client, payload));
     this.onMessage(MSG_SET_PROFILE, (client, payload) => this.handleSetProfile(client, payload));
+    this.onMessage(MSG_SET_WEAPON, (client, payload) => this.handleSetWeapon(client, payload));
   }
 
   private async assignPartyCode(): Promise<void> {
@@ -312,7 +347,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   onLeave(client: Client): void {
     this.state.players.delete(client.sessionId);
-    this.lastShotAt.delete(client.sessionId);
+    this.nextShotAt.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
       this.state.hostId = this.state.players.keys().next().value ?? "";
     }
@@ -413,58 +448,117 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     player.propType = propType;
   }
 
-  private handleShoot(client: Client, payload: unknown): void {
+  private handleSetWeapon(client: Client, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
-    if (!player || player.role !== "hunter" || !player.alive) return;
-    if (this.state.phase !== "hunting") return;
+    if (!player || !player.alive) return;
+    const weapon = parseWeapon(payload);
+    if (!weapon || weapon === player.weapon) return;
+    player.weapon = weapon;
+  }
 
-    const now = Date.now();
-    if (now - (this.lastShotAt.get(client.sessionId) ?? 0) < FIRE_COOLDOWN_MS) return;
-    this.lastShotAt.set(client.sessionId, now);
-
-    const ray = parseShoot(payload);
-    if (!ray) return;
-    const len = Math.hypot(ray.dir.x, ray.dir.y, ray.dir.z);
-    if (len === 0) return;
-    const dir = { x: ray.dir.x / len, y: ray.dir.y / len, z: ray.dir.z / len };
-
-    let wallDist = SHOOT_RANGE;
+  private resolvePellet(
+    shooter: PlayerState,
+    origin: Vec3,
+    dir: Vec3,
+    range: number,
+    captured: Set<PlayerState>,
+  ): { end: Vec3; target: PlayerState | undefined } {
+    let wallDist = range;
     for (const collider of this.map.colliders) {
       if (collider.position.y <= 0) continue;
       const { min, max } = colliderAabb(collider);
-      const t = rayAabb(ray.origin, dir, min, max, SHOOT_RANGE);
+      const t = rayAabb(origin, dir, min, max, range);
       if (t !== null && t < wallDist) wallDist = t;
     }
 
     let bestT = Infinity;
     let target: PlayerState | undefined;
     this.state.players.forEach((candidate) => {
-      if (candidate === player || candidate.role !== "prop" || !candidate.alive) return;
+      if (candidate === shooter || candidate.role !== "prop" || !candidate.alive) return;
+      if (captured.has(candidate)) return;
       const bounds =
         (candidate.propType ? this.propBounds.get(candidate.propType) : undefined) ??
         UNTRANSFORMED_PROP_BOUNDS;
-      const t = rayHitsBox(ray.origin, dir, candidate.x, candidate.z, bounds, SHOOT_RANGE);
+      const t = rayHitsBox(origin, dir, candidate.x, candidate.y, candidate.z, bounds, range);
       if (t !== null && t < wallDist && t < bestT) {
         bestT = t;
         target = candidate;
       }
     });
 
-    if (target) {
-      target.role = "hunter";
-      target.alive = true;
-      target.hp = HUNTER_MAX_HP;
-      target.propType = "";
-      player.kills += 1;
-      this.broadcast(MSG_KILL, {
-        byId: player.id,
-        byName: player.name,
-        victimId: target.id,
-        victimName: target.name,
-        reason: "converted",
-      } satisfies KillEvent);
+    const reach = target ? bestT : wallDist;
+    return {
+      end: {
+        x: origin.x + dir.x * reach,
+        y: origin.y + dir.y * reach,
+        z: origin.z + dir.z * reach,
+      },
+      target,
+    };
+  }
+
+  private handleShoot(client: Client, payload: unknown): void {
+    const player = this.state.players.get(client.sessionId);
+    if (!player || player.role !== "hunter" || !player.alive) return;
+    if (this.state.phase !== "hunting") return;
+
+    const weapon = WEAPONS[player.weapon];
+
+    const now = Date.now();
+    if (now < (this.nextShotAt.get(client.sessionId) ?? 0)) return;
+
+    const ray = parseShoot(payload);
+    if (!ray) return;
+    if (
+      Math.hypot(ray.origin.x - player.x, ray.origin.z - player.z) > SHOOT_ORIGIN_SLACK ||
+      Math.abs(ray.origin.y - player.y) > SHOOT_ORIGIN_SLACK
+    ) {
+      return;
+    }
+    const len = Math.hypot(ray.dir.x, ray.dir.y, ray.dir.z);
+    if (len === 0) return;
+    const dir = { x: ray.dir.x / len, y: ray.dir.y / len, z: ray.dir.z / len };
+    this.nextShotAt.set(client.sessionId, now + weapon.cooldownMs);
+
+    const ends: Vec3[] = [];
+    const captured = new Set<PlayerState>();
+    for (let pellet = 0; pellet < weapon.pellets; pellet++) {
+      const pelletDir = jitterDir(dir, weapon.spreadRad);
+      const { end, target } = this.resolvePellet(
+        player,
+        ray.origin,
+        pelletDir,
+        weapon.range,
+        captured,
+      );
+      ends.push(end);
+      if (target) captured.add(target);
+    }
+
+    this.broadcast(MSG_SHOT_FIRED, {
+      shooterId: player.id,
+      weapon: weapon.id,
+      origin: ray.origin,
+      ends,
+    } satisfies ShotFiredEvent);
+
+    if (captured.size > 0) {
+      for (const target of captured) {
+        target.role = "hunter";
+        target.alive = true;
+        target.hp = HUNTER_MAX_HP;
+        target.propType = "";
+        player.kills += 1;
+        this.broadcast(MSG_KILL, {
+          byId: player.id,
+          byName: player.name,
+          victimId: target.id,
+          victimName: target.name,
+          reason: "converted",
+        } satisfies KillEvent);
+      }
     } else {
-      player.hp = Math.max(0, player.hp - WRONG_SHOT_DAMAGE);
+      player.hp = Math.max(0, player.hp - weapon.missDamage);
       if (player.hp === 0) {
         player.alive = false;
         this.broadcast(MSG_KILL, {
@@ -476,7 +570,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
         } satisfies KillEvent);
       }
     }
-    client.send(MSG_SHOT_RESULT, { hit: target !== undefined });
+    client.send(MSG_SHOT_RESULT, { hit: captured.size > 0 });
     this.checkRoundEnd();
   }
 

@@ -1,8 +1,10 @@
 import { Callbacks } from "@colyseus/sdk";
 import { Canvas } from "@react-three/fiber";
 import {
+  DEFAULT_WEAPON,
   HIDE_DURATION_MS,
   HUNTER_MAX_HP,
+  isWeaponId,
   type KillEvent,
   MAX_CHAT_LENGTH,
   type MapDefinition,
@@ -11,6 +13,8 @@ import {
   MSG_KILL,
   MSG_MAP,
   MSG_READY,
+  MSG_SET_WEAPON,
+  MSG_SHOT_FIRED,
   MSG_SHOT_RESULT,
   MSG_START,
   MSG_TAUNT,
@@ -21,6 +25,9 @@ import {
   ROUND_END_MS,
   type Role,
   START_COUNTDOWN_MS,
+  WEAPON_IDS,
+  WEAPONS,
+  type WeaponId,
   type Winner,
 } from "@webhunt/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -34,16 +41,26 @@ import {
   playRoundEnd,
   playRoundStart,
   playTaunt,
+  playWeaponShot,
   startAmbient,
   stopAmbient,
   toggleMuted,
 } from "./audio";
-import { Scene, TAUNT_PULSE_SECONDS } from "./Scene";
-import type { MetaMap, PlayerMeta, RemotePlayerView, TauntPulseRef, TeleportRef } from "./types";
+import { GAME_FOV, Scene, TAUNT_PULSE_SECONDS } from "./Scene";
+import type {
+  MetaMap,
+  PlayerMeta,
+  RemotePlayerView,
+  ShotsRef,
+  TauntPulseRef,
+  TeleportRef,
+} from "./types";
 
 const STATE_POLL_MS = 200;
 const COUNTDOWN_TICK_MS = 250;
 const TAUNT_MAX_DISTANCE = 40;
+const SHOT_SOUND_MAX_DISTANCE = 60;
+const REMOTE_SHOT_VOLUME = 0.7;
 const CHAT_HISTORY = 6;
 const SHOT_FX_MS = 220;
 const MUZZLE_MS = 60;
@@ -321,6 +338,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   const playersRef = useRef<Map<string, RemotePlayerView>>(new Map());
   const teleportRef = useRef<{ x: number; z: number } | null>(null) as TeleportRef;
   const tauntPulseRef = useRef<Map<string, number>>(new Map()) as TauntPulseRef;
+  const shotsRef = useRef([]) as ShotsRef;
   const msgSeq = useRef(0);
   const chatOpenRef = useRef(false);
   const fxSeq = useRef(0);
@@ -342,11 +360,19 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   const [muzzle, setMuzzle] = useState<number | null>(null);
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
   const [muted, setMuted] = useState(() => isMuted());
+  const [weapon, setWeapon] = useState<WeaponId>(DEFAULT_WEAPON);
   const prevPhaseRef = useRef<Phase>("lobby");
 
   chatOpenRef.current = chatOpen;
 
   const onShoot = useCallback(() => setMuzzle(muzzleSeq.current++), []);
+  const pickWeapon = useCallback(
+    (id: WeaponId) => {
+      setWeapon(id);
+      room.send(MSG_SET_WEAPON, { weapon: id });
+    },
+    [room],
+  );
 
   useEffect(() => {
     const callbacks = Callbacks.get(room);
@@ -389,6 +415,44 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           ? Math.max(0, 1 - Math.hypot(local.x - m.x, local.z - m.z) / TAUNT_MAX_DISTANCE)
           : 0.7;
         playTaunt(volume);
+      }),
+    );
+
+    unsubscribers.push(
+      room.onMessage(MSG_SHOT_FIRED, (message: unknown) => {
+        if (typeof message !== "object" || message === null) return;
+        const m = message as Record<string, unknown>;
+        const origin = m.origin as Record<string, unknown> | undefined;
+        if (
+          !origin ||
+          !isWeaponId(m.weapon) ||
+          !isFiniteNumber(origin.x) ||
+          !isFiniteNumber(origin.y) ||
+          !isFiniteNumber(origin.z) ||
+          !Array.isArray(m.ends)
+        ) {
+          return;
+        }
+        const ends: { x: number; y: number; z: number }[] = [];
+        for (const raw of m.ends) {
+          const end = raw as Record<string, unknown>;
+          if (!isFiniteNumber(end.x) || !isFiniteNumber(end.y) || !isFiniteNumber(end.z)) return;
+          ends.push({ x: end.x, y: end.y, z: end.z });
+        }
+        shotsRef.current.push({
+          weapon: m.weapon,
+          origin: { x: origin.x, y: origin.y, z: origin.z },
+          ends,
+        });
+        if (m.shooterId === sessionId) return;
+        const local = playersRef.current.get(sessionId);
+        const volume = local
+          ? Math.max(
+              0,
+              1 - Math.hypot(local.x - origin.x, local.z - origin.z) / SHOT_SOUND_MAX_DISTANCE,
+            )
+          : 1;
+        playWeaponShot(m.weapon, volume * REMOTE_SHOT_VOLUME);
       }),
     );
 
@@ -448,7 +512,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
       for (const unsubscribe of unsubscribers) unsubscribe();
       playersRef.current.clear();
     };
-  }, [room, teleportRef, tauntPulseRef, sessionId]);
+  }, [room, teleportRef, tauntPulseRef, shotsRef, sessionId]);
 
   useEffect(() => {
     if (!shotFx) return;
@@ -473,11 +537,15 @@ export function Game({ connection, onBackToMenu }: GameProps) {
         setChatOpen(true);
       } else if (e.code === "KeyM") {
         setMuted(toggleMuted());
+      } else {
+        const slot = ["Digit1", "Digit2", "Digit3"].indexOf(e.code);
+        const id = slot >= 0 ? WEAPON_IDS[slot] : undefined;
+        if (id) pickWeapon(id);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [pickWeapon]);
 
   useEffect(() => {
     startAmbient();
@@ -589,12 +657,12 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   const hint = !localAlive
     ? "Eliminated — spectating"
     : canShoot
-      ? "Click to shoot · Shift run · Space jump · misses cost HP · T chat · Tab standings · M audio"
+      ? "Click to shoot · 1/2/3 weapon · Shift run · Space jump · misses cost HP · T chat · Tab standings"
       : canTransform
-        ? "Look at an object and press E · Shift run · T chat · Tab standings · M audio"
+        ? "Look at an object and press E · Shift run · Space jump · T chat · Tab standings"
         : localRole === "hunter" && phase === "hiding"
           ? "You're blinded… wait for the hunt"
-          : "WASD move · Shift run · click+mouse to look · T chat · Tab standings · M audio";
+          : "WASD move · Shift run · Space jump · click+mouse to look · T chat · Tab standings";
 
   if (!map) {
     return (
@@ -608,7 +676,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
 
   return (
     <>
-      <Canvas dpr={[1, 1.5]} shadows camera={{ position: [0, 12, 18], fov: 55 }}>
+      <Canvas dpr={[1, 1.5]} shadows camera={{ position: [0, 12, 18], fov: GAME_FOV }}>
         <Scene
           key={map.id}
           room={room}
@@ -620,6 +688,8 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           phase={phase}
           teleportRef={teleportRef}
           tauntPulseRef={tauntPulseRef}
+          shotsRef={shotsRef}
+          weapon={weapon}
           chatOpen={chatOpen}
           onShoot={onShoot}
         />
@@ -711,6 +781,24 @@ export function Game({ connection, onBackToMenu }: GameProps) {
             The hunt begins
             <Countdown endsAt={phaseEndsAt} />
           </div>
+          <div className="weapon-picker">
+            {WEAPON_IDS.map((id, index) => {
+              const spec = WEAPONS[id];
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`weapon-card${id === weapon ? " is-active" : ""}`}
+                  onClick={() => pickWeapon(id)}
+                >
+                  <span className="weapon-slot">{index + 1}</span>
+                  <span className="weapon-name">{spec.label}</span>
+                  <span className="weapon-blurb">{spec.blurb}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="weapon-picker-hint">Press 1 / 2 / 3 to pick your weapon</div>
         </div>
       )}
 

@@ -1,6 +1,5 @@
 import {
   computePropBounds,
-  FIRE_COOLDOWN_MS,
   type Intent,
   type MapDefinition,
   MOVE_SPEED,
@@ -30,6 +29,7 @@ import {
   ARRIVE_EPSILON,
   BOT_BODY_RADIUS,
   BOT_EYE_HEIGHT,
+  BOT_FIRE_COOLDOWN_MS,
   BOT_HEARING_RADIUS,
   BOT_VISION_RANGE,
   DOORWAY_TILE_MARKER,
@@ -231,7 +231,7 @@ export class Reflex {
       z: this.posZ,
       rot: this.rot,
       propType: self.propType,
-      canShootNow: now - this.lastShotAt >= FIRE_COOLDOWN_MS,
+      canShootNow: now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS,
     };
 
     const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };
@@ -528,7 +528,7 @@ export class Reflex {
       }
       const reactionMs = lerp(REACTION_MS_MAX, REACTION_MS_MIN, this.difficulty);
       const ready = now - this.aimAcquiredAt >= reactionMs;
-      if (ready && now - this.lastShotAt >= FIRE_COOLDOWN_MS) {
+      if (ready && now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS) {
         this.lastShotAt = now;
         return { origin, dir };
       }

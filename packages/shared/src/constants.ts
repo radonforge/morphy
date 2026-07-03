@@ -14,17 +14,22 @@ export const ROUND_END_MS = 8_000;
 export const TAUNT_INTERVAL_MS = 30_000;
 
 export const HUNTER_MAX_HP = 100;
-export const WRONG_SHOT_DAMAGE = 20;
-export const FIRE_COOLDOWN_MS = 800;
 export const SHOOT_RANGE = 50;
+export const SHOOT_ORIGIN_SLACK = 3;
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 
 export const MOVE_SPEED = 5;
 export const RUN_MULTIPLIER_HUNTER = 1.7;
 export const RUN_MULTIPLIER_PROP = 1.5;
+export const MOVE_ACCEL = 40;
+export const MOVE_DECEL = 50;
+export const AIR_CONTROL = 0.35;
 export const JUMP_SPEED = 6;
 export const GRAVITY = 20;
+export const JUMP_BUFFER_MS = 120;
+export const JUMP_RELEASE_GRAVITY_MULT = 2.4;
+export const FALL_GRAVITY_MULT = 1.35;
 
 export const PATCH_RATE_MS = 50;
 export const INPUT_SEND_RATE_MS = 50;

@@ -1,6 +1,7 @@
 import type { AvatarId } from "./avatars";
 import type { Vec3 } from "./map";
 import type { MapId } from "./maps";
+import type { WeaponId } from "./weapons";
 
 export type Phase = "lobby" | "starting" | "hiding" | "hunting" | "round_end";
 
@@ -11,6 +12,7 @@ export type Winner = "hunters" | "props" | "";
 export const MSG_INPUT = "input";
 export const MSG_TRANSFORM = "transform";
 export const MSG_SHOOT = "shoot";
+export const MSG_SHOT_FIRED = "shot_fired";
 export const MSG_TELEPORT = "teleport";
 export const MSG_TAUNT = "taunt";
 export const MSG_CHAT = "chat";
@@ -21,6 +23,7 @@ export const MSG_KILL = "kill";
 export const MSG_START = "start";
 export const MSG_SET_MAP = "set_map";
 export const MSG_SET_PROFILE = "set_profile";
+export const MSG_SET_WEAPON = "set_weapon";
 
 export type KillReason = "shot" | "self" | "converted";
 
@@ -74,6 +77,24 @@ export interface ChatEvent {
 
 export interface ShotResult {
   hit: boolean;
+}
+
+/**
+ * Broadcast to all clients when a shot resolves. Everyone renders the tracers
+ * (the shooter included — these are the authoritative pellet endpoints); only
+ * non-shooters play the positional shot audio.
+ */
+export interface ShotFiredEvent {
+  shooterId: string;
+  weapon: WeaponId;
+  origin: Vec3;
+  /** One resolved endpoint per pellet. */
+  ends: Vec3[];
+}
+
+/** Hunter request to switch weapon loadout. */
+export interface SetWeaponMessage {
+  weapon: string;
 }
 
 export interface ReadyMessage {

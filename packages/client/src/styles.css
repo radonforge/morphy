@@ -1391,6 +1391,66 @@ canvas {
   color: var(--cyan);
 }
 
+.weapon-picker {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  pointer-events: auto;
+}
+
+.weapon-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 180px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.weapon-card:hover {
+  border-color: var(--cyan);
+}
+
+.weapon-card.is-active {
+  border-color: var(--cyan);
+  background: rgba(53, 224, 255, 0.1);
+  box-shadow: inset 0 0 18px rgba(53, 224, 255, 0.12);
+}
+
+.weapon-slot {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  color: var(--cyan);
+}
+
+.weapon-name {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.weapon-blurb {
+  font-size: 0.78rem;
+  opacity: 0.75;
+  line-height: 1.35;
+}
+
+.weapon-picker-hint {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  opacity: 0.6;
+}
+
 /* ---------- Kill feed ---------- */
 
 .killfeed {
