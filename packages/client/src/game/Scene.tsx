@@ -60,7 +60,7 @@ const BLASTER_MODEL = "/models/blaster/blaster-a.glb";
 const WEAPON_SCALE = 0.32;
 const WEAPON_OFFSET: [number, number, number] = [0.2, -0.22, -0.6];
 const WEAPON_ROTATION: [number, number, number] = [0, Math.PI, 0];
-const NAMEPLATE_HEIGHT = 2.4;
+const NAMEPLATE_GAP = 0.45;
 const NAMEPLATE_FONT_SIZE = 0.34;
 const NAMEPLATE_COLOR = "#eef4ff";
 const NAMEPLATE_OUTLINE_COLOR = "#11161f";
@@ -1112,9 +1112,9 @@ function LocalPlayer({
   );
 }
 
-function AllyNameplate({ name }: { name: string }) {
+function AllyNameplate({ name, y }: { name: string; y: number }) {
   return (
-    <Billboard position={[0, NAMEPLATE_HEIGHT, 0]}>
+    <Billboard position={[0, y, 0]}>
       <Text
         fontSize={NAMEPLATE_FONT_SIZE}
         color={NAMEPLATE_COLOR}
@@ -1150,6 +1150,16 @@ function RemotePlayer({
 }: RemotePlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
 
+  const nameplateY = useMemo(() => {
+    if (role === "prop" && propType) {
+      const def = catalog.get(propType);
+      if (def) {
+        return computePropBounds(def).yMax + NAMEPLATE_GAP;
+      }
+    }
+    return PLAYER_HEAD_Y + NAMEPLATE_GAP;
+  }, [role, propType, catalog]);
+
   useFrame((_, delta) => {
     const group = groupRef.current;
     if (!group || !view) {
@@ -1170,7 +1180,7 @@ function RemotePlayer({
   return (
     <group ref={groupRef}>
       <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
-      {showName ? <AllyNameplate name={view.name} /> : null}
+      {showName ? <AllyNameplate name={view.name} y={nameplateY} /> : null}
     </group>
   );
 }
