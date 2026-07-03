@@ -12,6 +12,7 @@ import {
   MSG_MAP,
   MSG_READY,
   MSG_SHOT_RESULT,
+  MSG_START,
   MSG_TAUNT,
   MSG_TELEPORT,
   type Phase,
@@ -63,12 +64,15 @@ const PHASE_DURATION_MS: Record<Phase, number> = {
 
 interface GameProps {
   connection: Connection;
+  onBackToMenu: () => void;
 }
 
 interface RoomStateView {
   phase: Phase;
   phaseEndsAt: number;
   winner: Winner;
+  hostId: string;
+  isPrivate: boolean;
 }
 
 interface ChatLine {
@@ -312,7 +316,7 @@ function RingTimer({ endsAt, total }: { endsAt: number; total: number }) {
   );
 }
 
-export function Game({ connection }: GameProps) {
+export function Game({ connection, onBackToMenu }: GameProps) {
   const { room, sessionId } = connection;
   const playersRef = useRef<Map<string, RemotePlayerView>>(new Map());
   const teleportRef = useRef<{ x: number; z: number } | null>(null) as TeleportRef;
@@ -328,6 +332,8 @@ export function Game({ connection }: GameProps) {
   const [phase, setPhase] = useState<Phase>("lobby");
   const [phaseEndsAt, setPhaseEndsAt] = useState(0);
   const [winner, setWinner] = useState<Winner>("");
+  const [hostId, setHostId] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
   const [messages, setMessages] = useState<ChatLine[]>([]);
   const [killFeed, setKillFeed] = useState<KillLine[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
@@ -518,6 +524,8 @@ export function Game({ connection }: GameProps) {
       setPhase((prev) => (prev === view.phase ? prev : view.phase));
       setPhaseEndsAt((prev) => (prev === view.phaseEndsAt ? prev : view.phaseEndsAt));
       setWinner((prev) => (prev === view.winner ? prev : view.winner));
+      setHostId((prev) => (prev === view.hostId ? prev : view.hostId));
+      setIsPrivate((prev) => (prev === view.isPrivate ? prev : view.isPrivate));
 
       const next: MetaMap = {};
       for (const [id, player] of playersRef.current) {
@@ -547,6 +555,8 @@ export function Game({ connection }: GameProps) {
     () => room.send(MSG_READY, { ready: !localReady }),
     [room, localReady],
   );
+  const startMatch = useCallback(() => room.send(MSG_START), [room]);
+  const isHost = sessionId === hostId;
 
   const readyCount = ids.reduce((n, id) => (meta[id]?.ready ? n + 1 : n), 0);
   const aliveProps = ids.reduce((n, id) => {
@@ -618,26 +628,64 @@ export function Game({ connection }: GameProps) {
       {phase === "lobby" && (
         <div className="lobby-overlay">
           <div className="lobby-overlay-card panel">
-            <h2>Waiting for players</h2>
-            <ul className="ready-list">
-              {ids.map((id) => (
-                <li key={id} className={meta[id]?.ready ? "is-ready" : ""}>
-                  <span>
-                    {meta[id]?.name ?? "?"}
-                    {id === sessionId ? " (you)" : ""}
+            {isPrivate ? (
+              <>
+                <h2>Party lobby</h2>
+                <ul className="ready-list">
+                  {ids.map((id) => (
+                    <li key={id} className={id === hostId ? "is-host" : ""}>
+                      <span>
+                        {meta[id]?.name ?? "?"}
+                        {id === sessionId ? " (you)" : ""}
+                      </span>
+                      {id === hostId && <span className="party-host">★ Host</span>}
+                    </li>
+                  ))}
+                </ul>
+                {isHost ? (
+                  <button
+                    type="button"
+                    onClick={startMatch}
+                    disabled={ids.length < MIN_PLAYERS_TO_START}
+                  >
+                    Start match
+                  </button>
+                ) : (
+                  <span className="lobby-overlay-meta">Waiting for the host to start</span>
+                )}
+                <button type="button" className="btn-ghost" onClick={onBackToMenu}>
+                  Back to menu
+                </button>
+                {isHost && ids.length < MIN_PLAYERS_TO_START && (
+                  <span className="lobby-overlay-meta">
+                    Need at least {MIN_PLAYERS_TO_START} players
                   </span>
-                  <span>{meta[id]?.ready ? "✔ Ready" : "… waiting"}</span>
-                </li>
-              ))}
-            </ul>
-            <button type="button" onClick={toggleReady}>
-              {localReady ? "Cancel" : "Ready"}
-            </button>
-            <span className="lobby-overlay-meta">
-              {ids.length < MIN_PLAYERS_TO_START
-                ? `Need at least ${MIN_PLAYERS_TO_START} players`
-                : `Ready: ${readyCount}/${ids.length} — starts when everyone is ready`}
-            </span>
+                )}
+              </>
+            ) : (
+              <>
+                <h2>Waiting for players</h2>
+                <ul className="ready-list">
+                  {ids.map((id) => (
+                    <li key={id} className={meta[id]?.ready ? "is-ready" : ""}>
+                      <span>
+                        {meta[id]?.name ?? "?"}
+                        {id === sessionId ? " (you)" : ""}
+                      </span>
+                      <span>{meta[id]?.ready ? "✔ Ready" : "… waiting"}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" onClick={toggleReady}>
+                  {localReady ? "Cancel" : "Ready"}
+                </button>
+                <span className="lobby-overlay-meta">
+                  {ids.length < MIN_PLAYERS_TO_START
+                    ? `Need at least ${MIN_PLAYERS_TO_START} players`
+                    : `Ready: ${readyCount}/${ids.length} — starts when everyone is ready`}
+                </span>
+              </>
+            )}
           </div>
         </div>
       )}

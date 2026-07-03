@@ -96,8 +96,10 @@ export function App() {
     }
   }, []);
 
+  const handleBackToMenu = useCallback(() => setView("party"), []);
+
   if (view === "game" && connection) {
-    return <Game connection={connection} />;
+    return <Game connection={connection} onBackToMenu={handleBackToMenu} />;
   }
 
   const partyProps: PartyViewProps | null =

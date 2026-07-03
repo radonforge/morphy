@@ -199,6 +199,35 @@ canvas {
   color: var(--success);
 }
 
+.ready-list li.is-host {
+  opacity: 1;
+  border-left-color: var(--amber);
+}
+
+.party-host {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+.lobby-overlay-card button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.lobby-overlay-card .btn-ghost {
+  background: transparent;
+  color: var(--cyan);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.lobby-overlay-card .btn-ghost:hover {
+  filter: none;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
 .lobby-overlay-meta {
   font-family: var(--font-mono);
   font-size: 0.74rem;
