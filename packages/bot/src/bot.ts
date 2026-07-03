@@ -66,6 +66,7 @@ export interface BotOptions {
   serverUrl: string;
   name: string;
   map: MapId;
+  code: string | null;
   difficulty: number;
   readyAtPlayers: number;
   policy: Policy;
@@ -125,7 +126,9 @@ export class Bot {
   async connect(): Promise<void> {
     const client = new Client(this.options.serverUrl);
     const room = await withTimeout(
-      client.joinOrCreate(ROOM_NAME, { name: this.options.name, map: this.options.map }),
+      this.options.code
+        ? client.joinById(this.options.code, { name: this.options.name })
+        : client.joinOrCreate(ROOM_NAME, { name: this.options.name, map: this.options.map }),
       CONNECT_TIMEOUT_MS,
       `bot ${this.options.name} connect`,
     );
