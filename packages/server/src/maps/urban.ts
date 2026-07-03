@@ -22,12 +22,22 @@ const BOUND = HALF + 2;
 const ROAD_STRAIGHT = "/models/urban/roads/road-straight.glb";
 const ROAD_CROSS = "/models/urban/roads/road-crossroad.glb";
 const ROAD_SCALE = CELL;
+const ROAD_SCALE_Y = 1;
+const ROAD_RAW_SURFACE_Y = 0.01;
+const ROAD_Y = -ROAD_RAW_SURFACE_Y * ROAD_SCALE_Y;
 
+/**
+ * A building model with its GLB bbox size (`nx`/`ny`/`nz`) and, when the mesh
+ * is not centered on its origin, the bbox-center offset (`cx`/`cz`) — the
+ * visual is shifted by the rotated offset so it lands on its collider.
+ */
 interface BModel {
   id: string;
   nx: number;
   nz: number;
   ny: number;
+  cx?: number;
+  cz?: number;
 }
 
 const RESIDENTIAL: { kit: string; models: BModel[] } = {
@@ -56,11 +66,11 @@ const INDUSTRIAL: { kit: string; models: BModel[] } = {
   kit: "urban/industrial",
   models: [
     { id: "building-a", nx: 2.08, nz: 1.24, ny: 1.47 },
-    { id: "building-c", nx: 1.88, nz: 2.11, ny: 1.25 },
-    { id: "building-l", nx: 2.08, nz: 1.87, ny: 1.92 },
+    { id: "building-c", nx: 1.88, nz: 2.11, ny: 1.25, cx: 0.1, cz: 0.14 },
+    { id: "building-l", nx: 2.08, nz: 1.87, ny: 1.92, cx: -0.42, cz: 0.22 },
     { id: "building-r", nx: 2.48, nz: 1.27, ny: 1.39 },
-    { id: "building-f", nx: 1.79, nz: 1.28, ny: 1.92 },
-    { id: "building-q", nx: 2.14, nz: 1.77, ny: 0.88 },
+    { id: "building-f", nx: 1.79, nz: 1.28, ny: 1.92, cx: -0.45, cz: 0.25 },
+    { id: "building-q", nx: 2.14, nz: 1.77, ny: 0.88, cx: -0.23, cz: 0.01 },
   ],
 };
 
@@ -118,9 +128,10 @@ export function buildUrban(seed: number): MapDefinition {
         const cross = roadI && roadJ;
         tiles.push({
           model: cross ? ROAD_CROSS : ROAD_STRAIGHT,
-          position: { x: cx, y: 0, z: cz },
+          position: { x: cx, y: ROAD_Y, z: cz },
           rotationY: cross ? 0 : roadI ? 0 : HALF_PI,
           scale: ROAD_SCALE,
+          scaleY: ROAD_SCALE_Y,
         });
         continue;
       }
@@ -134,9 +145,13 @@ export function buildUrban(seed: number): MapDefinition {
       const fx = (turns % 2 === 0 ? m.nx : m.nz) * scale;
       const fz = (turns % 2 === 0 ? m.nz : m.nx) * scale;
       const height = m.ny * scale;
+      const cosR = Math.cos(rot);
+      const sinR = Math.sin(rot);
+      const offX = ((m.cx ?? 0) * cosR + (m.cz ?? 0) * sinR) * scale;
+      const offZ = (-(m.cx ?? 0) * sinR + (m.cz ?? 0) * cosR) * scale;
       scenery.push({
         model: `/models/${zone.kit}/${m.id}.glb`,
-        position: { x: cx, y: 0, z: cz },
+        position: { x: cx - offX, y: 0, z: cz - offZ },
         rotationY: rot,
         scale,
       });

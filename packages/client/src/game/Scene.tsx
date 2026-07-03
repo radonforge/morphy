@@ -69,6 +69,7 @@ const HUNTER_COLOR = "#e8564a";
 const PROP_COLOR = "#5bd75b";
 const MODEL_MIN_SIZE = 0.001;
 const BASE_PLANE_MARGIN = 8;
+const BASE_PLANE_Y = -0.02;
 const animalModel = (id: string): string => `/models/pets/animal-${id}.glb`;
 const WEAPON_SCALE = 0.32;
 const WEAPON_OFFSET: [number, number, number] = [0.2, -0.22, -0.6];
@@ -102,6 +103,8 @@ const TP_PITCH_MAX = 1.2;
 const DEFAULT_PITCH = 0.5;
 const EYE_HEIGHT = 1.6;
 const SUN_POSITION: [number, number, number] = [14, 26, 10];
+const SHADOW_RADIUS = 32;
+const SHADOW_TEXEL = (2 * SHADOW_RADIUS) / 2048;
 const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 const LOCAL_AVATAR_KEY = "localAvatar";
@@ -364,19 +367,7 @@ export function Scene({
       )}
       <hemisphereLight args={[theme.hemiSky, theme.hemiGround, theme.hemiIntensity]} />
       <ambientLight intensity={theme.ambient} />
-      <directionalLight
-        position={SUN_POSITION}
-        intensity={theme.dir}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
-        shadow-camera-near={1}
-        shadow-camera-far={90}
-        shadow-camera-left={-32}
-        shadow-camera-right={32}
-        shadow-camera-top={32}
-        shadow-camera-bottom={-32}
-        shadow-bias={-0.0004}
-      />
+      <SunLight intensity={theme.dir} playerPos={localGroundRef} />
       <MapView map={map} groundColor={theme.ground} />
       <PropPicker room={room} enabled={canTransform} playerPos={localGroundRef} />
       <Shooter
@@ -426,6 +417,43 @@ export function Scene({
             localPos={localGroundRef}
           />
         ))}
+    </>
+  );
+}
+
+function SunLight({ intensity, playerPos }: { intensity: number; playerPos: PlayerPosRef }) {
+  const lightRef = useRef<THREE.DirectionalLight>(null);
+  const target = useMemo(() => new THREE.Object3D(), []);
+
+  useFrame(() => {
+    const light = lightRef.current;
+    if (!light) return;
+    const p = playerPos.current;
+    const sx = Math.round(p.x / SHADOW_TEXEL) * SHADOW_TEXEL;
+    const sz = Math.round(p.z / SHADOW_TEXEL) * SHADOW_TEXEL;
+    light.position.set(sx + SUN_POSITION[0], SUN_POSITION[1], sz + SUN_POSITION[2]);
+    target.position.set(sx, 0, sz);
+    target.updateMatrixWorld();
+  });
+
+  return (
+    <>
+      <directionalLight
+        ref={lightRef}
+        position={SUN_POSITION}
+        target={target}
+        intensity={intensity}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
+        shadow-camera-near={1}
+        shadow-camera-far={90}
+        shadow-camera-left={-SHADOW_RADIUS}
+        shadow-camera-right={SHADOW_RADIUS}
+        shadow-camera-top={SHADOW_RADIUS}
+        shadow-camera-bottom={-SHADOW_RADIUS}
+        shadow-bias={-0.0004}
+      />
+      <primitive object={target} />
     </>
   );
 }
@@ -663,7 +691,8 @@ function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) 
     tiles.forEach((tile, i) => {
       quat.setFromAxisAngle(UP, tile.rotationY);
       pos.set(tile.position.x, tile.position.y, tile.position.z);
-      scale.setScalar(tile.scale ?? 1);
+      const s = tile.scale ?? 1;
+      scale.set(s, tile.scaleY ?? s, s);
       mesh.setMatrixAt(i, matrix.compose(pos, quat, scale));
     });
     mesh.instanceMatrix.needsUpdate = true;
@@ -828,7 +857,7 @@ const MapView = memo(function MapView({
 
   return (
     <>
-      <mesh rotation-x={-Math.PI / 2} position={[0, -0.1, 0]} receiveShadow>
+      <mesh rotation-x={-Math.PI / 2} position={[0, BASE_PLANE_Y, 0]} receiveShadow>
         <planeGeometry args={[floorSize.width, floorSize.depth]} />
         <meshStandardMaterial color={groundColor} />
       </mesh>

@@ -45,6 +45,15 @@ const KIT_OFFSET_Z = 1.5;
 /** Horizontal margin (world units) added around each solid box so the mesh is strictly enclosed. */
 const COLLIDER_PAD = 0.05;
 
+/**
+ * Solid scenery only rotates in 90° steps: collision is AABB-only, and the
+ * axis-aligned envelope of a diagonally rotated footprint bulges past the
+ * mesh at the corners, creating invisible blocked regions.
+ */
+function cardinalRot(rng: () => number): number {
+  return (Math.PI / 2) * Math.floor(rng() * 4);
+}
+
 /** Project a kit model's local mesh-center offset `(ox, oz)` to the world position of an instance placed at `(x, z)`, scaled by `scale` and rotated by `rot` (Y axis). */
 function kitCenter(
   x: number,
@@ -259,7 +268,7 @@ export function buildMars(seed: number): MapDefinition {
       [-BARRIER, t],
       [BARRIER, t],
     ] as const) {
-      pushSolid(pick(BARRIER_ROCKS, rng), x, z, rng() * Math.PI * 2);
+      pushSolid(pick(BARRIER_ROCKS, rng), x, z, cardinalRot(rng));
     }
   }
 
@@ -312,7 +321,7 @@ export function buildMars(seed: number): MapDefinition {
         const item = pick(list, rng);
         const x = randRange(rng, -FIELD, FIELD);
         const z = randRange(rng, -FIELD, FIELD);
-        const rot = rng() * Math.PI * 2;
+        const rot = cardinalRot(rng);
         const { cx, cz, r } = solidBox(item, x, z, rot);
         if (inBase(cx, cz) || nearCenter(cx, cz, PLAZA_CLEAR)) continue;
         if (!farFromWalls(cx, cz, r + 1, walls)) continue;

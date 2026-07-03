@@ -74,6 +74,8 @@ export interface TileInstance {
   rotationY: number;
   /** Uniform scale applied per instance (default 1). Lets small unit-sized kits tile at world scale. */
   scale?: number;
+  /** Vertical scale override (defaults to `scale`). Lets flat kits span in XZ without growing tall. */
+  scaleY?: number;
 }
 
 /**
@@ -174,7 +176,8 @@ function isTileInstance(value: unknown): value is TileInstance {
     typeof value.model === "string" &&
     isVec3(value.position) &&
     typeof value.rotationY === "number" &&
-    (value.scale === undefined || typeof value.scale === "number")
+    (value.scale === undefined || typeof value.scale === "number") &&
+    (value.scaleY === undefined || typeof value.scaleY === "number")
   );
 }
 
