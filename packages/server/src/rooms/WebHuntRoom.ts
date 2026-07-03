@@ -1,10 +1,12 @@
-import { type Client, Room } from "@colyseus/core";
+import { type Client, matchMaker, Room, ServerError } from "@colyseus/core";
 import { MapSchema, Schema, type } from "@colyseus/schema";
 import {
+  type AvatarId,
   type BoxCollider,
   computePropBounds,
   DEFAULT_MAP_ID,
   FIRE_COOLDOWN_MS,
+  generatePartyCode,
   HIDE_DURATION_MS,
   HUNTER_MAX_HP,
   HUNTER_RATIO,
@@ -23,9 +25,13 @@ import {
   MSG_KILL,
   MSG_MAP,
   MSG_READY,
+  MSG_SET_MAP,
+  MSG_SET_PROFILE,
   MSG_SHOOT,
   MSG_SHOT_RESULT,
+  MSG_START,
   MSG_TAUNT,
+  MSG_TELEPORT,
   MSG_TRANSFORM,
   PATCH_RATE_MS,
   type Phase,
@@ -48,6 +54,8 @@ import { buildMap } from "../maps";
 
 const FALLBACK_NAME = "Player";
 const SPAWN_CLEARANCE = 1.5;
+const PARTY_CODE_MAX_ATTEMPTS = 16;
+const PARTY_CODE_EXHAUSTED_STATUS = 503;
 
 export class PlayerState extends Schema {
   @type("string") id = "";
@@ -71,6 +79,8 @@ export class RoomState extends Schema {
   @type("string") phase: Phase = "lobby";
   @type("number") phaseEndsAt = 0;
   @type("string") winner: Winner = "";
+  @type("string") hostId = "";
+  @type("boolean") isPrivate = false;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
 }
 
@@ -140,6 +150,19 @@ function sanitizeName(raw: unknown): string {
   if (typeof raw !== "string") return FALLBACK_NAME;
   const trimmed = raw.trim().slice(0, MAX_NAME_LENGTH);
   return trimmed.length > 0 ? trimmed : FALLBACK_NAME;
+}
+
+function parseSetMap(payload: unknown): MapId | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const map = (payload as Record<string, unknown>).map;
+  return isMapId(map) ? map : null;
+}
+
+function parseProfile(payload: unknown): { name: string; avatar: AvatarId } | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const p = payload as Record<string, unknown>;
+  if (!isAvatarId(p.avatar)) return null;
+  return { name: sanitizeName(p.name), avatar: p.avatar };
 }
 
 const UNTRANSFORMED_PROP_BOUNDS: PropBounds = {
@@ -221,17 +244,39 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   private tauntTimer?: ClearableTimer;
   private lastShotAt = new Map<string, number>();
 
-  onCreate(options: unknown): void {
+  async onCreate(options: unknown): Promise<void> {
     const requested = (options as { map?: unknown } | undefined)?.map;
     const mapId: MapId = isMapId(requested) ? requested : DEFAULT_MAP_ID;
     this.applyMap(buildMap(mapId, nextSeed()));
     this.setPatchRate(PATCH_RATE_MS);
+    if ((options as { private?: unknown } | undefined)?.private === true) {
+      await this.assignPartyCode();
+      await this.setPrivate(true);
+      this.state.isPrivate = true;
+    }
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
     this.onMessage(MSG_TRANSFORM, (client, payload) => this.handleTransform(client, payload));
     this.onMessage(MSG_SHOOT, (client, payload) => this.handleShoot(client, payload));
     this.onMessage(MSG_CHAT, (client, payload) => this.handleChat(client, payload));
     this.onMessage(MSG_READY, (client, payload) => this.handleReady(client, payload));
     this.onMessage(MSG_MAP, (client) => client.send(MSG_MAP, this.map));
+    this.onMessage(MSG_START, (client) => this.handleStart(client));
+    this.onMessage(MSG_SET_MAP, (client, payload) => this.handleSetMap(client, payload));
+    this.onMessage(MSG_SET_PROFILE, (client, payload) => this.handleSetProfile(client, payload));
+  }
+
+  private async assignPartyCode(): Promise<void> {
+    for (let attempt = 0; attempt < PARTY_CODE_MAX_ATTEMPTS; attempt++) {
+      const code = generatePartyCode();
+      const taken = await matchMaker.driver.findOne({ roomId: code });
+      if (taken) continue;
+      this.roomId = code;
+      return;
+    }
+    throw new ServerError(
+      PARTY_CODE_EXHAUSTED_STATUS,
+      `could not allocate a party code after ${PARTY_CODE_MAX_ATTEMPTS} attempts — try again`,
+    );
   }
 
   private applyMap(map: MapDefinition): void {
@@ -261,17 +306,66 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     player.y = spawn.y;
     player.z = spawn.z;
     this.state.players.set(client.sessionId, player);
+    if (this.state.hostId === "") this.state.hostId = client.sessionId;
     this.maybeStartRound();
   }
 
   onLeave(client: Client): void {
     this.state.players.delete(client.sessionId);
     this.lastShotAt.delete(client.sessionId);
+    if (this.state.hostId === client.sessionId) {
+      this.state.hostId = this.state.players.keys().next().value ?? "";
+    }
     if (this.state.players.size < MIN_PLAYERS_TO_START && this.state.phase !== "lobby") {
       this.resetToLobby();
     } else {
       this.maybeStartRound();
     }
+  }
+
+  private handleStart(client: Client): void {
+    if (!this.state.isPrivate) return;
+    if (client.sessionId !== this.state.hostId) return;
+    if (this.state.phase !== "lobby") return;
+    if (this.state.players.size < MIN_PLAYERS_TO_START) return;
+    this.startCountdown();
+  }
+
+  private handleSetMap(client: Client, payload: unknown): void {
+    if (!this.state.isPrivate) return;
+    if (client.sessionId !== this.state.hostId) return;
+    if (this.state.phase !== "lobby") return;
+    const mapId = parseSetMap(payload);
+    if (!mapId || mapId === this.state.mapId) return;
+    this.applyMap(buildMap(mapId, nextSeed()));
+    this.respawnAllToLobby();
+    this.broadcast(MSG_MAP, this.map);
+    for (const other of this.clients) {
+      const player = this.state.players.get(other.sessionId);
+      if (player) other.send(MSG_TELEPORT, { x: player.x, z: player.z });
+    }
+  }
+
+  private handleSetProfile(client: Client, payload: unknown): void {
+    if (this.state.phase !== "lobby") return;
+    const profile = parseProfile(payload);
+    if (!profile) return;
+    const player = this.state.players.get(client.sessionId);
+    if (!player) return;
+    player.name = profile.name;
+    player.avatar = profile.avatar;
+  }
+
+  private respawnAllToLobby(): void {
+    const spawns = this.map.spawnPoints.props;
+    let index = 0;
+    this.state.players.forEach((player) => {
+      const spawn = spawns[index % spawns.length] ?? this.map.bounds.min;
+      index++;
+      player.x = spawn.x;
+      player.y = spawn.y;
+      player.z = spawn.z;
+    });
   }
 
   private handleReady(client: Client, payload: unknown): void {
@@ -387,6 +481,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   }
 
   private maybeStartRound(): void {
+    if (this.state.isPrivate) return;
     if (this.state.phase !== "lobby") return;
     if (this.state.players.size < MIN_PLAYERS_TO_START) return;
     let allReady = true;
