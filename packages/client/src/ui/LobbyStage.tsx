@@ -15,7 +15,7 @@ const CLIP_FADE_SECONDS = 0.3;
 const SQUAD_MAX = 3;
 const STAGE_FRONT_X = -0.7;
 const STAGE_FRONT_Z = 0.35;
-const STAGE_STEP_X = 1.15;
+const STAGE_STEP_X = 1.2;
 const STAGE_STEP_Z = 0.8;
 const STAGE_YAW = 0.15;
 
@@ -42,9 +42,9 @@ interface StageSlot {
 
 const SOLO_SLOT: StageSlot = { x: AVATAR_X, z: 0, yaw: AVATAR_YAW };
 
-function computeStageSlots(count: number): StageSlot[] {
-  if (count <= 1) return [SOLO_SLOT];
-  const n = Math.min(count, STAGE_MAX_ACTORS);
+function computeStageSlots(count: number, inParty: boolean): StageSlot[] {
+  if (!inParty) return [SOLO_SLOT];
+  const n = Math.min(Math.max(count, 1), STAGE_MAX_ACTORS);
   const slots: StageSlot[] = [];
   for (let i = 0; i < n; i++) {
     slots.push({
@@ -361,9 +361,13 @@ function Ground({ theme }: { theme: StageTheme }) {
   );
 }
 
-export function LobbyStage({ map, actors }: { map: MapId; actors: StageActor[] }) {
+export function LobbyStage({
+  map,
+  actors,
+  inParty,
+}: { map: MapId; actors: StageActor[]; inParty: boolean }) {
   const theme = STAGE_THEMES[map];
-  const slots = computeStageSlots(actors.length);
+  const slots = computeStageSlots(actors.length, inParty);
   return (
     <div className="menu-canvas" aria-hidden="true">
       <Canvas shadows dpr={[1, 2]} camera={{ fov: CAMERA_FOV, position: CAMERA_BASE }}>

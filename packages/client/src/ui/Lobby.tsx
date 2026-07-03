@@ -225,7 +225,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
   return (
     <div className="menu">
-      <LobbyStage map={activeMap} actors={stageActors} />
+      <LobbyStage map={activeMap} actors={stageActors} inParty={inParty} />
       <div className="menu-vignette" />
 
       <header className="menu-top">
