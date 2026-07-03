@@ -23,6 +23,7 @@ Flags (after `--` when invoked through the root script):
 | `--url` | `ws://127.0.0.1:2567` | server URL (or `BOT_SERVER_URL` env) |
 | `--name` | animal pool | name prefix, e.g. `--name Drone` → `Drone1`… |
 | `--ready-at` | `count + 1` | players present before bots ready up |
+| `--code` | — | join a private party room by code instead of matchmaking |
 
 Bots default to readying only once **one more player than the bot count** is in
 the room, so a round never auto-starts without you. Pass `--ready-at <count>` to
