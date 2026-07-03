@@ -306,7 +306,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             <button
               type="button"
               key={info.id}
-              className={`menu-mapcard${activeMap === info.id ? " sel" : ""}`}
+              className={`menu-mapcard panel${activeMap === info.id ? " sel" : ""}`}
               style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
               onClick={() => handleMapPick(info.id)}
               disabled={inParty && !isHost}
