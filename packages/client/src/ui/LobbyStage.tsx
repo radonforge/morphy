@@ -154,8 +154,8 @@ const DIORAMAS: Record<MapId, SetPiece[]> = {
     { url: sta("table-display-planet"), position: [7.6, 0, -9.4], rotationY: -0.8, scale: 3.2 },
   ],
   mars: [
-    { url: ext("hangar_smallA"), position: [7.5, 0, -13], rotationY: -0.5, scale: 3.5 },
-    { url: ext("hangar_smallB"), position: [-8, 0, -15], rotationY: 0.4, scale: 3.5 },
+    { url: ext("hangar_smallA"), position: [8.5, 0, -17], rotationY: -0.5, scale: 3.5 },
+    { url: ext("hangar_smallB"), position: [-8, 0, -20], rotationY: 0.4, scale: 3.5 },
     { url: ext("satelliteDish_large"), position: [-3.5, 0, -13], rotationY: -0.3, scale: 2 },
     { url: ext("machine_generatorLarge"), position: [4, 0, -8.5], rotationY: 0.3, scale: 2 },
     { url: ext("craft_speederA"), position: [-5, 0, -6.5], rotationY: 0.9, scale: 1.8 },
