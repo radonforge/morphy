@@ -1,6 +1,7 @@
 import {
   AVATAR_CATALOG,
   type AvatarId,
+  DEFAULT_AVATAR_ID,
   isAvatarId,
   isPartyCode,
   MAP_CATALOG,
@@ -12,7 +13,7 @@ import {
 } from "@webhunt/shared";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { isMuted, setMuted } from "../game/audio";
-import { LobbyStage } from "./LobbyStage";
+import { LobbyStage, type StageActor } from "./LobbyStage";
 import { loadPrefs, savePrefs } from "./prefs";
 
 export type ConnectStatus =
@@ -207,9 +208,19 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const trimmedName = name.trim();
   const mapInfo = MAP_CATALOG.find((info) => info.id === activeMap) ?? MAP_CATALOG[0];
 
+  const stageActors: StageActor[] =
+    party && party.members.length > 0
+      ? party.members.map((member) => ({
+          id: member.id,
+          name: member.name,
+          avatar: isAvatarId(member.avatar) ? member.avatar : DEFAULT_AVATAR_ID,
+          isHost: member.id === party.hostId,
+        }))
+      : [{ id: "local", name: trimmedName || "Guest", avatar: selectedAvatar, isHost: false }];
+
   return (
     <div className="menu">
-      <LobbyStage map={activeMap} avatar={selectedAvatar} />
+      <LobbyStage map={activeMap} actors={stageActors} />
       <div className="menu-vignette" />
 
       <header className="menu-top">

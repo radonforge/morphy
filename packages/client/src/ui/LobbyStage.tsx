@@ -1,4 +1,4 @@
-import { Sky, Stars, useAnimations, useGLTF } from "@react-three/drei";
+import { Billboard, Sky, Stars, Text, useAnimations, useGLTF } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { AvatarId, MapId } from "@webhunt/shared";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -11,6 +11,43 @@ const AVATAR_X = -1.35;
 const AVATAR_YAW = 0.35;
 const MODEL_MIN_SIZE = 0.001;
 const CLIP_FADE_SECONDS = 0.3;
+
+const SLOT_MAX_SPACING = 1.15;
+const SLOT_ARC_WIDTH = 6.8;
+const SLOT_BACK_RATE = 0.22;
+const SLOT_YAW_RATE = 0.26;
+
+const NAMEPLATE_Y = AVATAR_HEIGHT + 0.42;
+const NAMEPLATE_FONT_SIZE = 0.21;
+const NAMEPLATE_COLOR = "#eef4ff";
+const NAMEPLATE_OUTLINE_COLOR = "#11161f";
+const NAMEPLATE_OUTLINE_WIDTH = 0.03;
+
+export interface StageActor {
+  id: string;
+  name: string;
+  avatar: AvatarId;
+  isHost: boolean;
+}
+
+interface StageSlot {
+  x: number;
+  z: number;
+  yaw: number;
+}
+
+const SOLO_SLOT: StageSlot = { x: AVATAR_X, z: 0, yaw: AVATAR_YAW };
+
+function computeStageSlots(count: number): StageSlot[] {
+  if (count <= 1) return [SOLO_SLOT];
+  const spacing = Math.min(SLOT_MAX_SPACING, SLOT_ARC_WIDTH / (count - 1));
+  const slots: StageSlot[] = [];
+  for (let i = 0; i < count; i++) {
+    const x = (i - (count - 1) / 2) * spacing;
+    slots.push({ x, z: -Math.abs(x) * SLOT_BACK_RATE, yaw: -x * SLOT_YAW_RATE });
+  }
+  return slots;
+}
 
 const CAMERA_FOV = 38;
 const CAMERA_BASE: [number, number, number] = [0, 1.5, 6];
@@ -135,7 +172,7 @@ for (const pieces of Object.values(DIORAMAS)) {
   }
 }
 
-function AvatarActor({ avatar }: { avatar: AvatarId }) {
+function AvatarActor({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
   const group = useRef<THREE.Group>(null);
   const { scene, animations } = useGLTF(avatarModel(avatar));
   const object = useMemo(() => scene.clone(true), [scene]);
@@ -180,11 +217,28 @@ function AvatarActor({ avatar }: { avatar: AvatarId }) {
   }, [actions, mixer]);
 
   return (
-    <group position={[AVATAR_X, 0, 0]} rotation-y={AVATAR_YAW}>
+    <group position={[slot.x, 0, slot.z]} rotation-y={slot.yaw}>
       <group ref={group} position={[fit.offset[0], fit.offset[1], fit.offset[2]]} scale={fit.scale}>
         <primitive object={object} />
       </group>
     </group>
+  );
+}
+
+function ActorNameplate({ label, slot }: { label: string; slot: StageSlot }) {
+  return (
+    <Billboard position={[slot.x, NAMEPLATE_Y, slot.z]}>
+      <Text
+        fontSize={NAMEPLATE_FONT_SIZE}
+        color={NAMEPLATE_COLOR}
+        outlineWidth={NAMEPLATE_OUTLINE_WIDTH}
+        outlineColor={NAMEPLATE_OUTLINE_COLOR}
+        anchorX="center"
+        anchorY="middle"
+      >
+        {label}
+      </Text>
+    </Billboard>
   );
 }
 
@@ -271,8 +325,9 @@ function Ground({ theme }: { theme: StageTheme }) {
   );
 }
 
-export function LobbyStage({ map, avatar }: { map: MapId; avatar: AvatarId }) {
+export function LobbyStage({ map, actors }: { map: MapId; actors: StageActor[] }) {
   const theme = STAGE_THEMES[map];
+  const slots = computeStageSlots(actors.length);
   return (
     <div className="menu-canvas" aria-hidden="true">
       <Canvas shadows dpr={[1, 2]} camera={{ fov: CAMERA_FOV, position: CAMERA_BASE }}>
@@ -301,8 +356,22 @@ export function LobbyStage({ map, avatar }: { map: MapId; avatar: AvatarId }) {
           ))}
         </Suspense>
         <Suspense fallback={null}>
-          <AvatarActor key={avatar} avatar={avatar} />
+          {actors.map((actor, index) => (
+            <AvatarActor
+              key={`${actor.id}:${actor.avatar}`}
+              avatar={actor.avatar}
+              slot={slots[index] ?? SOLO_SLOT}
+            />
+          ))}
         </Suspense>
+        {actors.length > 1 &&
+          actors.map((actor, index) => (
+            <ActorNameplate
+              key={actor.id}
+              label={`${actor.isHost ? "★ " : ""}${actor.name}`}
+              slot={slots[index] ?? SOLO_SLOT}
+            />
+          ))}
       </Canvas>
     </div>
   );
