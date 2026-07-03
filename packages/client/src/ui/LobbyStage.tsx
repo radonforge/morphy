@@ -12,10 +12,14 @@ const AVATAR_YAW = 0.35;
 const MODEL_MIN_SIZE = 0.001;
 const CLIP_FADE_SECONDS = 0.3;
 
-const SLOT_MAX_SPACING = 2.1;
-const SLOT_ARC_WIDTH = 6.8;
-const SLOT_BACK_RATE = 0.3;
-const SLOT_YAW_RATE = 0.26;
+const SQUAD_MAX = 3;
+const STAGE_FRONT_X = -0.7;
+const STAGE_FRONT_Z = 0.35;
+const STAGE_STEP_X = 1.15;
+const STAGE_STEP_Z = 0.8;
+const STAGE_YAW = 0.15;
+
+export const STAGE_MAX_ACTORS = 1 + SQUAD_MAX;
 
 const NAMEPLATE_Y = AVATAR_HEIGHT + 0.42;
 const NAMEPLATE_FONT_SIZE = 0.14;
@@ -40,11 +44,14 @@ const SOLO_SLOT: StageSlot = { x: AVATAR_X, z: 0, yaw: AVATAR_YAW };
 
 function computeStageSlots(count: number): StageSlot[] {
   if (count <= 1) return [SOLO_SLOT];
-  const spacing = Math.min(SLOT_MAX_SPACING, SLOT_ARC_WIDTH / (count - 1));
+  const n = Math.min(count, STAGE_MAX_ACTORS);
   const slots: StageSlot[] = [];
-  for (let i = 0; i < count; i++) {
-    const x = (i - (count - 1) / 2) * spacing;
-    slots.push({ x, z: -Math.abs(x) * SLOT_BACK_RATE, yaw: -x * SLOT_YAW_RATE });
+  for (let i = 0; i < n; i++) {
+    slots.push({
+      x: STAGE_FRONT_X + i * STAGE_STEP_X,
+      z: STAGE_FRONT_Z - i * STAGE_STEP_Z,
+      yaw: STAGE_YAW,
+    });
   }
   return slots;
 }
@@ -394,13 +401,15 @@ export function LobbyStage({ map, actors }: { map: MapId; actors: StageActor[] }
           ))}
         </Suspense>
         {actors.length > 1 &&
-          actors.map((actor, index) => (
-            <ActorNameplate
-              key={actor.id}
-              label={`${actor.isHost ? "★ " : ""}${actor.name}`}
-              slot={slots[index] ?? SOLO_SLOT}
-            />
-          ))}
+          actors.map((actor, index) =>
+            index === 0 ? null : (
+              <ActorNameplate
+                key={actor.id}
+                label={`${actor.isHost ? "★ " : ""}${actor.name}`}
+                slot={slots[index] ?? SOLO_SLOT}
+              />
+            ),
+          )}
       </Canvas>
     </div>
   );

@@ -13,7 +13,7 @@ import {
 } from "@webhunt/shared";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { isMuted, setMuted } from "../game/audio";
-import { LobbyStage, type StageActor } from "./LobbyStage";
+import { LobbyStage, STAGE_MAX_ACTORS, type StageActor } from "./LobbyStage";
 import { loadPrefs, savePrefs } from "./prefs";
 
 export type ConnectStatus =
@@ -210,12 +210,17 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
   const stageActors: StageActor[] =
     party && party.members.length > 0
-      ? party.members.map((member) => ({
-          id: member.id,
-          name: member.name,
-          avatar: isAvatarId(member.avatar) ? member.avatar : DEFAULT_AVATAR_ID,
-          isHost: member.id === party.hostId,
-        }))
+      ? [
+          ...party.members.filter((member) => member.id === party.selfId),
+          ...party.members.filter((member) => member.id !== party.selfId),
+        ]
+          .slice(0, STAGE_MAX_ACTORS)
+          .map((member) => ({
+            id: member.id,
+            name: member.name,
+            avatar: isAvatarId(member.avatar) ? member.avatar : DEFAULT_AVATAR_ID,
+            isHost: member.id === party.hostId,
+          }))
       : [{ id: "local", name: trimmedName || "Guest", avatar: selectedAvatar, isHost: false }];
 
   return (
