@@ -12,16 +12,16 @@ const AVATAR_YAW = 0.35;
 const MODEL_MIN_SIZE = 0.001;
 const CLIP_FADE_SECONDS = 0.3;
 
-const SLOT_MAX_SPACING = 1.15;
+const SLOT_MAX_SPACING = 2.1;
 const SLOT_ARC_WIDTH = 6.8;
-const SLOT_BACK_RATE = 0.22;
+const SLOT_BACK_RATE = 0.3;
 const SLOT_YAW_RATE = 0.26;
 
 const NAMEPLATE_Y = AVATAR_HEIGHT + 0.42;
-const NAMEPLATE_FONT_SIZE = 0.21;
+const NAMEPLATE_FONT_SIZE = 0.14;
 const NAMEPLATE_COLOR = "#eef4ff";
 const NAMEPLATE_OUTLINE_COLOR = "#11161f";
-const NAMEPLATE_OUTLINE_WIDTH = 0.03;
+const NAMEPLATE_OUTLINE_WIDTH = 0.015;
 
 export interface StageActor {
   id: string;
