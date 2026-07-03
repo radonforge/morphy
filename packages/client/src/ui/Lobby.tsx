@@ -289,13 +289,15 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         </aside>
       )}
 
-      <aside className="menu-maptitle" key={activeMap}>
-        <span className="menu-maptitle-tag" style={{ color: MAP_ACCENT[activeMap] }}>
-          {MAP_TAG[activeMap]} sector
-        </span>
-        <h2>{mapInfo.name}</h2>
-        <p>{mapInfo.blurb}</p>
-      </aside>
+      {stageActors.length === 1 && (
+        <aside className="menu-maptitle" key={activeMap}>
+          <span className="menu-maptitle-tag" style={{ color: MAP_ACCENT[activeMap] }}>
+            {MAP_TAG[activeMap]} sector
+          </span>
+          <h2>{mapInfo.name}</h2>
+          <p>{mapInfo.blurb}</p>
+        </aside>
+      )}
 
       <form className="menu-bottom" onSubmit={handleSubmit}>
         <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
