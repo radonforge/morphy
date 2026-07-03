@@ -143,6 +143,15 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     return () => clearTimeout(timer);
   }, [copied]);
 
+  useEffect(() => {
+    if (pane === "play") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPane("play");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pane]);
+
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -240,7 +249,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               type="button"
               key={item.id}
               className={`menu-tab${pane === item.id ? " sel" : ""}`}
-              onClick={() => setPane(item.id)}
+              onClick={() => setPane((current) => (current === item.id ? "play" : item.id))}
               aria-pressed={pane === item.id}
             >
               {item.label}
@@ -294,7 +303,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         </aside>
       )}
 
-      {stageActors.length === 1 && (
+      {stageActors.length === 1 && pane === "play" && (
         <aside className="menu-maptitle" key={activeMap}>
           <span className="menu-maptitle-tag" style={{ color: MAP_ACCENT[activeMap] }}>
             {MAP_TAG[activeMap]} sector
@@ -366,137 +375,135 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       </form>
 
       {pane !== "play" && (
-        <div className="menu-overlay">
-          <section className="menu-sheet panel">
-            <header className="menu-sheet-head">
-              <h2>
-                {pane === "avatar" && "Choose your avatar"}
-                {pane === "private" && "Private room"}
-                {pane === "stats" && "Statistics"}
-                {pane === "options" && "Options"}
-              </h2>
-              <button
-                type="button"
-                className="menu-sheet-close"
-                onClick={() => setPane("play")}
-                aria-label="Close"
-              >
-                ✕
+        <section className="menu-panel panel">
+          <header className="menu-sheet-head">
+            <h2>
+              {pane === "avatar" && "Choose your avatar"}
+              {pane === "private" && "Private room"}
+              {pane === "stats" && "Statistics"}
+              {pane === "options" && "Options"}
+            </h2>
+            <button
+              type="button"
+              className="menu-sheet-close"
+              onClick={() => setPane("play")}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </header>
+
+          {pane === "avatar" && (
+            <div className="menu-avatars">
+              {AVATAR_CATALOG.map((info) => (
+                <button
+                  type="button"
+                  key={info.id}
+                  className={`menu-avatar${selectedAvatar === info.id ? " sel" : ""}`}
+                  onClick={() => handleAvatarPick(info.id)}
+                  aria-pressed={selectedAvatar === info.id}
+                >
+                  <span className="menu-avatar-emoji" aria-hidden="true">
+                    {AVATAR_EMOJI[info.id]}
+                  </span>
+                  <span className="menu-avatar-name">{info.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {pane === "private" && party && (
+            <div className="menu-card menu-party-sheet">
+              <span className="eyebrow">Party code</span>
+              <b className="menu-party-bigcode">{party.code}</b>
+              <p>Share this code with your friends so they can join you.</p>
+              {canCopy && (
+                <button type="button" className="menu-party-btn" onClick={copyCode}>
+                  {copied ? "Copied ✓" : "Copy code"}
+                </button>
+              )}
+              <button type="button" className="menu-party-leave" onClick={party.onLeaveParty}>
+                Leave party
               </button>
-            </header>
+            </div>
+          )}
 
-            {pane === "avatar" && (
-              <div className="menu-avatars">
-                {AVATAR_CATALOG.map((info) => (
-                  <button
-                    type="button"
-                    key={info.id}
-                    className={`menu-avatar${selectedAvatar === info.id ? " sel" : ""}`}
-                    onClick={() => handleAvatarPick(info.id)}
-                    aria-pressed={selectedAvatar === info.id}
-                  >
-                    <span className="menu-avatar-emoji" aria-hidden="true">
-                      {AVATAR_EMOJI[info.id]}
-                    </span>
-                    <span className="menu-avatar-name">{info.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {pane === "private" && party && (
-              <div className="menu-card menu-party-sheet">
-                <span className="eyebrow">Party code</span>
-                <b className="menu-party-bigcode">{party.code}</b>
-                <p>Share this code with your friends so they can join you.</p>
-                {canCopy && (
-                  <button type="button" className="menu-party-btn" onClick={copyCode}>
-                    {copied ? "Copied ✓" : "Copy code"}
-                  </button>
-                )}
-                <button type="button" className="menu-party-leave" onClick={party.onLeaveParty}>
-                  Leave party
+          {pane === "private" && !party && (
+            <div className="menu-party-setup">
+              <div className="menu-card">
+                <b>Create a room</b>
+                <p>
+                  Get a code to share with your friends. You pick the map and start the match.
+                </p>
+                <button
+                  type="button"
+                  className="menu-party-btn"
+                  onClick={() => onCreateParty(name, selectedMap, selectedAvatar)}
+                  disabled={connecting}
+                >
+                  {connecting ? "Connecting…" : "Create room"}
                 </button>
               </div>
-            )}
-
-            {pane === "private" && !party && (
-              <div className="menu-party-setup">
-                <div className="menu-card">
-                  <b>Create a room</b>
-                  <p>
-                    Get a code to share with your friends. You pick the map and start the match.
-                  </p>
-                  <button
-                    type="button"
-                    className="menu-party-btn"
-                    onClick={() => onCreateParty(name, selectedMap, selectedAvatar)}
-                    disabled={connecting}
-                  >
-                    {connecting ? "Connecting…" : "Create room"}
-                  </button>
-                </div>
-                <div className="menu-card">
-                  <b>Join with a code</b>
-                  <p>Enter the code you received to join your friends' room.</p>
-                  <form className="menu-party-joinrow" onSubmit={handleJoinSubmit}>
-                    <input
-                      value={joinCode}
-                      maxLength={PARTY_CODE_LENGTH}
-                      placeholder="CODE"
-                      aria-label="Room code"
-                      onChange={(e) => setJoinCode(normalizePartyCode(e.target.value))}
-                    />
-                    <button
-                      type="submit"
-                      className="menu-party-btn"
-                      disabled={!isPartyCode(joinCode) || connecting}
-                    >
-                      {connecting ? "…" : "Join"}
-                    </button>
-                  </form>
-                  {status.kind === "error" && <span className="menu-error">{status.message}</span>}
-                </div>
-              </div>
-            )}
-
-            {pane === "stats" && (
-              <ComingSoon
-                icon={
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    aria-hidden="true"
-                  >
-                    <path d="M5 19V10m7 9V5m7 14v-7" />
-                  </svg>
-                }
-                title="Your matches, in numbers"
-                body="Matches played, props flushed out, rounds won and time survived. Comes with account login."
-              />
-            )}
-
-            {pane === "options" && (
               <div className="menu-card">
-                <div className="menu-opt-row">
-                  <span className="l">
-                    <b>Audio</b>
-                    <span>Effects and ambience synthesized at runtime</span>
-                  </span>
-                  <button
-                    type="button"
-                    className={`menu-toggle${muted ? "" : " on"}`}
-                    onClick={toggleAudio}
-                    aria-pressed={!muted}
-                    aria-label={muted ? "Unmute audio" : "Mute audio"}
+                <b>Join with a code</b>
+                <p>Enter the code you received to join your friends' room.</p>
+                <form className="menu-party-joinrow" onSubmit={handleJoinSubmit}>
+                  <input
+                    value={joinCode}
+                    maxLength={PARTY_CODE_LENGTH}
+                    placeholder="CODE"
+                    aria-label="Room code"
+                    onChange={(e) => setJoinCode(normalizePartyCode(e.target.value))}
                   />
-                </div>
+                  <button
+                    type="submit"
+                    className="menu-party-btn"
+                    disabled={!isPartyCode(joinCode) || connecting}
+                  >
+                    {connecting ? "…" : "Join"}
+                  </button>
+                </form>
+                {status.kind === "error" && <span className="menu-error">{status.message}</span>}
               </div>
-            )}
-          </section>
-        </div>
+            </div>
+          )}
+
+          {pane === "stats" && (
+            <ComingSoon
+              icon={
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  aria-hidden="true"
+                >
+                  <path d="M5 19V10m7 9V5m7 14v-7" />
+                </svg>
+              }
+              title="Your matches, in numbers"
+              body="Matches played, props flushed out, rounds won and time survived. Comes with account login."
+            />
+          )}
+
+          {pane === "options" && (
+            <div className="menu-card">
+              <div className="menu-opt-row">
+                <span className="l">
+                  <b>Audio</b>
+                  <span>Effects and ambience synthesized at runtime</span>
+                </span>
+                <button
+                  type="button"
+                  className={`menu-toggle${muted ? "" : " on"}`}
+                  onClick={toggleAudio}
+                  aria-pressed={!muted}
+                  aria-label={muted ? "Unmute audio" : "Mute audio"}
+                />
+              </div>
+            </div>
+          )}
+        </section>
       )}
     </div>
   );

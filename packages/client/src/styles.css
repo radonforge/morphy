@@ -268,7 +268,7 @@ canvas {
   top: 0;
   left: 0;
   right: 0;
-  z-index: 3;
+  z-index: 5;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -645,37 +645,24 @@ canvas {
   text-shadow: 0 1px 6px rgba(4, 7, 12, 0.8);
 }
 
-.menu-overlay {
+.menu-panel {
   position: absolute;
-  inset: 0;
-  z-index: 4;
-  display: flex;
-  justify-content: flex-end;
-  background: linear-gradient(90deg, transparent 34%, rgba(4, 7, 12, 0.5));
-  animation: menu-fadein 0.2s ease both;
-}
-@keyframes menu-fadein {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-.menu-sheet {
-  width: min(460px, 100vw);
-  height: 100%;
+  top: clamp(84px, 13vh, 128px);
+  right: clamp(18px, 3vw, 48px);
+  z-index: 3;
+  width: min(420px, 92vw);
+  bottom: clamp(116px, 15vh, 150px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 22px 24px 28px;
-  animation: menu-sheetin 0.3s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  padding: 20px 22px 24px;
+  animation: menu-panelin 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
-@keyframes menu-sheetin {
+@keyframes menu-panelin {
   from {
     opacity: 0;
-    transform: translateX(42px);
+    transform: translateX(24px);
   }
   to {
     opacity: 1;
@@ -1093,16 +1080,19 @@ canvas {
   .menu-error {
     justify-self: start;
   }
-  .menu-sheet {
-    width: 100vw;
+  .menu-panel {
+    top: 120px;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .menu-maptitle,
   .menu-bottom,
-  .menu-overlay,
-  .menu-sheet {
+  .menu-panel {
     animation: none;
   }
 }
