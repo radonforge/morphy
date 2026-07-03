@@ -7,6 +7,7 @@ import {
 } from "@webhunt/shared";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { isMuted, setMuted } from "../game/audio";
+import { LobbyStage } from "./LobbyStage";
 import { loadPrefs, savePrefs } from "./prefs";
 
 export type ConnectStatus =
@@ -24,7 +25,6 @@ type PaneId = "play" | "avatar" | "private" | "stats" | "options";
 interface NavItem {
   id: PaneId;
   label: string;
-  icon: ReactNode;
   soon?: boolean;
 }
 
@@ -64,109 +64,24 @@ const AVATAR_EMOJI: Record<AvatarId, string> = {
   crab: "🦀",
 };
 
-function MapArt({ id }: { id: MapId }): ReactNode {
-  if (id === "station") {
-    return (
-      <div className="menu-art menu-art-station">
-        <span className="menu-shape bands" />
-        <span className="menu-shape win" />
-      </div>
-    );
-  }
-  if (id === "mars") {
-    return (
-      <div className="menu-art menu-art-mars">
-        <span className="menu-shape planet" />
-        <span className="menu-shape glowline" />
-      </div>
-    );
-  }
+const NAV_ITEMS: NavItem[] = [
+  { id: "play", label: "Play" },
+  { id: "avatar", label: "Avatar" },
+  { id: "private", label: "Private", soon: true },
+  { id: "stats", label: "Stats", soon: true },
+  { id: "options", label: "Options" },
+];
+
+function ComingSoon({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
   return (
-    <div className="menu-art menu-art-urban">
-      <span className="menu-shape sky2" />
-      <span className="menu-shape b1" />
-      <span className="menu-shape b2" />
-      <span className="menu-shape b3" />
+    <div className="menu-empty">
+      <span className="menu-empty-ring">{icon}</span>
+      <span className="menu-empty-tag">Coming soon</span>
+      <b>{title}</b>
+      <p>{body}</p>
     </div>
   );
 }
-
-const NAV_ITEMS: NavItem[] = [
-  {
-    id: "play",
-    label: "Play",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M8 5v14l11-7z" />
-      </svg>
-    ),
-  },
-  {
-    id: "avatar",
-    label: "Avatar",
-    icon: (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
-      </svg>
-    ),
-  },
-  {
-    id: "private",
-    label: "Private",
-    soon: true,
-    icon: (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        aria-hidden="true"
-      >
-        <rect x="5" y="11" width="14" height="9" rx="1.5" />
-        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-      </svg>
-    ),
-  },
-  {
-    id: "stats",
-    label: "Stats",
-    soon: true,
-    icon: (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        aria-hidden="true"
-      >
-        <path d="M5 19V10m7 9V5m7 14v-7" />
-      </svg>
-    ),
-  },
-  {
-    id: "options",
-    label: "Options",
-    icon: (
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="12" r="3" />
-        <path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1M7.7 16.3l-2.1 2.1" />
-      </svg>
-    ),
-  },
-];
 
 export function Lobby({ status, onConnect }: LobbyProps) {
   const [name, setName] = useState(() => loadPrefs().name);
@@ -197,13 +112,12 @@ export function Lobby({ status, onConnect }: LobbyProps) {
 
   const connecting = status.kind === "connecting";
   const trimmedName = name.trim();
+  const mapInfo = MAP_CATALOG.find((info) => info.id === selectedMap) ?? MAP_CATALOG[0];
 
   return (
     <div className="menu">
-      <div className="menu-sky">
-        <div className="menu-stars" />
-      </div>
-      <div className="menu-scanlines" />
+      <LobbyStage map={selectedMap} avatar={selectedAvatar} />
+      <div className="menu-vignette" />
 
       <header className="menu-top">
         <div className="menu-wordmark">
@@ -211,6 +125,20 @@ export function Lobby({ status, onConnect }: LobbyProps) {
           <span>WEBHUNT</span>
           <span className="b">.LOL</span>
         </div>
+        <nav className="menu-tabs" aria-label="Menu">
+          {NAV_ITEMS.map((item) => (
+            <button
+              type="button"
+              key={item.id}
+              className={`menu-tab${pane === item.id ? " sel" : ""}`}
+              onClick={() => setPane(item.id)}
+              aria-pressed={pane === item.id}
+            >
+              {item.label}
+              {item.soon && <span className="menu-mini">Soon</span>}
+            </button>
+          ))}
+        </nav>
         <div className="menu-playercard panel">
           <div className="menu-pc-av">
             <span className="menu-pc-emoji" aria-hidden="true">
@@ -224,87 +152,71 @@ export function Lobby({ status, onConnect }: LobbyProps) {
         </div>
       </header>
 
-      <div className="menu-body">
-        <nav className="menu-nav" aria-label="Menu">
-          {NAV_ITEMS.map((item) => (
+      <aside className="menu-maptitle" key={selectedMap}>
+        <span className="menu-maptitle-tag" style={{ color: MAP_ACCENT[selectedMap] }}>
+          {MAP_TAG[selectedMap]} sector
+        </span>
+        <h2>{mapInfo.name}</h2>
+        <p>{mapInfo.blurb}</p>
+      </aside>
+
+      <form className="menu-bottom" onSubmit={handleSubmit}>
+        <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
+          {MAP_CATALOG.map((info) => (
             <button
               type="button"
-              key={item.id}
-              className={`menu-nav-btn${pane === item.id ? " sel" : ""}`}
-              onClick={() => setPane(item.id)}
-              aria-pressed={pane === item.id}
+              key={info.id}
+              className={`menu-mapcard${selectedMap === info.id ? " sel" : ""}`}
+              style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
+              onClick={() => setSelectedMap(info.id)}
+              aria-pressed={selectedMap === info.id}
             >
-              <span className="menu-ic">{item.icon}</span>
-              <span className="menu-lbl">{item.label}</span>
-              {item.soon && <span className="menu-mini">Soon</span>}
+              <span className="menu-mapcard-tag">{MAP_TAG[info.id]}</span>
+              <span className="menu-mapcard-name">{info.name}</span>
             </button>
           ))}
-        </nav>
+        </div>
+        <div className="menu-dock">
+          <div className="menu-name-field">
+            <label htmlFor="player-name">Player name</label>
+            <input
+              id="player-name"
+              value={name}
+              maxLength={MAX_NAME_LENGTH}
+              placeholder="Your name"
+              onChange={(e) => setName(e.target.value)}
+              autoFocus
+            />
+          </div>
+          <button type="submit" className="menu-deploy" disabled={connecting}>
+            <span className="big">▶ {connecting ? "Connecting…" : "Play"}</span>
+            <span className="small">Public match</span>
+          </button>
+        </div>
+        {status.kind === "error" && <span className="menu-error">{status.message}</span>}
+      </form>
 
-        <div className="menu-stage">
-          {pane === "play" && (
-            <form className="menu-pane" onSubmit={handleSubmit}>
-              <div className="menu-pane-head">
-                <h2>Choose your sector</h2>
-                <span className="menu-pane-hint">3 maps · 6 players · ~8 min</span>
-              </div>
-              <div className="menu-maps">
-                {MAP_CATALOG.map((info) => (
-                  <button
-                    type="button"
-                    key={info.id}
-                    className={`menu-map${selectedMap === info.id ? " sel" : ""}`}
-                    style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
-                    onClick={() => setSelectedMap(info.id)}
-                    aria-pressed={selectedMap === info.id}
-                  >
-                    <MapArt id={info.id} />
-                    <span className="menu-map-tag">{MAP_TAG[info.id]}</span>
-                    <span className="menu-check">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        aria-hidden="true"
-                      >
-                        <path d="M5 13l4 4L19 7" />
-                      </svg>
-                    </span>
-                    <div className="menu-map-body">
-                      <span className="menu-map-name">{info.name}</span>
-                      <span className="menu-map-blurb">{info.blurb}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-              <div className="menu-deploybar">
-                <div className="menu-name-field">
-                  <label htmlFor="player-name">Player name</label>
-                  <input
-                    id="player-name"
-                    value={name}
-                    maxLength={MAX_NAME_LENGTH}
-                    placeholder="Your name"
-                    onChange={(e) => setName(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-                <button type="submit" className="menu-deploy" disabled={connecting}>
-                  <span className="big">▶ {connecting ? "Connecting…" : "Join"}</span>
-                  <span className="small">Public match</span>
-                </button>
-              </div>
-              {status.kind === "error" && <span className="menu-error">{status.message}</span>}
-            </form>
-          )}
+      {pane !== "play" && (
+        <div className="menu-overlay">
+          <section className="menu-sheet panel">
+            <header className="menu-sheet-head">
+              <h2>
+                {pane === "avatar" && "Choose your avatar"}
+                {pane === "private" && "Private room"}
+                {pane === "stats" && "Statistics"}
+                {pane === "options" && "Options"}
+              </h2>
+              <button
+                type="button"
+                className="menu-sheet-close"
+                onClick={() => setPane("play")}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </header>
 
-          {pane === "avatar" && (
-            <section className="menu-pane">
-              <div className="menu-pane-head">
-                <h2>Choose your avatar</h2>
-                <span className="menu-pane-hint">{AVATAR_CATALOG.length} cube-pet</span>
-              </div>
+            {pane === "avatar" && (
               <div className="menu-avatars">
                 {AVATAR_CATALOG.map((info) => (
                   <button
@@ -321,16 +233,11 @@ export function Lobby({ status, onConnect }: LobbyProps) {
                   </button>
                 ))}
               </div>
-            </section>
-          )}
+            )}
 
-          {pane === "private" && (
-            <section className="menu-pane">
-              <div className="menu-pane-head">
-                <h2>Private room</h2>
-              </div>
-              <div className="panel menu-empty">
-                <span className="menu-empty-ring">
+            {pane === "private" && (
+              <ComingSoon
+                icon={
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -341,24 +248,15 @@ export function Lobby({ status, onConnect }: LobbyProps) {
                     <rect x="5" y="11" width="14" height="9" rx="1.5" />
                     <path d="M8 11V8a4 4 0 0 1 8 0v3" />
                   </svg>
-                </span>
-                <span className="menu-empty-tag">Coming soon</span>
-                <b>Play only with people you invite</b>
-                <p>
-                  Create a code-protected room and share it with your friends, or join with a code
-                  you received.
-                </p>
-              </div>
-            </section>
-          )}
+                }
+                title="Play only with people you invite"
+                body="Create a code-protected room and share it with your friends, or join with a code you received."
+              />
+            )}
 
-          {pane === "stats" && (
-            <section className="menu-pane">
-              <div className="menu-pane-head">
-                <h2>Statistics</h2>
-              </div>
-              <div className="panel menu-empty">
-                <span className="menu-empty-ring">
+            {pane === "stats" && (
+              <ComingSoon
+                icon={
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -368,23 +266,14 @@ export function Lobby({ status, onConnect }: LobbyProps) {
                   >
                     <path d="M5 19V10m7 9V5m7 14v-7" />
                   </svg>
-                </span>
-                <span className="menu-empty-tag">Coming soon</span>
-                <b>Your matches, in numbers</b>
-                <p>
-                  Matches played, props flushed out, rounds won and time survived. Comes with
-                  account login.
-                </p>
-              </div>
-            </section>
-          )}
+                }
+                title="Your matches, in numbers"
+                body="Matches played, props flushed out, rounds won and time survived. Comes with account login."
+              />
+            )}
 
-          {pane === "options" && (
-            <section className="menu-pane">
-              <div className="menu-pane-head">
-                <h2>Options</h2>
-              </div>
-              <div className="panel menu-card">
+            {pane === "options" && (
+              <div className="menu-card">
                 <div className="menu-opt-row">
                   <span className="l">
                     <b>Audio</b>
@@ -399,10 +288,10 @@ export function Lobby({ status, onConnect }: LobbyProps) {
                   />
                 </div>
               </div>
-            </section>
-          )}
+            )}
+          </section>
         </div>
-      </div>
+      )}
     </div>
   );
 }
