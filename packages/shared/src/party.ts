@@ -6,11 +6,30 @@ import { PARTY_CODE_ALPHABET, PARTY_CODE_LENGTH } from "./constants";
  * Colyseus roomId, so joining is a plain `joinById(code)`.
  */
 
-/** Generate a random party code of {@link PARTY_CODE_LENGTH} characters. */
+/**
+ * Web Crypto global, present in every supported runtime (browsers, Node >= 20).
+ * Declared locally because this package compiles against the pure ES lib.
+ */
+declare const crypto: { getRandomValues<T extends ArrayBufferView>(array: T): T };
+
+const BYTE_RANGE = 256;
+
+/**
+ * Generate a random party code of {@link PARTY_CODE_LENGTH} characters.
+ * The code gates room access, so it comes from a CSPRNG; rejection sampling
+ * keeps the alphabet distribution unbiased.
+ */
 export function generatePartyCode(): string {
+  const alphabetLength = PARTY_CODE_ALPHABET.length;
+  const usableRange = BYTE_RANGE - (BYTE_RANGE % alphabetLength);
+  const byte = new Uint8Array(1);
   let code = "";
-  for (let i = 0; i < PARTY_CODE_LENGTH; i++) {
-    code += PARTY_CODE_ALPHABET[Math.floor(Math.random() * PARTY_CODE_ALPHABET.length)];
+  while (code.length < PARTY_CODE_LENGTH) {
+    crypto.getRandomValues(byte);
+    const value = byte[0];
+    if (value !== undefined && value < usableRange) {
+      code += PARTY_CODE_ALPHABET[value % alphabetLength];
+    }
   }
   return code;
 }
