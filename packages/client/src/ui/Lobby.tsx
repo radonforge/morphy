@@ -1,9 +1,14 @@
 import {
   AVATAR_CATALOG,
   type AvatarId,
+  isAvatarId,
+  isPartyCode,
   MAP_CATALOG,
   MAX_NAME_LENGTH,
+  MIN_PLAYERS_TO_START,
   type MapId,
+  normalizePartyCode,
+  PARTY_CODE_LENGTH,
 } from "@webhunt/shared";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { isMuted, setMuted } from "../game/audio";
@@ -15,9 +20,30 @@ export type ConnectStatus =
   | { kind: "connecting" }
   | { kind: "error"; message: string };
 
+export interface PartyMemberView {
+  id: string;
+  name: string;
+  avatar: string;
+}
+
+export interface PartyViewProps {
+  code: string;
+  selfId: string;
+  hostId: string;
+  mapId: MapId;
+  members: PartyMemberView[];
+  onStart: () => void;
+  onSetMap: (map: MapId) => void;
+  onSetProfile: (name: string, avatar: AvatarId) => void;
+  onLeaveParty: () => void;
+}
+
 interface LobbyProps {
   status: ConnectStatus;
+  party: PartyViewProps | null;
   onConnect: (name: string, map: MapId, avatar: AvatarId) => void;
+  onCreateParty: (name: string, map: MapId, avatar: AvatarId) => void;
+  onJoinParty: (code: string, name: string, avatar: AvatarId) => void;
 }
 
 type PaneId = "play" | "avatar" | "private" | "stats" | "options";
@@ -27,6 +53,8 @@ interface NavItem {
   label: string;
   soon?: boolean;
 }
+
+const COPY_FLASH_MS = 1600;
 
 const MAP_ACCENT: Record<MapId, string> = {
   station: "var(--cyan)",
@@ -64,10 +92,14 @@ const AVATAR_EMOJI: Record<AvatarId, string> = {
   crab: "🦀",
 };
 
+function avatarEmoji(avatar: string): string {
+  return isAvatarId(avatar) ? AVATAR_EMOJI[avatar] : "❔";
+}
+
 const NAV_ITEMS: NavItem[] = [
   { id: "play", label: "Play" },
   { id: "avatar", label: "Avatar" },
-  { id: "private", label: "Private", soon: true },
+  { id: "private", label: "Private" },
   { id: "stats", label: "Stats", soon: true },
   { id: "options", label: "Options" },
 ];
@@ -83,23 +115,84 @@ function ComingSoon({ icon, title, body }: { icon: ReactNode; title: string; bod
   );
 }
 
-export function Lobby({ status, onConnect }: LobbyProps) {
+export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: LobbyProps) {
   const [name, setName] = useState(() => loadPrefs().name);
   const [selectedMap, setSelectedMap] = useState<MapId>(() => loadPrefs().map);
   const [selectedAvatar, setSelectedAvatar] = useState<AvatarId>(() => loadPrefs().avatar);
   const [pane, setPane] = useState<PaneId>("play");
   const [muted, setMutedState] = useState(() => isMuted());
+  const [joinCode, setJoinCode] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const inParty = party !== null;
+  const isHost = party !== null && party.selfId === party.hostId;
+  const activeMap = party ? party.mapId : selectedMap;
 
   useEffect(() => {
     savePrefs({ name, map: selectedMap, avatar: selectedAvatar });
   }, [name, selectedMap, selectedAvatar]);
 
+  useEffect(() => {
+    if (inParty) setPane("play");
+  }, [inParty]);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), COPY_FLASH_MS);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
+      if (party) {
+        party.onSetProfile(name, selectedAvatar);
+        return;
+      }
       onConnect(name, selectedMap, selectedAvatar);
     },
-    [name, selectedMap, selectedAvatar, onConnect],
+    [party, name, selectedMap, selectedAvatar, onConnect],
+  );
+
+  const handleMapPick = useCallback(
+    (map: MapId) => {
+      if (party) {
+        if (party.selfId !== party.hostId) return;
+        party.onSetMap(map);
+      }
+      setSelectedMap(map);
+    },
+    [party],
+  );
+
+  const handleAvatarPick = useCallback(
+    (avatar: AvatarId) => {
+      setSelectedAvatar(avatar);
+      party?.onSetProfile(name, avatar);
+    },
+    [party, name],
+  );
+
+  const handleNameCommit = useCallback(() => {
+    party?.onSetProfile(name, selectedAvatar);
+  }, [party, name, selectedAvatar]);
+
+  const canCopy = typeof navigator !== "undefined" && navigator.clipboard !== undefined;
+  const copyCode = useCallback(() => {
+    if (!party || !navigator.clipboard) return;
+    navigator.clipboard.writeText(party.code).then(
+      () => setCopied(true),
+      () => setCopied(false),
+    );
+  }, [party]);
+
+  const handleJoinSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!isPartyCode(joinCode)) return;
+      onJoinParty(joinCode, name, selectedAvatar);
+    },
+    [joinCode, name, selectedAvatar, onJoinParty],
   );
 
   const toggleAudio = useCallback(() => {
@@ -112,11 +205,11 @@ export function Lobby({ status, onConnect }: LobbyProps) {
 
   const connecting = status.kind === "connecting";
   const trimmedName = name.trim();
-  const mapInfo = MAP_CATALOG.find((info) => info.id === selectedMap) ?? MAP_CATALOG[0];
+  const mapInfo = MAP_CATALOG.find((info) => info.id === activeMap) ?? MAP_CATALOG[0];
 
   return (
     <div className="menu">
-      <LobbyStage map={selectedMap} avatar={selectedAvatar} />
+      <LobbyStage map={activeMap} avatar={selectedAvatar} />
       <div className="menu-vignette" />
 
       <header className="menu-top">
@@ -147,14 +240,47 @@ export function Lobby({ status, onConnect }: LobbyProps) {
           </div>
           <div className="menu-pc-info">
             <span className="menu-pc-name">{trimmedName || "Guest"}</span>
-            <span className="menu-pc-sub">{trimmedName ? "Ready" : "Set name →"}</span>
+            <span className="menu-pc-sub">
+              {inParty ? "In party" : trimmedName ? "Ready" : "Set name →"}
+            </span>
           </div>
         </div>
       </header>
 
-      <aside className="menu-maptitle" key={selectedMap}>
-        <span className="menu-maptitle-tag" style={{ color: MAP_ACCENT[selectedMap] }}>
-          {MAP_TAG[selectedMap]} sector
+      {party && (
+        <aside className="menu-party panel">
+          <span className="eyebrow">Party code</span>
+          <div className="menu-party-code">
+            <b>{party.code}</b>
+            {canCopy && (
+              <button type="button" onClick={copyCode}>
+                {copied ? "Copied ✓" : "Copy"}
+              </button>
+            )}
+          </div>
+          <ul className="menu-party-members">
+            {party.members.map((member) => (
+              <li key={member.id}>
+                <span className="menu-party-emoji" aria-hidden="true">
+                  {avatarEmoji(member.avatar)}
+                </span>
+                <span className="menu-party-name">
+                  {member.id === party.hostId && <span className="menu-party-star">★ </span>}
+                  {member.name}
+                  {member.id === party.selfId ? " (you)" : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="menu-party-leave" onClick={party.onLeaveParty}>
+            Leave party
+          </button>
+        </aside>
+      )}
+
+      <aside className="menu-maptitle" key={activeMap}>
+        <span className="menu-maptitle-tag" style={{ color: MAP_ACCENT[activeMap] }}>
+          {MAP_TAG[activeMap]} sector
         </span>
         <h2>{mapInfo.name}</h2>
         <p>{mapInfo.blurb}</p>
@@ -166,10 +292,11 @@ export function Lobby({ status, onConnect }: LobbyProps) {
             <button
               type="button"
               key={info.id}
-              className={`menu-mapcard${selectedMap === info.id ? " sel" : ""}`}
+              className={`menu-mapcard${activeMap === info.id ? " sel" : ""}`}
               style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
-              onClick={() => setSelectedMap(info.id)}
-              aria-pressed={selectedMap === info.id}
+              onClick={() => handleMapPick(info.id)}
+              disabled={inParty && !isHost}
+              aria-pressed={activeMap === info.id}
             >
               <span className="menu-mapcard-tag">{MAP_TAG[info.id]}</span>
               <span className="menu-mapcard-name">{info.name}</span>
@@ -185,13 +312,37 @@ export function Lobby({ status, onConnect }: LobbyProps) {
               maxLength={MAX_NAME_LENGTH}
               placeholder="Your name"
               onChange={(e) => setName(e.target.value)}
+              onBlur={handleNameCommit}
               autoFocus
             />
           </div>
-          <button type="submit" className="menu-deploy" disabled={connecting}>
-            <span className="big">▶ {connecting ? "Connecting…" : "Play"}</span>
-            <span className="small">Public match</span>
-          </button>
+          {party ? (
+            isHost ? (
+              <button
+                type="button"
+                className="menu-deploy"
+                onClick={party.onStart}
+                disabled={party.members.length < MIN_PLAYERS_TO_START}
+              >
+                <span className="big">▶ Start match</span>
+                <span className="small">
+                  {party.members.length < MIN_PLAYERS_TO_START
+                    ? `Need at least ${MIN_PLAYERS_TO_START} players`
+                    : `Party of ${party.members.length}`}
+                </span>
+              </button>
+            ) : (
+              <div className="menu-deploy menu-waiting">
+                <span className="big">Waiting for host…</span>
+                <span className="small">Only the host can start the match</span>
+              </div>
+            )
+          ) : (
+            <button type="submit" className="menu-deploy" disabled={connecting}>
+              <span className="big">▶ {connecting ? "Connecting…" : "Play"}</span>
+              <span className="small">Public match</span>
+            </button>
+          )}
         </div>
         {status.kind === "error" && <span className="menu-error">{status.message}</span>}
       </form>
@@ -223,7 +374,7 @@ export function Lobby({ status, onConnect }: LobbyProps) {
                     type="button"
                     key={info.id}
                     className={`menu-avatar${selectedAvatar === info.id ? " sel" : ""}`}
-                    onClick={() => setSelectedAvatar(info.id)}
+                    onClick={() => handleAvatarPick(info.id)}
                     aria-pressed={selectedAvatar === info.id}
                   >
                     <span className="menu-avatar-emoji" aria-hidden="true">
@@ -235,23 +386,60 @@ export function Lobby({ status, onConnect }: LobbyProps) {
               </div>
             )}
 
-            {pane === "private" && (
-              <ComingSoon
-                icon={
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                    aria-hidden="true"
+            {pane === "private" && party && (
+              <div className="menu-card menu-party-sheet">
+                <span className="eyebrow">Party code</span>
+                <b className="menu-party-bigcode">{party.code}</b>
+                <p>Share this code with your friends so they can join you.</p>
+                {canCopy && (
+                  <button type="button" className="menu-party-btn" onClick={copyCode}>
+                    {copied ? "Copied ✓" : "Copy code"}
+                  </button>
+                )}
+                <button type="button" className="menu-party-leave" onClick={party.onLeaveParty}>
+                  Leave party
+                </button>
+              </div>
+            )}
+
+            {pane === "private" && !party && (
+              <div className="menu-party-setup">
+                <div className="menu-card">
+                  <b>Create a room</b>
+                  <p>
+                    Get a code to share with your friends. You pick the map and start the match.
+                  </p>
+                  <button
+                    type="button"
+                    className="menu-party-btn"
+                    onClick={() => onCreateParty(name, selectedMap, selectedAvatar)}
+                    disabled={connecting}
                   >
-                    <rect x="5" y="11" width="14" height="9" rx="1.5" />
-                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                  </svg>
-                }
-                title="Play only with people you invite"
-                body="Create a code-protected room and share it with your friends, or join with a code you received."
-              />
+                    {connecting ? "Connecting…" : "Create room"}
+                  </button>
+                </div>
+                <div className="menu-card">
+                  <b>Join with a code</b>
+                  <p>Enter the code you received to join your friends' room.</p>
+                  <form className="menu-party-joinrow" onSubmit={handleJoinSubmit}>
+                    <input
+                      value={joinCode}
+                      maxLength={PARTY_CODE_LENGTH}
+                      placeholder="CODE"
+                      aria-label="Room code"
+                      onChange={(e) => setJoinCode(normalizePartyCode(e.target.value))}
+                    />
+                    <button
+                      type="submit"
+                      className="menu-party-btn"
+                      disabled={!isPartyCode(joinCode) || connecting}
+                    >
+                      {connecting ? "…" : "Join"}
+                    </button>
+                  </form>
+                  {status.kind === "error" && <span className="menu-error">{status.message}</span>}
+                </div>
+              </div>
             )}
 
             {pane === "stats" && (

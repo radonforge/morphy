@@ -63,7 +63,6 @@ const PHASE_DURATION_MS: Record<Phase, number> = {
 
 interface GameProps {
   connection: Connection;
-  onLeave: () => void;
 }
 
 interface RoomStateView {
@@ -313,7 +312,7 @@ function RingTimer({ endsAt, total }: { endsAt: number; total: number }) {
   );
 }
 
-export function Game({ connection, onLeave }: GameProps) {
+export function Game({ connection }: GameProps) {
   const { room, sessionId } = connection;
   const playersRef = useRef<Map<string, RemotePlayerView>>(new Map());
   const teleportRef = useRef<{ x: number; z: number } | null>(null) as TeleportRef;
@@ -345,92 +344,105 @@ export function Game({ connection, onLeave }: GameProps) {
 
   useEffect(() => {
     const callbacks = Callbacks.get(room);
+    const unsubscribers: Array<() => void> = [];
 
-    callbacks.onAdd("players", (player: unknown, key: unknown) => {
-      const id = String(key);
-      playersRef.current.set(id, player as RemotePlayerView);
-      setIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    });
+    unsubscribers.push(
+      callbacks.onAdd("players", (player: unknown, key: unknown) => {
+        const id = String(key);
+        playersRef.current.set(id, player as RemotePlayerView);
+        setIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      }),
+    );
 
-    callbacks.onRemove("players", (_player: unknown, key: unknown) => {
-      const id = String(key);
-      playersRef.current.delete(id);
-      setIds((prev) => prev.filter((existing) => existing !== id));
-    });
+    unsubscribers.push(
+      callbacks.onRemove("players", (_player: unknown, key: unknown) => {
+        const id = String(key);
+        playersRef.current.delete(id);
+        setIds((prev) => prev.filter((existing) => existing !== id));
+      }),
+    );
 
-    room.onMessage(MSG_TELEPORT, (message: unknown) => {
-      if (typeof message !== "object" || message === null) return;
-      const m = message as Record<string, unknown>;
-      if (isFiniteNumber(m.x) && isFiniteNumber(m.z)) {
-        teleportRef.current = { x: m.x, z: m.z };
-      }
-    });
-
-    room.onMessage(MSG_TAUNT, (message: unknown) => {
-      if (typeof message !== "object" || message === null) return;
-      const m = message as Record<string, unknown>;
-      if (typeof m.playerId !== "string" || !isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
-      tauntPulseRef.current.set(m.playerId, TAUNT_PULSE_SECONDS);
-      const local = playersRef.current.get(sessionId);
-      const volume = local
-        ? Math.max(0, 1 - Math.hypot(local.x - m.x, local.z - m.z) / TAUNT_MAX_DISTANCE)
-        : 0.7;
-      playTaunt(volume);
-    });
-
-    room.onMessage(MSG_CHAT, (message: unknown) => {
-      if (typeof message !== "object" || message === null) return;
-      const m = message as Record<string, unknown>;
-      if (typeof m.name !== "string" || typeof m.text !== "string") return;
-      const line: ChatLine = { key: msgSeq.current++, name: m.name, text: m.text };
-      setMessages((prev) => [...prev, line].slice(-CHAT_HISTORY));
-    });
-
-    room.onMessage(MSG_SHOT_RESULT, (message: unknown) => {
-      if (typeof message !== "object" || message === null) return;
-      const hit = (message as Record<string, unknown>).hit === true;
-      if (hit) {
-        playHitConfirm();
-      } else {
-        playMiss();
-      }
-      setShotFx({ kind: hit ? "hit" : "miss", seq: fxSeq.current++ });
-    });
-
-    room.onMessage(MSG_KILL, (message: unknown) => {
-      if (typeof message !== "object" || message === null) return;
-      const event = message as KillEvent;
-      if (typeof event.victimName !== "string" || typeof event.reason !== "string") return;
-      const key = fxSeq.current++;
-      setKillFeed((prev) => [...prev.slice(-(KILL_FEED_MAX - 1)), { key, text: killText(event) }]);
-      setTimeout(
-        () => setKillFeed((prev) => prev.filter((line) => line.key !== key)),
-        KILL_FEED_MS,
-      );
-      if (event.victimId === sessionId) {
-        if (event.reason === "converted") {
-          playRoundStart();
-        } else {
-          playDeath();
+    unsubscribers.push(
+      room.onMessage(MSG_TELEPORT, (message: unknown) => {
+        if (typeof message !== "object" || message === null) return;
+        const m = message as Record<string, unknown>;
+        if (isFiniteNumber(m.x) && isFiniteNumber(m.z)) {
+          teleportRef.current = { x: m.x, z: m.z };
         }
-      } else if (event.byId !== sessionId) {
-        playKill();
-      }
-    });
+      }),
+    );
 
-    room.onMessage(MSG_MAP, (raw: unknown) => setMap(parseMapDefinition(raw)));
+    unsubscribers.push(
+      room.onMessage(MSG_TAUNT, (message: unknown) => {
+        if (typeof message !== "object" || message === null) return;
+        const m = message as Record<string, unknown>;
+        if (typeof m.playerId !== "string" || !isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
+        tauntPulseRef.current.set(m.playerId, TAUNT_PULSE_SECONDS);
+        const local = playersRef.current.get(sessionId);
+        const volume = local
+          ? Math.max(0, 1 - Math.hypot(local.x - m.x, local.z - m.z) / TAUNT_MAX_DISTANCE)
+          : 0.7;
+        playTaunt(volume);
+      }),
+    );
+
+    unsubscribers.push(
+      room.onMessage(MSG_CHAT, (message: unknown) => {
+        if (typeof message !== "object" || message === null) return;
+        const m = message as Record<string, unknown>;
+        if (typeof m.name !== "string" || typeof m.text !== "string") return;
+        const line: ChatLine = { key: msgSeq.current++, name: m.name, text: m.text };
+        setMessages((prev) => [...prev, line].slice(-CHAT_HISTORY));
+      }),
+    );
+
+    unsubscribers.push(
+      room.onMessage(MSG_SHOT_RESULT, (message: unknown) => {
+        if (typeof message !== "object" || message === null) return;
+        const hit = (message as Record<string, unknown>).hit === true;
+        if (hit) {
+          playHitConfirm();
+        } else {
+          playMiss();
+        }
+        setShotFx({ kind: hit ? "hit" : "miss", seq: fxSeq.current++ });
+      }),
+    );
+
+    unsubscribers.push(
+      room.onMessage(MSG_KILL, (message: unknown) => {
+        if (typeof message !== "object" || message === null) return;
+        const event = message as KillEvent;
+        if (typeof event.victimName !== "string" || typeof event.reason !== "string") return;
+        const key = fxSeq.current++;
+        setKillFeed((prev) => [
+          ...prev.slice(-(KILL_FEED_MAX - 1)),
+          { key, text: killText(event) },
+        ]);
+        setTimeout(
+          () => setKillFeed((prev) => prev.filter((line) => line.key !== key)),
+          KILL_FEED_MS,
+        );
+        if (event.victimId === sessionId) {
+          if (event.reason === "converted") {
+            playRoundStart();
+          } else {
+            playDeath();
+          }
+        } else if (event.byId !== sessionId) {
+          playKill();
+        }
+      }),
+    );
+
+    unsubscribers.push(room.onMessage(MSG_MAP, (raw: unknown) => setMap(parseMapDefinition(raw))));
     room.send(MSG_MAP);
 
-    room.onError((code, errMessage) => {
-      console.error("[webhunt] room error", code, errMessage);
-      onLeave();
-    });
-    room.onLeave(() => onLeave());
-
     return () => {
-      void room.leave();
+      for (const unsubscribe of unsubscribers) unsubscribe();
+      playersRef.current.clear();
     };
-  }, [room, onLeave, teleportRef, tauntPulseRef, sessionId]);
+  }, [room, teleportRef, tauntPulseRef, sessionId]);
 
   useEffect(() => {
     if (!shotFx) return;
@@ -588,6 +600,7 @@ export function Game({ connection, onLeave }: GameProps) {
     <>
       <Canvas dpr={[1, 1.5]} shadows camera={{ position: [0, 12, 18], fov: 55 }}>
         <Scene
+          key={map.id}
           room={room}
           map={map}
           localId={sessionId}
