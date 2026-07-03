@@ -1,5 +1,12 @@
 import { Callbacks } from "@colyseus/sdk";
-import { DEFAULT_MAP_ID, isMapId, type MapId, type Phase } from "@webhunt/shared";
+import {
+  DEFAULT_MAP_ID,
+  isMapId,
+  type MapId,
+  MSG_MAP,
+  MSG_TELEPORT,
+  type Phase,
+} from "@webhunt/shared";
 import { useEffect, useRef, useState } from "react";
 import type { Connection } from "./connection";
 
@@ -79,6 +86,7 @@ export function usePartyRoom(connection: Connection | null): PartyView {
     }
     const { room } = connection;
     const callbacks = Callbacks.get(room);
+    const ignore = () => {};
     const unsubscribers = [
       callbacks.onAdd("players", (player: unknown, key: unknown) => {
         players.set(String(key), player as PartyPlayerView);
@@ -86,6 +94,8 @@ export function usePartyRoom(connection: Connection | null): PartyView {
       callbacks.onRemove("players", (_player: unknown, key: unknown) => {
         players.delete(String(key));
       }),
+      room.onMessage(MSG_MAP, ignore),
+      room.onMessage(MSG_TELEPORT, ignore),
     ];
     const update = () => {
       const state = room.state as unknown as PartyStateView;
