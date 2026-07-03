@@ -404,16 +404,15 @@ export function LobbyStage({
             />
           ))}
         </Suspense>
-        {actors.length > 1 &&
-          actors.map((actor, index) =>
-            index === 0 ? null : (
-              <ActorNameplate
-                key={actor.id}
-                label={`${actor.isHost ? "★ " : ""}${actor.name}`}
-                slot={slots[index] ?? SOLO_SLOT}
-              />
-            ),
-          )}
+        {actors.map((actor, index) =>
+          !inParty || index > 0 ? (
+            <ActorNameplate
+              key={actor.id}
+              label={`${actor.isHost ? "★ " : ""}${actor.name}`}
+              slot={slots[index] ?? SOLO_SLOT}
+            />
+          ) : null,
+        )}
       </Canvas>
     </div>
   );

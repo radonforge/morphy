@@ -257,19 +257,6 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             </button>
           ))}
         </nav>
-        <div className="menu-playercard panel">
-          <div className="menu-pc-av">
-            <span className="menu-pc-emoji" aria-hidden="true">
-              {AVATAR_EMOJI[selectedAvatar]}
-            </span>
-          </div>
-          <div className="menu-pc-info">
-            <span className="menu-pc-name">{trimmedName || "Guest"}</span>
-            <span className="menu-pc-sub">
-              {inParty ? "In party" : trimmedName ? "Ready" : "Set name →"}
-            </span>
-          </div>
-        </div>
       </header>
 
       {party && (
