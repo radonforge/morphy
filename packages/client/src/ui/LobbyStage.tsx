@@ -150,7 +150,6 @@ const DIORAMAS: Record<MapId, SetPiece[]> = {
     { url: sta("container"), position: [-2.5, 0, -6.8], rotationY: 0.9, scale: 2.4 },
     { url: sta("skip"), position: [-6.2, 0, -4.8], rotationY: 0.7, scale: 2.4 },
     { url: sta("computer-wide"), position: [3.6, 0, -6], rotationY: -0.55, scale: 2.6 },
-    { url: sta("computer-screen"), position: [2.8, 0, -6.9], rotationY: -0.35, scale: 2.6 },
     { url: sta("chair"), position: [4.8, 0, -5], rotationY: -2.4, scale: 2.6 },
     { url: sta("table-display-planet"), position: [7.6, 0, -9.4], rotationY: -0.8, scale: 3.2 },
   ],
