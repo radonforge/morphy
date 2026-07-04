@@ -42,6 +42,7 @@ import {
   playRoundStart,
   playTaunt,
   playWeaponShot,
+  preloadSamples,
   toggleMuted,
 } from "./audio";
 import { GAME_FOV, Scene, TAUNT_PULSE_SECONDS } from "./Scene";
@@ -544,6 +545,10 @@ export function Game({ connection, onBackToMenu }: GameProps) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [pickWeapon]);
+
+  useEffect(() => {
+    preloadSamples();
+  }, []);
 
   useEffect(() => {
     const prev = prevPhaseRef.current;

@@ -39,7 +39,7 @@ The single source of truth for everything client and server must agree on. **Exp
 - `ui/App.tsx` — lobby/connect screen; `net/connection.ts` wraps the Colyseus SDK `joinOrCreate` with a timeout.
 - `game/Game.tsx` — React HUD and the network event hub: registers all `room.onMessage` handlers and the schema `Callbacks` (player add/remove), drives chat/kill-feed/result/scoreboard overlays.
 - `game/Scene.tsx` — the entire 3D scene: map rendering (instanced tiles, fitted GLB props/avatars, scenery), the **local player movement + client-side collision** (walls, obstacles, player separation, gravity/jump), remote-player interpolation, the shooting raycast, and the prop-picker (`E` to morph). This is the largest and densest file.
-- `game/audio.ts` — **all sound is synthesized at runtime via the Web Audio API** (oscillators + noise bursts); there are no audio asset files.
+- `game/audio.ts` — **hybrid audio**: weapon shots and hit impacts play Kenney CC0 OGG samples from `public/sounds/sci-fi/` (fetched + decoded once, cached); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers both.
 
 ### Two facts that span files
 
