@@ -127,7 +127,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 const noRaycast = () => {};
 const LOCAL_AVATAR_KEY = "localAvatar";
-const TRANSFORM_REACH = 3.5;
+const TRANSFORM_REACH = 5;
 
 export const GAME_FOV = 55;
 const SPRINT_FOV_ADD = 7;
