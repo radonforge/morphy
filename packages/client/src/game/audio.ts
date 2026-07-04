@@ -5,12 +5,6 @@ const MUTE_STORAGE_KEY = "webhunt:muted";
 const MUTE_FADE_S = 0.05;
 const NOISE_SECONDS = 0.2;
 
-const AMBIENT_GAIN = 0.007;
-const AMBIENT_FREQS = [48, 72];
-const AMBIENT_FILTER_HZ = 160;
-const AMBIENT_FADE_IN_S = 1.5;
-const AMBIENT_FADE_OUT_S = 0.8;
-
 interface ToneSpec {
   type: OscillatorType;
   f0: number;
@@ -26,7 +20,6 @@ let audioContext: AudioContext | null = null;
 let masterGain: GainNode | null = null;
 let muted = readMuted();
 let noiseBuffer: AudioBuffer | null = null;
-let ambient: { stop: () => void } | null = null;
 
 function readMuted(): boolean {
   if (typeof localStorage === "undefined") return false;
@@ -281,40 +274,4 @@ export function playRoundEnd(won: boolean): void {
   notes.forEach((f, i) => {
     tone(e.ctx, e.master, { type: "triangle", f0: f, peak: 0.2, dur: 0.3, delay: i * 0.14 });
   });
-}
-
-/** Start a faint low sine pad, routed through the master (mute applies). */
-export function startAmbient(): void {
-  const e = ensure();
-  if (!e || ambient) return;
-  const { ctx, master } = e;
-  const ambGain = ctx.createGain();
-  ambGain.gain.value = 0.0001;
-  ambGain.gain.setTargetAtTime(AMBIENT_GAIN, ctx.currentTime, AMBIENT_FADE_IN_S);
-  const filter = ctx.createBiquadFilter();
-  filter.type = "lowpass";
-  filter.frequency.value = AMBIENT_FILTER_HZ;
-  const oscs = AMBIENT_FREQS.map((f) => {
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = f;
-    osc.connect(filter);
-    osc.start();
-    return osc;
-  });
-  filter.connect(ambGain).connect(master);
-  ambient = {
-    stop: () => {
-      const now = ctx.currentTime;
-      ambGain.gain.setTargetAtTime(0.0001, now, AMBIENT_FADE_OUT_S);
-      oscs.forEach((osc) => {
-        osc.stop(now + AMBIENT_FADE_OUT_S * 4);
-      });
-    },
-  };
-}
-
-export function stopAmbient(): void {
-  ambient?.stop();
-  ambient = null;
 }
