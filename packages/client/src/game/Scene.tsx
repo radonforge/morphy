@@ -63,6 +63,9 @@ function applyTauntPulse(
 
 const PLAYER_RADIUS = 0.4;
 const PLAYER_SEPARATION = PLAYER_RADIUS * 2;
+const PLAYER_HEIGHT = 1.8;
+const STEP_HEIGHT = 0.35;
+const GROUND_EPSILON = 1e-3;
 const FURNITURE_MIN_RADIUS = 0.3;
 const PLAYER_BODY_LENGTH = 0.9;
 const PLAYER_BODY_Y = PLAYER_BODY_LENGTH / 2 + PLAYER_RADIUS;
@@ -228,28 +231,120 @@ function themeFor(mapId: string): ThemePreset {
 
 type Catalog = Map<string, PropDefinition>;
 
-interface Obstacle {
+/**
+ * A solid box for movement collision: Y-rotated by the angle whose cos/sin are
+ * precomputed, spanning [yMin, yMax] vertically. Map colliders are axis-aligned
+ * (cos 1, sin 0); prop parts carry their instance rotation, so long furniture
+ * blocks by its true oriented footprint instead of a bounding circle.
+ */
+interface ObbCollider {
   x: number;
   z: number;
-  radius: number;
+  cos: number;
+  sin: number;
+  hx: number;
+  hz: number;
+  yMin: number;
+  yMax: number;
 }
 
-function buildObstacles(map: MapDefinition, catalog: Catalog): Obstacle[] {
-  const obstacles: Obstacle[] = [];
+function buildColliders(map: MapDefinition, catalog: Catalog): ObbCollider[] {
+  const colliders: ObbCollider[] = [];
+  for (const collider of map.colliders) {
+    colliders.push({
+      x: collider.position.x,
+      z: collider.position.z,
+      cos: 1,
+      sin: 0,
+      hx: collider.size.x / 2,
+      hz: collider.size.z / 2,
+      yMin: collider.position.y - collider.size.y / 2,
+      yMax: collider.position.y + collider.size.y / 2,
+    });
+  }
   for (const instance of map.props) {
     const def = catalog.get(instance.type);
     if (!def) continue;
-    let radius = 0;
+    const cos = Math.cos(instance.rotation);
+    const sin = Math.sin(instance.rotation);
     for (const part of def.parts) {
-      const reach =
-        Math.hypot(part.position.x, part.position.z) + Math.max(part.size.x, part.size.z) / 2;
-      if (reach > radius) radius = reach;
-    }
-    if (radius >= FURNITURE_MIN_RADIUS) {
-      obstacles.push({ x: instance.position.x, z: instance.position.z, radius });
+      const hx = part.size.x / 2;
+      const hz = part.size.z / 2;
+      const reach = Math.hypot(part.position.x, part.position.z) + Math.max(hx, hz);
+      if (reach < FURNITURE_MIN_RADIUS) continue;
+      colliders.push({
+        x: instance.position.x + part.position.x * cos + part.position.z * sin,
+        z: instance.position.z - part.position.x * sin + part.position.z * cos,
+        cos,
+        sin,
+        hx,
+        hz,
+        yMin: instance.position.y + part.position.y - part.size.y / 2,
+        yMax: instance.position.y + part.position.y + part.size.y / 2,
+      });
     }
   }
-  return obstacles;
+  return colliders;
+}
+
+/**
+ * Highest collider top the player's footprint circle overlaps that is no more
+ * than a step above the feet — the surface the player stands on (base ground 0).
+ */
+function supportHeightAt(x: number, z: number, footY: number, colliders: ObbCollider[]): number {
+  let best = 0;
+  for (const c of colliders) {
+    if (c.yMax <= best || c.yMax > footY + STEP_HEIGHT) continue;
+    const dx = x - c.x;
+    const dz = z - c.z;
+    const lx = dx * c.cos - dz * c.sin;
+    const lz = dx * c.sin + dz * c.cos;
+    const ox = lx - THREE.MathUtils.clamp(lx, -c.hx, c.hx);
+    const oz = lz - THREE.MathUtils.clamp(lz, -c.hz, c.hz);
+    if (ox * ox + oz * oz < PLAYER_RADIUS * PLAYER_RADIUS) best = c.yMax;
+  }
+  return best;
+}
+
+/**
+ * Push the player's footprint circle out of every solid box overlapping its
+ * vertical span. Boxes whose top is within a step of the feet are walkable
+ * (handled by {@link supportHeightAt}); boxes above the head are ignored.
+ */
+function resolveColliders(pos: THREE.Vector3, colliders: ObbCollider[]): void {
+  for (const c of colliders) {
+    if (c.yMax <= pos.y + STEP_HEIGHT || c.yMin >= pos.y + PLAYER_HEIGHT) continue;
+    const dx = pos.x - c.x;
+    const dz = pos.z - c.z;
+    const lx = dx * c.cos - dz * c.sin;
+    const lz = dx * c.sin + dz * c.cos;
+    const nx = THREE.MathUtils.clamp(lx, -c.hx, c.hx);
+    const nz = THREE.MathUtils.clamp(lz, -c.hz, c.hz);
+    const ox = lx - nx;
+    const oz = lz - nz;
+    const distSq = ox * ox + oz * oz;
+    if (distSq >= PLAYER_RADIUS * PLAYER_RADIUS) continue;
+    let pushX = 0;
+    let pushZ = 0;
+    if (distSq > 1e-8) {
+      const dist = Math.sqrt(distSq);
+      const push = PLAYER_RADIUS - dist;
+      pushX = (ox / dist) * push;
+      pushZ = (oz / dist) * push;
+    } else {
+      const toMinX = lx + c.hx;
+      const toMaxX = c.hx - lx;
+      const toMinZ = lz + c.hz;
+      const toMaxZ = c.hz - lz;
+      const minPen = Math.min(toMinX, toMaxX, toMinZ, toMaxZ);
+      if (minPen === toMinX) pushX = -(toMinX + PLAYER_RADIUS);
+      else if (minPen === toMaxX) pushX = toMaxX + PLAYER_RADIUS;
+      else if (minPen === toMinZ) pushZ = -(toMinZ + PLAYER_RADIUS);
+      else pushZ = toMaxZ + PLAYER_RADIUS;
+    }
+    pos.x += pushX * c.cos + pushZ * c.sin;
+    pos.z += -pushX * c.sin + pushZ * c.cos;
+  }
 }
 
 interface Wall {
@@ -365,7 +460,7 @@ export function Scene({
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
     [map],
   );
-  const obstacles = useMemo(() => buildObstacles(map, catalog), [map, catalog]);
+  const colliders = useMemo(() => buildColliders(map, catalog), [map, catalog]);
   const walls = useMemo(() => buildWalls(map), [map]);
   const theme = useMemo(() => themeFor(map.id), [map.id]);
   const localGroundRef = useRef(new THREE.Vector3());
@@ -471,7 +566,7 @@ export function Scene({
         tauntPulseRef={tauntPulseRef}
         chatOpen={chatOpen}
         playersRef={playersRef}
-        obstacles={obstacles}
+        colliders={colliders}
         walls={walls}
         avatar={localMeta?.avatar ?? ""}
         playerPos={localGroundRef}
@@ -1430,7 +1525,7 @@ interface LocalPlayerProps {
   tauntPulseRef: TauntPulseRef;
   chatOpen: boolean;
   playersRef: PlayersRef;
-  obstacles: Obstacle[];
+  colliders: ObbCollider[];
   walls: Wall[];
   avatar: string;
   playerPos: PlayerPosRef;
@@ -1450,7 +1545,7 @@ function LocalPlayer({
   tauntPulseRef,
   chatOpen,
   playersRef,
-  obstacles,
+  colliders,
   walls,
   avatar,
   playerPos,
@@ -1462,7 +1557,10 @@ function LocalPlayer({
   const { camera } = useThree();
 
   const spawn = map.spawnPoints.props[0] ?? map.bounds.min;
-  const pos = useMemo(() => new THREE.Vector3(spawn.x, 0, spawn.z), [spawn.x, spawn.z]);
+  const pos = useMemo(
+    () => new THREE.Vector3(spawn.x, spawn.y, spawn.z),
+    [spawn.x, spawn.y, spawn.z],
+  );
   const spawnApplied = useRef(false);
   const heading = useRef(0);
   const sendAccumMs = useRef(0);
@@ -1483,7 +1581,7 @@ function LocalPlayer({
     if (!spawnApplied.current) {
       const self = playersRef.current.get(id);
       if (self) {
-        pos.set(self.x, 0, self.z);
+        pos.set(self.x, self.y, self.z);
         heading.current = self.rot;
         spawnApplied.current = true;
       }
@@ -1492,7 +1590,9 @@ function LocalPlayer({
     const teleport = teleportRef.current;
     if (teleport) {
       pos.x = teleport.x;
+      pos.y = 0;
       pos.z = teleport.z;
+      velocityY.current = 0;
       teleportRef.current = null;
     }
 
@@ -1500,6 +1600,7 @@ function LocalPlayer({
     forwardVec.set(-Math.sin(yaw), 0, -Math.cos(yaw));
     rightVec.crossVectors(forwardVec, UP);
 
+    let support = supportHeightAt(pos.x, pos.z, pos.y, colliders);
     let horizSpeed = 0;
     let sprinting = false;
 
@@ -1516,7 +1617,7 @@ function LocalPlayer({
 
       const runMultiplier = role === "hunter" ? RUN_MULTIPLIER_HUNTER : RUN_MULTIPLIER_PROP;
       const speed = k.run ? MOVE_SPEED * runMultiplier : MOVE_SPEED;
-      const grounded = pos.y <= 0;
+      const grounded = pos.y <= support + GROUND_EPSILON;
       const rate = (hasInput ? MOVE_ACCEL : MOVE_DECEL) * (grounded ? 1 : AIR_CONTROL) * delta;
       const dvx = moveVec.x * speed - velocity.x;
       const dvz = moveVec.z * speed - velocity.z;
@@ -1554,15 +1655,16 @@ function LocalPlayer({
       if (velocityY.current > 0 && !k.jump) gravity *= JUMP_RELEASE_GRAVITY_MULT;
       else if (velocityY.current < 0) gravity *= FALL_GRAVITY_MULT;
       velocityY.current -= gravity * delta;
-      const airborne = pos.y > 0;
+      support = supportHeightAt(pos.x, pos.z, pos.y, colliders);
+      const airborne = pos.y > support + GROUND_EPSILON;
       pos.y += velocityY.current * delta;
-      if (pos.y <= 0) {
+      if (velocityY.current <= 0 && pos.y <= support) {
         if (airborne) {
           const impact = Math.min(1, -velocityY.current / (JUMP_SPEED * 2));
           motionRef.current.landing = Math.max(motionRef.current.landing, impact);
           playLand(impact);
         }
-        pos.y = 0;
+        pos.y = support;
         velocityY.current = 0;
       }
       jumpHeld.current = k.jump;
@@ -1577,6 +1679,7 @@ function LocalPlayer({
     if (alive) {
       for (const [otherId, other] of playersRef.current) {
         if (otherId === id || !other.alive) continue;
+        if (Math.abs(pos.y - other.y) >= PLAYER_HEIGHT) continue;
         const dx = pos.x - other.x;
         const dz = pos.z - other.z;
         const distSq = dx * dx + dz * dz;
@@ -1587,48 +1690,13 @@ function LocalPlayer({
           pos.z += (dz / dist) * push;
         }
       }
-      for (const obstacle of obstacles) {
-        const dx = pos.x - obstacle.x;
-        const dz = pos.z - obstacle.z;
-        const minSep = PLAYER_RADIUS + obstacle.radius;
-        const distSq = dx * dx + dz * dz;
-        if (distSq > 1e-8 && distSq < minSep * minSep) {
-          const dist = Math.sqrt(distSq);
-          const push = minSep - dist;
-          pos.x += (dx / dist) * push;
-          pos.z += (dz / dist) * push;
-        }
-      }
-      for (const wall of walls) {
-        const nearestX = THREE.MathUtils.clamp(pos.x, wall.minX, wall.maxX);
-        const nearestZ = THREE.MathUtils.clamp(pos.z, wall.minZ, wall.maxZ);
-        const dx = pos.x - nearestX;
-        const dz = pos.z - nearestZ;
-        const distSq = dx * dx + dz * dz;
-        if (distSq >= PLAYER_RADIUS * PLAYER_RADIUS) continue;
-        if (distSq > 1e-8) {
-          const dist = Math.sqrt(distSq);
-          const push = PLAYER_RADIUS - dist;
-          pos.x += (dx / dist) * push;
-          pos.z += (dz / dist) * push;
-        } else {
-          const toMinX = pos.x - wall.minX;
-          const toMaxX = wall.maxX - pos.x;
-          const toMinZ = pos.z - wall.minZ;
-          const toMaxZ = wall.maxZ - pos.z;
-          const minPen = Math.min(toMinX, toMaxX, toMinZ, toMaxZ);
-          if (minPen === toMinX) pos.x = wall.minX - PLAYER_RADIUS;
-          else if (minPen === toMaxX) pos.x = wall.maxX + PLAYER_RADIUS;
-          else if (minPen === toMinZ) pos.z = wall.minZ - PLAYER_RADIUS;
-          else pos.z = wall.maxZ + PLAYER_RADIUS;
-        }
-      }
+      resolveColliders(pos, colliders);
       const { min, max } = map.bounds;
       pos.x = THREE.MathUtils.clamp(pos.x, min.x + PLAYER_RADIUS, max.x - PLAYER_RADIUS);
       pos.z = THREE.MathUtils.clamp(pos.z, min.z + PLAYER_RADIUS, max.z - PLAYER_RADIUS);
     }
 
-    playerPos.current.set(pos.x, 0, pos.z);
+    playerPos.current.set(pos.x, pos.y, pos.z);
     const group = groupRef.current;
     if (group) {
       group.position.set(pos.x, pos.y, pos.z);
@@ -1641,7 +1709,7 @@ function LocalPlayer({
     motion.landing *= LAND_DAMP ** delta;
     motion.speed = horizSpeed;
     motion.sprinting = sprinting;
-    motion.grounded = pos.y <= 0;
+    motion.grounded = pos.y <= support + GROUND_EPSILON;
     motion.yaw = yaw;
     motion.pitch = pitch;
 
