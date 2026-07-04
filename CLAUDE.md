@@ -53,6 +53,8 @@ The single source of truth for everything client and server must agree on. **Exp
 ### Assets
 GLB models live in `packages/client/public/models/<kit>/`: `blaster` (weapon viewmodel), `pets` (player avatars), `space` (corridor/wall/floor tiles for the generated map), `space-station` (interior furniture props), `space-kit` (exterior scenery). Kenney kits reference an external `Textures/colormap.png` per kit — keep that file alongside the GLBs or models render untextured.
 
+Audio samples in active use ship from `packages/client/public/sounds/sci-fi/`. Unwired candidates are staged in `assets/audio/sci-fi/` (CC0, see its README) — copy into `public/sounds/` only when a sound is actually used, so the client bundle stays lean.
+
 ## Spec vs. code
 
 `SPEC.md` is the original design doc and is **partially outdated**. Where it conflicts with code, trust the code. Notable divergences:
