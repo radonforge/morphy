@@ -123,6 +123,32 @@ export function playTaunt(volume: number): void {
   });
 }
 
+/** Shimmering materialize sweep when a player morphs into a prop. `volume` is 0..1. */
+export function playMorph(volume = 1): void {
+  const e = ensure();
+  if (!e || volume <= 0) return;
+  const level = Math.min(1, volume);
+  noiseBurst(e.ctx, e.master, { peak: 0.1 * level, dur: 0.3, filterHz: 3400 });
+  tone(e.ctx, e.master, {
+    type: "sine",
+    f0: 240,
+    f1: 960,
+    fTime: 0.26,
+    peak: 0.14 * level,
+    attack: 0.02,
+    dur: 0.34,
+  });
+  tone(e.ctx, e.master, {
+    type: "triangle",
+    f0: 1440,
+    f1: 1920,
+    fTime: 0.08,
+    peak: 0.07 * level,
+    dur: 0.14,
+    delay: 0.22,
+  });
+}
+
 /** Rising chime confirming a hunter's shot caught a prop. */
 export function playHitConfirm(): void {
   const e = ensure();
