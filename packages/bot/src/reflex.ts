@@ -238,6 +238,7 @@ export class Reflex {
     const colliders = this.map?.colliders ?? [];
     const entities: ObservedEntity[] = [];
     for (const other of world.others) {
+      if (!other.alive) continue;
       const distance = Math.hypot(other.x - this.posX, other.z - this.posZ);
       const bounds = this.propBounds.get(other.propType) ?? UNTRANSFORMED_BOUNDS;
       const aimY = (bounds.yMin + bounds.yMax) / 2;
