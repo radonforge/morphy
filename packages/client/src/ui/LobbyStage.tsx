@@ -334,6 +334,17 @@ function StaticShadows() {
   return null;
 }
 
+/** Re-renders the frozen shadow map when the suspense boundary it sits in resolves with new content. */
+function ShadowKick({ signal }: { signal: string }) {
+  const gl = useThree((state) => state.gl);
+
+  useEffect(() => {
+    gl.shadowMap.needsUpdate = true;
+  }, [gl, signal]);
+
+  return null;
+}
+
 function Atmosphere({ theme }: { theme: StageTheme }) {
   const scene = useThree((state) => state.scene);
   const [background] = useState(() => new THREE.Color(theme.background));
@@ -432,11 +443,12 @@ export function LobbyStage({
           shadow-camera-bottom={-SHADOW_EXTENT}
         />
         <Ground theme={theme} />
+        <StaticShadows />
         <Suspense fallback={null}>
           {DIORAMAS[map].map((piece) => (
             <SetPieceModel key={`${piece.url}:${piece.position.join(",")}`} piece={piece} />
           ))}
-          <StaticShadows key={map} />
+          <ShadowKick signal={`diorama:${map}`} />
         </Suspense>
         <Suspense fallback={null}>
           {actors.map((actor, index) => (
@@ -446,6 +458,9 @@ export function LobbyStage({
               slot={slots[index] ?? SOLO_SLOT}
             />
           ))}
+          <ShadowKick
+            signal={`actors:${map}:${inParty}:${actors.map((a) => `${a.id}:${a.avatar}`).join("|")}`}
+          />
         </Suspense>
         {actors.map((actor, index) =>
           !inParty || index > 0 ? (

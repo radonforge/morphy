@@ -106,7 +106,8 @@ function loadSample(ctx: AudioContext, name: string): Promise<AudioBuffer | null
       })
       .then((data) => ctx.decodeAudioData(data))
       .catch((error: unknown) => {
-        console.warn(`[audio] sample unavailable: ${name}`, error);
+        sampleCache.delete(name);
+        console.warn(`[audio] sample unavailable, will retry on next play: ${name}`, error);
         return null;
       });
     sampleCache.set(name, cached);

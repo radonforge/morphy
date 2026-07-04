@@ -383,6 +383,7 @@ export function Scene({
   const localAlive = localMeta?.alive ?? true;
   const morphsRef = useRef<MorphFx[]>([]);
   const seenPropTypes = useRef(new Map<string, string>());
+  const renderPosesRef = useRef(new Map<string, { x: number; z: number }>());
 
   useEffect(() => {
     const seen = seenPropTypes.current;
@@ -396,7 +397,9 @@ export function Scene({
       if (!def) continue;
       const bounds = computePropBounds(def);
       const local = id === localId;
-      const source = local ? localGroundRef.current : playersRef.current.get(id);
+      const source = local
+        ? localGroundRef.current
+        : (renderPosesRef.current.get(id) ?? playersRef.current.get(id));
       if (!source) continue;
       morphsRef.current.push({
         x: source.x,
@@ -412,7 +415,10 @@ export function Scene({
       );
     }
     for (const id of seen.keys()) {
-      if (!live.has(id)) seen.delete(id);
+      if (!live.has(id)) {
+        seen.delete(id);
+        renderPosesRef.current.delete(id);
+      }
     }
   }, [meta, ids, localId, catalog, playersRef]);
   const canTransform =
@@ -433,6 +439,7 @@ export function Scene({
         motionRef={motionRef}
         meta={meta}
         ids={ids}
+        tauntPulseRef={tauntPulseRef}
       />
       <SunLight intensity={theme.dir} bounds={map.bounds} />
       <MapView map={map} groundColor={theme.ground} />
@@ -483,6 +490,7 @@ export function Scene({
             avatar={meta[id]?.avatar ?? ""}
             tauntPulseRef={tauntPulseRef}
             localPos={localGroundRef}
+            renderPoses={renderPosesRef}
           />
         ))}
     </>
@@ -502,12 +510,14 @@ function ShadowRefresh({
   motionRef,
   meta,
   ids,
+  tauntPulseRef,
 }: {
   playersRef: PlayersRef;
   localPos: PlayerPosRef;
   motionRef: LocalMotionRef;
   meta: MetaMap;
   ids: string[];
+  tauntPulseRef: TauntPulseRef;
 }) {
   const gl = useThree((state) => state.gl);
   const checkAccum = useRef(0);
@@ -573,6 +583,13 @@ function ShadowRefresh({
       if (!playersRef.current.has(id)) {
         poses.delete(id);
         sinceChange.current = 0;
+      }
+    }
+
+    for (const remaining of tauntPulseRef.current.values()) {
+      if (remaining > 0) {
+        sinceChange.current = 0;
+        break;
       }
     }
 
@@ -695,6 +712,17 @@ function Tracers({ shotsRef }: { shotsRef: ShotsRef }) {
     return group;
   }, []);
 
+  useEffect(
+    () => () => {
+      for (const child of pool.children) {
+        const line = child as THREE.Line;
+        line.geometry.dispose();
+        (line.material as THREE.Material).dispose();
+      }
+    },
+    [pool],
+  );
+
   useFrame((_, delta) => {
     const tracers = tracersRef.current;
     for (const shot of shotsRef.current) {
@@ -752,6 +780,8 @@ interface MorphFx {
 
 type MorphFxRef = { readonly current: MorphFx[] };
 
+type RenderPosesRef = { readonly current: Map<string, { x: number; z: number }> };
+
 interface MorphBurstState extends MorphFx {
   age: number;
 }
@@ -798,6 +828,17 @@ function MorphEffects({ morphsRef }: { morphsRef: MorphFxRef }) {
       scale: new THREE.Vector3(),
     }),
     [],
+  );
+
+  useEffect(
+    () => () => {
+      for (const child of beams.children) {
+        const mesh = child as THREE.Mesh;
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+    },
+    [beams],
   );
 
   useFrame((_, delta) => {
@@ -1302,7 +1343,7 @@ function PropPicker({
       return;
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.code !== "KeyE") {
+      if (event.code !== "KeyE" || event.repeat) {
         return;
       }
       raycaster.setFromCamera(SCREEN_CENTER, camera);
@@ -1705,6 +1746,7 @@ interface RemotePlayerProps {
   avatar: string;
   tauntPulseRef: TauntPulseRef;
   localPos: PlayerPosRef;
+  renderPoses: RenderPosesRef;
 }
 
 function RemotePlayer({
@@ -1716,6 +1758,7 @@ function RemotePlayer({
   avatar,
   tauntPulseRef,
   localPos,
+  renderPoses,
 }: RemotePlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const stepAccum = useRef(0);
@@ -1742,6 +1785,14 @@ function RemotePlayer({
     group.position.z += (view.z - group.position.z) * t;
     group.rotation.y = view.rot;
     applyTauntPulse(group, tauntPulseRef, view.id, delta);
+
+    const pose = renderPoses.current.get(view.id);
+    if (pose) {
+      pose.x = group.position.x;
+      pose.z = group.position.z;
+    } else {
+      renderPoses.current.set(view.id, { x: group.position.x, z: group.position.z });
+    }
 
     if (role === "hunter") {
       const last = lastStepPos.current;
