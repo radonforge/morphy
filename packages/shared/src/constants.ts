@@ -19,6 +19,8 @@ export const SHOOT_ORIGIN_SLACK = 3;
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 
+export const PLAYER_HEIGHT = 1.8;
+
 export const MOVE_SPEED = 5;
 export const RUN_MULTIPLIER_HUNTER = 1.7;
 export const RUN_MULTIPLIER_PROP = 1.5;

@@ -181,6 +181,95 @@ function pushGate(
   }
 }
 
+export const DECK_THICKNESS = 0.4;
+export const STAIR_RISE = 0.3;
+export const STAIR_RUN = 0.7;
+
+const DECK_SLAB_MODEL = "/models/space/modular/template-floor-layer.glb";
+const DECK_SLAB_PITCH = 4;
+const STAIR_SLAB_DROP = 0.01;
+
+/**
+ * Elevated walkable platform: one solid box whose top is at `top`, plus slab
+ * tiles covering it. Rect sides should be multiples of {@link DECK_SLAB_PITCH}
+ * for a seamless surface. Keep `top - DECK_THICKNESS` at or above player
+ * height (1.8) so the space underneath stays walkable.
+ */
+export function emitDeck(
+  rect: { x0: number; x1: number; z0: number; z1: number },
+  top: number,
+  out: { tiles: TileInstance[]; colliders: BoxCollider[] },
+): void {
+  const w = rect.x1 - rect.x0;
+  const d = rect.z1 - rect.z0;
+  out.colliders.push({
+    position: {
+      x: (rect.x0 + rect.x1) / 2,
+      y: top - DECK_THICKNESS / 2,
+      z: (rect.z0 + rect.z1) / 2,
+    },
+    size: { x: w, y: DECK_THICKNESS, z: d },
+  });
+  const nx = Math.max(1, Math.round(w / DECK_SLAB_PITCH));
+  const nz = Math.max(1, Math.round(d / DECK_SLAB_PITCH));
+  for (let i = 0; i < nx; i++) {
+    for (let j = 0; j < nz; j++) {
+      out.tiles.push({
+        model: DECK_SLAB_MODEL,
+        position: {
+          x: rect.x0 + (i + 0.5) * (w / nx),
+          y: top - DECK_THICKNESS,
+          z: rect.z0 + (j + 0.5) * (d / nz),
+        },
+        rotationY: 0,
+      });
+    }
+  }
+}
+
+/**
+ * Straight walk-up staircase descending from the top edge centered at (x, z)
+ * toward the cardinal unit direction (dirX, dirZ). Each step rises
+ * {@link STAIR_RISE} (under the movement engine's step-up limit, so plain
+ * walking climbs it) over {@link STAIR_RUN}, as a full-height box so it blocks
+ * shots and ground navigation like low furniture. Each step's visual is one
+ * deck slab whose down-run edge sits at the tread front and whose body tucks
+ * under the steps above — a solid terraced ramp with no gaps (slabs are
+ * thicker than the rise). Slabs sink {@link STAIR_SLAB_DROP} so the top one
+ * never z-fights the deck surface; visuals assume `width` ≈ the slab pitch.
+ */
+export function emitStairs(
+  opts: { x: number; z: number; width: number; top: number; dirX: number; dirZ: number },
+  out: { tiles: TileInstance[]; colliders: BoxCollider[] },
+): void {
+  const steps = Math.round(opts.top / STAIR_RISE);
+  const slabSetback = DECK_SLAB_PITCH / 2 - STAIR_RUN;
+  for (let k = steps; k >= 1; k--) {
+    const distOut = (steps - k) * STAIR_RUN;
+    out.colliders.push({
+      position: {
+        x: opts.x + opts.dirX * (distOut + STAIR_RUN / 2),
+        y: (STAIR_RISE * k) / 2,
+        z: opts.z + opts.dirZ * (distOut + STAIR_RUN / 2),
+      },
+      size: {
+        x: Math.abs(opts.dirX) * STAIR_RUN + Math.abs(opts.dirZ) * opts.width,
+        y: STAIR_RISE * k,
+        z: Math.abs(opts.dirZ) * STAIR_RUN + Math.abs(opts.dirX) * opts.width,
+      },
+    });
+    out.tiles.push({
+      model: DECK_SLAB_MODEL,
+      position: {
+        x: opts.x + opts.dirX * (distOut - slabSetback),
+        y: STAIR_RISE * k - DECK_THICKNESS - STAIR_SLAB_DROP,
+        z: opts.z + opts.dirZ * (distOut - slabSetback),
+      },
+      rotationY: 0,
+    });
+  }
+}
+
 /** Region id per grid cell, or `null` for open ground (no floor, no walls). */
 export type Cell = string | null;
 

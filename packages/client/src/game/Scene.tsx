@@ -21,6 +21,7 @@ import {
   MSG_SHOOT,
   MSG_TRANSFORM,
   type Phase,
+  PLAYER_HEIGHT,
   type PrimitiveSpec,
   type PropDefinition,
   type Role,
@@ -63,7 +64,6 @@ function applyTauntPulse(
 
 const PLAYER_RADIUS = 0.4;
 const PLAYER_SEPARATION = PLAYER_RADIUS * 2;
-const PLAYER_HEIGHT = 1.8;
 const STEP_HEIGHT = 0.35;
 const GROUND_EPSILON = 1e-3;
 const FURNITURE_MIN_RADIUS = 0.3;
@@ -91,6 +91,8 @@ const CAMERA_DAMP = 0.0008;
 const CAMERA_WALL_MARGIN = 0.35;
 const CAMERA_MIN_DISTANCE = 0.2;
 const CAMERA_SLAB_EPSILON = 1e-4;
+const CAMERA_OCCLUDER_BASE_MAX = 0.5;
+const CAMERA_OCCLUDER_TOP_MIN = 2.5;
 const REMOTE_DAMP = 0.0009;
 export const TAUNT_PULSE_SECONDS = 0.5;
 const TAUNT_AMPLITUDE = 0.18;
@@ -307,6 +309,27 @@ function supportHeightAt(x: number, z: number, footY: number, colliders: ObbColl
 }
 
 /**
+ * Lowest collider bottom at or above the player's head over the footprint
+ * circle — the ceiling that caps upward motion (Infinity under open sky).
+ * Keeps a jump under an elevated deck from entering the deck box, where
+ * {@link resolveColliders} would otherwise shove the player sideways.
+ */
+function ceilingHeightAt(x: number, z: number, footY: number, colliders: ObbCollider[]): number {
+  let best = Infinity;
+  for (const c of colliders) {
+    if (c.yMin >= best || c.yMin < footY + PLAYER_HEIGHT) continue;
+    const dx = x - c.x;
+    const dz = z - c.z;
+    const lx = dx * c.cos - dz * c.sin;
+    const lz = dx * c.sin + dz * c.cos;
+    const ox = lx - THREE.MathUtils.clamp(lx, -c.hx, c.hx);
+    const oz = lz - THREE.MathUtils.clamp(lz, -c.hz, c.hz);
+    if (ox * ox + oz * oz < PLAYER_RADIUS * PLAYER_RADIUS) best = c.yMin;
+  }
+  return best;
+}
+
+/**
  * Push the player's footprint circle out of every solid box overlapping its
  * vertical span. Boxes whose top is within a step of the feet are walkable
  * (handled by {@link supportHeightAt}); boxes above the head are ignored.
@@ -354,9 +377,17 @@ interface Wall {
   maxZ: number;
 }
 
+/**
+ * Camera-occluding footprints: only wall-like boxes (grounded and tall) count,
+ * so elevated decks and stair steps never yank the third-person camera in.
+ */
 function buildWalls(map: MapDefinition): Wall[] {
   return map.colliders
-    .filter((collider) => collider.position.y > 0)
+    .filter((collider) => {
+      const yMin = collider.position.y - collider.size.y / 2;
+      const yMax = collider.position.y + collider.size.y / 2;
+      return yMin <= CAMERA_OCCLUDER_BASE_MAX && yMax >= CAMERA_OCCLUDER_TOP_MIN;
+    })
     .map((collider) => ({
       minX: collider.position.x - collider.size.x / 2,
       maxX: collider.position.x + collider.size.x / 2,
@@ -1657,7 +1688,12 @@ function LocalPlayer({
       velocityY.current -= gravity * delta;
       support = supportHeightAt(pos.x, pos.z, pos.y, colliders);
       const airborne = pos.y > support + GROUND_EPSILON;
+      const ceiling = ceilingHeightAt(pos.x, pos.z, pos.y, colliders);
       pos.y += velocityY.current * delta;
+      if (pos.y + PLAYER_HEIGHT > ceiling) {
+        pos.y = ceiling - PLAYER_HEIGHT - GROUND_EPSILON;
+        velocityY.current = Math.min(velocityY.current, 0);
+      }
       if (velocityY.current <= 0 && pos.y <= support) {
         if (airborne) {
           const impact = Math.min(1, -velocityY.current / (JUMP_SPEED * 2));

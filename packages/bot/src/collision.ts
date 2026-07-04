@@ -1,4 +1,4 @@
-import type { MapBounds, MapDefinition } from "@webhunt/shared";
+import { type MapBounds, type MapDefinition, PLAYER_HEIGHT } from "@webhunt/shared";
 import { BOT_BODY_RADIUS, FURNITURE_MIN_RADIUS } from "./config";
 
 export interface Wall {
@@ -19,9 +19,18 @@ export interface Point2 {
   z: number;
 }
 
+/**
+ * Solid footprints for ground-level bot navigation. Boxes fully above player
+ * height (elevated decks, catwalks) are skipped — bots walk under them; stair
+ * steps keep their footprint so bots path around instead of climbing.
+ */
 export function buildWalls(map: MapDefinition): Wall[] {
   return map.colliders
-    .filter((collider) => collider.position.y > 0)
+    .filter(
+      (collider) =>
+        collider.position.y > 0 &&
+        collider.position.y - collider.size.y / 2 < PLAYER_HEIGHT,
+    )
     .map((collider) => ({
       minX: collider.position.x - collider.size.x / 2,
       maxX: collider.position.x + collider.size.x / 2,
@@ -36,6 +45,7 @@ export function buildObstacles(map: MapDefinition): Obstacle[] {
   for (const instance of map.props) {
     const def = catalog.get(instance.type);
     if (!def) continue;
+    if (instance.position.y >= PLAYER_HEIGHT) continue;
     let radius = 0;
     for (const part of def.parts) {
       const reach =
