@@ -5,9 +5,9 @@ const MUTE_STORAGE_KEY = "webhunt:muted";
 const MUTE_FADE_S = 0.05;
 const NOISE_SECONDS = 0.2;
 
-const AMBIENT_GAIN = 0.015;
-const AMBIENT_FREQS = [48, 72.2];
-const AMBIENT_FILTER_HZ = 240;
+const AMBIENT_GAIN = 0.007;
+const AMBIENT_FREQS = [48, 72];
+const AMBIENT_FILTER_HZ = 160;
 const AMBIENT_FADE_IN_S = 1.5;
 const AMBIENT_FADE_OUT_S = 0.8;
 
@@ -123,29 +123,35 @@ export function playTaunt(volume: number): void {
   });
 }
 
-/** Shimmering materialize sweep when a player morphs into a prop. `volume` is 0..1. */
+/** Clean two-tone materialize sweep when a player morphs into a prop. `volume` is 0..1. */
 export function playMorph(volume = 1): void {
   const e = ensure();
   if (!e || volume <= 0) return;
   const level = Math.min(1, volume);
-  noiseBurst(e.ctx, e.master, { peak: 0.1 * level, dur: 0.3, filterHz: 3400 });
   tone(e.ctx, e.master, {
     type: "sine",
-    f0: 240,
-    f1: 960,
-    fTime: 0.26,
-    peak: 0.14 * level,
-    attack: 0.02,
-    dur: 0.34,
+    f0: 300,
+    f1: 900,
+    fTime: 0.22,
+    peak: 0.12 * level,
+    attack: 0.03,
+    dur: 0.3,
+  });
+  tone(e.ctx, e.master, {
+    type: "sine",
+    f0: 600,
+    f1: 1800,
+    fTime: 0.22,
+    peak: 0.05 * level,
+    attack: 0.03,
+    dur: 0.3,
   });
   tone(e.ctx, e.master, {
     type: "triangle",
-    f0: 1440,
-    f1: 1920,
-    fTime: 0.08,
-    peak: 0.07 * level,
-    dur: 0.14,
-    delay: 0.22,
+    f0: 1200,
+    peak: 0.05 * level,
+    dur: 0.12,
+    delay: 0.2,
   });
 }
 
