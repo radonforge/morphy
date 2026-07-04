@@ -46,7 +46,7 @@ import {
   stopAmbient,
   toggleMuted,
 } from "./audio";
-import { GAME_FOV, Scene, TAUNT_PULSE_SECONDS } from "./Scene";
+import { GAME_DPR, GAME_FOV, Scene, TAUNT_PULSE_SECONDS } from "./Scene";
 import type {
   MetaMap,
   PlayerMeta,
@@ -676,7 +676,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
 
   return (
     <>
-      <Canvas dpr={[1, 1.5]} shadows camera={{ position: [0, 12, 18], fov: GAME_FOV }}>
+      <Canvas dpr={GAME_DPR} shadows camera={{ position: [0, 12, 18], fov: GAME_FOV }}>
         <Scene
           key={map.id}
           room={room}

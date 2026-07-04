@@ -6,11 +6,13 @@ import {
   computePropBounds,
   FALL_GRAVITY_MULT,
   GRAVITY,
+  INPUT_IDLE_EPSILON,
   INPUT_SEND_RATE_MS,
   JUMP_BUFFER_MS,
   JUMP_RELEASE_GRAVITY_MULT,
   JUMP_SPEED,
   MAP_CATALOG,
+  type MapBounds,
   type MapDefinition,
   MOVE_ACCEL,
   MOVE_DECEL,
@@ -103,14 +105,19 @@ const TP_PITCH_MAX = 1.2;
 const DEFAULT_PITCH = 0.5;
 const EYE_HEIGHT = 1.6;
 const SUN_POSITION: [number, number, number] = [14, 26, 10];
-const SHADOW_RADIUS = 32;
-const SHADOW_TEXEL = (2 * SHADOW_RADIUS) / 2048;
+const SHADOW_MAP_SIZE = 2048;
+const SHADOW_MARGIN = 4;
+const SHADOW_NORMAL_BIAS_TEXELS = 2;
+const SHADOW_UPDATE_INTERVAL_S = 1 / 30;
+const SHADOW_SETTLE_S = 0.4;
+const SHADOW_HEARTBEAT_S = 2;
 const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 const LOCAL_AVATAR_KEY = "localAvatar";
 const TRANSFORM_REACH = 3.5;
 
 export const GAME_FOV = 55;
+export const GAME_DPR: [number, number] = [1, 1.25];
 const SPRINT_FOV_ADD = 7;
 const FOV_DAMP = 0.02;
 const FOV_EPSILON = 0.05;
@@ -367,7 +374,14 @@ export function Scene({
       )}
       <hemisphereLight args={[theme.hemiSky, theme.hemiGround, theme.hemiIntensity]} />
       <ambientLight intensity={theme.ambient} />
-      <SunLight intensity={theme.dir} playerPos={localGroundRef} />
+      <ShadowRefresh
+        playersRef={playersRef}
+        localPos={localGroundRef}
+        motionRef={motionRef}
+        meta={meta}
+        ids={ids}
+      />
+      <SunLight intensity={theme.dir} bounds={map.bounds} />
       <MapView map={map} groundColor={theme.ground} />
       <PropPicker room={room} enabled={canTransform} playerPos={localGroundRef} />
       <Shooter
@@ -421,37 +435,140 @@ export function Scene({
   );
 }
 
-function SunLight({ intensity, playerPos }: { intensity: number; playerPos: PlayerPosRef }) {
-  const lightRef = useRef<THREE.DirectionalLight>(null);
-  const target = useMemo(() => new THREE.Object3D(), []);
+interface ShadowPose {
+  x: number;
+  y: number;
+  z: number;
+  rot: number;
+}
 
-  useFrame(() => {
-    const light = lightRef.current;
-    if (!light) return;
-    const p = playerPos.current;
-    const sx = Math.round(p.x / SHADOW_TEXEL) * SHADOW_TEXEL;
-    const sz = Math.round(p.z / SHADOW_TEXEL) * SHADOW_TEXEL;
-    light.position.set(sx + SUN_POSITION[0], SUN_POSITION[1], sz + SUN_POSITION[2]);
-    target.position.set(sx, 0, sz);
-    target.updateMatrixWorld();
+function ShadowRefresh({
+  playersRef,
+  localPos,
+  motionRef,
+  meta,
+  ids,
+}: {
+  playersRef: PlayersRef;
+  localPos: PlayerPosRef;
+  motionRef: LocalMotionRef;
+  meta: MetaMap;
+  ids: string[];
+}) {
+  const gl = useThree((state) => state.gl);
+  const checkAccum = useRef(0);
+  const sinceRender = useRef(0);
+  const sinceChange = useRef(0);
+  const remotePoses = useRef(new Map<string, ShadowPose>());
+  const localPose = useRef<ShadowPose>({ x: Number.NaN, y: Number.NaN, z: Number.NaN, rot: Number.NaN });
+
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+    return () => {
+      gl.shadowMap.autoUpdate = true;
+    };
+  }, [gl]);
+
+  useEffect(() => {
+    sinceChange.current = 0;
+  }, [meta, ids]);
+
+  useFrame((_, delta) => {
+    checkAccum.current += delta;
+    sinceRender.current += delta;
+    sinceChange.current += delta;
+    if (checkAccum.current < SHADOW_UPDATE_INTERVAL_S) return;
+    checkAccum.current = 0;
+
+    const pos = localPos.current;
+    const yaw = motionRef.current.yaw;
+    const local = localPose.current;
+    if (
+      !(Math.abs(pos.x - local.x) < INPUT_IDLE_EPSILON) ||
+      !(Math.abs(pos.y - local.y) < INPUT_IDLE_EPSILON) ||
+      !(Math.abs(pos.z - local.z) < INPUT_IDLE_EPSILON) ||
+      !(Math.abs(yaw - local.rot) < INPUT_IDLE_EPSILON)
+    ) {
+      localPose.current = { x: pos.x, y: pos.y, z: pos.z, rot: yaw };
+      sinceChange.current = 0;
+    }
+
+    const poses = remotePoses.current;
+    for (const [id, view] of playersRef.current) {
+      const prev = poses.get(id);
+      if (!prev) {
+        poses.set(id, { x: view.x, y: view.y, z: view.z, rot: view.rot });
+        sinceChange.current = 0;
+        continue;
+      }
+      if (
+        Math.abs(view.x - prev.x) > INPUT_IDLE_EPSILON ||
+        Math.abs(view.y - prev.y) > INPUT_IDLE_EPSILON ||
+        Math.abs(view.z - prev.z) > INPUT_IDLE_EPSILON ||
+        Math.abs(view.rot - prev.rot) > INPUT_IDLE_EPSILON
+      ) {
+        prev.x = view.x;
+        prev.y = view.y;
+        prev.z = view.z;
+        prev.rot = view.rot;
+        sinceChange.current = 0;
+      }
+    }
+    for (const id of poses.keys()) {
+      if (!playersRef.current.has(id)) {
+        poses.delete(id);
+        sinceChange.current = 0;
+      }
+    }
+
+    if (sinceChange.current <= SHADOW_SETTLE_S || sinceRender.current >= SHADOW_HEARTBEAT_S) {
+      sinceRender.current = 0;
+      gl.shadowMap.needsUpdate = true;
+    }
   });
+
+  return null;
+}
+
+function SunLight({ intensity, bounds }: { intensity: number; bounds: MapBounds }) {
+  const frustum = useMemo(() => {
+    const cx = (bounds.min.x + bounds.max.x) / 2;
+    const cz = (bounds.min.z + bounds.max.z) / 2;
+    const radius =
+      Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z) / 2 + SHADOW_MARGIN;
+    const far =
+      Math.hypot(SUN_POSITION[0], SUN_POSITION[1], SUN_POSITION[2]) + radius + SHADOW_MARGIN;
+    const normalBias = ((2 * radius) / SHADOW_MAP_SIZE) * SHADOW_NORMAL_BIAS_TEXELS;
+    return { cx, cz, radius, far, normalBias };
+  }, [bounds]);
+  const target = useMemo(() => {
+    const object = new THREE.Object3D();
+    object.position.set(frustum.cx, 0, frustum.cz);
+    object.updateMatrixWorld();
+    return object;
+  }, [frustum]);
 
   return (
     <>
       <directionalLight
-        ref={lightRef}
-        position={SUN_POSITION}
+        position={[
+          frustum.cx + SUN_POSITION[0],
+          SUN_POSITION[1],
+          frustum.cz + SUN_POSITION[2],
+        ]}
         target={target}
         intensity={intensity}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
         shadow-camera-near={1}
-        shadow-camera-far={90}
-        shadow-camera-left={-SHADOW_RADIUS}
-        shadow-camera-right={SHADOW_RADIUS}
-        shadow-camera-top={SHADOW_RADIUS}
-        shadow-camera-bottom={-SHADOW_RADIUS}
+        shadow-camera-far={frustum.far}
+        shadow-camera-left={-frustum.radius}
+        shadow-camera-right={frustum.radius}
+        shadow-camera-top={frustum.radius}
+        shadow-camera-bottom={-frustum.radius}
         shadow-bias={-0.0004}
+        shadow-normalBias={frustum.normalBias}
       />
       <primitive object={target} />
     </>
@@ -1086,6 +1203,7 @@ function LocalPlayer({
   const spawnApplied = useRef(false);
   const heading = useRef(0);
   const sendAccumMs = useRef(0);
+  const lastSentInput = useRef({ x: Number.NaN, y: Number.NaN, z: Number.NaN, rot: Number.NaN, aim: Number.NaN });
   const stepAccum = useRef(0);
   const velocity = useMemo(() => new THREE.Vector3(), []);
   const velocityY = useRef(0);
@@ -1316,7 +1434,17 @@ function LocalPlayer({
     if (sendAccumMs.current >= INPUT_SEND_RATE_MS) {
       sendAccumMs.current = 0;
       const aim = Math.atan2(forwardVec.x, forwardVec.z);
-      room.send(MSG_INPUT, { x: pos.x, y: pos.y, z: pos.z, rot: heading.current, aim });
+      const last = lastSentInput.current;
+      const moved =
+        !(Math.abs(pos.x - last.x) < INPUT_IDLE_EPSILON) ||
+        !(Math.abs(pos.y - last.y) < INPUT_IDLE_EPSILON) ||
+        !(Math.abs(pos.z - last.z) < INPUT_IDLE_EPSILON) ||
+        !(Math.abs(heading.current - last.rot) < INPUT_IDLE_EPSILON) ||
+        !(Math.abs(aim - last.aim) < INPUT_IDLE_EPSILON);
+      if (moved) {
+        lastSentInput.current = { x: pos.x, y: pos.y, z: pos.z, rot: heading.current, aim };
+        room.send(MSG_INPUT, { x: pos.x, y: pos.y, z: pos.z, rot: heading.current, aim });
+      }
     }
   });
 

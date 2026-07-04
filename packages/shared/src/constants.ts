@@ -33,6 +33,8 @@ export const FALL_GRAVITY_MULT = 1.35;
 
 export const PATCH_RATE_MS = 50;
 export const INPUT_SEND_RATE_MS = 50;
+export const INPUT_IDLE_EPSILON = 0.001;
+export const MAX_CLIENT_MESSAGES_PER_SECOND = 60;
 
 export const MAX_NAME_LENGTH = 16;
 export const MAX_CHAT_LENGTH = 200;

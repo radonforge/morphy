@@ -58,6 +58,8 @@ function computeStageSlots(count: number, inParty: boolean): StageSlot[] {
 
 const CAMERA_FOV = 38;
 const CAMERA_BASE: [number, number, number] = [0, 1.5, 6];
+const STAGE_MAX_FPS = 30;
+const STAGE_DPR: [number, number] = [1, 1.25];
 const CAMERA_LOOK_AT = new THREE.Vector3(0, 1.05, 0);
 const PARALLAX_X = 0.55;
 const PARALLAX_Y = 0.25;
@@ -298,6 +300,40 @@ function SetPieceModel({ piece }: { piece: SetPiece }) {
   );
 }
 
+function FrameLimiter({ fps }: { fps: number }) {
+  const invalidate = useThree((state) => state.invalidate);
+
+  useEffect(() => {
+    const intervalMs = 1000 / fps;
+    let handle = 0;
+    let last = 0;
+    const tick = (now: number) => {
+      handle = requestAnimationFrame(tick);
+      if (now - last < intervalMs) return;
+      last = now - ((now - last) % intervalMs);
+      invalidate();
+    };
+    handle = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(handle);
+  }, [fps, invalidate]);
+
+  return null;
+}
+
+function StaticShadows() {
+  const gl = useThree((state) => state.gl);
+
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+    return () => {
+      gl.shadowMap.autoUpdate = true;
+    };
+  }, [gl]);
+
+  return null;
+}
+
 function Atmosphere({ theme }: { theme: StageTheme }) {
   const scene = useThree((state) => state.scene);
   const [background] = useState(() => new THREE.Color(theme.background));
@@ -370,7 +406,13 @@ export function LobbyStage({
   const slots = computeStageSlots(actors.length, inParty);
   return (
     <div className="menu-canvas" aria-hidden="true">
-      <Canvas shadows dpr={[1, 2]} camera={{ fov: CAMERA_FOV, position: CAMERA_BASE }}>
+      <Canvas
+        shadows
+        frameloop="demand"
+        dpr={STAGE_DPR}
+        camera={{ fov: CAMERA_FOV, position: CAMERA_BASE }}
+      >
+        <FrameLimiter fps={STAGE_MAX_FPS} />
         <Atmosphere theme={theme} />
         <ParallaxRig />
         {theme.sky === "stars" && (
@@ -394,6 +436,7 @@ export function LobbyStage({
           {DIORAMAS[map].map((piece) => (
             <SetPieceModel key={`${piece.url}:${piece.position.join(",")}`} piece={piece} />
           ))}
+          <StaticShadows key={map} />
         </Suspense>
         <Suspense fallback={null}>
           {actors.map((actor, index) => (

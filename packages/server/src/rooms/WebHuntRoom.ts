@@ -17,6 +17,7 @@ import {
   type KillEvent,
   MAX_CHAT_LENGTH,
   MAX_NAME_LENGTH,
+  MAX_CLIENT_MESSAGES_PER_SECOND,
   MAX_PLAYERS,
   type MapDefinition,
   type MapId,
@@ -65,11 +66,11 @@ const PARTY_CODE_EXHAUSTED_STATUS = 503;
 export class PlayerState extends Schema {
   @type("string") id = "";
   @type("string") name = "";
-  @type("number") x = 0;
-  @type("number") y = 0;
-  @type("number") z = 0;
-  @type("number") rot = 0;
-  @type("number") aim = 0;
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") z = 0;
+  @type("float32") rot = 0;
+  @type("float32") aim = 0;
   @type("string") role: Role = "prop";
   @type("boolean") alive = true;
   @type("number") hp = 0;
@@ -270,6 +271,7 @@ function nextSeed(): number {
 
 export class WebHuntRoom extends Room<{ state: RoomState }> {
   maxClients = MAX_PLAYERS;
+  maxMessagesPerSecond = MAX_CLIENT_MESSAGES_PER_SECOND;
   state = new RoomState();
   private map!: MapDefinition;
   private catalogIds = new Set<string>();
