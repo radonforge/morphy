@@ -33,7 +33,7 @@ import {
 } from "@webhunt/shared";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { playJump, playLand, playStep, playWeaponShot } from "./audio";
+import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
 import type {
   MetaMap,
   PlayersRef,
@@ -93,6 +93,24 @@ export const TAUNT_PULSE_SECONDS = 0.5;
 const TAUNT_AMPLITUDE = 0.18;
 const TRACER_TTL = 0.12;
 const MAX_TRACERS = 16;
+const MORPH_COLOR = "#7de8ff";
+const MORPH_MAX_BURSTS = 6;
+const MORPH_DURATION_S = 0.5;
+const MORPH_BEAM_DURATION_S = 0.3;
+const MORPH_BEAM_GROW_FRACTION = 0.35;
+const MORPH_BEAM_OPACITY = 0.55;
+const MORPH_BEAM_SEGMENTS = 12;
+const MORPH_BEAM_RADIUS_MULT = 1.15;
+const MORPH_BEAM_HEIGHT_MULT = 1.6;
+const MORPH_SHARD_COUNT = 24;
+const MORPH_SHARD_SIZE = 0.14;
+const MORPH_SHARD_SPAWN_RADIUS = 1.4;
+const MORPH_SHARD_SPAWN_HEIGHT_MULT = 1.5;
+const MORPH_SHARD_SPIN = 9;
+const MORPH_POP_DURATION_S = 0.35;
+const EASE_BACK_OVERSHOOT = 1.70158;
+const MORPH_SOUND_MAX_DISTANCE = 24;
+const MORPH_REMOTE_VOLUME = 0.8;
 const STEP_DISTANCE = 2.2;
 const REMOTE_STEP_MAX_DISTANCE = 24;
 const REMOTE_STEP_VOLUME = 0.8;
@@ -113,8 +131,9 @@ const SHADOW_SETTLE_S = 0.4;
 const SHADOW_HEARTBEAT_S = 2;
 const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
+const noRaycast = () => {};
 const LOCAL_AVATAR_KEY = "localAvatar";
-const TRANSFORM_REACH = 3.5;
+const TRANSFORM_REACH = 5;
 
 export const GAME_FOV = 55;
 export const GAME_DPR: [number, number] = [1, 1.25];
@@ -362,6 +381,40 @@ export function Scene({
   const localMeta = meta[localId];
   const localRole: Role = localMeta?.role ?? "prop";
   const localAlive = localMeta?.alive ?? true;
+  const morphsRef = useRef<MorphFx[]>([]);
+  const seenPropTypes = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    const seen = seenPropTypes.current;
+    const live = new Set(ids);
+    for (const id of ids) {
+      const propType = meta[id]?.propType ?? "";
+      const before = seen.get(id);
+      seen.set(id, propType);
+      if (before === undefined || before === propType || !propType) continue;
+      const def = catalog.get(propType);
+      if (!def) continue;
+      const bounds = computePropBounds(def);
+      const local = id === localId;
+      const source = local ? localGroundRef.current : playersRef.current.get(id);
+      if (!source) continue;
+      morphsRef.current.push({
+        x: source.x,
+        z: source.z,
+        radius: bounds.radius,
+        height: bounds.yMax,
+      });
+      const distance = local
+        ? 0
+        : Math.hypot(source.x - localGroundRef.current.x, source.z - localGroundRef.current.z);
+      playMorph(
+        local ? 1 : MORPH_REMOTE_VOLUME * Math.max(0, 1 - distance / MORPH_SOUND_MAX_DISTANCE),
+      );
+    }
+    for (const id of seen.keys()) {
+      if (!live.has(id)) seen.delete(id);
+    }
+  }, [meta, ids, localId, catalog, playersRef]);
   const canTransform =
     localRole === "prop" && localAlive && !chatOpen && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && !chatOpen && phase === "hunting";
@@ -392,6 +445,7 @@ export function Scene({
         onShoot={onShoot}
       />
       <Tracers shotsRef={shotsRef} />
+      <MorphEffects morphsRef={morphsRef} />
       <HunterViewmodel
         enabled={localRole === "hunter" && localAlive}
         weapon={weapon}
@@ -687,6 +741,170 @@ function Tracers({ shotsRef }: { shotsRef: ShotsRef }) {
   });
 
   return <primitive object={pool} />;
+}
+
+interface MorphFx {
+  x: number;
+  z: number;
+  radius: number;
+  height: number;
+}
+
+type MorphFxRef = { readonly current: MorphFx[] };
+
+interface MorphBurstState extends MorphFx {
+  age: number;
+}
+
+function MorphEffects({ morphsRef }: { morphsRef: MorphFxRef }) {
+  const burstsRef = useRef<MorphBurstState[]>([]);
+  const shardMeshRef = useRef<THREE.InstancedMesh>(null);
+  const beams = useMemo(() => {
+    const group = new THREE.Group();
+    for (let i = 0; i < MORPH_MAX_BURSTS; i++) {
+      const geometry = new THREE.CylinderGeometry(1, 1, 1, MORPH_BEAM_SEGMENTS, 1, true);
+      const material = new THREE.MeshBasicMaterial({
+        color: MORPH_COLOR,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      mesh.raycast = noRaycast;
+      group.add(mesh);
+    }
+    return group;
+  }, []);
+  const seeds = useMemo(
+    () =>
+      Array.from({ length: MORPH_SHARD_COUNT }, (_, i) => ({
+        angle: (i / MORPH_SHARD_COUNT) * Math.PI * 2 + Math.random(),
+        yFrac: Math.random(),
+        spinX: (Math.random() - 0.5) * MORPH_SHARD_SPIN,
+        spinZ: (Math.random() - 0.5) * MORPH_SHARD_SPIN,
+      })),
+    [],
+  );
+  const scratch = useMemo(
+    () => ({
+      matrix: new THREE.Matrix4(),
+      position: new THREE.Vector3(),
+      quaternion: new THREE.Quaternion(),
+      euler: new THREE.Euler(),
+      scale: new THREE.Vector3(),
+    }),
+    [],
+  );
+
+  useFrame((_, delta) => {
+    const bursts = burstsRef.current;
+    for (const fx of morphsRef.current) {
+      if (bursts.length >= MORPH_MAX_BURSTS) bursts.shift();
+      bursts.push({ ...fx, age: 0 });
+    }
+    morphsRef.current.length = 0;
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const burst = bursts[i];
+      if (!burst) continue;
+      burst.age += delta;
+      if (burst.age >= MORPH_DURATION_S) bursts.splice(i, 1);
+    }
+
+    beams.children.forEach((child, i) => {
+      const mesh = child as THREE.Mesh;
+      const burst = bursts[i];
+      if (!burst || burst.age >= MORPH_BEAM_DURATION_S) {
+        mesh.visible = false;
+        return;
+      }
+      const t = burst.age / MORPH_BEAM_DURATION_S;
+      const growth = Math.min(1, t / MORPH_BEAM_GROW_FRACTION);
+      const height = Math.max(burst.height, PLAYER_BODY_LENGTH) * MORPH_BEAM_HEIGHT_MULT * growth;
+      const radius = burst.radius * MORPH_BEAM_RADIUS_MULT;
+      mesh.position.set(burst.x, height / 2, burst.z);
+      mesh.scale.set(radius, Math.max(height, MODEL_MIN_SIZE), radius);
+      (mesh.material as THREE.MeshBasicMaterial).opacity = MORPH_BEAM_OPACITY * (1 - t);
+      mesh.visible = true;
+    });
+
+    const shardMesh = shardMeshRef.current;
+    if (!shardMesh) return;
+    let written = 0;
+    for (const burst of bursts) {
+      const t = Math.min(1, burst.age / MORPH_DURATION_S);
+      const convergence = t * t;
+      const radial = (burst.radius + MORPH_SHARD_SPAWN_RADIUS) * (1 - convergence);
+      const size = Math.max(MORPH_SHARD_SIZE * (1 - t), MODEL_MIN_SIZE);
+      const spawnHeight =
+        Math.max(burst.height, PLAYER_BODY_LENGTH) * MORPH_SHARD_SPAWN_HEIGHT_MULT;
+      for (const seed of seeds) {
+        const y = THREE.MathUtils.lerp(seed.yFrac * spawnHeight, burst.height / 2, convergence);
+        scratch.position.set(
+          burst.x + Math.cos(seed.angle) * radial,
+          y,
+          burst.z + Math.sin(seed.angle) * radial,
+        );
+        scratch.euler.set(seed.spinX * burst.age, 0, seed.spinZ * burst.age);
+        scratch.quaternion.setFromEuler(scratch.euler);
+        scratch.scale.setScalar(size);
+        shardMesh.setMatrixAt(
+          written,
+          scratch.matrix.compose(scratch.position, scratch.quaternion, scratch.scale),
+        );
+        written++;
+      }
+    }
+    shardMesh.count = written;
+    shardMesh.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <>
+      <primitive object={beams} />
+      <instancedMesh
+        ref={shardMeshRef}
+        args={[undefined, undefined, MORPH_MAX_BURSTS * MORPH_SHARD_COUNT]}
+        frustumCulled={false}
+        raycast={noRaycast}
+      >
+        <boxGeometry />
+        <meshBasicMaterial
+          color={MORPH_COLOR}
+          transparent
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </instancedMesh>
+    </>
+  );
+}
+
+function easeOutBack(progress: number): number {
+  const q = progress - 1;
+  return 1 + (EASE_BACK_OVERSHOOT + 1) * q * q * q + EASE_BACK_OVERSHOOT * q * q;
+}
+
+function PropPopIn({ popKey, children }: { popKey: string; children: ReactElement }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const age = useRef(0);
+
+  useEffect(() => {
+    age.current = 0;
+  }, [popKey]);
+
+  useFrame((_, delta) => {
+    const group = groupRef.current;
+    if (!group) return;
+    age.current = Math.min(age.current + delta, MORPH_POP_DURATION_S);
+    const progress = age.current / MORPH_POP_DURATION_S;
+    group.scale.setScalar(progress >= 1 ? 1 : Math.max(easeOutBack(progress), 0));
+  });
+
+  return <group ref={groupRef}>{children}</group>;
 }
 
 function geometryFor(part: PrimitiveSpec): ReactElement {
@@ -1057,7 +1275,11 @@ function PlayerModel({
   if (role === "prop" && propType) {
     const def = catalog.get(propType);
     if (def) {
-      return <PropMesh def={def} />;
+      return (
+        <PropPopIn popKey={propType}>
+          <PropMesh def={def} />
+        </PropPopIn>
+      );
     }
   }
   return <AnimalAvatar id={avatar} role={role} />;

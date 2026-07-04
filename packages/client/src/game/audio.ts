@@ -5,11 +5,17 @@ const MUTE_STORAGE_KEY = "webhunt:muted";
 const MUTE_FADE_S = 0.05;
 const NOISE_SECONDS = 0.2;
 
-const AMBIENT_GAIN = 0.015;
-const AMBIENT_FREQS = [48, 72.2];
-const AMBIENT_FILTER_HZ = 240;
-const AMBIENT_FADE_IN_S = 1.5;
-const AMBIENT_FADE_OUT_S = 0.8;
+const SAMPLE_BASE = "/sounds/sci-fi/";
+const SAMPLE_FETCH_TIMEOUT_MS = 10_000;
+const WEAPON_SAMPLE_LEVEL = 0.5;
+const HIT_SAMPLE_LEVEL = 0.35;
+
+const WEAPON_SAMPLES: Record<WeaponId, readonly string[]> = {
+  pistol: ["laserSmall_000.ogg", "laserSmall_001.ogg", "laserSmall_002.ogg"],
+  shotgun: ["laserLarge_000.ogg", "laserLarge_001.ogg", "laserLarge_002.ogg"],
+  rifle: ["laserRetro_000.ogg", "laserRetro_001.ogg", "laserRetro_002.ogg"],
+};
+const HIT_SAMPLES: readonly string[] = ["impactMetal_000.ogg", "impactMetal_001.ogg"];
 
 interface ToneSpec {
   type: OscillatorType;
@@ -26,7 +32,6 @@ let audioContext: AudioContext | null = null;
 let masterGain: GainNode | null = null;
 let muted = readMuted();
 let noiseBuffer: AudioBuffer | null = null;
-let ambient: { stop: () => void } | null = null;
 
 function readMuted(): boolean {
   if (typeof localStorage === "undefined") return false;
@@ -87,6 +92,56 @@ function noiseBurst(
   src.stop(now + opts.dur + 0.02);
 }
 
+const sampleCache = new Map<string, Promise<AudioBuffer | null>>();
+
+function loadSample(ctx: AudioContext, name: string): Promise<AudioBuffer | null> {
+  let cached = sampleCache.get(name);
+  if (!cached) {
+    cached = fetch(`${SAMPLE_BASE}${name}`, {
+      signal: AbortSignal.timeout(SAMPLE_FETCH_TIMEOUT_MS),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        return res.arrayBuffer();
+      })
+      .then((data) => ctx.decodeAudioData(data))
+      .catch((error: unknown) => {
+        console.warn(`[audio] sample unavailable: ${name}`, error);
+        return null;
+      });
+    sampleCache.set(name, cached);
+  }
+  return cached;
+}
+
+function playSample(name: string, volume: number): void {
+  const e = ensure();
+  if (!e || volume <= 0) return;
+  void loadSample(e.ctx, name).then((buffer) => {
+    if (!buffer) return;
+    const src = e.ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = e.ctx.createGain();
+    gain.gain.value = volume;
+    src.connect(gain).connect(e.master);
+    src.start();
+  });
+}
+
+function pickSample(names: readonly string[]): string {
+  return names[Math.floor(Math.random() * names.length)] ?? names[0]!;
+}
+
+/** Kick off sample downloads/decodes so the first shot isn't delayed. */
+export function preloadSamples(): void {
+  const e = ensure();
+  if (!e) return;
+  for (const names of Object.values(WEAPON_SAMPLES)) {
+    for (const name of names) void loadSample(e.ctx, name);
+  }
+  for (const name of HIT_SAMPLES) void loadSample(e.ctx, name);
+}
+
 export function isMuted(): boolean {
   return muted;
 }
@@ -123,55 +178,52 @@ export function playTaunt(volume: number): void {
   });
 }
 
-/** Rising chime confirming a hunter's shot caught a prop. */
+/** Clean two-tone materialize sweep when a player morphs into a prop. `volume` is 0..1. */
+export function playMorph(volume = 1): void {
+  const e = ensure();
+  if (!e || volume <= 0) return;
+  const level = Math.min(1, volume);
+  tone(e.ctx, e.master, {
+    type: "sine",
+    f0: 300,
+    f1: 900,
+    fTime: 0.22,
+    peak: 0.12 * level,
+    attack: 0.03,
+    dur: 0.3,
+  });
+  tone(e.ctx, e.master, {
+    type: "sine",
+    f0: 600,
+    f1: 1800,
+    fTime: 0.22,
+    peak: 0.05 * level,
+    attack: 0.03,
+    dur: 0.3,
+  });
+  tone(e.ctx, e.master, {
+    type: "triangle",
+    f0: 1200,
+    peak: 0.05 * level,
+    dur: 0.12,
+    delay: 0.2,
+  });
+}
+
+/** Metallic impact layered under a rising chime confirming a hunter's shot caught a prop. */
 export function playHitConfirm(): void {
   const e = ensure();
   if (!e) return;
+  playSample(pickSample(HIT_SAMPLES), HIT_SAMPLE_LEVEL);
   tone(e.ctx, e.master, { type: "triangle", f0: 880, f1: 1320, peak: 0.25, dur: 0.16 });
 }
 
 /**
- * Weapon-specific blaster report: pistol crack, shotgun boom, rifle snap.
+ * Weapon-specific blaster report from the Kenney sci-fi sample set.
  * `volume` is 0..1 (1 for the local shooter, by distance for others).
  */
 export function playWeaponShot(weapon: WeaponId, volume = 1): void {
-  const e = ensure();
-  if (!e || volume <= 0) return;
-  const level = Math.min(1, volume);
-  switch (weapon) {
-    case "shotgun":
-      noiseBurst(e.ctx, e.master, { peak: 0.42 * level, dur: 0.13, filterHz: 850 });
-      tone(e.ctx, e.master, {
-        type: "square",
-        f0: 300,
-        f1: 85,
-        fTime: 0.11,
-        peak: 0.26 * level,
-        dur: 0.17,
-      });
-      break;
-    case "rifle":
-      noiseBurst(e.ctx, e.master, { peak: 0.3 * level, dur: 0.05, filterHz: 2600 });
-      tone(e.ctx, e.master, {
-        type: "square",
-        f0: 1150,
-        f1: 220,
-        fTime: 0.05,
-        peak: 0.2 * level,
-        dur: 0.09,
-      });
-      break;
-    default:
-      noiseBurst(e.ctx, e.master, { peak: 0.35 * level, dur: 0.06, filterHz: 1800 });
-      tone(e.ctx, e.master, {
-        type: "square",
-        f0: 700,
-        f1: 160,
-        fTime: 0.08,
-        peak: 0.22 * level,
-        dur: 0.1,
-      });
-  }
+  playSample(pickSample(WEAPON_SAMPLES[weapon]), WEAPON_SAMPLE_LEVEL * Math.min(1, volume));
 }
 
 /** Soft low thud for a footstep. `volume` is 0..1 (1 for the local player, by distance for others). */
@@ -249,40 +301,4 @@ export function playRoundEnd(won: boolean): void {
   notes.forEach((f, i) => {
     tone(e.ctx, e.master, { type: "triangle", f0: f, peak: 0.2, dur: 0.3, delay: i * 0.14 });
   });
-}
-
-/** Start a faint low sine pad, routed through the master (mute applies). */
-export function startAmbient(): void {
-  const e = ensure();
-  if (!e || ambient) return;
-  const { ctx, master } = e;
-  const ambGain = ctx.createGain();
-  ambGain.gain.value = 0.0001;
-  ambGain.gain.setTargetAtTime(AMBIENT_GAIN, ctx.currentTime, AMBIENT_FADE_IN_S);
-  const filter = ctx.createBiquadFilter();
-  filter.type = "lowpass";
-  filter.frequency.value = AMBIENT_FILTER_HZ;
-  const oscs = AMBIENT_FREQS.map((f) => {
-    const osc = ctx.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = f;
-    osc.connect(filter);
-    osc.start();
-    return osc;
-  });
-  filter.connect(ambGain).connect(master);
-  ambient = {
-    stop: () => {
-      const now = ctx.currentTime;
-      ambGain.gain.setTargetAtTime(0.0001, now, AMBIENT_FADE_OUT_S);
-      oscs.forEach((osc) => {
-        osc.stop(now + AMBIENT_FADE_OUT_S * 4);
-      });
-    },
-  };
-}
-
-export function stopAmbient(): void {
-  ambient?.stop();
-  ambient = null;
 }

@@ -42,8 +42,7 @@ import {
   playRoundStart,
   playTaunt,
   playWeaponShot,
-  startAmbient,
-  stopAmbient,
+  preloadSamples,
   toggleMuted,
 } from "./audio";
 import { GAME_DPR, GAME_FOV, Scene, TAUNT_PULSE_SECONDS } from "./Scene";
@@ -548,8 +547,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   }, [pickWeapon]);
 
   useEffect(() => {
-    startAmbient();
-    return () => stopAmbient();
+    preloadSamples();
   }, []);
 
   useEffect(() => {
