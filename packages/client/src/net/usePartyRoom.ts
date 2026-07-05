@@ -2,6 +2,7 @@ import { Callbacks } from "@colyseus/sdk";
 import {
   DEFAULT_MAP_ID,
   isMapId,
+  isPhase,
   type MapId,
   MSG_MAP,
   MSG_TELEPORT,
@@ -100,7 +101,7 @@ export function usePartyRoom(connection: Connection | null): PartyView {
     const update = () => {
       const state = room.state as unknown as PartyStateView;
       const next: PartyView = {
-        phase: state.phase,
+        phase: isPhase(state.phase) ? state.phase : "lobby",
         hostId: state.hostId,
         isPrivate: state.isPrivate,
         mapId: isMapId(state.mapId) ? state.mapId : DEFAULT_MAP_ID,

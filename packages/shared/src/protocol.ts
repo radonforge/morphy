@@ -3,7 +3,14 @@ import type { Vec3 } from "./map";
 import type { MapId } from "./maps";
 import type { WeaponId } from "./weapons";
 
-export type Phase = "lobby" | "starting" | "hiding" | "hunting" | "round_end";
+export const PHASES = ["lobby", "starting", "hiding", "hunting", "round_end"] as const;
+
+export type Phase = (typeof PHASES)[number];
+
+/** Narrow an untrusted/unsynced state value to a known phase (boundary validation). */
+export function isPhase(value: unknown): value is Phase {
+  return typeof value === "string" && (PHASES as readonly string[]).includes(value);
+}
 
 export type Role = "hunter" | "prop";
 
