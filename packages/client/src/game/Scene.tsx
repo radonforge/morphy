@@ -665,6 +665,7 @@ function ShadowRefresh({
     };
   }, [gl]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: meta/ids are triggers, not read in the body — a roster/meta change must reset the shadow-settle timer.
   useEffect(() => {
     sinceChange.current = 0;
   }, [meta, ids]);
@@ -1060,6 +1061,7 @@ function PropPopIn({ popKey, children }: { popKey: string; children: ReactElemen
   const groupRef = useRef<THREE.Group>(null);
   const age = useRef(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: popKey is a trigger, not read in the body — a new prop type must restart the pop-in animation.
   useEffect(() => {
     age.current = 0;
   }, [popKey]);
@@ -1095,6 +1097,7 @@ function PrimitiveParts({ parts }: { parts: PrimitiveSpec[] }) {
     <>
       {parts.map((part, index) => (
         <mesh
+          // biome-ignore lint/suspicious/noArrayIndexKey: static geometry parts of a prop, never reordered
           key={index}
           position={[part.position.x, part.position.y, part.position.z]}
           castShadow
@@ -1373,6 +1376,7 @@ const MapView = memo(function MapView({
 
       <Suspense fallback={null}>
         {map.scenery.map((inst, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: static per-map scenery, never reordered
           <SceneryModel key={`scn-${index}`} inst={inst} />
         ))}
       </Suspense>
@@ -1384,6 +1388,7 @@ const MapView = memo(function MapView({
         }
         return (
           <group
+            // biome-ignore lint/suspicious/noArrayIndexKey: static per-map props, never reordered
             key={`prop-${index}`}
             position={[instance.position.x, instance.position.y, instance.position.z]}
             rotation-y={instance.rotation}

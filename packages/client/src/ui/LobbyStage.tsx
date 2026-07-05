@@ -382,6 +382,7 @@ function StaticShadows() {
 function ShadowKick({ signal }: { signal: string }) {
   const gl = useThree((state) => state.gl);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: signal is a trigger, not read in the body — new suspense content must repaint the frozen shadow map.
   useEffect(() => {
     gl.shadowMap.needsUpdate = true;
   }, [gl, signal]);

@@ -879,6 +879,7 @@ canvas {
   justify-content: space-between;
   gap: 10px;
 }
+/* biome-ignore lint/style/noDescendingSpecificity: distinct component scope; never matches the same <b> as .menu-opt-row .l b */
 .menu-party-code b {
   font-family: var(--font-mono);
   font-size: 1.7rem;
@@ -961,6 +962,7 @@ canvas {
   flex-direction: column;
   gap: 26px;
 }
+/* biome-ignore lint/style/noDescendingSpecificity: distinct component scope; never matches the same <b> as .menu-opt-row .l b */
 .menu-party-setup b {
   font-family: var(--font-mono);
   font-size: 0.95rem;
@@ -1533,6 +1535,7 @@ canvas {
   border-radius: 4px;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: distinct component scope; never matches the same <b> as .menu-opt-row .l b */
 .chat-line b {
   color: var(--cyan);
 }

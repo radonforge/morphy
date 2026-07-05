@@ -485,7 +485,7 @@ export class Reflex {
     now: number,
   ): void {
     const target = world.others.find((o) => o.id === targetId);
-    if (!target || !target.alive) return;
+    if (!target?.alive) return;
     this.ensurePath(target.x, target.z, now, true);
     const wp = this.follower.advance(this.posX, this.posZ);
     if (wp) this.steer(wp, run, world.self.role, dt);
@@ -500,7 +500,7 @@ export class Reflex {
   ): MotorOutput["shoot"] {
     const map = this.map;
     const target = world.others.find((o) => o.id === targetId);
-    if (!target || !target.alive || !map) {
+    if (!target?.alive || !map) {
       this.aimTargetId = null;
       return null;
     }

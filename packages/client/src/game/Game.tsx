@@ -276,7 +276,7 @@ function topHunter(ids: string[], meta: MetaMap): PlayerMeta | null {
   let best: PlayerMeta | null = null;
   for (const id of ids) {
     const player = meta[id];
-    if (!player || player.role !== "hunter") continue;
+    if (player?.role !== "hunter") continue;
     if (!best || player.kills > best.kills) best = player;
   }
   return best && best.kills > 0 ? best : null;
@@ -548,7 +548,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
       for (const unsubscribe of unsubscribers) unsubscribe();
       playersRef.current.clear();
     };
-  }, [room, teleportRef, tauntPulseRef, shotsRef, sessionId]);
+  }, [room, sessionId]);
 
   useEffect(() => {
     if (!shotFx) return;

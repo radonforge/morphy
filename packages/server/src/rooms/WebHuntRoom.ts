@@ -466,7 +466,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   private handleInput(client: Client, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
-    if (!player || !player.alive) return;
+    if (!player?.alive) return;
     if (player.role === "hunter" && this.state.phase === "hiding") return;
     const input = parseInput(payload);
     if (!input) return;
@@ -480,7 +480,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   private handleTransform(client: Client, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
-    if (!player || player.role !== "prop" || !player.alive) return;
+    if (player?.role !== "prop" || !player.alive) return;
     if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
     const propType = parsePropType(payload);
     if (!propType || !this.catalogIds.has(propType)) return;
@@ -489,7 +489,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   private handleSetWeapon(client: Client, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
-    if (!player || !player.alive) return;
+    if (!player?.alive) return;
     const weapon = parseWeapon(payload);
     if (!weapon || weapon === player.weapon) return;
     player.weapon = weapon;
@@ -538,7 +538,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   private handleShoot(client: Client, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
-    if (!player || player.role !== "hunter" || !player.alive) return;
+    if (player?.role !== "hunter" || !player.alive) return;
     if (this.state.phase !== "hunting") return;
 
     const weapon = WEAPONS[player.weapon];
