@@ -29,6 +29,8 @@ import {
   MSG_READY,
   MSG_SET_MAP,
   MSG_SET_PROFILE,
+  MSG_PING,
+  MSG_PONG,
   MSG_SET_WEAPON,
   MSG_SHOOT,
   MSG_SHOT_FIRED,
@@ -39,6 +41,10 @@ import {
   MSG_TRANSFORM,
   PATCH_RATE_MS,
   type Phase,
+  PING_INTERVAL_MS,
+  PING_MAX_MS,
+  type PingMessage,
+  type PongMessage,
   type PropBounds,
   ROUND_DURATION_MS,
   ROUND_END_MS,
@@ -79,6 +85,7 @@ export class PlayerState extends Schema {
   @type("boolean") ready = false;
   @type("string") avatar = "";
   @type("string") weapon: WeaponId = DEFAULT_WEAPON;
+  @type("uint16") ping = 0;
 }
 
 export class RoomState extends Schema {
@@ -169,6 +176,12 @@ function parseWeapon(payload: unknown): WeaponId | null {
   if (typeof payload !== "object" || payload === null) return null;
   const weapon = (payload as Record<string, unknown>).weapon;
   return isWeaponId(weapon) ? weapon : null;
+}
+
+function parsePong(payload: unknown): PongMessage | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const n = (payload as Record<string, unknown>).n;
+  return isFiniteNumber(n) ? { n } : null;
 }
 
 function parseProfile(payload: unknown): { name: string; avatar: AvatarId } | null {
@@ -279,6 +292,8 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   private phaseTimer?: ClearableTimer;
   private tauntTimer?: ClearableTimer;
   private nextShotAt = new Map<string, number>();
+  private pendingPings = new Map<string, { nonce: number; sentAt: number }>();
+  private pingNonce = 0;
 
   async onCreate(options: unknown): Promise<void> {
     const requested = (options as { map?: unknown } | undefined)?.map;
@@ -300,6 +315,27 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     this.onMessage(MSG_SET_MAP, (client, payload) => this.handleSetMap(client, payload));
     this.onMessage(MSG_SET_PROFILE, (client, payload) => this.handleSetProfile(client, payload));
     this.onMessage(MSG_SET_WEAPON, (client, payload) => this.handleSetWeapon(client, payload));
+    this.onMessage(MSG_PONG, (client, payload) => this.handlePong(client, payload));
+    this.clock.setInterval(() => this.sendPings(), PING_INTERVAL_MS);
+  }
+
+  private sendPings(): void {
+    for (const client of this.clients) {
+      const nonce = ++this.pingNonce;
+      this.pendingPings.set(client.sessionId, { nonce, sentAt: Date.now() });
+      client.send(MSG_PING, { n: nonce } satisfies PingMessage);
+    }
+  }
+
+  private handlePong(client: Client, payload: unknown): void {
+    const pong = parsePong(payload);
+    if (!pong) return;
+    const pending = this.pendingPings.get(client.sessionId);
+    if (!pending || pending.nonce !== pong.n) return;
+    this.pendingPings.delete(client.sessionId);
+    const player = this.state.players.get(client.sessionId);
+    if (!player) return;
+    player.ping = clamp(Math.round(Date.now() - pending.sentAt), 0, PING_MAX_MS);
   }
 
   private async assignPartyCode(): Promise<void> {
@@ -350,6 +386,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   onLeave(client: Client): void {
     this.state.players.delete(client.sessionId);
     this.nextShotAt.delete(client.sessionId);
+    this.pendingPings.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
       this.state.hostId = this.state.players.keys().next().value ?? "";
     }

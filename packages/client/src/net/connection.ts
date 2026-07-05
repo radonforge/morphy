@@ -1,7 +1,10 @@
 import { Client, type Room } from "@colyseus/sdk";
 import {
+  MSG_PING,
+  MSG_PONG,
   normalizePartyCode,
   type PartyCreateOptions,
+  type PongMessage,
   type PublicJoinOptions,
   ROOM_NAME,
   type RoomJoinOptions,
@@ -12,6 +15,19 @@ const CONNECT_TIMEOUT_MS = 8_000;
 export interface Connection {
   room: Room;
   sessionId: string;
+}
+
+/**
+ * Echo the server's latency probes for the room's whole lifetime, whichever
+ * screen (menu stage or game) currently owns the connection.
+ */
+function registerPingEcho(room: Room): void {
+  room.onMessage(MSG_PING, (message: unknown) => {
+    if (typeof message !== "object" || message === null) return;
+    const n = (message as Record<string, unknown>).n;
+    if (typeof n !== "number" || !Number.isFinite(n)) return;
+    room.send(MSG_PONG, { n } satisfies PongMessage);
+  });
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -40,6 +56,7 @@ export async function connectToRoom(
     CONNECT_TIMEOUT_MS,
     "server connection",
   );
+  registerPingEcho(room);
   return { room, sessionId: room.sessionId };
 }
 
@@ -53,6 +70,7 @@ export async function createPartyRoom(
     CONNECT_TIMEOUT_MS,
     "party creation",
   );
+  registerPingEcho(room);
   return { room, sessionId: room.sessionId };
 }
 
@@ -76,6 +94,7 @@ export async function joinPartyRoom(
       CONNECT_TIMEOUT_MS,
       "party join",
     );
+    registerPingEcho(room);
     return { room, sessionId: room.sessionId };
   } catch (error) {
     throw translatePartyJoinError(error);

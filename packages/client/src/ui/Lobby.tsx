@@ -32,6 +32,7 @@ import {
   stopLobbyMusic,
   unlockAudio,
 } from "../game/audio";
+import { isPerfHudEnabled, setPerfHudEnabled } from "../game/prefs";
 import { LobbyStage, STAGE_MAX_ACTORS, type StageActor } from "./LobbyStage";
 import { loadPrefs, savePrefs } from "./prefs";
 
@@ -145,6 +146,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const [uiSounds, setUiSoundsState] = useState(() => areUiSoundsEnabled());
   const [musicOn, setMusicOnState] = useState(() => isMusicEnabled());
   const [musicVol, setMusicVolState] = useState(() => getMusicVolume());
+  const [perfHud, setPerfHudState] = useState(() => isPerfHudEnabled());
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -289,6 +291,13 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     setUiSoundsEnabled(next);
     setUiSoundsState(next);
     if (next) playUiClick();
+  }, []);
+
+  const togglePerfHud = useCallback(() => {
+    const next = !isPerfHudEnabled();
+    setPerfHudEnabled(next);
+    setPerfHudState(next);
+    playUiClick();
   }, []);
 
   const toggleMusic = useCallback(() => {
@@ -681,6 +690,22 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
                     onPointerEnter={playUiHover}
                     aria-pressed={uiSounds}
                     aria-label={uiSounds ? "Disable interface sounds" : "Enable interface sounds"}
+                  />
+                </div>
+                <div className="menu-opt-row">
+                  <span className="l">
+                    <b>Performance readout</b>
+                    <span>FPS and ping in the corner of the match HUD</span>
+                  </span>
+                  <button
+                    type="button"
+                    className={`menu-toggle${perfHud ? " on" : ""}`}
+                    onClick={togglePerfHud}
+                    onPointerEnter={playUiHover}
+                    aria-pressed={perfHud}
+                    aria-label={
+                      perfHud ? "Disable performance readout" : "Enable performance readout"
+                    }
                   />
                 </div>
               </div>

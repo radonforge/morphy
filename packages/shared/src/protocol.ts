@@ -24,6 +24,8 @@ export const MSG_START = "start";
 export const MSG_SET_MAP = "set_map";
 export const MSG_SET_PROFILE = "set_profile";
 export const MSG_SET_WEAPON = "set_weapon";
+export const MSG_PING = "ping";
+export const MSG_PONG = "pong";
 
 export type KillReason = "shot" | "self" | "converted";
 
@@ -95,6 +97,20 @@ export interface ShotFiredEvent {
 /** Hunter request to switch weapon loadout. */
 export interface SetWeaponMessage {
   weapon: string;
+}
+
+/**
+ * Server → client latency probe. The client echoes the nonce back as a
+ * {@link PongMessage}; RTT is measured against the server clock, so clients
+ * cannot fake a lower ping (delaying the echo only makes it worse).
+ */
+export interface PingMessage {
+  n: number;
+}
+
+/** Client echo of a {@link PingMessage} nonce. */
+export interface PongMessage {
+  n: number;
 }
 
 export interface ReadyMessage {

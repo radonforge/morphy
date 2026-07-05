@@ -8,6 +8,8 @@ import {
   MSG_INPUT,
   MSG_KILL,
   MSG_MAP,
+  MSG_PING,
+  MSG_PONG,
   MSG_READY,
   MSG_SHOOT,
   MSG_SHOT_RESULT,
@@ -137,6 +139,11 @@ export class Bot {
     room.onMessage(MSG_MAP, (raw: unknown) => this.applyMap(raw));
     room.onMessage(MSG_TELEPORT, (message: unknown) => this.onTeleport(message));
     room.onMessage(MSG_KILL, (message: unknown) => this.onKill(message));
+    room.onMessage(MSG_PING, (message: unknown) => {
+      if (typeof message !== "object" || message === null) return;
+      const n = (message as Record<string, unknown>).n;
+      if (typeof n === "number" && Number.isFinite(n)) room.send(MSG_PONG, { n });
+    });
     for (const ignored of [MSG_TAUNT, MSG_CHAT, MSG_SHOT_RESULT]) {
       room.onMessage(ignored, () => {});
     }

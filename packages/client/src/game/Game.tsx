@@ -1,5 +1,5 @@
 import { Callbacks } from "@colyseus/sdk";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import {
   DEFAULT_WEAPON,
   HIDE_DURATION_MS,
@@ -45,10 +45,12 @@ import {
   preloadSamples,
   toggleMuted,
 } from "./audio";
+import { isPerfHudEnabled } from "./prefs";
 import { GAME_DPR, GAME_FOV, Scene, TAUNT_PULSE_SECONDS } from "./Scene";
 import type {
   MetaMap,
   PlayerMeta,
+  PlayersRef,
   RemotePlayerView,
   ShotsRef,
   TauntPulseRef,
@@ -69,6 +71,7 @@ const LOW_TIME_MS = 10000;
 const HP_LOW_THRESHOLD = 40;
 const RING_RADIUS = 19;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+const PERF_SAMPLE_WINDOW_S = 0.5;
 
 const PHASE_DURATION_MS: Record<Phase, number> = {
   lobby: 0,
@@ -152,7 +155,8 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
       ai.kills === bi.kills &&
       ai.propType === bi.propType &&
       ai.ready === bi.ready &&
-      ai.avatar === bi.avatar
+      ai.avatar === bi.avatar &&
+      ai.ping === bi.ping
     );
   });
 }
@@ -176,6 +180,7 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
         <span>Role</span>
         <span>Status</span>
         <span>Kills</span>
+        <span>Ping</span>
       </div>
       {sortStandings(ids, meta).map(({ id, player }) => (
         <div
@@ -194,10 +199,40 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
               : "Eliminated"}
           </span>
           <span>{player.role === "hunter" ? player.kills : "—"}</span>
+          <span>{player.ping} ms</span>
         </div>
       ))}
     </>
   );
+}
+
+/**
+ * Samples the r3f frame loop and writes "N fps · M ms" straight into the
+ * readout's DOM node — the text never passes through React state, same
+ * discipline as the position interpolation.
+ */
+function PerfProbe({
+  playersRef,
+  localId,
+  nodeRef,
+}: {
+  playersRef: PlayersRef;
+  localId: string;
+  nodeRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const frames = useRef(0);
+  const windowStart = useRef(0);
+  useFrame(({ clock }) => {
+    frames.current++;
+    const elapsed = clock.elapsedTime - windowStart.current;
+    if (elapsed < PERF_SAMPLE_WINDOW_S) return;
+    const fps = Math.round(frames.current / elapsed);
+    frames.current = 0;
+    windowStart.current = clock.elapsedTime;
+    const ping = playersRef.current.get(localId)?.ping ?? 0;
+    if (nodeRef.current) nodeRef.current.textContent = `${fps} fps · ${ping} ms`;
+  });
+  return null;
 }
 
 function SpeakerIcon({ muted }: { muted: boolean }) {
@@ -360,6 +395,8 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
   const [muted, setMuted] = useState(() => isMuted());
   const [weapon, setWeapon] = useState<WeaponId>(DEFAULT_WEAPON);
+  const [perfHud] = useState(() => isPerfHudEnabled());
+  const perfNodeRef = useRef<HTMLDivElement | null>(null);
   const prevPhaseRef = useRef<Phase>("lobby");
 
   chatOpenRef.current = chatOpen;
@@ -604,6 +641,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           propType: player.propType,
           ready: player.ready,
           avatar: player.avatar,
+          ping: player.ping,
         };
       }
       setMeta((prev) => (metaEqual(prev, next) ? prev : next));
@@ -691,7 +729,10 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           chatOpen={chatOpen}
           onShoot={onShoot}
         />
+        {perfHud && <PerfProbe playersRef={playersRef} localId={sessionId} nodeRef={perfNodeRef} />}
       </Canvas>
+
+      {perfHud && <div className="perf" ref={perfNodeRef} />}
 
       {phase === "lobby" && (
         <div className="lobby-overlay">
