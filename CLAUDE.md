@@ -39,7 +39,7 @@ The single source of truth for everything client and server must agree on. **Exp
 - `ui/App.tsx` — lobby/connect screen; `net/connection.ts` wraps the Colyseus SDK `joinOrCreate` with a timeout.
 - `game/Game.tsx` — React HUD and the network event hub: registers all `room.onMessage` handlers and the schema `Callbacks` (player add/remove), drives chat/kill-feed/result/scoreboard overlays.
 - `game/Scene.tsx` — the entire 3D scene: map rendering (instanced tiles, fitted GLB props/avatars, scenery), the **local player movement + client-side collision** (walls, obstacles, player separation, gravity/jump), remote-player interpolation, the shooting raycast, and the prop-picker (`E` to morph). This is the largest and densest file.
-- `game/audio.ts` — **hybrid audio**: weapon shots and hit impacts play Kenney CC0 OGG samples from `public/sounds/sci-fi/` (fetched + decoded once, cached); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers both.
+- `game/audio.ts` — **hybrid audio**: weapon shots / hit impacts (Kenney Sci-fi Sounds, `public/sounds/sci-fi/`) and lobby UI cues (Kenney UI Audio, `public/sounds/ui/`) play cached OGG samples; the lobby loops a licensed theme (`public/sounds/music/lobby-theme.ogg`, own gain, fade in/out); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers all; volume / music / UI-sound prefs persist to localStorage (`webhunt:*` keys).
 
 ### Two facts that span files
 
@@ -53,7 +53,7 @@ The single source of truth for everything client and server must agree on. **Exp
 ### Assets
 GLB models live in `packages/client/public/models/<kit>/`: `blaster` (weapon viewmodel), `pets` (player avatars), `space` (corridor/wall/floor tiles for the generated map), `space-station` (interior furniture props), `space-kit` (exterior scenery). Kenney kits reference an external `Textures/colormap.png` per kit — keep that file alongside the GLBs or models render untextured.
 
-Audio samples in active use ship from `packages/client/public/sounds/sci-fi/`. Unwired candidates are staged in `assets/audio/sci-fi/` (CC0, see its README) — copy into `public/sounds/` only when a sound is actually used, so the client bundle stays lean.
+Audio samples in active use ship from `packages/client/public/sounds/` (`sci-fi/` combat, `ui/` menu cues, `music/` lobby theme — see `music/CREDITS.txt` for the alkakrab license). Unwired candidates are staged in `assets/audio/` (per-directory READMEs and licenses) — copy into `public/sounds/` only when a sound is actually used, so the client bundle stays lean.
 
 ## Spec vs. code
 
