@@ -11,8 +11,27 @@ import {
   normalizePartyCode,
   PARTY_CODE_LENGTH,
 } from "@webhunt/shared";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { isMuted, setMuted } from "../game/audio";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  areUiSoundsEnabled,
+  getMusicVolume,
+  getVolume,
+  isMusicEnabled,
+  isMuted,
+  playUiClick,
+  playUiClose,
+  playUiDeploy,
+  playUiHover,
+  playUiOpen,
+  setMusicEnabled,
+  setMusicVolume,
+  setMuted,
+  setUiSoundsEnabled,
+  setVolume,
+  startLobbyMusic,
+  stopLobbyMusic,
+  unlockAudio,
+} from "../game/audio";
 import { LobbyStage, STAGE_MAX_ACTORS, type StageActor } from "./LobbyStage";
 import { loadPrefs, savePrefs } from "./prefs";
 
@@ -47,12 +66,11 @@ interface LobbyProps {
   onJoinParty: (code: string, name: string, avatar: AvatarId) => void;
 }
 
-type PaneId = "play" | "avatar" | "private" | "stats" | "options";
+type PaneId = "identity" | "private" | "options";
 
 interface NavItem {
   id: PaneId;
   label: string;
-  soon?: boolean;
 }
 
 const COPY_FLASH_MS = 1600;
@@ -98,30 +116,35 @@ function avatarEmoji(avatar: string): string {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "play", label: "Play" },
-  { id: "avatar", label: "Avatar" },
+  { id: "identity", label: "Identity" },
   { id: "private", label: "Private" },
-  { id: "stats", label: "Stats", soon: true },
   { id: "options", label: "Options" },
 ];
 
-function ComingSoon({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
-  return (
-    <div className="menu-empty">
-      <span className="menu-empty-ring">{icon}</span>
-      <span className="menu-empty-tag">Coming soon</span>
-      <b>{title}</b>
-      <p>{body}</p>
-    </div>
-  );
-}
+const MAP_GLYPH: Record<MapId, string> = {
+  station: "▣",
+  mars: "◭",
+  urban: "▦",
+};
+
+const PANE_TITLES: Record<PaneId, string> = {
+  identity: "Identity",
+  private: "Private room",
+  options: "Options",
+};
+
+const VOLUME_SLIDER_MAX = 100;
 
 export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: LobbyProps) {
   const [name, setName] = useState(() => loadPrefs().name);
   const [selectedMap, setSelectedMap] = useState<MapId>(() => loadPrefs().map);
   const [selectedAvatar, setSelectedAvatar] = useState<AvatarId>(() => loadPrefs().avatar);
-  const [pane, setPane] = useState<PaneId>("play");
+  const [pane, setPane] = useState<PaneId | null>(null);
   const [muted, setMutedState] = useState(() => isMuted());
+  const [volume, setVolumeState] = useState(() => getVolume());
+  const [uiSounds, setUiSoundsState] = useState(() => areUiSoundsEnabled());
+  const [musicOn, setMusicOnState] = useState(() => isMusicEnabled());
+  const [musicVol, setMusicVolState] = useState(() => getMusicVolume());
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -134,7 +157,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   }, [name, selectedMap, selectedAvatar]);
 
   useEffect(() => {
-    if (inParty) setPane("play");
+    if (inParty) setPane(null);
   }, [inParty]);
 
   useEffect(() => {
@@ -144,25 +167,72 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   }, [copied]);
 
   useEffect(() => {
-    if (pane === "play") return;
+    window.addEventListener("pointerdown", unlockAudio, { once: true });
+    startLobbyMusic();
+    return () => {
+      window.removeEventListener("pointerdown", unlockAudio);
+      stopLobbyMusic();
+    };
+  }, []);
+
+  const profileRef = useRef({ party, name, avatar: selectedAvatar, pane });
+  profileRef.current = { party, name, avatar: selectedAvatar, pane };
+
+  const commitProfile = useCallback(() => {
+    const { party: p, name: n, avatar } = profileRef.current;
+    p?.onSetProfile(n, avatar);
+  }, []);
+
+  const closePane = useCallback(() => {
+    const current = profileRef.current.pane;
+    if (current === null) return;
+    if (current === "identity") commitProfile();
+    playUiClose();
+    setPane(null);
+  }, [commitProfile]);
+
+  useEffect(() => {
+    if (pane === null) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPane("play");
+      if (e.key === "Escape") closePane();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pane]);
+  }, [pane, closePane]);
+
+  const handleTabClick = useCallback(
+    (id: PaneId) => {
+      if (pane === id) {
+        closePane();
+        return;
+      }
+      if (pane === "identity") commitProfile();
+      playUiOpen();
+      setPane(id);
+    },
+    [pane, closePane, commitProfile],
+  );
+
+  const handleCustomize = useCallback(() => {
+    if (profileRef.current.pane === "identity") return;
+    playUiOpen();
+    setPane("identity");
+  }, []);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      if (party) {
-        party.onSetProfile(name, selectedAvatar);
-        return;
-      }
+      if (party) return;
+      playUiDeploy();
       onConnect(name, selectedMap, selectedAvatar);
     },
     [party, name, selectedMap, selectedAvatar, onConnect],
   );
+
+  const handleStart = useCallback(() => {
+    playUiDeploy();
+    party?.onStart();
+  }, [party]);
 
   const handleMapPick = useCallback(
     (map: MapId) => {
@@ -170,26 +240,25 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         if (party.selfId !== party.hostId) return;
         party.onSetMap(map);
       }
+      if (map !== activeMap) playUiClick();
       setSelectedMap(map);
     },
-    [party],
+    [party, activeMap],
   );
 
   const handleAvatarPick = useCallback(
     (avatar: AvatarId) => {
+      if (avatar !== selectedAvatar) playUiClick();
       setSelectedAvatar(avatar);
       party?.onSetProfile(name, avatar);
     },
-    [party, name],
+    [party, name, selectedAvatar],
   );
-
-  const handleNameCommit = useCallback(() => {
-    party?.onSetProfile(name, selectedAvatar);
-  }, [party, name, selectedAvatar]);
 
   const canCopy = typeof navigator !== "undefined" && navigator.clipboard !== undefined;
   const copyCode = useCallback(() => {
     if (!party || !navigator.clipboard) return;
+    playUiClick();
     navigator.clipboard.writeText(party.code).then(
       () => setCopied(true),
       () => setCopied(false),
@@ -200,17 +269,50 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     (e: React.FormEvent) => {
       e.preventDefault();
       if (!isPartyCode(joinCode)) return;
+      playUiClick();
       onJoinParty(joinCode, name, selectedAvatar);
     },
     [joinCode, name, selectedAvatar, onJoinParty],
   );
 
   const toggleAudio = useCallback(() => {
+    playUiClick();
     setMutedState((prev) => {
       const next = !prev;
       setMuted(next);
       return next;
     });
+  }, []);
+
+  const toggleUiSounds = useCallback(() => {
+    const next = !areUiSoundsEnabled();
+    setUiSoundsEnabled(next);
+    setUiSoundsState(next);
+    if (next) playUiClick();
+  }, []);
+
+  const toggleMusic = useCallback(() => {
+    const next = !isMusicEnabled();
+    setMusicEnabled(next);
+    setMusicOnState(next);
+    if (next) {
+      startLobbyMusic();
+    } else {
+      stopLobbyMusic();
+    }
+    playUiClick();
+  }, []);
+
+  const handleVolumeChange = useCallback((value: number) => {
+    const next = value / VOLUME_SLIDER_MAX;
+    setVolume(next);
+    setVolumeState(next);
+  }, []);
+
+  const handleMusicVolumeChange = useCallback((value: number) => {
+    const next = value / VOLUME_SLIDER_MAX;
+    setMusicVolume(next);
+    setMusicVolState(next);
   }, []);
 
   const connecting = status.kind === "connecting";
@@ -234,7 +336,12 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
   return (
     <div className="menu">
-      <LobbyStage map={activeMap} actors={stageActors} inParty={inParty} />
+      <LobbyStage
+        map={activeMap}
+        actors={stageActors}
+        inParty={inParty}
+        onCustomize={handleCustomize}
+      />
       <div className="menu-vignette" />
 
       <header className="menu-top">
@@ -249,11 +356,11 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               type="button"
               key={item.id}
               className={`menu-tab${pane === item.id ? " sel" : ""}`}
-              onClick={() => setPane((current) => (current === item.id ? "play" : item.id))}
+              onClick={() => handleTabClick(item.id)}
+              onPointerEnter={playUiHover}
               aria-pressed={pane === item.id}
             >
               {item.label}
-              {item.soon && <span className="menu-mini">Soon</span>}
             </button>
           ))}
         </nav>
@@ -265,7 +372,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           <div className="menu-party-code">
             <b>{party.code}</b>
             {canCopy && (
-              <button type="button" onClick={copyCode}>
+              <button type="button" onClick={copyCode} onPointerEnter={playUiHover}>
                 {copied ? "Copied ✓" : "Copy"}
               </button>
             )}
@@ -284,13 +391,21 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               </li>
             ))}
           </ul>
-          <button type="button" className="menu-party-leave" onClick={party.onLeaveParty}>
+          <button
+            type="button"
+            className="menu-party-leave"
+            onClick={() => {
+              playUiClick();
+              party.onLeaveParty();
+            }}
+            onPointerEnter={playUiHover}
+          >
             Leave party
           </button>
         </aside>
       )}
 
-      {stageActors.length === 1 && pane === "play" && (
+      {stageActors.length === 1 && pane === null && (
         <aside className="menu-maptitle" key={activeMap}>
           <span className="menu-maptitle-tag" style={{ color: MAP_ACCENT[activeMap] }}>
             {MAP_TAG[activeMap]} sector
@@ -301,41 +416,39 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       )}
 
       <form className="menu-bottom" onSubmit={handleSubmit}>
-        <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
-          {MAP_CATALOG.map((info) => (
-            <button
-              type="button"
-              key={info.id}
-              className={`menu-mapcard panel${activeMap === info.id ? " sel" : ""}`}
-              style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
-              onClick={() => handleMapPick(info.id)}
-              disabled={inParty && !isHost}
-              aria-pressed={activeMap === info.id}
-            >
-              <span className="menu-mapcard-tag">{MAP_TAG[info.id]}</span>
-              <span className="menu-mapcard-name">{info.name}</span>
-            </button>
-          ))}
+        <div className="menu-strip">
+          <span className="menu-strip-label">Map</span>
+          <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
+            {MAP_CATALOG.map((info) => (
+              <button
+                type="button"
+                key={info.id}
+                className={`menu-mapcard panel${activeMap === info.id ? " sel" : ""}`}
+                style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
+                onClick={() => handleMapPick(info.id)}
+                onPointerEnter={playUiHover}
+                disabled={inParty && !isHost}
+                aria-pressed={activeMap === info.id}
+              >
+                <span className="menu-mapcard-glyph" aria-hidden="true">
+                  {MAP_GLYPH[info.id]}
+                </span>
+                <span className="menu-mapcard-text">
+                  <span className="menu-mapcard-tag">{MAP_TAG[info.id]}</span>
+                  <span className="menu-mapcard-name">{info.name}</span>
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
         <div className="menu-dock">
-          <div className="menu-name-field">
-            <label htmlFor="player-name">Player name</label>
-            <input
-              id="player-name"
-              value={name}
-              maxLength={MAX_NAME_LENGTH}
-              placeholder="Your name"
-              onChange={(e) => setName(e.target.value)}
-              onBlur={handleNameCommit}
-              autoFocus
-            />
-          </div>
           {party ? (
             isHost ? (
               <button
                 type="button"
                 className="menu-deploy"
-                onClick={party.onStart}
+                onClick={handleStart}
+                onPointerEnter={playUiHover}
                 disabled={party.members.length < MIN_PLAYERS_TO_START}
               >
                 <span className="big">▶ Start match</span>
@@ -352,7 +465,12 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               </div>
             )
           ) : (
-            <button type="submit" className="menu-deploy" disabled={connecting}>
+            <button
+              type="submit"
+              className="menu-deploy"
+              onPointerEnter={playUiHover}
+              disabled={connecting}
+            >
               <span className="big">▶ {connecting ? "Connecting…" : "Play"}</span>
               <span className="small">Public match</span>
             </button>
@@ -361,42 +479,58 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         {status.kind === "error" && <span className="menu-error">{status.message}</span>}
       </form>
 
-      {pane !== "play" && (
+      {pane !== null && (
         <section className="menu-panel panel">
           <header className="menu-sheet-head">
-            <h2>
-              {pane === "avatar" && "Choose your avatar"}
-              {pane === "private" && "Private room"}
-              {pane === "stats" && "Statistics"}
-              {pane === "options" && "Options"}
-            </h2>
+            <h2>{PANE_TITLES[pane]}</h2>
             <button
               type="button"
               className="menu-sheet-close"
-              onClick={() => setPane("play")}
+              onClick={closePane}
+              onPointerEnter={playUiHover}
               aria-label="Close"
             >
               ✕
             </button>
           </header>
 
-          {pane === "avatar" && (
-            <div className="menu-avatars">
-              {AVATAR_CATALOG.map((info) => (
-                <button
-                  type="button"
-                  key={info.id}
-                  className={`menu-avatar${selectedAvatar === info.id ? " sel" : ""}`}
-                  onClick={() => handleAvatarPick(info.id)}
-                  aria-pressed={selectedAvatar === info.id}
-                >
-                  <span className="menu-avatar-emoji" aria-hidden="true">
-                    {AVATAR_EMOJI[info.id]}
-                  </span>
-                  <span className="menu-avatar-name">{info.name}</span>
-                </button>
-              ))}
-            </div>
+          {pane === "identity" && (
+            <>
+              <div className="menu-card menu-callsign">
+                <label htmlFor="player-name" className="eyebrow">
+                  Callsign
+                </label>
+                <input
+                  id="player-name"
+                  value={name}
+                  maxLength={MAX_NAME_LENGTH}
+                  placeholder="Your name"
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={commitProfile}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  autoFocus
+                />
+              </div>
+              <div className="menu-avatars">
+                {AVATAR_CATALOG.map((info) => (
+                  <button
+                    type="button"
+                    key={info.id}
+                    className={`menu-avatar${selectedAvatar === info.id ? " sel" : ""}`}
+                    onClick={() => handleAvatarPick(info.id)}
+                    onPointerEnter={playUiHover}
+                    aria-pressed={selectedAvatar === info.id}
+                  >
+                    <span className="menu-avatar-emoji" aria-hidden="true">
+                      {AVATAR_EMOJI[info.id]}
+                    </span>
+                    <span className="menu-avatar-name">{info.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
 
           {pane === "private" && party && (
@@ -405,11 +539,24 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               <b className="menu-party-bigcode">{party.code}</b>
               <p>Share this code with your friends so they can join you.</p>
               {canCopy && (
-                <button type="button" className="menu-party-btn" onClick={copyCode}>
+                <button
+                  type="button"
+                  className="menu-party-btn"
+                  onClick={copyCode}
+                  onPointerEnter={playUiHover}
+                >
                   {copied ? "Copied ✓" : "Copy code"}
                 </button>
               )}
-              <button type="button" className="menu-party-leave" onClick={party.onLeaveParty}>
+              <button
+                type="button"
+                className="menu-party-leave"
+                onClick={() => {
+                  playUiClick();
+                  party.onLeaveParty();
+                }}
+                onPointerEnter={playUiHover}
+              >
                 Leave party
               </button>
             </div>
@@ -425,7 +572,11 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
                 <button
                   type="button"
                   className="menu-party-btn"
-                  onClick={() => onCreateParty(name, selectedMap, selectedAvatar)}
+                  onClick={() => {
+                    playUiClick();
+                    onCreateParty(name, selectedMap, selectedAvatar);
+                  }}
+                  onPointerEnter={playUiHover}
                   disabled={connecting}
                 >
                   {connecting ? "Connecting…" : "Create room"}
@@ -445,6 +596,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
                   <button
                     type="submit"
                     className="menu-party-btn"
+                    onPointerEnter={playUiHover}
                     disabled={!isPartyCode(joinCode) || connecting}
                   >
                     {connecting ? "…" : "Join"}
@@ -455,40 +607,94 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             </div>
           )}
 
-          {pane === "stats" && (
-            <ComingSoon
-              icon={
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                  aria-hidden="true"
-                >
-                  <path d="M5 19V10m7 9V5m7 14v-7" />
-                </svg>
-              }
-              title="Your matches, in numbers"
-              body="Matches played, props flushed out, rounds won and time survived. Comes with account login."
-            />
-          )}
-
           {pane === "options" && (
-            <div className="menu-card">
-              <div className="menu-opt-row">
-                <span className="l">
-                  <b>Audio</b>
-                  <span>Effects and ambience synthesized at runtime</span>
-                </span>
-                <button
-                  type="button"
-                  className={`menu-toggle${muted ? "" : " on"}`}
-                  onClick={toggleAudio}
-                  aria-pressed={!muted}
-                  aria-label={muted ? "Unmute audio" : "Mute audio"}
-                />
+            <>
+              <div className="menu-card">
+                <div className="menu-opt-row">
+                  <span className="l">
+                    <b>Audio</b>
+                    <span>Master switch for every sound</span>
+                  </span>
+                  <button
+                    type="button"
+                    className={`menu-toggle${muted ? "" : " on"}`}
+                    onClick={toggleAudio}
+                    onPointerEnter={playUiHover}
+                    aria-pressed={!muted}
+                    aria-label={muted ? "Unmute audio" : "Mute audio"}
+                  />
+                </div>
+                <div className="menu-opt-row">
+                  <span className="l">
+                    <b>Volume</b>
+                    <span>Master level for effects and interface</span>
+                  </span>
+                  <input
+                    type="range"
+                    className="menu-slider"
+                    min={0}
+                    max={VOLUME_SLIDER_MAX}
+                    value={Math.round(volume * VOLUME_SLIDER_MAX)}
+                    onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                    onPointerUp={playUiClick}
+                    aria-label="Master volume"
+                  />
+                </div>
+                <div className="menu-opt-row">
+                  <span className="l">
+                    <b>Music</b>
+                    <span>Lobby theme by alkakrab</span>
+                  </span>
+                  <button
+                    type="button"
+                    className={`menu-toggle${musicOn ? " on" : ""}`}
+                    onClick={toggleMusic}
+                    onPointerEnter={playUiHover}
+                    aria-pressed={musicOn}
+                    aria-label={musicOn ? "Disable music" : "Enable music"}
+                  />
+                </div>
+                <div className="menu-opt-row">
+                  <span className="l">
+                    <b>Music volume</b>
+                    <span>Level of the lobby theme</span>
+                  </span>
+                  <input
+                    type="range"
+                    className="menu-slider"
+                    min={0}
+                    max={VOLUME_SLIDER_MAX}
+                    value={Math.round(musicVol * VOLUME_SLIDER_MAX)}
+                    onChange={(e) => handleMusicVolumeChange(Number(e.target.value))}
+                    aria-label="Music volume"
+                  />
+                </div>
+                <div className="menu-opt-row">
+                  <span className="l">
+                    <b>Interface sounds</b>
+                    <span>Menu ticks and clicks</span>
+                  </span>
+                  <button
+                    type="button"
+                    className={`menu-toggle${uiSounds ? " on" : ""}`}
+                    onClick={toggleUiSounds}
+                    onPointerEnter={playUiHover}
+                    aria-pressed={uiSounds}
+                    aria-label={uiSounds ? "Disable interface sounds" : "Enable interface sounds"}
+                  />
+                </div>
               </div>
-            </div>
+              <div className="menu-card menu-locked">
+                <div className="menu-opt-row">
+                  <span className="l">
+                    <b>
+                      Statistics <span className="menu-mini">Soon</span>
+                    </b>
+                    <span>Matches, props flushed out, rounds won — comes with account login</span>
+                  </span>
+                </div>
+              </div>
+            </>
           )}
         </section>
       )}

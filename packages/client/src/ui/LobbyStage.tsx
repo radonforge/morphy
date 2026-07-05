@@ -1,8 +1,9 @@
-import { Billboard, Sky, Stars, Text, useAnimations, useGLTF } from "@react-three/drei";
+import { Billboard, Html, Sky, Stars, Text, useAnimations, useGLTF } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { AvatarId, MapId } from "@webhunt/shared";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { playUiHover } from "../game/audio";
 
 const avatarModel = (id: AvatarId): string => `/models/pets/animal-${id}.glb`;
 
@@ -26,6 +27,9 @@ const NAMEPLATE_FONT_SIZE = 0.14;
 const NAMEPLATE_COLOR = "#eef4ff";
 const NAMEPLATE_OUTLINE_COLOR = "#11161f";
 const NAMEPLATE_OUTLINE_WIDTH = 0.015;
+
+const CHIP_Y = AVATAR_HEIGHT + 0.12;
+const CHIP_Z_INDEX = 2;
 
 export interface StageActor {
   id: string;
@@ -210,11 +214,22 @@ for (const pieces of Object.values(DIORAMAS)) {
   }
 }
 
-function AvatarActor({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
+function AvatarActor({
+  avatar,
+  slot,
+  onSelect,
+}: { avatar: AvatarId; slot: StageSlot; onSelect?: () => void }) {
   const group = useRef<THREE.Group>(null);
   const { scene, animations } = useGLTF(avatarModel(avatar));
   const object = useMemo(() => scene.clone(true), [scene]);
   const { actions, mixer } = useAnimations(animations, group);
+
+  useEffect(() => {
+    if (!onSelect) return;
+    return () => {
+      document.body.style.cursor = "";
+    };
+  }, [onSelect]);
 
   const fit = useMemo(() => {
     const box = new THREE.Box3().setFromObject(object);
@@ -255,7 +270,32 @@ function AvatarActor({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
   }, [actions, mixer]);
 
   return (
-    <group position={[slot.x, 0, slot.z]} rotation-y={slot.yaw}>
+    // biome-ignore lint/a11y/noStaticElementInteractions: r3f scene-graph node, not a DOM element — keyboard path is the Identity tab
+    <group
+      position={[slot.x, 0, slot.z]}
+      rotation-y={slot.yaw}
+      onClick={
+        onSelect &&
+        ((e) => {
+          e.stopPropagation();
+          onSelect();
+        })
+      }
+      onPointerOver={
+        onSelect &&
+        ((e) => {
+          e.stopPropagation();
+          document.body.style.cursor = "pointer";
+          playUiHover();
+        })
+      }
+      onPointerOut={
+        onSelect &&
+        (() => {
+          document.body.style.cursor = "";
+        })
+      }
+    >
       <group ref={group} position={[fit.offset[0], fit.offset[1], fit.offset[2]]} scale={fit.scale}>
         <primitive object={object} />
       </group>
@@ -412,9 +452,11 @@ export function LobbyStage({
   map,
   actors,
   inParty,
-}: { map: MapId; actors: StageActor[]; inParty: boolean }) {
+  onCustomize,
+}: { map: MapId; actors: StageActor[]; inParty: boolean; onCustomize: () => void }) {
   const theme = STAGE_THEMES[map];
   const slots = computeStageSlots(actors.length, inParty);
+  const selfSlot = slots[0] ?? SOLO_SLOT;
   return (
     <div className="menu-canvas" aria-hidden="true">
       <Canvas
@@ -456,6 +498,7 @@ export function LobbyStage({
               key={`${actor.id}:${actor.avatar}`}
               avatar={actor.avatar}
               slot={slots[index] ?? SOLO_SLOT}
+              onSelect={index === 0 ? onCustomize : undefined}
             />
           ))}
           <ShadowKick
@@ -463,7 +506,7 @@ export function LobbyStage({
           />
         </Suspense>
         {actors.map((actor, index) =>
-          !inParty || index > 0 ? (
+          index > 0 ? (
             <ActorNameplate
               key={actor.id}
               label={`${actor.isHost ? "★ " : ""}${actor.name}`}
@@ -471,6 +514,22 @@ export function LobbyStage({
             />
           ) : null,
         )}
+        <Html
+          position={[selfSlot.x, CHIP_Y, selfSlot.z]}
+          center
+          zIndexRange={[CHIP_Z_INDEX, CHIP_Z_INDEX]}
+          wrapperClass="stage-chip"
+        >
+          <button type="button" tabIndex={-1} onClick={onCustomize} onPointerEnter={playUiHover}>
+            <span className="stage-chip-name">
+              {actors[0]?.isHost ? "★ " : ""}
+              {actors[0]?.name ?? ""}
+            </span>
+            <span className="stage-chip-pencil" aria-hidden="true">
+              ✎
+            </span>
+          </button>
+        </Html>
       </Canvas>
     </div>
   );

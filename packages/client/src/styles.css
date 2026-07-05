@@ -269,8 +269,8 @@ canvas {
   left: 0;
   right: 0;
   z-index: 5;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 18px;
   padding: 14px clamp(18px, 3vw, 44px);
@@ -297,13 +297,7 @@ canvas {
 
 .menu-tabs {
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 9px;
-  background: rgba(8, 13, 22, 0.6);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  box-shadow: inset 0 0 0 1px var(--border);
+  gap: clamp(8px, 1.6vw, 26px);
 }
 .menu-tab {
   appearance: none;
@@ -312,22 +306,22 @@ canvas {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 16px;
-  border-radius: 6px;
+  padding: 10px 2px 8px;
   background: transparent;
+  border-bottom: 2px solid transparent;
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
   transition:
     color 0.14s ease,
-    background 0.14s ease;
+    border-color 0.14s ease;
 }
 .menu-tab:hover {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
 }
 .menu-mini {
   font-family: var(--font-mono);
@@ -342,14 +336,8 @@ canvas {
   box-shadow: inset 0 0 0 1px rgba(255, 178, 74, 0.4);
 }
 .menu-tab.sel {
-  color: #04121c;
-  background: var(--cyan);
-  box-shadow: 0 0 18px rgba(53, 224, 255, 0.35);
-}
-.menu-tab.sel .menu-mini {
-  color: rgba(4, 18, 28, 0.8);
-  background: rgba(4, 18, 28, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(4, 18, 28, 0.4);
+  color: var(--text);
+  border-bottom-color: var(--cyan);
 }
 
 .menu-maptitle {
@@ -435,6 +423,30 @@ canvas {
   }
 }
 
+.menu-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.menu-strip-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-shadow: 0 1px 6px rgba(4, 7, 12, 0.8);
+}
+.menu-strip-label::after {
+  content: "";
+  flex: 0 1 120px;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border), transparent);
+}
 .menu-mapstrip {
   display: flex;
   gap: 12px;
@@ -448,17 +460,35 @@ canvas {
 }
 .menu-mapcard {
   flex: 0 1 250px;
-  min-width: 175px;
+  min-width: 185px;
   cursor: pointer;
   text-align: left;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 12px;
   padding: 12px 16px 14px;
   transition:
     transform 0.16s ease,
     box-shadow 0.16s ease,
     background 0.16s ease;
+}
+.menu-mapcard-glyph {
+  flex: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  color: var(--accent);
+  opacity: 0.55;
+  transition: opacity 0.16s ease;
+}
+.menu-mapcard:hover .menu-mapcard-glyph,
+.menu-mapcard.sel .menu-mapcard-glyph {
+  opacity: 1;
+}
+.menu-mapcard-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 .menu-mapcard::before {
   background: linear-gradient(90deg, var(--accent), transparent);
@@ -515,35 +545,22 @@ canvas {
   gap: 14px;
   align-items: stretch;
 }
-.menu-name-field {
+.menu-callsign {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  justify-content: center;
-  width: clamp(180px, 19vw, 260px);
+  gap: 8px;
 }
-.menu-name-field label {
-  font-family: var(--font-mono);
-  font-size: 0.64rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--text);
-  opacity: 0.75;
-  text-shadow: 0 1px 6px rgba(4, 7, 12, 0.8);
-}
-.menu-name-field input {
+.menu-callsign input {
   font-family: var(--font-sans);
   font-size: 0.98rem;
   padding: 0.75rem 0.9rem;
   background: rgba(4, 7, 12, 0.62);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
   outline: none;
 }
-.menu-name-field input:focus-visible {
+.menu-callsign input:focus-visible {
   border-color: var(--border-strong);
   box-shadow: 0 0 0 3px rgba(53, 224, 255, 0.18);
 }
@@ -735,52 +752,55 @@ canvas {
   background: var(--cyan);
 }
 
-.menu-empty {
+.menu-slider {
+  width: clamp(120px, 12vw, 170px);
+  accent-color: var(--cyan);
+}
+.menu-locked {
+  opacity: 0.55;
+}
+.menu-locked .menu-mini {
+  margin-left: 8px;
+}
+
+.stage-chip {
+  pointer-events: none;
+}
+.stage-chip button {
+  pointer-events: auto;
+  appearance: none;
+  cursor: pointer;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 14px;
-  text-align: center;
-  padding: 56px 24px;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(8, 13, 22, 0.72);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: var(--text);
+  white-space: nowrap;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease;
 }
-.menu-empty-ring {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 178, 74, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(255, 178, 74, 0.4);
-  color: var(--amber);
+.stage-chip button:hover {
+  border-color: var(--border-strong);
+  background: rgba(8, 13, 22, 0.9);
 }
-.menu-empty-ring svg {
-  width: 30px;
-  height: 30px;
-}
-.menu-empty b {
-  font-family: var(--font-mono);
-  font-size: 1rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.menu-empty p {
-  margin: 0;
-  max-width: 44ch;
-  font-size: 0.86rem;
-  line-height: 1.5;
-  color: var(--muted);
-}
-.menu-empty-tag {
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
+.stage-chip-name {
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--amber);
-  padding: 4px 10px;
-  border-radius: 3px;
-  background: rgba(255, 178, 74, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(255, 178, 74, 0.4);
+}
+.stage-chip-pencil {
+  font-size: 0.78rem;
+  color: var(--muted);
+  transition: color 0.14s ease;
+}
+.stage-chip button:hover .stage-chip-pencil {
+  color: var(--cyan);
 }
 
 .menu-avatars {
@@ -1015,12 +1035,8 @@ canvas {
 
 @media (max-width: 880px) {
   .menu-top {
-    grid-template-columns: 1fr;
-    justify-items: center;
+    flex-direction: column;
     row-gap: 10px;
-  }
-  .menu-wordmark {
-    justify-self: center;
   }
   .menu-tabs {
     max-width: 100%;
@@ -1035,9 +1051,6 @@ canvas {
   }
   .menu-dock {
     flex-direction: column;
-  }
-  .menu-name-field {
-    width: 100%;
   }
   .menu-deploy {
     padding: 1rem;
