@@ -1,21 +1,41 @@
 import type { WeaponId } from "@webhunt/shared";
 
-const MASTER_VOLUME = 0.6;
+const DEFAULT_VOLUME = 0.6;
 const MUTE_STORAGE_KEY = "webhunt:muted";
+const VOLUME_STORAGE_KEY = "webhunt:volume";
+const UI_SOUNDS_STORAGE_KEY = "webhunt:ui-sounds";
 const MUTE_FADE_S = 0.05;
 const NOISE_SECONDS = 0.2;
 
-const SAMPLE_BASE = "/sounds/sci-fi/";
+const SAMPLE_BASE = "/sounds/";
 const SAMPLE_FETCH_TIMEOUT_MS = 10_000;
 const WEAPON_SAMPLE_LEVEL = 0.5;
 const HIT_SAMPLE_LEVEL = 0.35;
 
 const WEAPON_SAMPLES: Record<WeaponId, readonly string[]> = {
-  pistol: ["laserSmall_000.ogg", "laserSmall_001.ogg", "laserSmall_002.ogg"],
-  shotgun: ["laserLarge_000.ogg", "laserLarge_001.ogg", "laserLarge_002.ogg"],
-  rifle: ["laserRetro_000.ogg", "laserRetro_001.ogg", "laserRetro_002.ogg"],
+  pistol: ["sci-fi/laserSmall_000.ogg", "sci-fi/laserSmall_001.ogg", "sci-fi/laserSmall_002.ogg"],
+  shotgun: ["sci-fi/laserLarge_000.ogg", "sci-fi/laserLarge_001.ogg", "sci-fi/laserLarge_002.ogg"],
+  rifle: ["sci-fi/laserRetro_000.ogg", "sci-fi/laserRetro_001.ogg", "sci-fi/laserRetro_002.ogg"],
 };
-const HIT_SAMPLES: readonly string[] = ["impactMetal_000.ogg", "impactMetal_001.ogg"];
+const HIT_SAMPLES: readonly string[] = ["sci-fi/impactMetal_000.ogg", "sci-fi/impactMetal_001.ogg"];
+
+const UI_HOVER_SAMPLE = "ui/rollover1.ogg";
+const UI_CLICK_SAMPLE = "ui/click1.ogg";
+const UI_OPEN_SAMPLE = "ui/switch2.ogg";
+const UI_CLOSE_SAMPLE = "ui/switch3.ogg";
+
+const UI_HOVER_LEVEL = 0.12;
+const UI_CLICK_LEVEL = 0.3;
+const UI_SHEET_LEVEL = 0.3;
+const UI_HOVER_MIN_INTERVAL_MS = 70;
+
+const MUSIC_SAMPLE = "music/lobby-theme.ogg";
+const MUSIC_STORAGE_KEY = "webhunt:music";
+const MUSIC_VOLUME_STORAGE_KEY = "webhunt:music-volume";
+const MUSIC_DEFAULT_VOLUME = 0.4;
+const MUSIC_FADE_IN_S = 1.2;
+const MUSIC_FADE_OUT_S = 0.4;
+const MUSIC_STOP_DELAY_FACTOR = 4;
 
 interface ToneSpec {
   type: OscillatorType;
@@ -31,11 +51,45 @@ interface ToneSpec {
 let audioContext: AudioContext | null = null;
 let masterGain: GainNode | null = null;
 let muted = readMuted();
+let volume = readVolume();
+let uiSoundsEnabled = readUiSoundsEnabled();
 let noiseBuffer: AudioBuffer | null = null;
+let lastUiHoverAt = 0;
+let musicEnabled = readMusicEnabled();
+let musicVolume = readMusicVolume();
+let musicGain: GainNode | null = null;
+let musicSource: AudioBufferSourceNode | null = null;
+let musicWanted = false;
 
 function readMuted(): boolean {
   if (typeof localStorage === "undefined") return false;
   return localStorage.getItem(MUTE_STORAGE_KEY) === "1";
+}
+
+function readMusicEnabled(): boolean {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(MUSIC_STORAGE_KEY) !== "0";
+}
+
+function readMusicVolume(): number {
+  if (typeof localStorage === "undefined") return MUSIC_DEFAULT_VOLUME;
+  const raw = localStorage.getItem(MUSIC_VOLUME_STORAGE_KEY);
+  if (raw === null) return MUSIC_DEFAULT_VOLUME;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : MUSIC_DEFAULT_VOLUME;
+}
+
+function readVolume(): number {
+  if (typeof localStorage === "undefined") return DEFAULT_VOLUME;
+  const raw = localStorage.getItem(VOLUME_STORAGE_KEY);
+  if (raw === null) return DEFAULT_VOLUME;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : DEFAULT_VOLUME;
+}
+
+function readUiSoundsEnabled(): boolean {
+  if (typeof localStorage === "undefined") return true;
+  return localStorage.getItem(UI_SOUNDS_STORAGE_KEY) !== "0";
 }
 
 function ensure(): { ctx: AudioContext; master: GainNode } | null {
@@ -43,7 +97,7 @@ function ensure(): { ctx: AudioContext; master: GainNode } | null {
   if (!audioContext) {
     audioContext = new AudioContext();
     masterGain = audioContext.createGain();
-    masterGain.gain.value = muted ? 0 : MASTER_VOLUME;
+    masterGain.gain.value = muted ? 0 : volume;
     masterGain.connect(audioContext.destination);
   }
   if (audioContext.state === "suspended") void audioContext.resume();
@@ -155,7 +209,7 @@ export function setMuted(value: boolean): void {
   if (masterGain && audioContext) {
     const now = audioContext.currentTime;
     masterGain.gain.cancelScheduledValues(now);
-    masterGain.gain.setTargetAtTime(value ? 0 : MASTER_VOLUME, now, MUTE_FADE_S);
+    masterGain.gain.setTargetAtTime(value ? 0 : volume, now, MUTE_FADE_S);
   }
 }
 
@@ -163,6 +217,161 @@ export function toggleMuted(): boolean {
   setMuted(!muted);
   return muted;
 }
+
+export function getVolume(): number {
+  return volume;
+}
+
+/** Set master volume (0..1), persisted; a live context ramps smoothly unless muted. */
+export function setVolume(value: number): void {
+  volume = Math.min(1, Math.max(0, value));
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(VOLUME_STORAGE_KEY, String(volume));
+  }
+  if (masterGain && audioContext && !muted) {
+    const now = audioContext.currentTime;
+    masterGain.gain.cancelScheduledValues(now);
+    masterGain.gain.setTargetAtTime(volume, now, MUTE_FADE_S);
+  }
+}
+
+export function areUiSoundsEnabled(): boolean {
+  return uiSoundsEnabled;
+}
+
+/** Toggle menu interface cues, persisted. Game sounds are unaffected. */
+export function setUiSoundsEnabled(value: boolean): void {
+  uiSoundsEnabled = value;
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(UI_SOUNDS_STORAGE_KEY, value ? "1" : "0");
+  }
+}
+
+/** Create/resume the context and warm the UI sample cache; call on the first user gesture. */
+export function unlockAudio(): void {
+  const e = ensure();
+  if (!e) return;
+  const names = [UI_HOVER_SAMPLE, UI_CLICK_SAMPLE, UI_OPEN_SAMPLE, UI_CLOSE_SAMPLE];
+  for (const name of names) void loadSample(e.ctx, name);
+}
+
+/** Faint tick on button/tab hover, throttled so cursor sweeps don't machine-gun. */
+export function playUiHover(): void {
+  if (!uiSoundsEnabled) return;
+  const now = performance.now();
+  if (now - lastUiHoverAt < UI_HOVER_MIN_INTERVAL_MS) return;
+  lastUiHoverAt = now;
+  playSample(UI_HOVER_SAMPLE, UI_HOVER_LEVEL);
+}
+
+/** Soft press for generic buttons and toggles. */
+export function playUiClick(): void {
+  if (!uiSoundsEnabled) return;
+  playSample(UI_CLICK_SAMPLE, UI_CLICK_LEVEL);
+}
+
+/** Drawer/sheet opening. */
+export function playUiOpen(): void {
+  if (!uiSoundsEnabled) return;
+  playSample(UI_OPEN_SAMPLE, UI_SHEET_LEVEL);
+}
+
+/** Drawer/sheet closing. */
+export function playUiClose(): void {
+  if (!uiSoundsEnabled) return;
+  playSample(UI_CLOSE_SAMPLE, UI_SHEET_LEVEL);
+}
+
+/** Soft rising two-tone confirm when the player hits Play / Start match. */
+export function playUiDeploy(): void {
+  if (!uiSoundsEnabled) return;
+  const e = ensure();
+  if (!e) return;
+  tone(e.ctx, e.master, { type: "triangle", f0: 440, f1: 660, fTime: 0.08, peak: 0.18, dur: 0.16 });
+  tone(e.ctx, e.master, {
+    type: "triangle",
+    f0: 660,
+    f1: 880,
+    fTime: 0.08,
+    peak: 0.16,
+    dur: 0.22,
+    delay: 0.12,
+  });
+}
+
+export function isMusicEnabled(): boolean {
+  return musicEnabled;
+}
+
+/** Persist the music preference; the caller starts/stops playback to match. */
+export function setMusicEnabled(value: boolean): void {
+  musicEnabled = value;
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(MUSIC_STORAGE_KEY, value ? "1" : "0");
+  }
+}
+
+export function getMusicVolume(): number {
+  return musicVolume;
+}
+
+/** Set music level (0..1) relative to the master volume, persisted; ramps live playback. */
+export function setMusicVolume(value: number): void {
+  musicVolume = Math.min(1, Math.max(0, value));
+  if (typeof localStorage !== "undefined") {
+    localStorage.setItem(MUSIC_VOLUME_STORAGE_KEY, String(musicVolume));
+  }
+  if (musicGain && audioContext && musicSource) {
+    const now = audioContext.currentTime;
+    musicGain.gain.cancelScheduledValues(now);
+    musicGain.gain.setTargetAtTime(musicVolume, now, MUTE_FADE_S);
+  }
+}
+
+/**
+ * Start the looped lobby theme with a fade-in; idempotent while playing or loading.
+ * Each start gets its own gain node so a restart during a previous fade-out
+ * crossfades cleanly instead of fighting over one shared gain curve.
+ */
+export function startLobbyMusic(): void {
+  if (!musicEnabled || musicWanted) return;
+  musicWanted = true;
+  const e = ensure();
+  if (!e) return;
+  void loadSample(e.ctx, MUSIC_SAMPLE).then((buffer) => {
+    if (!buffer || !musicWanted || musicSource) return;
+    const gain = e.ctx.createGain();
+    gain.gain.value = 0;
+    gain.connect(e.master);
+    const src = e.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.loop = true;
+    src.connect(gain);
+    src.onended = () => gain.disconnect();
+    const now = e.ctx.currentTime;
+    gain.gain.setTargetAtTime(musicVolume, now, MUSIC_FADE_IN_S);
+    src.start(now);
+    musicSource = src;
+    musicGain = gain;
+  });
+}
+
+/** Fade out and stop the lobby theme; call when leaving the menu. */
+export function stopLobbyMusic(): void {
+  musicWanted = false;
+  if (!musicSource || !musicGain || !audioContext) {
+    musicSource = null;
+    musicGain = null;
+    return;
+  }
+  const now = audioContext.currentTime;
+  musicGain.gain.cancelScheduledValues(now);
+  musicGain.gain.setTargetAtTime(0, now, MUSIC_FADE_OUT_S);
+  musicSource.stop(now + MUSIC_FADE_OUT_S * MUSIC_STOP_DELAY_FACTOR);
+  musicSource = null;
+  musicGain = null;
+}
+
 
 /** Play a short rising "honk" for a prop taunt. `volume` is 0..1 (typically by distance). */
 export function playTaunt(volume: number): void {
