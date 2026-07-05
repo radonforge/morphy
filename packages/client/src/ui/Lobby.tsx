@@ -6,8 +6,8 @@ import {
   isPartyCode,
   MAP_CATALOG,
   MAX_NAME_LENGTH,
-  MIN_PLAYERS_TO_START,
   type MapId,
+  MIN_PLAYERS_TO_START,
   normalizePartyCode,
   PARTY_CODE_LENGTH,
 } from "@webhunt/shared";
@@ -575,9 +575,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             <div className="menu-party-setup">
               <div className="menu-card">
                 <b>Create a room</b>
-                <p>
-                  Get a code to share with your friends. You pick the map and start the match.
-                </p>
+                <p>Get a code to share with your friends. You pick the map and start the match.</p>
                 <button
                   type="button"
                   className="menu-party-btn"

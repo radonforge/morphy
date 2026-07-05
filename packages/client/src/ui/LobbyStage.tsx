@@ -218,7 +218,11 @@ function AvatarActor({
   avatar,
   slot,
   onSelect,
-}: { avatar: AvatarId; slot: StageSlot; onSelect?: () => void }) {
+}: {
+  avatar: AvatarId;
+  slot: StageSlot;
+  onSelect?: () => void;
+}) {
   const group = useRef<THREE.Group>(null);
   const { scene, animations } = useGLTF(avatarModel(avatar));
   const object = useMemo(() => scene.clone(true), [scene]);
@@ -453,7 +457,12 @@ export function LobbyStage({
   actors,
   inParty,
   onCustomize,
-}: { map: MapId; actors: StageActor[]; inParty: boolean; onCustomize: () => void }) {
+}: {
+  map: MapId;
+  actors: StageActor[];
+  inParty: boolean;
+  onCustomize: () => void;
+}) {
   const theme = STAGE_THEMES[map];
   const slots = computeStageSlots(actors.length, inParty);
   const selfSlot = slots[0] ?? SOLO_SLOT;

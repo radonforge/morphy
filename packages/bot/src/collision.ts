@@ -28,8 +28,7 @@ export function buildWalls(map: MapDefinition): Wall[] {
   return map.colliders
     .filter(
       (collider) =>
-        collider.position.y > 0 &&
-        collider.position.y - collider.size.y / 2 < PLAYER_HEIGHT,
+        collider.position.y > 0 && collider.position.y - collider.size.y / 2 < PLAYER_HEIGHT,
     )
     .map((collider) => ({
       minX: collider.position.x - collider.size.x / 2,

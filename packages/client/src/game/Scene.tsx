@@ -650,7 +650,12 @@ function ShadowRefresh({
   const sinceRender = useRef(0);
   const sinceChange = useRef(0);
   const remotePoses = useRef(new Map<string, ShadowPose>());
-  const localPose = useRef<ShadowPose>({ x: Number.NaN, y: Number.NaN, z: Number.NaN, rot: Number.NaN });
+  const localPose = useRef<ShadowPose>({
+    x: Number.NaN,
+    y: Number.NaN,
+    z: Number.NaN,
+    rot: Number.NaN,
+  });
 
   useEffect(() => {
     gl.shadowMap.autoUpdate = false;
@@ -749,11 +754,7 @@ function SunLight({ intensity, bounds }: { intensity: number; bounds: MapBounds 
   return (
     <>
       <directionalLight
-        position={[
-          frustum.cx + SUN_POSITION[0],
-          SUN_POSITION[1],
-          frustum.cz + SUN_POSITION[2],
-        ]}
+        position={[frustum.cx + SUN_POSITION[0], SUN_POSITION[1], frustum.cz + SUN_POSITION[2]]}
         target={target}
         intensity={intensity}
         castShadow
@@ -1595,7 +1596,13 @@ function LocalPlayer({
   const spawnApplied = useRef(false);
   const heading = useRef(0);
   const sendAccumMs = useRef(0);
-  const lastSentInput = useRef({ x: Number.NaN, y: Number.NaN, z: Number.NaN, rot: Number.NaN, aim: Number.NaN });
+  const lastSentInput = useRef({
+    x: Number.NaN,
+    y: Number.NaN,
+    z: Number.NaN,
+    rot: Number.NaN,
+    aim: Number.NaN,
+  });
   const stepAccum = useRef(0);
   const velocity = useMemo(() => new THREE.Vector3(), []);
   const velocityY = useRef(0);

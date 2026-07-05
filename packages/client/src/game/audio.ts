@@ -372,7 +372,6 @@ export function stopLobbyMusic(): void {
   musicGain = null;
 }
 
-
 /** Play a short rising "honk" for a prop taunt. `volume` is 0..1 (typically by distance). */
 export function playTaunt(volume: number): void {
   const e = ensure();
