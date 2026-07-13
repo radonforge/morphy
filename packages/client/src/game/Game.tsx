@@ -45,6 +45,7 @@ import {
   preloadSamples,
   toggleMuted,
 } from "./audio";
+import { ControlsBar, ControlsDialog } from "./Controls";
 import { isPerfHudEnabled } from "./prefs";
 import { GAME_DPR, GAME_FOV, Scene, TAUNT_PULSE_SECONDS } from "./Scene";
 import type {
@@ -154,6 +155,7 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
       ai.hp === bi.hp &&
       ai.kills === bi.kills &&
       ai.propType === bi.propType &&
+      ai.rerollsLeft === bi.rerollsLeft &&
       ai.ready === bi.ready &&
       ai.avatar === bi.avatar &&
       ai.ping === bi.ping
@@ -393,6 +395,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   const [shotFx, setShotFx] = useState<{ kind: "hit" | "miss"; seq: number } | null>(null);
   const [muzzle, setMuzzle] = useState<number | null>(null);
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [muted, setMuted] = useState(() => isMuted());
   const [weapon, setWeapon] = useState<WeaponId>(DEFAULT_WEAPON);
   const [perfHud] = useState(() => isPerfHudEnabled());
@@ -603,14 +606,27 @@ export function Game({ connection, onBackToMenu }: GameProps) {
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
+      if (chatOpenRef.current) return;
+      if (e.key === "?") {
+        e.preventDefault();
+        setControlsOpen((open) => !open);
+        return;
+      }
+      if (e.key === "Escape") {
+        setControlsOpen(false);
+        return;
+      }
       if (e.code !== "Tab") return;
       e.preventDefault();
-      if (!chatOpenRef.current) setScoreboardOpen(true);
+      setScoreboardOpen(true);
     };
     const onUp = (e: KeyboardEvent) => {
       if (e.code === "Tab") setScoreboardOpen(false);
     };
-    const onBlur = () => setScoreboardOpen(false);
+    const onBlur = () => {
+      setScoreboardOpen(false);
+      setControlsOpen(false);
+    };
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
     window.addEventListener("blur", onBlur);
@@ -639,6 +655,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           hp: player.hp,
           kills: player.kills,
           propType: player.propType,
+          rerollsLeft: player.rerollsLeft,
           ready: player.ready,
           avatar: player.avatar,
           ping: player.ping,
@@ -689,16 +706,6 @@ export function Game({ connection, onBackToMenu }: GameProps) {
       closeChat();
     }
   };
-
-  const hint = !localAlive
-    ? "Eliminated — spectating"
-    : canShoot
-      ? "Click to shoot · 1/2/3 weapon · Shift run · Space jump · misses cost HP · T chat · Tab standings"
-      : canTransform
-        ? "Look at an object and press E · Shift run · Space jump · T chat · Tab standings"
-        : localRole === "hunter" && phase === "hiding"
-          ? "You're blinded… wait for the hunt"
-          : "WASD move · Shift run · Space jump · click+mouse to look · T chat · Tab standings";
 
   if (!map) {
     return (
@@ -920,7 +927,18 @@ export function Game({ connection, onBackToMenu }: GameProps) {
         </div>
       )}
 
-      {phase !== "lobby" && <div className="hint">{hint}</div>}
+      {phase !== "lobby" && (
+        <ControlsBar
+          role={localRole}
+          alive={localAlive}
+          canShoot={canShoot}
+          canTransform={canTransform}
+          phase={phase}
+          rerollsLeft={localMeta?.rerollsLeft ?? 0}
+          onOpen={() => setControlsOpen(true)}
+        />
+      )}
+      {controlsOpen && <ControlsDialog onClose={() => setControlsOpen(false)} />}
     </>
   );
 }

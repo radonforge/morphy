@@ -18,10 +18,13 @@ import {
   MOVE_DECEL,
   MOVE_SPEED,
   MSG_INPUT,
+  MSG_REROLL,
   MSG_SHOOT,
-  MSG_TRANSFORM,
   type Phase,
   PLAYER_HEIGHT,
+  PROP_TURN_SNAP,
+  PROP_TURN_SPEED,
+  PROP_TURN_TAP_MS,
   type PrimitiveSpec,
   type PropDefinition,
   type Role,
@@ -138,7 +141,6 @@ const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 const noRaycast = () => {};
 const LOCAL_AVATAR_KEY = "localAvatar";
-const TRANSFORM_REACH = 5;
 
 export const GAME_FOV = 55;
 export const GAME_DPR: [number, number] = [1, 1.25];
@@ -569,7 +571,7 @@ export function Scene({
       />
       <SunLight intensity={theme.dir} bounds={map.bounds} />
       <MapView map={map} groundColor={theme.ground} />
-      <PropPicker room={room} enabled={canTransform} playerPos={localGroundRef} />
+      <RerollControl room={room} enabled={canTransform} />
       <Shooter
         room={room}
         enabled={canShoot}
@@ -1458,60 +1460,20 @@ function PlayerModel({
   return <AnimalAvatar id={avatar} role={role} />;
 }
 
-function PropPicker({
-  room,
-  enabled,
-  playerPos,
-}: {
-  room: Room;
-  enabled: boolean;
-  playerPos: PlayerPosRef;
-}) {
-  const { camera, scene } = useThree();
-  const raycaster = useMemo(() => new THREE.Raycaster(), []);
-
+function RerollControl({ room, enabled }: { room: Room; enabled: boolean }) {
   useEffect(() => {
     if (!enabled) {
       return;
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.code !== "KeyE" || event.repeat) {
+      if (event.code !== "KeyR" || event.repeat) {
         return;
       }
-      raycaster.setFromCamera(SCREEN_CENTER, camera);
-      const hits = raycaster.intersectObjects(scene.children, true);
-      for (const hit of hits) {
-        let obj: THREE.Object3D | null = hit.object;
-        let propType: string | undefined;
-        let isSelf = false;
-        while (obj) {
-          if (obj.userData?.[LOCAL_AVATAR_KEY]) {
-            isSelf = true;
-          }
-          const pt = obj.userData?.propType;
-          if (typeof pt === "string" && pt) {
-            propType = pt;
-            break;
-          }
-          obj = obj.parent;
-        }
-        if (propType) {
-          const dx = hit.point.x - playerPos.current.x;
-          const dz = hit.point.z - playerPos.current.z;
-          if (dx * dx + dz * dz <= TRANSFORM_REACH * TRANSFORM_REACH) {
-            room.send(MSG_TRANSFORM, { propType });
-          }
-          return;
-        }
-        if (isSelf) {
-          continue;
-        }
-        return;
-      }
+      room.send(MSG_REROLL);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled, camera, scene, raycaster, room, playerPos]);
+  }, [enabled, room]);
 
   return null;
 }
@@ -1607,6 +1569,7 @@ function LocalPlayer({
     z: Number.NaN,
     rot: Number.NaN,
     aim: Number.NaN,
+    propRot: Number.NaN,
   });
   const stepAccum = useRef(0);
   const velocity = useMemo(() => new THREE.Vector3(), []);
@@ -1617,6 +1580,10 @@ function LocalPlayer({
   const rightVec = useMemo(() => new THREE.Vector3(), []);
   const moveVec = useMemo(() => new THREE.Vector3(), []);
   const camDistRef = useRef(CAMERA_DISTANCE);
+  const propRot = useRef(0);
+  const turnHeldMs = useRef(0);
+  const lastTurnDir = useRef(0);
+  const prevPropType = useRef("");
 
   const frozen = !alive || (role === "hunter" && phase === "hiding");
 
@@ -1724,6 +1691,28 @@ function LocalPlayer({
       velocity.set(0, 0, 0);
     }
 
+    if (propType && propType !== prevPropType.current) {
+      propRot.current = heading.current;
+    }
+    prevPropType.current = propType;
+    if (role === "prop") {
+      const turnDir = (keys.current.turnRight ? 1 : 0) - (keys.current.turnLeft ? 1 : 0);
+      if (turnDir !== 0) {
+        propRot.current += turnDir * PROP_TURN_SPEED * delta;
+        turnHeldMs.current += delta * 1000;
+        lastTurnDir.current = turnDir;
+      } else if (lastTurnDir.current !== 0) {
+        if (turnHeldMs.current < PROP_TURN_TAP_MS) {
+          propRot.current =
+            lastTurnDir.current > 0
+              ? Math.ceil(propRot.current / PROP_TURN_SNAP) * PROP_TURN_SNAP
+              : Math.floor(propRot.current / PROP_TURN_SNAP) * PROP_TURN_SNAP;
+        }
+        turnHeldMs.current = 0;
+        lastTurnDir.current = 0;
+      }
+    }
+
     if (alive) {
       for (const [otherId, other] of playersRef.current) {
         if (otherId === id || !other.alive) continue;
@@ -1748,7 +1737,7 @@ function LocalPlayer({
     const group = groupRef.current;
     if (group) {
       group.position.set(pos.x, pos.y, pos.z);
-      group.rotation.y = heading.current;
+      group.rotation.y = role === "prop" && propType ? propRot.current : heading.current;
       applyTauntPulse(group, tauntPulseRef, id, delta);
     }
 
@@ -1819,10 +1808,19 @@ function LocalPlayer({
         !(Math.abs(pos.y - last.y) < INPUT_IDLE_EPSILON) ||
         !(Math.abs(pos.z - last.z) < INPUT_IDLE_EPSILON) ||
         !(Math.abs(heading.current - last.rot) < INPUT_IDLE_EPSILON) ||
-        !(Math.abs(aim - last.aim) < INPUT_IDLE_EPSILON);
+        !(Math.abs(aim - last.aim) < INPUT_IDLE_EPSILON) ||
+        !(Math.abs(propRot.current - last.propRot) < INPUT_IDLE_EPSILON);
       if (moved) {
-        lastSentInput.current = { x: pos.x, y: pos.y, z: pos.z, rot: heading.current, aim };
-        room.send(MSG_INPUT, { x: pos.x, y: pos.y, z: pos.z, rot: heading.current, aim });
+        const payload = {
+          x: pos.x,
+          y: pos.y,
+          z: pos.z,
+          rot: heading.current,
+          aim,
+          propRot: propRot.current,
+        };
+        lastSentInput.current = payload;
+        room.send(MSG_INPUT, payload);
       }
     }
   });
@@ -1899,7 +1897,7 @@ function RemotePlayer({
     group.position.x += (view.x - group.position.x) * t;
     group.position.y += (view.y - group.position.y) * t;
     group.position.z += (view.z - group.position.z) * t;
-    group.rotation.y = view.rot;
+    group.rotation.y = role === "prop" && propType ? view.propRot : view.rot;
     applyTauntPulse(group, tauntPulseRef, view.id, delta);
 
     const pose = renderPoses.current.get(view.id);

@@ -7,6 +7,8 @@ export interface MoveKeys {
   right: boolean;
   run: boolean;
   jump: boolean;
+  turnLeft: boolean;
+  turnRight: boolean;
 }
 
 const KEY_MAP: Record<string, keyof MoveKeys> = {
@@ -21,6 +23,8 @@ const KEY_MAP: Record<string, keyof MoveKeys> = {
   ShiftLeft: "run",
   ShiftRight: "run",
   Space: "jump",
+  KeyQ: "turnLeft",
+  KeyE: "turnRight",
 };
 
 const NO_KEYS: MoveKeys = {
@@ -30,6 +34,8 @@ const NO_KEYS: MoveKeys = {
   right: false,
   run: false,
   jump: false,
+  turnLeft: false,
+  turnRight: false,
 };
 
 export function useControls(active: boolean) {

@@ -17,7 +17,7 @@ export type Role = "hunter" | "prop";
 export type Winner = "hunters" | "props" | "";
 
 export const MSG_INPUT = "input";
-export const MSG_TRANSFORM = "transform";
+export const MSG_REROLL = "reroll";
 export const MSG_SHOOT = "shoot";
 export const MSG_SHOT_FIRED = "shot_fired";
 export const MSG_TELEPORT = "teleport";
@@ -52,10 +52,8 @@ export interface InputMessage {
   rot: number;
   /** Look/aim heading in the same convention as {@link rot}; what the player is facing/aiming at. */
   aim: number;
-}
-
-export interface TransformMessage {
-  propType: string;
+  /** Manual prop orientation (Q/E), decoupled from movement and camera. Drives the prop mesh; ignored for hunters. */
+  propRot: number;
 }
 
 export interface ShootMessage {

@@ -33,6 +33,12 @@ export const JUMP_BUFFER_MS = 120;
 export const JUMP_RELEASE_GRAVITY_MULT = 2.4;
 export const FALL_GRAVITY_MULT = 1.35;
 
+export const PROP_TURN_SPEED = 2.4;
+export const PROP_TURN_SNAP = Math.PI / 2;
+export const PROP_TURN_TAP_MS = 200;
+
+export const REROLL_BUDGET = 2;
+
 export const PING_INTERVAL_MS = 2_000;
 export const PING_MAX_MS = 999;
 

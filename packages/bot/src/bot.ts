@@ -15,7 +15,6 @@ import {
   MSG_SHOT_RESULT,
   MSG_TAUNT,
   MSG_TELEPORT,
-  MSG_TRANSFORM,
   type Observation,
   type Phase,
   parseMapDefinition,
@@ -252,9 +251,6 @@ export class Bot {
     const reflexWorld: ReflexWorld = { phase: world.phase, self, others: world.others };
     const motor = this.reflex.executeIntent(this.currentIntent, reflexWorld, dt, now);
     room.send(MSG_INPUT, motor.input);
-    if (motor.transformTo && self.propType !== motor.transformTo) {
-      room.send(MSG_TRANSFORM, { propType: motor.transformTo });
-    }
     if (motor.shoot) {
       room.send(MSG_SHOOT, { origin: motor.shoot.origin, dir: motor.shoot.dir });
     }

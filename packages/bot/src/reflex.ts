@@ -88,7 +88,6 @@ export interface ReflexWorld {
 /** The synchronous motor commands the bot ships to the server this tick. */
 export interface MotorOutput {
   input: { x: number; y: number; z: number; rot: number; aim: number };
-  transformTo: string | null;
   shoot: { origin: Vec3; dir: Vec3 } | null;
 }
 
@@ -100,7 +99,6 @@ interface MovementSample {
 
 const HOLD = (x: number, z: number, rot: number): MotorOutput => ({
   input: { x, y: 0, z, rot, aim: rot },
-  transformTo: null,
   shoot: null,
 });
 
@@ -340,8 +338,6 @@ export class Reflex {
 
   executeIntent(intent: Intent, world: ReflexWorld, dt: number, now: number): MotorOutput {
     if (!this.grid || !this.map) return HOLD(this.posX, this.posZ, this.rot);
-    const self = world.self;
-    let transformTo: string | null = null;
     let shoot: MotorOutput["shoot"] = null;
 
     // Drop the aim lock whenever we are not actively shooting, so re-acquiring a
@@ -352,9 +348,7 @@ export class Reflex {
       case "idle":
       case "taunt":
       case "chat":
-        break;
       case "transform":
-        transformTo = self.propType !== intent.propType ? intent.propType : null;
         break;
       case "patrol":
         this.runPatrol(world, dt, now);
@@ -363,7 +357,6 @@ export class Reflex {
         this.runMoveTo(intent.x, intent.z, intent.run, world, dt, now);
         break;
       case "hideAs":
-        transformTo = self.propType !== intent.propType ? intent.propType : null;
         this.runHideAs(intent.x, intent.z, world, dt, now);
         break;
       case "inspect":
@@ -377,7 +370,6 @@ export class Reflex {
     this.separateFromCrowd(world.others);
     return {
       input: { x: this.posX, y: 0, z: this.posZ, rot: this.rot, aim: this.rot },
-      transformTo,
       shoot,
     };
   }

@@ -7,11 +7,13 @@ export interface RemotePlayerView {
   y: number;
   z: number;
   rot: number;
+  propRot: number;
   role: Role;
   alive: boolean;
   hp: number;
   kills: number;
   propType: string;
+  rerollsLeft: number;
   ready: boolean;
   avatar: string;
   ping: number;
@@ -26,6 +28,7 @@ export interface PlayerMeta {
   hp: number;
   kills: number;
   propType: string;
+  rerollsLeft: number;
   ready: boolean;
   avatar: string;
   ping: number;

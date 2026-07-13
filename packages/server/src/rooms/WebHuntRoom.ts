@@ -29,6 +29,7 @@ import {
   MSG_PING,
   MSG_PONG,
   MSG_READY,
+  MSG_REROLL,
   MSG_SET_MAP,
   MSG_SET_PROFILE,
   MSG_SET_WEAPON,
@@ -38,7 +39,6 @@ import {
   MSG_START,
   MSG_TAUNT,
   MSG_TELEPORT,
-  MSG_TRANSFORM,
   PATCH_RATE_MS,
   type Phase,
   PING_INTERVAL_MS,
@@ -46,6 +46,7 @@ import {
   type PingMessage,
   type PongMessage,
   type PropBounds,
+  REROLL_BUDGET,
   ROUND_DURATION_MS,
   ROUND_END_MS,
   type Role,
@@ -77,11 +78,13 @@ export class PlayerState extends Schema {
   @type("float32") z = 0;
   @type("float32") rot = 0;
   @type("float32") aim = 0;
+  @type("float32") propRot = 0;
   @type("string") role: Role = "prop";
   @type("boolean") alive = true;
   @type("number") hp = 0;
   @type("number") kills = 0;
   @type("string") propType = "";
+  @type("uint8") rerollsLeft = 0;
   @type("boolean") ready = false;
   @type("string") avatar = "";
   @type("string") weapon: WeaponId = DEFAULT_WEAPON;
@@ -128,7 +131,14 @@ function parseInput(payload: unknown): InputMessage | null {
   ) {
     return null;
   }
-  return { x: p.x, y: p.y, z: p.z, rot: p.rot, aim: isFiniteNumber(p.aim) ? p.aim : p.rot };
+  return {
+    x: p.x,
+    y: p.y,
+    z: p.z,
+    rot: p.rot,
+    aim: isFiniteNumber(p.aim) ? p.aim : p.rot,
+    propRot: isFiniteNumber(p.propRot) ? p.propRot : 0,
+  };
 }
 
 function parseShoot(payload: unknown): ShootMessage | null {
@@ -138,12 +148,6 @@ function parseShoot(payload: unknown): ShootMessage | null {
   const dir = parseVec3(p.dir);
   if (!origin || !dir) return null;
   return { origin, dir };
-}
-
-function parsePropType(payload: unknown): string | null {
-  if (typeof payload !== "object" || payload === null) return null;
-  const propType = (payload as Record<string, unknown>).propType;
-  return typeof propType === "string" ? propType : null;
 }
 
 function parseReady(payload: unknown): boolean | null {
@@ -287,7 +291,6 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   maxMessagesPerSecond = MAX_CLIENT_MESSAGES_PER_SECOND;
   state = new RoomState();
   private map!: MapDefinition;
-  private catalogIds = new Set<string>();
   private propBounds = new Map<string, PropBounds>();
   private phaseTimer?: ClearableTimer;
   private tauntTimer?: ClearableTimer;
@@ -306,7 +309,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       this.state.isPrivate = true;
     }
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
-    this.onMessage(MSG_TRANSFORM, (client, payload) => this.handleTransform(client, payload));
+    this.onMessage(MSG_REROLL, (client) => this.handleReroll(client));
     this.onMessage(MSG_SHOOT, (client, payload) => this.handleShoot(client, payload));
     this.onMessage(MSG_CHAT, (client, payload) => this.handleChat(client, payload));
     this.onMessage(MSG_READY, (client, payload) => this.handleReady(client, payload));
@@ -354,7 +357,6 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
   private applyMap(map: MapDefinition): void {
     this.map = map;
-    this.catalogIds = new Set(map.propCatalog.map((def) => def.id));
     this.propBounds = new Map(map.propCatalog.map((def) => [def.id, computePropBounds(def)]));
     this.state.mapId = map.id;
   }
@@ -476,15 +478,24 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     player.z = clamp(input.z, min.z, max.z);
     player.rot = input.rot;
     player.aim = input.aim;
+    player.propRot = input.propRot;
   }
 
-  private handleTransform(client: Client, payload: unknown): void {
+  private handleReroll(client: Client): void {
     const player = this.state.players.get(client.sessionId);
     if (player?.role !== "prop" || !player.alive) return;
     if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
-    const propType = parsePropType(payload);
-    if (!propType || !this.catalogIds.has(propType)) return;
-    player.propType = propType;
+    if (player.rerollsLeft <= 0) return;
+    player.propType = this.randomPropId(player.propType);
+    player.rerollsLeft -= 1;
+  }
+
+  private randomPropId(exclude?: string): string {
+    const catalog = this.map.propCatalog;
+    if (catalog.length === 0) return "";
+    const pool =
+      exclude && catalog.length > 1 ? catalog.filter((def) => def.id !== exclude) : catalog;
+    return pool[Math.floor(Math.random() * pool.length)]?.id ?? "";
   }
 
   private handleSetWeapon(client: Client, payload: unknown): void {
@@ -682,6 +693,8 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       player.alive = true;
       player.hp = 0;
       player.propType = "";
+      player.propRot = 0;
+      player.rerollsLeft = 0;
     });
   }
 
@@ -723,7 +736,9 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       player.alive = true;
       player.hp = player.role === "hunter" ? HUNTER_MAX_HP : 0;
       player.kills = 0;
-      player.propType = "";
+      player.propType = player.role === "prop" ? this.randomPropId() : "";
+      player.propRot = 0;
+      player.rerollsLeft = player.role === "prop" ? REROLL_BUDGET : 0;
     });
   }
 }
