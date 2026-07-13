@@ -33,6 +33,7 @@ const CONTROL_GROUPS: ControlGroup[] = [
     items: [
       { keys: ["R"], label: "Swap disguise (random)" },
       { keys: ["Q", "E"], label: "Rotate disguise" },
+      { keys: ["C"], label: "Drop decoy" },
     ],
   },
   {
@@ -69,6 +70,7 @@ interface BarState {
   canTransform: boolean;
   phase: Phase;
   rerollsLeft: number;
+  decoysLeft: number;
 }
 
 function mainControls(s: BarState): { note?: string; items: ControlSpec[] } {
@@ -88,6 +90,7 @@ function mainControls(s: BarState): { note?: string; items: ControlSpec[] } {
       items: [
         { keys: ["R"], label: `Swap (${s.rerollsLeft})` },
         { keys: ["Q", "E"], label: "Rotate" },
+        { keys: ["C"], label: `Decoy (${s.decoysLeft})` },
         { keys: ["Shift"], label: "Run" },
         { keys: ["Space"], label: "Jump" },
       ],

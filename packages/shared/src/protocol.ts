@@ -18,6 +18,8 @@ export type Winner = "hunters" | "props" | "";
 
 export const MSG_INPUT = "input";
 export const MSG_REROLL = "reroll";
+export const MSG_DECOY = "decoy";
+export const MSG_DECOY_BREAK = "decoy_break";
 export const MSG_SHOOT = "shoot";
 export const MSG_SHOT_FIRED = "shot_fired";
 export const MSG_TELEPORT = "teleport";
@@ -59,6 +61,13 @@ export interface InputMessage {
 export interface ShootMessage {
   origin: Vec3;
   dir: Vec3;
+}
+
+/** Broadcast when a decoy is destroyed by a shot; drives the break sound/FX at its location. */
+export interface DecoyBreakEvent {
+  x: number;
+  y: number;
+  z: number;
 }
 
 export interface TeleportMessage {

@@ -4,8 +4,11 @@ import {
   type AvatarId,
   type BoxCollider,
   computePropBounds,
+  DECOY_BUDGET,
+  DECOY_COOLDOWN_MS,
   DEFAULT_MAP_ID,
   DEFAULT_WEAPON,
+  type DecoyBreakEvent,
   generatePartyCode,
   HIDE_DURATION_MS,
   HUNTER_MAX_HP,
@@ -23,6 +26,8 @@ import {
   type MapId,
   MIN_PLAYERS_TO_START,
   MSG_CHAT,
+  MSG_DECOY,
+  MSG_DECOY_BREAK,
   MSG_INPUT,
   MSG_KILL,
   MSG_MAP,
@@ -85,10 +90,21 @@ export class PlayerState extends Schema {
   @type("number") kills = 0;
   @type("string") propType = "";
   @type("uint8") rerollsLeft = 0;
+  @type("uint8") decoysLeft = 0;
   @type("boolean") ready = false;
   @type("string") avatar = "";
   @type("string") weapon: WeaponId = DEFAULT_WEAPON;
   @type("uint16") ping = 0;
+}
+
+export class DecoyState extends Schema {
+  @type("string") id = "";
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") z = 0;
+  @type("float32") rot = 0;
+  @type("string") propType = "";
+  @type("string") owner = "";
 }
 
 export class RoomState extends Schema {
@@ -99,6 +115,7 @@ export class RoomState extends Schema {
   @type("string") hostId = "";
   @type("boolean") isPrivate = false;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
+  @type({ map: DecoyState }) decoys = new MapSchema<DecoyState>();
 }
 
 interface ClearableTimer {
@@ -295,6 +312,8 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   private phaseTimer?: ClearableTimer;
   private tauntTimer?: ClearableTimer;
   private nextShotAt = new Map<string, number>();
+  private nextDecoyAt = new Map<string, number>();
+  private decoySeq = 0;
   private pendingPings = new Map<string, { nonce: number; sentAt: number }>();
   private pingNonce = 0;
 
@@ -310,6 +329,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     }
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
     this.onMessage(MSG_REROLL, (client) => this.handleReroll(client));
+    this.onMessage(MSG_DECOY, (client) => this.handleDecoy(client));
     this.onMessage(MSG_SHOOT, (client, payload) => this.handleShoot(client, payload));
     this.onMessage(MSG_CHAT, (client, payload) => this.handleChat(client, payload));
     this.onMessage(MSG_READY, (client, payload) => this.handleReady(client, payload));
@@ -386,8 +406,10 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   }
 
   onLeave(client: Client): void {
+    this.removeDecoysOf(client.sessionId);
     this.state.players.delete(client.sessionId);
     this.nextShotAt.delete(client.sessionId);
+    this.nextDecoyAt.delete(client.sessionId);
     this.pendingPings.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
       this.state.hostId = this.state.players.keys().next().value ?? "";
@@ -498,6 +520,34 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     return pool[Math.floor(Math.random() * pool.length)]?.id ?? "";
   }
 
+  private handleDecoy(client: Client): void {
+    const player = this.state.players.get(client.sessionId);
+    if (player?.role !== "prop" || !player.alive || !player.propType) return;
+    if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
+    if (player.decoysLeft <= 0) return;
+    const now = Date.now();
+    if (now < (this.nextDecoyAt.get(client.sessionId) ?? 0)) return;
+    const decoy = new DecoyState();
+    decoy.id = `d${this.decoySeq++}`;
+    decoy.x = player.x;
+    decoy.y = player.y;
+    decoy.z = player.z;
+    decoy.rot = player.propRot;
+    decoy.propType = player.propType;
+    decoy.owner = player.id;
+    this.state.decoys.set(decoy.id, decoy);
+    player.decoysLeft -= 1;
+    this.nextDecoyAt.set(client.sessionId, now + DECOY_COOLDOWN_MS);
+  }
+
+  private removeDecoysOf(ownerId: string): void {
+    const ids: string[] = [];
+    this.state.decoys.forEach((decoy, id) => {
+      if (decoy.owner === ownerId) ids.push(id);
+    });
+    for (const id of ids) this.state.decoys.delete(id);
+  }
+
   private handleSetWeapon(client: Client, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
     if (!player?.alive) return;
@@ -512,7 +562,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     dir: Vec3,
     range: number,
     captured: Set<PlayerState>,
-  ): { end: Vec3; target: PlayerState | undefined } {
+  ): { end: Vec3; target: PlayerState | undefined; decoy: DecoyState | undefined } {
     let wallDist = range;
     for (const collider of this.map.colliders) {
       if (collider.position.y <= 0) continue;
@@ -536,7 +586,28 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       }
     });
 
-    const reach = target ? bestT : wallDist;
+    let decoyT = Infinity;
+    let decoy: DecoyState | undefined;
+    this.state.decoys.forEach((d) => {
+      const bounds = this.propBounds.get(d.propType) ?? UNTRANSFORMED_PROP_BOUNDS;
+      const t = rayHitsBox(origin, dir, d.x, d.y, d.z, bounds, range);
+      if (t !== null && t < wallDist && t < decoyT) {
+        decoyT = t;
+        decoy = d;
+      }
+    });
+
+    let reach: number;
+    if (target !== undefined && bestT <= decoyT) {
+      decoy = undefined;
+      reach = bestT;
+    } else if (decoy !== undefined) {
+      target = undefined;
+      reach = decoyT;
+    } else {
+      target = undefined;
+      reach = wallDist;
+    }
     return {
       end: {
         x: origin.x + dir.x * reach,
@@ -544,6 +615,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
         z: origin.z + dir.z * reach,
       },
       target,
+      decoy,
     };
   }
 
@@ -572,9 +644,10 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
 
     const ends: Vec3[] = [];
     const captured = new Set<PlayerState>();
+    const broken = new Set<DecoyState>();
     for (let pellet = 0; pellet < weapon.pellets; pellet++) {
       const pelletDir = jitterDir(dir, weapon.spreadRad);
-      const { end, target } = this.resolvePellet(
+      const { end, target, decoy } = this.resolvePellet(
         player,
         ray.origin,
         pelletDir,
@@ -583,6 +656,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       );
       ends.push(end);
       if (target) captured.add(target);
+      else if (decoy) broken.add(decoy);
     }
 
     this.broadcast(MSG_SHOT_FIRED, {
@@ -592,12 +666,19 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       ends,
     } satisfies ShotFiredEvent);
 
+    for (const d of broken) {
+      this.state.decoys.delete(d.id);
+      this.broadcast(MSG_DECOY_BREAK, { x: d.x, y: d.y, z: d.z } satisfies DecoyBreakEvent);
+    }
+
     if (captured.size > 0) {
       for (const target of captured) {
         target.role = "hunter";
         target.alive = true;
         target.hp = HUNTER_MAX_HP;
         target.propType = "";
+        target.decoysLeft = 0;
+        this.removeDecoysOf(target.id);
         player.kills += 1;
         this.broadcast(MSG_KILL, {
           byId: player.id,
@@ -648,6 +729,8 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
   }
 
   private beginHiding(): void {
+    this.state.decoys.clear();
+    this.nextDecoyAt.clear();
     this.assignRoles();
     this.setPhase("hiding", HIDE_DURATION_MS, () => this.beginHunting());
   }
@@ -695,7 +778,10 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       player.propType = "";
       player.propRot = 0;
       player.rerollsLeft = 0;
+      player.decoysLeft = 0;
     });
+    this.state.decoys.clear();
+    this.nextDecoyAt.clear();
   }
 
   private checkRoundEnd(): void {
@@ -739,6 +825,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       player.propType = player.role === "prop" ? this.randomPropId() : "";
       player.propRot = 0;
       player.rerollsLeft = player.role === "prop" ? REROLL_BUDGET : 0;
+      player.decoysLeft = player.role === "prop" ? DECOY_BUDGET : 0;
     });
   }
 }

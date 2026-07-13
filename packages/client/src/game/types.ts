@@ -14,12 +14,22 @@ export interface RemotePlayerView {
   kills: number;
   propType: string;
   rerollsLeft: number;
+  decoysLeft: number;
   ready: boolean;
   avatar: string;
   ping: number;
 }
 
 export type PlayersRef = { readonly current: Map<string, RemotePlayerView> };
+
+export interface DecoyView {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  rot: number;
+  propType: string;
+}
 
 export interface PlayerMeta {
   name: string;
@@ -29,6 +39,7 @@ export interface PlayerMeta {
   kills: number;
   propType: string;
   rerollsLeft: number;
+  decoysLeft: number;
   ready: boolean;
   avatar: string;
   ping: number;

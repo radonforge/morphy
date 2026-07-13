@@ -17,6 +17,7 @@ import {
   MOVE_ACCEL,
   MOVE_DECEL,
   MOVE_SPEED,
+  MSG_DECOY,
   MSG_INPUT,
   MSG_REROLL,
   MSG_SHOOT,
@@ -39,6 +40,7 @@ import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "r
 import * as THREE from "three";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
 import type {
+  DecoyView,
   MetaMap,
   PlayersRef,
   RemotePlayerView,
@@ -466,6 +468,7 @@ interface SceneProps {
   playersRef: PlayersRef;
   meta: MetaMap;
   phase: Phase;
+  decoys: DecoyView[];
   teleportRef: TeleportRef;
   tauntPulseRef: TauntPulseRef;
   shotsRef: ShotsRef;
@@ -482,6 +485,7 @@ export function Scene({
   playersRef,
   meta,
   phase,
+  decoys,
   teleportRef,
   tauntPulseRef,
   shotsRef,
@@ -571,7 +575,8 @@ export function Scene({
       />
       <SunLight intensity={theme.dir} bounds={map.bounds} />
       <MapView map={map} groundColor={theme.ground} />
-      <RerollControl room={room} enabled={canTransform} />
+      <PropActions room={room} enabled={canTransform} />
+      <Decoys decoys={decoys} catalog={catalog} />
       <Shooter
         room={room}
         enabled={canShoot}
@@ -1460,16 +1465,31 @@ function PlayerModel({
   return <AnimalAvatar id={avatar} role={role} />;
 }
 
-function RerollControl({ room, enabled }: { room: Room; enabled: boolean }) {
+function Decoys({ decoys, catalog }: { decoys: DecoyView[]; catalog: Catalog }) {
+  return (
+    <>
+      {decoys.map((d) => {
+        const def = catalog.get(d.propType);
+        if (!def) return null;
+        return (
+          <group key={d.id} position={[d.x, d.y, d.z]} rotation={[0, d.rot, 0]}>
+            <PropMesh def={def} />
+          </group>
+        );
+      })}
+    </>
+  );
+}
+
+function PropActions({ room, enabled }: { room: Room; enabled: boolean }) {
   useEffect(() => {
     if (!enabled) {
       return;
     }
     const onKey = (event: KeyboardEvent) => {
-      if (event.code !== "KeyR" || event.repeat) {
-        return;
-      }
-      room.send(MSG_REROLL);
+      if (event.repeat) return;
+      if (event.code === "KeyR") room.send(MSG_REROLL);
+      else if (event.code === "KeyC") room.send(MSG_DECOY);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

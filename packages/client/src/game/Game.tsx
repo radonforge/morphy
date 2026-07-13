@@ -10,6 +10,7 @@ import {
   type MapDefinition,
   MIN_PLAYERS_TO_START,
   MSG_CHAT,
+  MSG_DECOY_BREAK,
   MSG_KILL,
   MSG_MAP,
   MSG_READY,
@@ -38,6 +39,7 @@ import {
   playHitConfirm,
   playKill,
   playMiss,
+  playMorph,
   playRoundEnd,
   playRoundStart,
   playTaunt,
@@ -49,6 +51,7 @@ import { ControlsBar, ControlsDialog } from "./Controls";
 import { isPerfHudEnabled } from "./prefs";
 import { GAME_DPR, GAME_FOV, Scene, TAUNT_PULSE_SECONDS } from "./Scene";
 import type {
+  DecoyView,
   MetaMap,
   PlayerMeta,
   PlayersRef,
@@ -156,6 +159,7 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
       ai.kills === bi.kills &&
       ai.propType === bi.propType &&
       ai.rerollsLeft === bi.rerollsLeft &&
+      ai.decoysLeft === bi.decoysLeft &&
       ai.ready === bi.ready &&
       ai.avatar === bi.avatar &&
       ai.ping === bi.ping
@@ -396,6 +400,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   const [muzzle, setMuzzle] = useState<number | null>(null);
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [decoys, setDecoys] = useState<DecoyView[]>([]);
   const [muted, setMuted] = useState(() => isMuted());
   const [weapon, setWeapon] = useState<WeaponId>(DEFAULT_WEAPON);
   const [perfHud] = useState(() => isPerfHudEnabled());
@@ -434,6 +439,29 @@ export function Game({ connection, onBackToMenu }: GameProps) {
     );
 
     unsubscribers.push(
+      callbacks.onAdd("decoys", (decoy: unknown, key: unknown) => {
+        const d = decoy as DecoyView & { owner: string };
+        const view: DecoyView = {
+          id: String(key),
+          x: d.x,
+          y: d.y,
+          z: d.z,
+          rot: d.rot,
+          propType: d.propType,
+        };
+        setDecoys((prev) => [...prev, view]);
+        if (d.owner === sessionId) playMorph(1);
+      }),
+    );
+
+    unsubscribers.push(
+      callbacks.onRemove("decoys", (_decoy: unknown, key: unknown) => {
+        const id = String(key);
+        setDecoys((prev) => prev.filter((existing) => existing.id !== id));
+      }),
+    );
+
+    unsubscribers.push(
       room.onMessage(MSG_TELEPORT, (message: unknown) => {
         if (typeof message !== "object" || message === null) return;
         const m = message as Record<string, unknown>;
@@ -454,6 +482,19 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           ? Math.max(0, 1 - Math.hypot(local.x - m.x, local.z - m.z) / TAUNT_MAX_DISTANCE)
           : 0.7;
         playTaunt(volume);
+      }),
+    );
+
+    unsubscribers.push(
+      room.onMessage(MSG_DECOY_BREAK, (message: unknown) => {
+        if (typeof message !== "object" || message === null) return;
+        const m = message as Record<string, unknown>;
+        if (!isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
+        const local = playersRef.current.get(sessionId);
+        const volume = local
+          ? Math.max(0, 1 - Math.hypot(local.x - m.x, local.z - m.z) / SHOT_SOUND_MAX_DISTANCE)
+          : 0.7;
+        playMorph(volume);
       }),
     );
 
@@ -656,6 +697,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           kills: player.kills,
           propType: player.propType,
           rerollsLeft: player.rerollsLeft,
+          decoysLeft: player.decoysLeft,
           ready: player.ready,
           avatar: player.avatar,
           ping: player.ping,
@@ -729,6 +771,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           playersRef={playersRef}
           meta={meta}
           phase={phase}
+          decoys={decoys}
           teleportRef={teleportRef}
           tauntPulseRef={tauntPulseRef}
           shotsRef={shotsRef}
@@ -935,6 +978,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           canTransform={canTransform}
           phase={phase}
           rerollsLeft={localMeta?.rerollsLeft ?? 0}
+          decoysLeft={localMeta?.decoysLeft ?? 0}
           onOpen={() => setControlsOpen(true)}
         />
       )}
