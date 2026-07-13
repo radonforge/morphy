@@ -550,6 +550,25 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     for (const id of ids) this.state.decoys.delete(id);
   }
 
+  private breakDecoy(decoy: DecoyState): void {
+    this.state.decoys.delete(decoy.id);
+    this.broadcast(MSG_DECOY_BREAK, {
+      x: decoy.x,
+      y: decoy.y,
+      z: decoy.z,
+      propType: decoy.propType,
+    } satisfies DecoyBreakEvent);
+  }
+
+  /** A captured prop's cover is blown: its decoys shatter with FX instead of vanishing silently. */
+  private breakDecoysOf(ownerId: string): void {
+    const doomed: DecoyState[] = [];
+    this.state.decoys.forEach((decoy) => {
+      if (decoy.owner === ownerId) doomed.push(decoy);
+    });
+    for (const decoy of doomed) this.breakDecoy(decoy);
+  }
+
   private handleSetWeapon(client: Client, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
     if (!player?.alive) return;
@@ -671,10 +690,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
       ends,
     } satisfies ShotFiredEvent);
 
-    for (const d of broken) {
-      this.state.decoys.delete(d.id);
-      this.broadcast(MSG_DECOY_BREAK, { x: d.x, y: d.y, z: d.z } satisfies DecoyBreakEvent);
-    }
+    for (const d of broken) this.breakDecoy(d);
 
     if (captured.size > 0) {
       for (const target of captured) {
@@ -683,7 +699,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
         target.hp = HUNTER_MAX_HP;
         target.propType = "";
         target.decoysLeft = 0;
-        this.removeDecoysOf(target.id);
+        this.breakDecoysOf(target.id);
         player.kills += 1;
         this.broadcast(MSG_KILL, {
           byId: player.id,

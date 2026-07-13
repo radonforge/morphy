@@ -59,3 +59,13 @@ export interface ShotFx {
 
 /** Queue of resolved shots, filled by the network hub and drained by the scene's tracer pool. */
 export type ShotsRef = { readonly current: ShotFx[] };
+
+export interface DecoyBreakFx {
+  x: number;
+  y: number;
+  z: number;
+  propType: string;
+}
+
+/** Queue of decoy breaks, filled by the network hub and drained by the scene's debris pool. */
+export type BreaksRef = { readonly current: DecoyBreakFx[] };

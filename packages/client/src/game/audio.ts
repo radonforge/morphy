@@ -18,6 +18,11 @@ const WEAPON_SAMPLES: Record<WeaponId, readonly string[]> = {
   rifle: ["sci-fi/laserRetro_000.ogg", "sci-fi/laserRetro_001.ogg", "sci-fi/laserRetro_002.ogg"],
 };
 const HIT_SAMPLES: readonly string[] = ["sci-fi/impactMetal_000.ogg", "sci-fi/impactMetal_001.ogg"];
+const DECOY_BREAK_SAMPLES: readonly string[] = [
+  "sci-fi/explosionCrunch_000.ogg",
+  "sci-fi/explosionCrunch_001.ogg",
+];
+const DECOY_BREAK_SAMPLE_LEVEL = 0.4;
 
 const UI_HOVER_SAMPLE = "ui/rollover1.ogg";
 const UI_CLICK_SAMPLE = "ui/click1.ogg";
@@ -195,6 +200,7 @@ export function preloadSamples(): void {
     for (const name of names) void loadSample(e.ctx, name);
   }
   for (const name of HIT_SAMPLES) void loadSample(e.ctx, name);
+  for (const name of DECOY_BREAK_SAMPLES) void loadSample(e.ctx, name);
 }
 
 export function isMuted(): boolean {
@@ -417,6 +423,11 @@ export function playMorph(volume = 1): void {
     dur: 0.12,
     delay: 0.2,
   });
+}
+
+/** Crunchy shatter when a decoy breaks. `volume` is 0..1 (typically by distance). */
+export function playDecoyBreak(volume = 1): void {
+  playSample(pickSample(DECOY_BREAK_SAMPLES), DECOY_BREAK_SAMPLE_LEVEL * Math.min(1, volume));
 }
 
 /** Metallic impact layered under a rising chime confirming a hunter's shot caught a prop. */

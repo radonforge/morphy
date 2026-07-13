@@ -36,6 +36,7 @@ import type { Connection } from "../net/connection";
 import {
   isMuted,
   playDeath,
+  playDecoyBreak,
   playHitConfirm,
   playKill,
   playMiss,
@@ -51,6 +52,7 @@ import { ControlsBar, ControlsDialog } from "./Controls";
 import { isPerfHudEnabled } from "./prefs";
 import { GAME_DPR, GAME_FOV, Scene, TAUNT_PULSE_SECONDS } from "./Scene";
 import type {
+  BreaksRef,
   DecoyView,
   MetaMap,
   PlayerMeta,
@@ -379,6 +381,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   const teleportRef = useRef<{ x: number; z: number } | null>(null) as TeleportRef;
   const tauntPulseRef = useRef<Map<string, number>>(new Map()) as TauntPulseRef;
   const shotsRef = useRef([]) as ShotsRef;
+  const breaksRef = useRef([]) as BreaksRef;
   const msgSeq = useRef(0);
   const chatOpenRef = useRef(false);
   const fxSeq = useRef(0);
@@ -440,7 +443,16 @@ export function Game({ connection, onBackToMenu }: GameProps) {
 
     unsubscribers.push(
       callbacks.onAdd("decoys", (decoy: unknown, key: unknown) => {
-        const d = decoy as DecoyView & { owner: string };
+        const d = decoy as Partial<DecoyView & { owner: string }>;
+        if (
+          !isFiniteNumber(d.x) ||
+          !isFiniteNumber(d.y) ||
+          !isFiniteNumber(d.z) ||
+          !isFiniteNumber(d.rot) ||
+          typeof d.propType !== "string"
+        ) {
+          return;
+        }
         const view: DecoyView = {
           id: String(key),
           x: d.x,
@@ -489,12 +501,20 @@ export function Game({ connection, onBackToMenu }: GameProps) {
       room.onMessage(MSG_DECOY_BREAK, (message: unknown) => {
         if (typeof message !== "object" || message === null) return;
         const m = message as Record<string, unknown>;
-        if (!isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
+        if (
+          !isFiniteNumber(m.x) ||
+          !isFiniteNumber(m.y) ||
+          !isFiniteNumber(m.z) ||
+          typeof m.propType !== "string"
+        ) {
+          return;
+        }
+        breaksRef.current.push({ x: m.x, y: m.y, z: m.z, propType: m.propType });
         const local = playersRef.current.get(sessionId);
         const volume = local
           ? Math.max(0, 1 - Math.hypot(local.x - m.x, local.z - m.z) / SHOT_SOUND_MAX_DISTANCE)
           : 0.7;
-        playMorph(volume);
+        playDecoyBreak(volume);
       }),
     );
 
@@ -775,6 +795,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           teleportRef={teleportRef}
           tauntPulseRef={tauntPulseRef}
           shotsRef={shotsRef}
+          breaksRef={breaksRef}
           weapon={weapon}
           chatOpen={chatOpen}
           onShoot={onShoot}

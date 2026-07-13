@@ -27,6 +27,7 @@ import {
   PROP_TURN_SPEED,
   PROP_TURN_TAP_MS,
   type PrimitiveSpec,
+  type PropBounds,
   type PropDefinition,
   type Role,
   RUN_MULTIPLIER_HUNTER,
@@ -40,6 +41,8 @@ import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "r
 import * as THREE from "three";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
 import type {
+  BreaksRef,
+  DecoyBreakFx,
   DecoyView,
   MetaMap,
   PlayersRef,
@@ -118,6 +121,20 @@ const MORPH_SHARD_SPAWN_RADIUS = 1.4;
 const MORPH_SHARD_SPAWN_HEIGHT_MULT = 1.5;
 const MORPH_SHARD_SPIN = 9;
 const MORPH_POP_DURATION_S = 0.35;
+const BREAK_MAX_BURSTS = 4;
+const BREAK_CHUNK_COUNT = 16;
+const BREAK_DURATION_S = 0.6;
+const BREAK_CHUNK_SIZE = 0.16;
+const BREAK_GRAVITY = 10;
+const BREAK_OUT_SPEED_MIN = 2;
+const BREAK_OUT_SPEED_MAX = 4;
+const BREAK_UP_SPEED_MIN = 1.2;
+const BREAK_UP_SPEED_MAX = 3.2;
+const BREAK_SPIN = 12;
+const BREAK_FLASH_DURATION_S = 0.15;
+const BREAK_FLASH_COLOR = "#ffc98a";
+const BREAK_FLASH_OPACITY = 0.75;
+const BREAK_FLASH_RADIUS_MULT = 1.25;
 const EASE_BACK_OVERSHOOT = 1.70158;
 const MORPH_SOUND_MAX_DISTANCE = 24;
 const MORPH_REMOTE_VOLUME = 0.8;
@@ -472,6 +489,7 @@ interface SceneProps {
   teleportRef: TeleportRef;
   tauntPulseRef: TauntPulseRef;
   shotsRef: ShotsRef;
+  breaksRef: BreaksRef;
   weapon: WeaponId;
   chatOpen: boolean;
   onShoot: () => void;
@@ -489,6 +507,7 @@ export function Scene({
   teleportRef,
   tauntPulseRef,
   shotsRef,
+  breaksRef,
   weapon,
   chatOpen,
   onShoot,
@@ -586,6 +605,7 @@ export function Scene({
       />
       <Tracers shotsRef={shotsRef} />
       <MorphEffects morphsRef={morphsRef} />
+      <DecoyBreakEffects breaksRef={breaksRef} catalog={catalog} />
       <HunterViewmodel
         enabled={localRole === "hunter" && localAlive}
         weapon={weapon}
@@ -1054,6 +1074,185 @@ function MorphEffects({ morphsRef }: { morphsRef: MorphFxRef }) {
           blending={THREE.AdditiveBlending}
           depthWrite={false}
         />
+      </instancedMesh>
+    </>
+  );
+}
+
+interface BreakChunkState {
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  spinX: number;
+  spinZ: number;
+  color: THREE.Color;
+}
+
+interface BreakBurstState {
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+  age: number;
+  chunks: BreakChunkState[];
+}
+
+function spawnBreakChunks(
+  fx: DecoyBreakFx,
+  def: PropDefinition,
+  bounds: PropBounds,
+): BreakChunkState[] {
+  const chunks: BreakChunkState[] = [];
+  for (let i = 0; i < BREAK_CHUNK_COUNT; i++) {
+    const part = def.parts[Math.floor(Math.random() * def.parts.length)];
+    const angle = Math.random() * Math.PI * 2;
+    const spawnRadius = bounds.radius * Math.sqrt(Math.random());
+    const outSpeed = THREE.MathUtils.lerp(BREAK_OUT_SPEED_MIN, BREAK_OUT_SPEED_MAX, Math.random());
+    chunks.push({
+      x: fx.x + Math.cos(angle) * spawnRadius,
+      y: fx.y + THREE.MathUtils.lerp(bounds.yMin, bounds.yMax, Math.random()),
+      z: fx.z + Math.sin(angle) * spawnRadius,
+      vx: Math.cos(angle) * outSpeed,
+      vy: THREE.MathUtils.lerp(BREAK_UP_SPEED_MIN, BREAK_UP_SPEED_MAX, Math.random()),
+      vz: Math.sin(angle) * outSpeed,
+      spinX: (Math.random() - 0.5) * BREAK_SPIN,
+      spinZ: (Math.random() - 0.5) * BREAK_SPIN,
+      color: new THREE.Color(part?.color ?? MORPH_COLOR),
+    });
+  }
+  return chunks;
+}
+
+/**
+ * Pooled shatter bursts for broken decoys, mirroring the {@link MorphEffects}
+ * architecture: one instanced mesh of tumbling chunks tinted from the prop's
+ * part colors plus a brief additive flash at the decoy center.
+ */
+function DecoyBreakEffects({ breaksRef, catalog }: { breaksRef: BreaksRef; catalog: Catalog }) {
+  const burstsRef = useRef<BreakBurstState[]>([]);
+  const chunkMeshRef = useRef<THREE.InstancedMesh>(null);
+  const flashes = useMemo(() => {
+    const group = new THREE.Group();
+    for (let i = 0; i < BREAK_MAX_BURSTS; i++) {
+      const geometry = new THREE.SphereGeometry(1, 12, 12);
+      const material = new THREE.MeshBasicMaterial({
+        color: BREAK_FLASH_COLOR,
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      mesh.raycast = noRaycast;
+      group.add(mesh);
+    }
+    return group;
+  }, []);
+  const scratch = useMemo(
+    () => ({
+      matrix: new THREE.Matrix4(),
+      position: new THREE.Vector3(),
+      quaternion: new THREE.Quaternion(),
+      euler: new THREE.Euler(),
+      scale: new THREE.Vector3(),
+    }),
+    [],
+  );
+
+  useEffect(
+    () => () => {
+      for (const child of flashes.children) {
+        const mesh = child as THREE.Mesh;
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+    },
+    [flashes],
+  );
+
+  useFrame((_, delta) => {
+    const bursts = burstsRef.current;
+    for (const fx of breaksRef.current) {
+      const def = catalog.get(fx.propType);
+      if (!def) continue;
+      if (bursts.length >= BREAK_MAX_BURSTS) bursts.shift();
+      const bounds = computePropBounds(def);
+      bursts.push({
+        x: fx.x,
+        y: fx.y + (bounds.yMin + bounds.yMax) / 2,
+        z: fx.z,
+        radius: Math.max(bounds.radius, MODEL_MIN_SIZE),
+        age: 0,
+        chunks: spawnBreakChunks(fx, def, bounds),
+      });
+    }
+    breaksRef.current.length = 0;
+
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const burst = bursts[i];
+      if (!burst) continue;
+      burst.age += delta;
+      if (burst.age >= BREAK_DURATION_S) bursts.splice(i, 1);
+    }
+
+    flashes.children.forEach((child, i) => {
+      const mesh = child as THREE.Mesh;
+      const burst = bursts[i];
+      if (!burst || burst.age >= BREAK_FLASH_DURATION_S) {
+        mesh.visible = false;
+        return;
+      }
+      const t = burst.age / BREAK_FLASH_DURATION_S;
+      mesh.position.set(burst.x, burst.y, burst.z);
+      mesh.scale.setScalar(burst.radius * BREAK_FLASH_RADIUS_MULT);
+      (mesh.material as THREE.MeshBasicMaterial).opacity = BREAK_FLASH_OPACITY * (1 - t);
+      mesh.visible = true;
+    });
+
+    const chunkMesh = chunkMeshRef.current;
+    if (!chunkMesh) return;
+    let written = 0;
+    for (const burst of bursts) {
+      const t = burst.age / BREAK_DURATION_S;
+      const size = Math.max(BREAK_CHUNK_SIZE * (1 - t), MODEL_MIN_SIZE);
+      for (const chunk of burst.chunks) {
+        chunk.vy -= BREAK_GRAVITY * delta;
+        chunk.x += chunk.vx * delta;
+        chunk.y += chunk.vy * delta;
+        chunk.z += chunk.vz * delta;
+        scratch.position.set(chunk.x, chunk.y, chunk.z);
+        scratch.euler.set(chunk.spinX * burst.age, 0, chunk.spinZ * burst.age);
+        scratch.quaternion.setFromEuler(scratch.euler);
+        scratch.scale.setScalar(size);
+        chunkMesh.setMatrixAt(
+          written,
+          scratch.matrix.compose(scratch.position, scratch.quaternion, scratch.scale),
+        );
+        chunkMesh.setColorAt(written, chunk.color);
+        written++;
+      }
+    }
+    chunkMesh.count = written;
+    chunkMesh.instanceMatrix.needsUpdate = true;
+    if (chunkMesh.instanceColor) chunkMesh.instanceColor.needsUpdate = true;
+  });
+
+  return (
+    <>
+      <primitive object={flashes} />
+      <instancedMesh
+        ref={chunkMeshRef}
+        args={[undefined, undefined, BREAK_MAX_BURSTS * BREAK_CHUNK_COUNT]}
+        frustumCulled={false}
+        raycast={noRaycast}
+      >
+        <boxGeometry />
+        <meshStandardMaterial />
       </instancedMesh>
     </>
   );

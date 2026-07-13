@@ -63,11 +63,16 @@ export interface ShootMessage {
   dir: Vec3;
 }
 
-/** Broadcast when a decoy is destroyed by a shot; drives the break sound/FX at its location. */
+/**
+ * Broadcast when a decoy is destroyed (shot, or its owner got captured);
+ * drives the break sound/FX at its location, with debris sized and tinted
+ * from the prop definition.
+ */
 export interface DecoyBreakEvent {
   x: number;
   y: number;
   z: number;
+  propType: string;
 }
 
 export interface TeleportMessage {
