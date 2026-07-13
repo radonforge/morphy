@@ -562,6 +562,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     dir: Vec3,
     range: number,
     captured: Set<PlayerState>,
+    broken: Set<DecoyState>,
   ): { end: Vec3; target: PlayerState | undefined; decoy: DecoyState | undefined } {
     let wallDist = range;
     for (const collider of this.map.colliders) {
@@ -589,6 +590,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     let decoyT = Infinity;
     let decoy: DecoyState | undefined;
     this.state.decoys.forEach((d) => {
+      if (broken.has(d)) return;
       const bounds = this.propBounds.get(d.propType) ?? UNTRANSFORMED_PROP_BOUNDS;
       const t = rayHitsBox(origin, dir, d.x, d.y, d.z, bounds, range);
       if (t !== null && t < wallDist && t < decoyT) {
@@ -653,6 +655,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
         pelletDir,
         weapon.range,
         captured,
+        broken,
       );
       ends.push(end);
       if (target) captured.add(target);
