@@ -1731,6 +1731,7 @@ function LocalPlayer({
         turnHeldMs.current = 0;
         lastTurnDir.current = 0;
       }
+      propRot.current = Math.atan2(Math.sin(propRot.current), Math.cos(propRot.current));
     }
 
     if (alive) {

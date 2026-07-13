@@ -500,7 +500,7 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     player.z = clamp(input.z, min.z, max.z);
     player.rot = input.rot;
     player.aim = input.aim;
-    player.propRot = input.propRot;
+    player.propRot = Math.atan2(Math.sin(input.propRot), Math.cos(input.propRot));
   }
 
   private handleReroll(client: Client): void {
@@ -508,7 +508,9 @@ export class WebHuntRoom extends Room<{ state: RoomState }> {
     if (player?.role !== "prop" || !player.alive) return;
     if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
     if (player.rerollsLeft <= 0) return;
-    player.propType = this.randomPropId(player.propType);
+    const next = this.randomPropId(player.propType);
+    if (!next || next === player.propType) return;
+    player.propType = next;
     player.rerollsLeft -= 1;
   }
 
