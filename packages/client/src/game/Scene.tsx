@@ -271,6 +271,32 @@ interface ObbCollider {
   yMax: number;
 }
 
+function pushPropPartColliders(
+  colliders: ObbCollider[],
+  def: PropDefinition,
+  position: { x: number; y: number; z: number },
+  rotation: number,
+): void {
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  for (const part of def.parts) {
+    const hx = part.size.x / 2;
+    const hz = part.size.z / 2;
+    const reach = Math.hypot(part.position.x, part.position.z) + Math.max(hx, hz);
+    if (reach < FURNITURE_MIN_RADIUS) continue;
+    colliders.push({
+      x: position.x + part.position.x * cos + part.position.z * sin,
+      z: position.z - part.position.x * sin + part.position.z * cos,
+      cos,
+      sin,
+      hx,
+      hz,
+      yMin: position.y + part.position.y - part.size.y / 2,
+      yMax: position.y + part.position.y + part.size.y / 2,
+    });
+  }
+}
+
 function buildColliders(map: MapDefinition, catalog: Catalog): ObbCollider[] {
   const colliders: ObbCollider[] = [];
   for (const collider of map.colliders) {
@@ -288,24 +314,17 @@ function buildColliders(map: MapDefinition, catalog: Catalog): ObbCollider[] {
   for (const instance of map.props) {
     const def = catalog.get(instance.type);
     if (!def) continue;
-    const cos = Math.cos(instance.rotation);
-    const sin = Math.sin(instance.rotation);
-    for (const part of def.parts) {
-      const hx = part.size.x / 2;
-      const hz = part.size.z / 2;
-      const reach = Math.hypot(part.position.x, part.position.z) + Math.max(hx, hz);
-      if (reach < FURNITURE_MIN_RADIUS) continue;
-      colliders.push({
-        x: instance.position.x + part.position.x * cos + part.position.z * sin,
-        z: instance.position.z - part.position.x * sin + part.position.z * cos,
-        cos,
-        sin,
-        hx,
-        hz,
-        yMin: instance.position.y + part.position.y - part.size.y / 2,
-        yMax: instance.position.y + part.position.y + part.size.y / 2,
-      });
-    }
+    pushPropPartColliders(colliders, def, instance.position, instance.rotation);
+  }
+  return colliders;
+}
+
+function buildDecoyColliders(decoys: DecoyView[], catalog: Catalog): ObbCollider[] {
+  const colliders: ObbCollider[] = [];
+  for (const decoy of decoys) {
+    const def = catalog.get(decoy.propType);
+    if (!def) continue;
+    pushPropPartColliders(colliders, def, decoy, decoy.rot);
   }
   return colliders;
 }
@@ -516,7 +535,12 @@ export function Scene({
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
     [map],
   );
-  const colliders = useMemo(() => buildColliders(map, catalog), [map, catalog]);
+  const staticColliders = useMemo(() => buildColliders(map, catalog), [map, catalog]);
+  const decoyColliders = useMemo(() => buildDecoyColliders(decoys, catalog), [decoys, catalog]);
+  const colliders = useMemo(
+    () => (decoyColliders.length > 0 ? [...staticColliders, ...decoyColliders] : staticColliders),
+    [staticColliders, decoyColliders],
+  );
   const walls = useMemo(() => buildWalls(map), [map]);
   const theme = useMemo(() => themeFor(map.id), [map.id]);
   const localGroundRef = useRef(new THREE.Vector3());
@@ -594,7 +618,7 @@ export function Scene({
       />
       <SunLight intensity={theme.dir} bounds={map.bounds} />
       <MapView map={map} groundColor={theme.ground} />
-      <PropActions room={room} enabled={canTransform} />
+      <PropActions room={room} enabled={canTransform} motionRef={motionRef} />
       <Decoys decoys={decoys} catalog={catalog} />
       <Shooter
         room={room}
@@ -1680,7 +1704,15 @@ function Decoys({ decoys, catalog }: { decoys: DecoyView[]; catalog: Catalog }) 
   );
 }
 
-function PropActions({ room, enabled }: { room: Room; enabled: boolean }) {
+function PropActions({
+  room,
+  enabled,
+  motionRef,
+}: {
+  room: Room;
+  enabled: boolean;
+  motionRef: LocalMotionRef;
+}) {
   useEffect(() => {
     if (!enabled) {
       return;
@@ -1688,11 +1720,11 @@ function PropActions({ room, enabled }: { room: Room; enabled: boolean }) {
     const onKey = (event: KeyboardEvent) => {
       if (event.repeat) return;
       if (event.code === "KeyR") room.send(MSG_REROLL);
-      else if (event.code === "KeyC") room.send(MSG_DECOY);
+      else if (event.code === "KeyC" && motionRef.current.grounded) room.send(MSG_DECOY);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled, room]);
+  }, [enabled, room, motionRef]);
 
   return null;
 }
