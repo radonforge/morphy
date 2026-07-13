@@ -348,7 +348,6 @@ export class Reflex {
       case "idle":
       case "taunt":
       case "chat":
-      case "transform":
         break;
       case "patrol":
         this.runPatrol(world, dt, now);

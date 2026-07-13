@@ -31,10 +31,9 @@ export type Intent =
   | (IntentMeta & { kind: "idle" })
   | (IntentMeta & { kind: "patrol" })
   | (IntentMeta & { kind: "moveTo"; x: number; z: number; run: boolean })
-  | (IntentMeta & { kind: "hideAs"; propType: string; x: number; z: number })
+  | (IntentMeta & { kind: "hideAs"; x: number; z: number })
   | (IntentMeta & { kind: "inspect"; targetId: string })
   | (IntentMeta & { kind: "shootTarget"; targetId: string })
-  | (IntentMeta & { kind: "transform"; propType: string })
   | (IntentMeta & { kind: "taunt" })
   | (IntentMeta & { kind: "chat"; text: string });
 
@@ -181,7 +180,6 @@ export function parseIntent(raw: unknown): Intent {
     case "hideAs":
       return {
         kind: "hideAs",
-        propType: nonEmptyString(raw.propType, "propType", IntentValidationError),
         x: finiteNumber(raw.x, "x", IntentValidationError),
         z: finiteNumber(raw.z, "z", IntentValidationError),
         ...meta,
@@ -196,12 +194,6 @@ export function parseIntent(raw: unknown): Intent {
       return {
         kind: "shootTarget",
         targetId: nonEmptyString(raw.targetId, "targetId", IntentValidationError),
-        ...meta,
-      };
-    case "transform":
-      return {
-        kind: "transform",
-        propType: nonEmptyString(raw.propType, "propType", IntentValidationError),
         ...meta,
       };
     case "chat":

@@ -49,16 +49,11 @@ function behaviorChanged(prev: Intent, next: Intent): boolean {
     return prev.run !== next.run || Math.hypot(prev.x - next.x, prev.z - next.z) > ARRIVE_EPSILON;
   }
   if (prev.kind === "hideAs" && next.kind === "hideAs") {
-    return (
-      prev.propType !== next.propType ||
-      Math.hypot(prev.x - next.x, prev.z - next.z) > ARRIVE_EPSILON
-    );
+    return Math.hypot(prev.x - next.x, prev.z - next.z) > ARRIVE_EPSILON;
   }
   if (prev.kind === "inspect" && next.kind === "inspect") return prev.targetId !== next.targetId;
   if (prev.kind === "shootTarget" && next.kind === "shootTarget")
     return prev.targetId !== next.targetId;
-  if (prev.kind === "transform" && next.kind === "transform")
-    return prev.propType !== next.propType;
   if (prev.kind === "chat" && next.kind === "chat") return prev.text !== next.text;
   return false;
 }

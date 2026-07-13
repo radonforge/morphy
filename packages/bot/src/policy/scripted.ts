@@ -88,7 +88,7 @@ export class ScriptedPolicy implements Policy {
       obs.visibility === "limited" ? this.nearestThreatLimited(obs) : this.nearestHunter(obs);
     if (threat) {
       if (threat.facingMe === true && threat.distance < FREEZE_RADIUS) {
-        return { kind: "transform", propType: type, seq };
+        return { kind: "idle", seq };
       }
       if (threat.distance < PANIC_RADIUS) {
         this.clearHidePlan();
@@ -96,7 +96,7 @@ export class ScriptedPolicy implements Policy {
         return { kind: "moveTo", x: flee.x, z: flee.z, run: true, seq };
       }
     }
-    return { kind: "hideAs", propType: type, x: spot.x, z: spot.z, seq };
+    return { kind: "hideAs", x: spot.x, z: spot.z, seq };
   }
 
   private nearestThreatLimited(obs: Observation): ObservedEntity | null {
