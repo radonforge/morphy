@@ -6,7 +6,7 @@ import {
   type SceneryInstance,
   type TileInstance,
   type Vec3,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import { URBAN_CATALOG } from "../urbanCatalog";
 import { makeRng, pick, randRange } from "./lib";
 

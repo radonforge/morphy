@@ -14,7 +14,7 @@ import {
   UNTRANSFORMED_PROP_HEIGHT,
   UNTRANSFORMED_PROP_RADIUS,
   type Visibility,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import {
   buildObstacles,
   buildWalls,

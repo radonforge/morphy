@@ -1,4 +1,4 @@
-import { type BoxCollider, type PropBounds, SHOOT_RANGE } from "@webhunt/shared";
+import { type BoxCollider, type PropBounds, SHOOT_RANGE } from "@morphy/shared";
 
 export interface Vec3 {
   x: number;

@@ -1,4 +1,4 @@
-import type { BoxCollider, TileInstance } from "@webhunt/shared";
+import type { BoxCollider, TileInstance } from "@morphy/shared";
 import type { Doorway } from "../furnish";
 
 /** World size of one grid cell (and of every modular floor/wall tile). */

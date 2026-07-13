@@ -1,5 +1,5 @@
 {
-  "name": "@webhunt/bot",
+  "name": "@morphy/bot",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@colyseus/sdk": "^0.17.43",
-    "@webhunt/shared": "workspace:*"
+    "@morphy/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

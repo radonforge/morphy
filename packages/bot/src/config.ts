@@ -1,4 +1,4 @@
-import { DEFAULT_PORT, DEFAULT_WEAPON, SHOOT_RANGE, WEAPONS } from "@webhunt/shared";
+import { DEFAULT_PORT, DEFAULT_WEAPON, SHOOT_RANGE, WEAPONS } from "@morphy/shared";
 
 export const CONNECT_TIMEOUT_MS = 8_000;
 

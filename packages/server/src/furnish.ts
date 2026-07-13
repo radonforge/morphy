@@ -1,4 +1,4 @@
-import { computePropBounds, type PropDefinition, type PropInstance } from "@webhunt/shared";
+import { computePropBounds, type PropDefinition, type PropInstance } from "@morphy/shared";
 
 /** Interior rectangle of a room in world space (boundaries lie on wall lines). */
 export interface RoomRect {

@@ -1,4 +1,4 @@
-import type { Intent, MapBounds, Observation, ObservedEntity, Phase, Role } from "@webhunt/shared";
+import type { Intent, MapBounds, Observation, ObservedEntity, Phase, Role } from "@morphy/shared";
 import {
   ENGAGE_RANGE_MAX,
   ENGAGE_RANGE_MIN,

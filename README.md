@@ -1,4 +1,4 @@
-# webhunt.lol
+# morphy.lol
 
 Browser multiplayer prop hunt. Low-poly 3D, LAN-first. See [`SPEC.md`](./SPEC.md) for the design.
 

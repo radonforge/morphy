@@ -21,7 +21,7 @@ import {
   ROOM_NAME,
   type Role,
   type Visibility,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import {
   ARRIVE_EPSILON,
   BOT_VISION_RANGE,

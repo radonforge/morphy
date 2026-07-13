@@ -36,7 +36,7 @@ import {
   type TileInstance,
   WEAPONS,
   type WeaponId,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";

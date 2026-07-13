@@ -9,7 +9,7 @@ import {
   normalizePartyCode,
   PARTY_CODE_LENGTH,
   type Visibility,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import { Bot } from "./bot";
 import {
   BOT_NAMES,

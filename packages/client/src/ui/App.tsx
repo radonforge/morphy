@@ -7,7 +7,7 @@ import {
   MSG_START,
   type SetMapMessage,
   type SetProfileMessage,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import { useCallback, useEffect, useState } from "react";
 import { Game } from "../game/Game";
 import { type Connection, connectToRoom, createPartyRoom, joinPartyRoom } from "../net/connection";
@@ -38,7 +38,7 @@ export function App() {
     if (!connection) return;
     const { room } = connection;
     const handleError = (code: number, message?: string) => {
-      console.error("[webhunt] room error", code, message);
+      console.error("[morphy] room error", code, message);
       disconnect();
     };
     const handleLeave = () => {

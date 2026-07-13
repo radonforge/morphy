@@ -1,4 +1,4 @@
-import type { Intent, Observation } from "@webhunt/shared";
+import type { Intent, Observation } from "@morphy/shared";
 
 /**
  * A pluggable brain. `decide` is async and low-frequency: it returns a

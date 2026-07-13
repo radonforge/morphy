@@ -30,7 +30,7 @@ import {
   WEAPONS,
   type WeaponId,
   type Winner,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Connection } from "../net/connection";
 import {

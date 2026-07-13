@@ -1,4 +1,4 @@
-import type { MapDefinition, MapId } from "@webhunt/shared";
+import type { MapDefinition, MapId } from "@morphy/shared";
 import { buildMars } from "./mars";
 import { buildStation } from "./station";
 import { buildUrban } from "./urban";

@@ -1,4 +1,4 @@
-import { type MapBounds, type MapDefinition, PLAYER_HEIGHT } from "@webhunt/shared";
+import { type MapBounds, type MapDefinition, PLAYER_HEIGHT } from "@morphy/shared";
 import { BOT_BODY_RADIUS, FURNITURE_MIN_RADIUS } from "./config";
 
 export interface Wall {

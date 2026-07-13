@@ -1,6 +1,6 @@
-# @webhunt/bot
+# @morphy/bot
 
-Headless autonomous players for webhunt.lol. They connect to a running Colyseus
+Headless autonomous players for morphy.lol. They connect to a running Colyseus
 server exactly like the browser client (`@colyseus/sdk` over `ws`, no rendering),
 auto-ready in the lobby, and play whatever role the server assigns each round —
 switching behaviour on the fly when a prop gets converted to a hunter.
@@ -34,7 +34,7 @@ let bots play on their own (handy as a server smoke test).
 ## How it plays
 
 - **Hunter** — scans for live props within an engage range, and fires *only when
-  it predicts a server-side hit* (same raycast as `WebHuntRoom`), so it never
+  it predicts a server-side hit* (same raycast as `MorphyRoom`), so it never
   bleeds HP on walls. Difficulty widens its sight and shortens its reaction time.
 - **Prop** — picks a prop type that exists in the scene, hides next to a matching
   cluster, transforms, holds still, and bolts if a hunter gets close.

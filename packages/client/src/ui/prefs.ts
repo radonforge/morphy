@@ -6,7 +6,7 @@ import {
   isMapId,
   MAX_NAME_LENGTH,
   type MapId,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 
 /**
  * Client-side lobby preferences persisted to localStorage so a returning player
@@ -19,7 +19,7 @@ export interface LobbyPrefs {
   avatar: AvatarId;
 }
 
-const PREFS_KEY = "webhunt:prefs";
+const PREFS_KEY = "morphy:prefs";
 
 const DEFAULTS: LobbyPrefs = { name: "", map: DEFAULT_MAP_ID, avatar: DEFAULT_AVATAR_ID };
 

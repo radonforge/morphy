@@ -9,7 +9,7 @@ import type { Phase, Role } from "./protocol";
  * (pathfinding, aim, fire cooldown) from a compact {@link Observation}.
  *
  * Kept dependency-free TS (types + boundary guards) so it can live in
- * `@webhunt/shared` alongside {@link parseMapDefinition}.
+ * `@morphy/shared` alongside {@link parseMapDefinition}.
  */
 
 /** Fields every {@link Intent} carries regardless of `kind`. */

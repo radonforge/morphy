@@ -1,9 +1,9 @@
-import type { WeaponId } from "@webhunt/shared";
+import type { WeaponId } from "@morphy/shared";
 
 const DEFAULT_VOLUME = 0.6;
-const MUTE_STORAGE_KEY = "webhunt:muted";
-const VOLUME_STORAGE_KEY = "webhunt:volume";
-const UI_SOUNDS_STORAGE_KEY = "webhunt:ui-sounds";
+const MUTE_STORAGE_KEY = "morphy:muted";
+const VOLUME_STORAGE_KEY = "morphy:volume";
+const UI_SOUNDS_STORAGE_KEY = "morphy:ui-sounds";
 const MUTE_FADE_S = 0.05;
 const NOISE_SECONDS = 0.2;
 
@@ -35,8 +35,8 @@ const UI_SHEET_LEVEL = 0.3;
 const UI_HOVER_MIN_INTERVAL_MS = 70;
 
 const MUSIC_SAMPLE = "music/lobby-theme.ogg";
-const MUSIC_STORAGE_KEY = "webhunt:music";
-const MUSIC_VOLUME_STORAGE_KEY = "webhunt:music-volume";
+const MUSIC_STORAGE_KEY = "morphy:music";
+const MUSIC_VOLUME_STORAGE_KEY = "morphy:music-volume";
 const MUSIC_DEFAULT_VOLUME = 0.4;
 const MUSIC_FADE_IN_S = 1.2;
 const MUSIC_FADE_OUT_S = 0.4;

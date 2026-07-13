@@ -1,4 +1,4 @@
-export const ROOM_NAME = "webhunt";
+export const ROOM_NAME = "morphy";
 
 export const DEFAULT_PORT = 2567;
 export const COLYSEUS_PROXY_PATH = "/colyseus";

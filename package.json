@@ -1,5 +1,5 @@
 {
-  "name": "webhunt",
+  "name": "morphy",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,10 +8,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @webhunt/server --filter @webhunt/client dev",
-    "dev:server": "pnpm --filter @webhunt/server dev",
-    "dev:client": "pnpm --filter @webhunt/client dev",
-    "bot": "pnpm --filter @webhunt/bot start",
+    "dev": "pnpm --parallel --filter @morphy/server --filter @morphy/client dev",
+    "dev:server": "pnpm --filter @morphy/server dev",
+    "dev:client": "pnpm --filter @morphy/client dev",
+    "bot": "pnpm --filter @morphy/bot start",
     "tunnel": "ngrok http 5173 ${NGROK_DOMAIN:+--url=https://$NGROK_DOMAIN}",
     "typecheck": "pnpm -r typecheck",
     "format": "biome format --write .",

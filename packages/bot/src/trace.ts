@@ -1,5 +1,5 @@
 import { createWriteStream, type WriteStream } from "node:fs";
-import type { Intent, Observation } from "@webhunt/shared";
+import type { Intent, Observation } from "@morphy/shared";
 
 interface KillFields {
   byId: string;

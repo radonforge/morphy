@@ -1,4 +1,4 @@
-import type { PropDefinition } from "@webhunt/shared";
+import type { PropDefinition } from "@morphy/shared";
 import { boxProp } from "./propDef";
 
 const ex = (id: string, name: string, w: number, h: number, color: string): PropDefinition =>

@@ -1,4 +1,4 @@
-import type { Phase, Role, Winner } from "@webhunt/shared";
+import type { Phase, Role, Winner } from "@morphy/shared";
 
 export interface BotPlayer {
   id: string;

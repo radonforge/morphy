@@ -3,7 +3,7 @@
  * audio flags in `game/audio.ts`. Lobby identity prefs (name, map, avatar)
  * live separately in `ui/prefs.ts`.
  */
-const PERF_HUD_STORAGE_KEY = "webhunt:perf-hud";
+const PERF_HUD_STORAGE_KEY = "morphy:perf-hud";
 
 export function isPerfHudEnabled(): boolean {
   if (typeof localStorage === "undefined") return false;

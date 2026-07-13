@@ -67,7 +67,7 @@ import {
   WEAPONS,
   type WeaponId,
   type Winner,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import { buildMap } from "../maps";
 
 const FALLBACK_NAME = "Player";
@@ -303,7 +303,7 @@ function nextSeed(): number {
   return Math.floor(Math.random() * 0x1_0000_0000);
 }
 
-export class WebHuntRoom extends Room<{ state: RoomState }> {
+export class MorphyRoom extends Room<{ state: RoomState }> {
   maxClients = MAX_PLAYERS;
   maxMessagesPerSecond = MAX_CLIENT_MESSAGES_PER_SECOND;
   state = new RoomState();

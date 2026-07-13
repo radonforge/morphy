@@ -1,4 +1,4 @@
-import type { PropDefinition } from "@webhunt/shared";
+import type { PropDefinition } from "@morphy/shared";
 
 /**
  * A morphable prop whose hitbox is a single upright box (`width`×`height`×`width`);

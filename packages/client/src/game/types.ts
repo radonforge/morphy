@@ -1,4 +1,4 @@
-import type { Role, WeaponId } from "@webhunt/shared";
+import type { Role, WeaponId } from "@morphy/shared";
 
 export interface RemotePlayerView {
   id: string;

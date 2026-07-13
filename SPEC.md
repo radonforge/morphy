@@ -1,4 +1,4 @@
-# webhunt.lol — Project spec
+# morphy.lol — Project spec
 
 > Browser multiplayer prop hunt. Starts LAN-first (a colleague hosts, the others connect; cloud-ready with the same code). Low-poly 3D, simple but polished. Theme: **space station on Mars**.
 
@@ -154,7 +154,7 @@ Each map is a builder `(seed: number) => MapDefinition` registered in `packages/
 
 ### Network model
 
-- `WebHuntRoom` room with state synchronized via `@colyseus/schema`.
+- `MorphyRoom` room with state synchronized via `@colyseus/schema`.
 - State broadcast at 20 Hz (`PATCH_RATE_MS = 50`); the client **interpolates** between snapshots and renders at 60 fps.
 - **Server authority**: phase, timers, roles, HP, alive/dead, shot resolution, taunt, win, map build.
 - **Movement (pragmatic)**: the client sends `input { x, y, z, rot }` at ~20 Hz (`INPUT_SEND_RATE_MS`); the server **only clamps to the map bounds**. No prediction/rollback, **no velocity sanity check** and **no server-side collision**: walls and furniture are handled **only by the client** (`Scene.tsx`). A deliberate choice to stay simple on LAN.
@@ -162,7 +162,7 @@ Each map is a builder `(seed: number) => MapDefinition` registered in `packages/
 ### Synchronized state (schema)
 
 ```ts
-// packages/server/src/rooms/WebHuntRoom.ts
+// packages/server/src/rooms/MorphyRoom.ts
 PlayerState  { id, name, x, y, z, rot, aim, role: 'hunter'|'prop',
                alive, hp, kills, propType: string, ready, avatar }
 RoomState    { mapId, phase, phaseEndsAt, winner, players: Map<id, PlayerState> }
@@ -197,14 +197,14 @@ The `reason` of `kill` ∈ `"shot" | "self" | "converted"`. All inbound payloads
 ### Repo layout
 
 ```
-webhunt.lol/
+morphy.lol/
   package.json            # pnpm workspaces; dev/typecheck/tunnel scripts
   packages/
     shared/               # contract: types, protocol, constants, map model + catalogs
       src/{constants,protocol,map,maps,avatars,index}.ts
     server/               # Colyseus: room + authoritative logic + map builders
       src/index.ts
-      src/rooms/WebHuntRoom.ts
+      src/rooms/MorphyRoom.ts
       src/maps/{index,lib,station,mars,urban}.ts   # one builder per selectable map
       src/{furnish,propDef,spaceCatalog,marsCatalog,urbanCatalog}.ts
     client/               # Vite + React + R3F
@@ -221,7 +221,7 @@ webhunt.lol/
 All game constants centralized in `packages/shared/src/constants.ts`. URL/port from config, never inline.
 
 ```ts
-export const ROOM_NAME = "webhunt";
+export const ROOM_NAME = "morphy";
 export const DEFAULT_PORT = 2567;
 export const COLYSEUS_PROXY_PATH = "/colyseus";
 

@@ -10,7 +10,7 @@ import {
   MIN_PLAYERS_TO_START,
   normalizePartyCode,
   PARTY_CODE_LENGTH,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   areUiSoundsEnabled,
@@ -356,7 +356,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       <header className="menu-top">
         <div className="menu-wordmark">
           <span className="tri">◢</span>
-          <span>WEBHUNT</span>
+          <span>MORPHY</span>
           <span className="b">.LOL</span>
         </div>
         <nav className="menu-tabs" aria-label="Menu">

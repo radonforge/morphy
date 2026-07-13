@@ -6,7 +6,7 @@ import {
   type SceneryInstance,
   type TileInstance,
   type Vec3,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import type { Doorway } from "../furnish";
 import { MARS_CATALOG } from "../marsCatalog";
 import {

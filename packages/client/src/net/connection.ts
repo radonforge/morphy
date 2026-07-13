@@ -8,7 +8,7 @@ import {
   type PublicJoinOptions,
   ROOM_NAME,
   type RoomJoinOptions,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 
 const CONNECT_TIMEOUT_MS = 8_000;
 

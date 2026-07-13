@@ -1,4 +1,4 @@
-import type { BoxCollider, MapDefinition, PropInstance, TileInstance, Vec3 } from "@webhunt/shared";
+import type { BoxCollider, MapDefinition, PropInstance, TileInstance, Vec3 } from "@morphy/shared";
 import { ARCHETYPE, type Doorway, furnishRoom, type RoomRect } from "../furnish";
 import { SPACE_CATALOG } from "../spaceCatalog";
 import {

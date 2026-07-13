@@ -1,4 +1,4 @@
-import type { MapBounds } from "@webhunt/shared";
+import type { MapBounds } from "@morphy/shared";
 import type { Obstacle, Wall } from "../collision";
 import { BOT_BODY_RADIUS, NAV_CELL_SIZE, NAV_INFLATION_EPS } from "../config";
 

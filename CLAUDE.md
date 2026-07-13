@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-webhunt.lol is a browser multiplayer prop-hunt game: low-poly 3D, LAN-first, server-authoritative. Hunters stalk players disguised as scene objects (props). See `SPEC.md` for the design intent — but note it has **diverged from the code** (see "Spec vs. code" below); the code is the source of truth.
+morphy.lol is a browser multiplayer prop-hunt game: low-poly 3D, LAN-first, server-authoritative. Hunters stalk players disguised as scene objects (props). See `SPEC.md` for the design intent — but note it has **diverged from the code** (see "Spec vs. code" below); the code is the source of truth.
 
 ## Commands
 
@@ -13,33 +13,33 @@ pnpm dev:server         # tsx watch — server only
 pnpm dev:client         # vite — client only
 pnpm typecheck          # tsc --noEmit across all packages (the only static gate)
 pnpm tunnel             # ngrok http 5173 — share a LAN/remote session
-pnpm --filter @webhunt/client build   # production client bundle
+pnpm --filter @morphy/client build   # production client bundle
 ```
 
 There is **no test suite, no linter, and no formatter**. `pnpm typecheck` is the only automated check — run it after changes. Verification beyond that is manual play.
 
-Single-package typecheck: `pnpm --filter @webhunt/server typecheck` (or `@webhunt/client` / `@webhunt/shared`).
+Single-package typecheck: `pnpm --filter @morphy/server typecheck` (or `@morphy/client` / `@morphy/shared`).
 
 ## Architecture
 
-pnpm-workspace monorepo, three packages with a strict dependency direction: **client → shared ← server** (client and server never import each other; both depend only on `@webhunt/shared`).
+pnpm-workspace monorepo, three packages with a strict dependency direction: **client → shared ← server** (client and server never import each other; both depend only on `@morphy/shared`).
 
 ### `packages/shared` — the contract layer
-The single source of truth for everything client and server must agree on. **Exports raw TypeScript** (`"exports": { ".": "./src/index.ts" }`, no build step) — both sides consume the source directly via the `@webhunt/shared` workspace alias.
+The single source of truth for everything client and server must agree on. **Exports raw TypeScript** (`"exports": { ".": "./src/index.ts" }`, no build step) — both sides consume the source directly via the `@morphy/shared` workspace alias.
 - `constants.ts` — all gameplay tuning (durations, ratios, speeds, ranges, limits). No gameplay magic numbers live anywhere else.
 - `protocol.ts` — network message **name constants** (`MSG_INPUT`, `MSG_SHOOT`, …) plus the payload interfaces. Messages are individual Colyseus channels keyed by these string constants, **not** a single tagged union.
 - `map.ts` — the `MapDefinition` data model, `parseMapDefinition` (boundary validation, throws `MapValidationError`), and `computePropBounds` (derives a prop's bounding cylinder from its primitive parts — **shared by server hit detection and client mesh fitting**, so they always agree on hitboxes).
 
 ### `packages/server` — authoritative Colyseus room
 - `index.ts` boots `defineServer` with `WebSocketTransport`. **Uses `@colyseus/core` + `@colyseus/ws-transport` directly, never the `colyseus` meta-package** — this is deliberate (see pnpm-workspace `allowBuilds` / `minimumReleaseAgeExclude`).
-- `rooms/WebHuntRoom.ts` — the whole game. Holds `RoomState`/`PlayerState` (`@colyseus/schema` classes; note `experimentalDecorators` + `useDefineForClassFields: false` in its tsconfig). Owns the round state machine (`lobby → starting → hiding → hunting → round_end`), role assignment, the patch loop, and **server-side hit resolution** (ray vs. prop bounding cylinders + wall AABBs). Every inbound WS payload is validated by a `parse*` helper that returns `null` on bad input (silently ignored, never trusted).
+- `rooms/MorphyRoom.ts` — the whole game. Holds `RoomState`/`PlayerState` (`@colyseus/schema` classes; note `experimentalDecorators` + `useDefineForClassFields: false` in its tsconfig). Owns the round state machine (`lobby → starting → hiding → hunting → round_end`), role assignment, the patch loop, and **server-side hit resolution** (ray vs. prop bounding cylinders + wall AABBs). Every inbound WS payload is validated by a `parse*` helper that returns `null` on bad input (silently ignored, never trusted).
 - Map generation: **maps are procedurally generated per round**, not loaded from files. `generateMap(seed, catalog)` builds a rooms+corridors grid (modular glTF tiles + matching box colliders), `furnish.ts` fills each room from a set of semantic **archetypes** (mess hall, quarters, control room, storage bay, lab), and `emitScenery` dresses the exterior Martian apron with space-kit set pieces. `spaceCatalog.ts` is the hardcoded prop catalog (the shapes players can morph into); `avatars.ts` assigns a random cube-pet model per player. A fresh seed is generated each round in `beginHiding`.
 
 ### `packages/client` — Vite + React + react-three-fiber
 - `ui/App.tsx` — lobby/connect screen; `net/connection.ts` wraps the Colyseus SDK `joinOrCreate` with a timeout.
 - `game/Game.tsx` — React HUD and the network event hub: registers all `room.onMessage` handlers and the schema `Callbacks` (player add/remove), drives chat/kill-feed/result/scoreboard overlays.
 - `game/Scene.tsx` — the entire 3D scene: map rendering (instanced tiles, fitted GLB props/avatars, scenery), the **local player movement + client-side collision** (walls, obstacles, player separation, gravity/jump), remote-player interpolation, the shooting raycast, and the prop-picker (`E` to morph). This is the largest and densest file.
-- `game/audio.ts` — **hybrid audio**: weapon shots / hit impacts (Kenney Sci-fi Sounds, `public/sounds/sci-fi/`) and lobby UI cues (Kenney UI Audio, `public/sounds/ui/`) play cached OGG samples; the lobby loops a licensed theme (`public/sounds/music/lobby-theme.ogg`, own gain, fade in/out); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers all; volume / music / UI-sound prefs persist to localStorage (`webhunt:*` keys).
+- `game/audio.ts` — **hybrid audio**: weapon shots / hit impacts (Kenney Sci-fi Sounds, `public/sounds/sci-fi/`) and lobby UI cues (Kenney UI Audio, `public/sounds/ui/`) play cached OGG samples; the lobby loops a licensed theme (`public/sounds/music/lobby-theme.ogg`, own gain, fade in/out); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers all; volume / music / UI-sound prefs persist to localStorage (`morphy:*` keys).
 
 ### Two facts that span files
 

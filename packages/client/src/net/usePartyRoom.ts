@@ -7,7 +7,7 @@ import {
   MSG_MAP,
   MSG_TELEPORT,
   type Phase,
-} from "@webhunt/shared";
+} from "@morphy/shared";
 import { useEffect, useRef, useState } from "react";
 import type { Connection } from "./connection";
 

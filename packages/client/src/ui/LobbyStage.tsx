@@ -1,6 +1,6 @@
 import { Billboard, Html, Sky, Stars, Text, useAnimations, useGLTF } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import type { AvatarId, MapId } from "@webhunt/shared";
+import type { AvatarId, MapId } from "@morphy/shared";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { playUiHover } from "../game/audio";

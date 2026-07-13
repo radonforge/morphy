@@ -1,4 +1,4 @@
-import type { Phase, Role } from "@webhunt/shared";
+import type { Phase, Role } from "@morphy/shared";
 import { Kbd } from "../ui/Kbd";
 
 interface ControlSpec {
