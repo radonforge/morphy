@@ -13,13 +13,6 @@ export interface Doorway {
   z: number;
 }
 
-/** Circular no-furniture zone, e.g. the footprint of authored stairs or platforms. */
-export interface Keepout {
-  x: number;
-  z: number;
-  radius: number;
-}
-
 type Rng = () => number;
 
 const WALL_GAP = 0.6;
@@ -84,7 +77,6 @@ function makePlacer(
   rect: RoomRect,
   doorways: Doorway[],
   spawn: { x: number; z: number },
-  keepouts: Keepout[],
   available: Set<string>,
   radiusOf: (id: string) => number,
   out: PropInstance[],
@@ -109,9 +101,6 @@ function makePlacer(
       if (Math.hypot(x - d.x, z - d.z) < DOOR_KEEPOUT + r) return false;
     }
     if (Math.hypot(x - spawn.x, z - spawn.z) < SPAWN_RESERVE + r) return false;
-    for (const k of keepouts) {
-      if (Math.hypot(x - k.x, z - k.z) < k.radius + r) return false;
-    }
     if (checkGap) {
       for (const p of placed) {
         if (Math.hypot(x - p.x, z - p.z) < r + p.r + GAP_EPS) return false;
@@ -312,21 +301,11 @@ export function furnishRoom(opts: {
   out: PropInstance[];
   /** Force a specific archetype (index into the internal set); random when omitted. */
   archetype?: number;
-  /** Extra no-furniture zones beyond doorways and the spawn (default none). */
-  keepouts?: Keepout[];
 }): void {
   const available = new Set(opts.catalog.map((d) => d.id));
   const radii = new Map(opts.catalog.map((d) => [d.id, computePropBounds(d).radius]));
   const radiusOf = (id: string): number => radii.get(id) ?? DEFAULT_RADIUS;
-  const placer = makePlacer(
-    opts.rect,
-    opts.doorways,
-    opts.spawn,
-    opts.keepouts ?? [],
-    available,
-    radiusOf,
-    opts.out,
-  );
+  const placer = makePlacer(opts.rect, opts.doorways, opts.spawn, available, radiusOf, opts.out);
   const forced = opts.archetype;
   const archetype =
     forced !== undefined && forced >= 0 && forced < ARCHETYPES.length
