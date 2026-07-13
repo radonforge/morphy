@@ -17,7 +17,7 @@ function migrateLegacyStorage(): void {
   const legacyKeys: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key !== null && key.startsWith(LEGACY_PREFIX)) legacyKeys.push(key);
+    if (key?.startsWith(LEGACY_PREFIX)) legacyKeys.push(key);
   }
 
   for (const oldKey of legacyKeys) {

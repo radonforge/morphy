@@ -1,6 +1,4 @@
 import type { Room } from "@colyseus/sdk";
-import { Billboard, Sky, Text, useGLTF } from "@react-three/drei";
-import { useFrame, useThree } from "@react-three/fiber";
 import {
   AIR_CONTROL,
   computePropBounds,
@@ -37,6 +35,8 @@ import {
   WEAPONS,
   type WeaponId,
 } from "@morphy/shared";
+import { Billboard, Sky, Text, useGLTF } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";

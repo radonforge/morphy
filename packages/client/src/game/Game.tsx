@@ -1,5 +1,4 @@
 import { Callbacks } from "@colyseus/sdk";
-import { Canvas, useFrame } from "@react-three/fiber";
 import {
   DEFAULT_WEAPON,
   HIDE_DURATION_MS,
@@ -31,6 +30,7 @@ import {
   type WeaponId,
   type Winner,
 } from "@morphy/shared";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Connection } from "../net/connection";
 import {
