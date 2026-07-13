@@ -53,6 +53,10 @@ import type {
 } from "./types";
 import { useControls } from "./useControls";
 
+function wrapAngle(angle: number): number {
+  return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
 function applyTauntPulse(
   group: THREE.Group,
   pulses: TauntPulseRef,
@@ -1962,7 +1966,7 @@ function LocalPlayer({
         turnHeldMs.current = 0;
         lastTurnDir.current = 0;
       }
-      propRot.current = Math.atan2(Math.sin(propRot.current), Math.cos(propRot.current));
+      propRot.current = wrapAngle(propRot.current);
     }
 
     if (alive) {
@@ -2061,7 +2065,7 @@ function LocalPlayer({
         !(Math.abs(pos.z - last.z) < INPUT_IDLE_EPSILON) ||
         !(Math.abs(heading.current - last.rot) < INPUT_IDLE_EPSILON) ||
         !(Math.abs(aim - last.aim) < INPUT_IDLE_EPSILON) ||
-        !(Math.abs(propRot.current - last.propRot) < INPUT_IDLE_EPSILON);
+        !(Math.abs(wrapAngle(propRot.current - last.propRot)) < INPUT_IDLE_EPSILON);
       if (moved) {
         const payload = {
           x: pos.x,
