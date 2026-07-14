@@ -313,9 +313,10 @@ canvas {
   text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
 }
 .menu-wordmark .tri {
-  color: var(--cyan);
-  margin-right: 0.45em;
-  font-size: 0.8em;
+  height: 1.5em;
+  width: auto;
+  margin-right: 0.4em;
+  align-self: center;
 }
 .menu-wordmark .b {
   color: var(--muted);

@@ -358,7 +358,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
       <header className="menu-top">
         <div className="menu-wordmark">
-          <span className="tri">◢</span>
+          <img className="tri" src="/logo-mark.png" alt="" aria-hidden="true" />
           <span>MORPHY</span>
           <span className="b">.LOL</span>
         </div>
