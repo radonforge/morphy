@@ -151,6 +151,8 @@ export interface SetProfileMessage {
 export interface RoomJoinOptions {
   name: string;
   avatar: AvatarId;
+  /** Opaque per-device identity (UUID) that lifetime stats accrue against. */
+  deviceId: string;
 }
 
 /** Options for public matchmaking (`joinOrCreate`, filtered by map). */

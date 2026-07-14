@@ -30,3 +30,9 @@ Thumbs.db
 # Tooling / local
 .playwright-mcp/
 .claude/worktrees/
+
+# Stats database (SQLite + WAL sidecars)
+data/
+*.db
+*.db-wal
+*.db-shm

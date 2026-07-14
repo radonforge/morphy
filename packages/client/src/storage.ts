@@ -31,3 +31,25 @@ function migrateLegacyStorage(): void {
 }
 
 migrateLegacyStorage();
+
+const DEVICE_ID_KEY = `${CURRENT_PREFIX}deviceId`;
+
+let ephemeralDeviceId: string | null = null;
+
+/**
+ * Stable opaque identity for this browser, minted on first call and persisted so
+ * lifetime stats survive reloads. Sent with every room join; the server maps it
+ * to the player's stats record. When storage is unavailable it falls back to a
+ * single id kept stable for the page's lifetime (stats won't survive a reload).
+ */
+export function getDeviceId(): string {
+  if (typeof localStorage === "undefined") {
+    if (ephemeralDeviceId === null) ephemeralDeviceId = crypto.randomUUID();
+    return ephemeralDeviceId;
+  }
+  const existing = localStorage.getItem(DEVICE_ID_KEY);
+  if (existing) return existing;
+  const id = crypto.randomUUID();
+  localStorage.setItem(DEVICE_ID_KEY, id);
+  return id;
+}

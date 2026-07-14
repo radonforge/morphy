@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Game } from "../game/Game";
 import { type Connection, connectToRoom, createPartyRoom, joinPartyRoom } from "../net/connection";
 import { usePartyRoom } from "../net/usePartyRoom";
+import { getDeviceId } from "../storage";
 import { type ConnectStatus, Lobby, type PartyViewProps } from "./Lobby";
 
 const SERVER_URL =
@@ -60,7 +61,7 @@ export function App() {
   const handleConnect = useCallback(async (name: string, map: MapId, avatar: AvatarId) => {
     setStatus({ kind: "connecting" });
     try {
-      const conn = await connectToRoom(SERVER_URL, { name, map, avatar });
+      const conn = await connectToRoom(SERVER_URL, { name, map, avatar, deviceId: getDeviceId() });
       setConnection(conn);
       setView("game");
       setStatus({ kind: "idle" });
@@ -73,7 +74,12 @@ export function App() {
   const handleCreateParty = useCallback(async (name: string, map: MapId, avatar: AvatarId) => {
     setStatus({ kind: "connecting" });
     try {
-      const conn = await createPartyRoom(SERVER_URL, { name, map, avatar });
+      const conn = await createPartyRoom(SERVER_URL, {
+        name,
+        map,
+        avatar,
+        deviceId: getDeviceId(),
+      });
       setConnection(conn);
       setView("party");
       setStatus({ kind: "idle" });
@@ -86,7 +92,7 @@ export function App() {
   const handleJoinParty = useCallback(async (code: string, name: string, avatar: AvatarId) => {
     setStatus({ kind: "connecting" });
     try {
-      const conn = await joinPartyRoom(SERVER_URL, code, { name, avatar });
+      const conn = await joinPartyRoom(SERVER_URL, code, { name, avatar, deviceId: getDeviceId() });
       setConnection(conn);
       setView("party");
       setStatus({ kind: "idle" });
