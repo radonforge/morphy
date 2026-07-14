@@ -84,7 +84,7 @@ jobs:
       - name: Add deploy host to known_hosts
         run: |
           for i in $(seq 1 5); do
-            ssh-keyscan -p 86 -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null && break
+            ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null && break
             echo "ssh-keyscan failed, retrying in 5s... (attempt $i/5)"
             sleep 5
           done
@@ -98,8 +98,8 @@ jobs:
           WEB_DIR: ${{ inputs.web-dir }}
           TAG: ${{ inputs.tag }}
         run: |
-          rsync -az -e "ssh -p 86" compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/compose.yml"
-          rsync -az --delete -e "ssh -p 86" packages/client/dist/ "$DEPLOY_USER@$DEPLOY_HOST:$WEB_DIR/"
-          ssh -p 86 "$DEPLOY_USER@$DEPLOY_HOST" \
+          rsync -az compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/compose.yml"
+          rsync -az --delete packages/client/dist/ "$DEPLOY_USER@$DEPLOY_HOST:$WEB_DIR/"
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -euo pipefail && cd '$DEPLOY_DIR' && export MORPHY_TAG='$TAG' && \
              docker compose pull server && docker compose up -d server && docker image prune -f"
