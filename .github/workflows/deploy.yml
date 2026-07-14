@@ -1,0 +1,105 @@
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      deploy-dir:
+        required: true
+        type: string
+      web-dir:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+    secrets:
+      TS_OAUTH_CLIENT_ID:
+        required: true
+      TS_OAUTH_SECRET:
+        required: true
+      SSH_PRIVATE_KEY:
+        required: true
+      DEPLOY_HOST:
+        required: true
+      DEPLOY_USER:
+        required: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/server.Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ inputs.tag }}
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @morphy/client build
+
+      - uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+
+      - uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add deploy host to known_hosts
+        run: |
+          for i in $(seq 1 5); do
+            ssh-keyscan -p 86 -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null && break
+            echo "ssh-keyscan failed, retrying in 5s... (attempt $i/5)"
+            sleep 5
+          done
+          grep -q . ~/.ssh/known_hosts || exit 1
+
+      - name: Ship client + pull server (${{ inputs.tag }})
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_DIR: ${{ inputs.deploy-dir }}
+          WEB_DIR: ${{ inputs.web-dir }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          rsync -az -e "ssh -p 86" compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_DIR/compose.yml"
+          rsync -az --delete -e "ssh -p 86" packages/client/dist/ "$DEPLOY_USER@$DEPLOY_HOST:$WEB_DIR/"
+          ssh -p 86 "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -euo pipefail && cd '$DEPLOY_DIR' && export MORPHY_TAG='$TAG' && \
+             docker compose pull server && docker compose up -d server && docker image prune -f"

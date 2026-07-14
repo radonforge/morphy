@@ -1,0 +1,24 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: checks
+    uses: ./.github/workflows/deploy.yml
+    with:
+      deploy-dir: /opt/morphy
+      web-dir: /var/www/morphy.smyile.com/dist
+      tag: latest
+    secrets:
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
