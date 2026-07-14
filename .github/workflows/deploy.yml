@@ -77,6 +77,7 @@ jobs:
 
       - name: Add deploy host to known_hosts
         run: |
+          mkdir -p ~/.ssh
           for i in $(seq 1 5); do
             ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null && break
             echo "ssh-keyscan failed, retrying in 5s... (attempt $i/5)"
