@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+.git
+.github
+.claude
+.playwright-mcp
+assets
+packages/client/public
+data
+*.db
+*.db-wal
+*.db-shm
+*.log
+**/.DS_Store

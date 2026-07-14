@@ -1,0 +1,12 @@
+services:
+  server:
+    image: ghcr.io/xsmyile/morphy.lol:${MORPHY_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      PORT: 2567
+      NODE_ENV: production
+      MORPHY_DB_PATH: /data/morphy-stats.db
+    ports:
+      - "127.0.0.1:2567:2567"
+    volumes:
+      - ./data:/data
