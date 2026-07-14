@@ -155,6 +155,14 @@ export interface RoomJoinOptions {
   deviceId: string;
 }
 
+/** Cumulative lifetime stats served by the `GET /stats` endpoint, keyed by device id. */
+export interface PlayerStatsPayload {
+  rounds: number;
+  wins: number;
+  kills: number;
+  survivals: number;
+}
+
 /** Options for public matchmaking (`joinOrCreate`, filtered by map). */
 export interface PublicJoinOptions extends RoomJoinOptions {
   map: MapId;

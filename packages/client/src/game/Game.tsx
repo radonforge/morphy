@@ -164,11 +164,7 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
       ai.decoysLeft === bi.decoysLeft &&
       ai.ready === bi.ready &&
       ai.avatar === bi.avatar &&
-      ai.ping === bi.ping &&
-      ai.statRounds === bi.statRounds &&
-      ai.statWins === bi.statWins &&
-      ai.statKills === bi.statKills &&
-      ai.statSurvivals === bi.statSurvivals
+      ai.ping === bi.ping
     );
   });
 }
@@ -215,30 +211,6 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
         </div>
       ))}
     </>
-  );
-}
-
-function PlayerStatsCard({ meta }: { meta: PlayerMeta }) {
-  const winRate = meta.statRounds > 0 ? Math.round((meta.statWins / meta.statRounds) * 100) : 0;
-  const stats: { label: string; value: string }[] = [
-    { label: "Rounds", value: String(meta.statRounds) },
-    { label: "Wins", value: String(meta.statWins) },
-    { label: "Win rate", value: `${winRate}%` },
-    { label: "Captures", value: String(meta.statKills) },
-    { label: "Survivals", value: String(meta.statSurvivals) },
-  ];
-  return (
-    <div className="stats-card panel">
-      <h3>Your stats</h3>
-      <dl className="stats-grid">
-        {stats.map(({ label, value }) => (
-          <div key={label} className="stats-cell">
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
   );
 }
 
@@ -749,10 +721,6 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           ready: player.ready,
           avatar: player.avatar,
           ping: player.ping,
-          statRounds: player.statRounds,
-          statWins: player.statWins,
-          statKills: player.statKills,
-          statSurvivals: player.statSurvivals,
         };
       }
       setMeta((prev) => (metaEqual(prev, next) ? prev : next));
@@ -899,7 +867,6 @@ export function Game({ connection, onBackToMenu }: GameProps) {
               </>
             )}
           </div>
-          {localMeta && <PlayerStatsCard meta={localMeta} />}
         </div>
       )}
 

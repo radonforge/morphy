@@ -35,6 +35,7 @@ import {
 import { isPerfHudEnabled, setPerfHudEnabled } from "../game/prefs";
 import { LobbyStage, STAGE_MAX_ACTORS, type StageActor } from "./LobbyStage";
 import { loadPrefs, savePrefs } from "./prefs";
+import { StatsPane } from "./StatsPane";
 
 export type ConnectStatus =
   | { kind: "idle" }
@@ -67,7 +68,7 @@ interface LobbyProps {
   onJoinParty: (code: string, name: string, avatar: AvatarId) => void;
 }
 
-type PaneId = "identity" | "private" | "options";
+type PaneId = "identity" | "private" | "stats" | "options";
 
 interface NavItem {
   id: PaneId;
@@ -119,6 +120,7 @@ function avatarEmoji(avatar: string): string {
 const NAV_ITEMS: NavItem[] = [
   { id: "identity", label: "Identity" },
   { id: "private", label: "Private" },
+  { id: "stats", label: "Stats" },
   { id: "options", label: "Options" },
 ];
 
@@ -131,6 +133,7 @@ const MAP_GLYPH: Record<MapId, string> = {
 const PANE_TITLES: Record<PaneId, string> = {
   identity: "Identity",
   private: "Private room",
+  stats: "Your stats",
   options: "Options",
 };
 
@@ -615,110 +618,100 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           )}
 
           {pane === "options" && (
-            <>
-              <div className="menu-card">
-                <div className="menu-opt-row">
-                  <span className="l">
-                    <b>Audio</b>
-                    <span>Master switch for every sound</span>
-                  </span>
-                  <button
-                    type="button"
-                    className={`menu-toggle${muted ? "" : " on"}`}
-                    onClick={toggleAudio}
-                    onPointerEnter={playUiHover}
-                    aria-pressed={!muted}
-                    aria-label={muted ? "Unmute audio" : "Mute audio"}
-                  />
-                </div>
-                <div className="menu-opt-row">
-                  <span className="l">
-                    <b>Volume</b>
-                    <span>Master level for effects and interface</span>
-                  </span>
-                  <input
-                    type="range"
-                    className="menu-slider"
-                    min={0}
-                    max={VOLUME_SLIDER_MAX}
-                    value={Math.round(volume * VOLUME_SLIDER_MAX)}
-                    onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                    onPointerUp={playUiClick}
-                    aria-label="Master volume"
-                  />
-                </div>
-                <div className="menu-opt-row">
-                  <span className="l">
-                    <b>Music</b>
-                    <span>Lobby theme by alkakrab</span>
-                  </span>
-                  <button
-                    type="button"
-                    className={`menu-toggle${musicOn ? " on" : ""}`}
-                    onClick={toggleMusic}
-                    onPointerEnter={playUiHover}
-                    aria-pressed={musicOn}
-                    aria-label={musicOn ? "Disable music" : "Enable music"}
-                  />
-                </div>
-                <div className="menu-opt-row">
-                  <span className="l">
-                    <b>Music volume</b>
-                    <span>Level of the lobby theme</span>
-                  </span>
-                  <input
-                    type="range"
-                    className="menu-slider"
-                    min={0}
-                    max={VOLUME_SLIDER_MAX}
-                    value={Math.round(musicVol * VOLUME_SLIDER_MAX)}
-                    onChange={(e) => handleMusicVolumeChange(Number(e.target.value))}
-                    aria-label="Music volume"
-                  />
-                </div>
-                <div className="menu-opt-row">
-                  <span className="l">
-                    <b>Interface sounds</b>
-                    <span>Menu ticks and clicks</span>
-                  </span>
-                  <button
-                    type="button"
-                    className={`menu-toggle${uiSounds ? " on" : ""}`}
-                    onClick={toggleUiSounds}
-                    onPointerEnter={playUiHover}
-                    aria-pressed={uiSounds}
-                    aria-label={uiSounds ? "Disable interface sounds" : "Enable interface sounds"}
-                  />
-                </div>
-                <div className="menu-opt-row">
-                  <span className="l">
-                    <b>Performance readout</b>
-                    <span>FPS and ping in the corner of the match HUD</span>
-                  </span>
-                  <button
-                    type="button"
-                    className={`menu-toggle${perfHud ? " on" : ""}`}
-                    onClick={togglePerfHud}
-                    onPointerEnter={playUiHover}
-                    aria-pressed={perfHud}
-                    aria-label={
-                      perfHud ? "Disable performance readout" : "Enable performance readout"
-                    }
-                  />
-                </div>
+            <div className="menu-card">
+              <div className="menu-opt-row">
+                <span className="l">
+                  <b>Audio</b>
+                  <span>Master switch for every sound</span>
+                </span>
+                <button
+                  type="button"
+                  className={`menu-toggle${muted ? "" : " on"}`}
+                  onClick={toggleAudio}
+                  onPointerEnter={playUiHover}
+                  aria-pressed={!muted}
+                  aria-label={muted ? "Unmute audio" : "Mute audio"}
+                />
               </div>
-              <div className="menu-card menu-locked">
-                <div className="menu-opt-row">
-                  <span className="l">
-                    <b>
-                      Statistics <span className="menu-mini">Soon</span>
-                    </b>
-                    <span>Matches, props flushed out, rounds won — comes with account login</span>
-                  </span>
-                </div>
+              <div className="menu-opt-row">
+                <span className="l">
+                  <b>Volume</b>
+                  <span>Master level for effects and interface</span>
+                </span>
+                <input
+                  type="range"
+                  className="menu-slider"
+                  min={0}
+                  max={VOLUME_SLIDER_MAX}
+                  value={Math.round(volume * VOLUME_SLIDER_MAX)}
+                  onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                  onPointerUp={playUiClick}
+                  aria-label="Master volume"
+                />
               </div>
-            </>
+              <div className="menu-opt-row">
+                <span className="l">
+                  <b>Music</b>
+                  <span>Lobby theme by alkakrab</span>
+                </span>
+                <button
+                  type="button"
+                  className={`menu-toggle${musicOn ? " on" : ""}`}
+                  onClick={toggleMusic}
+                  onPointerEnter={playUiHover}
+                  aria-pressed={musicOn}
+                  aria-label={musicOn ? "Disable music" : "Enable music"}
+                />
+              </div>
+              <div className="menu-opt-row">
+                <span className="l">
+                  <b>Music volume</b>
+                  <span>Level of the lobby theme</span>
+                </span>
+                <input
+                  type="range"
+                  className="menu-slider"
+                  min={0}
+                  max={VOLUME_SLIDER_MAX}
+                  value={Math.round(musicVol * VOLUME_SLIDER_MAX)}
+                  onChange={(e) => handleMusicVolumeChange(Number(e.target.value))}
+                  aria-label="Music volume"
+                />
+              </div>
+              <div className="menu-opt-row">
+                <span className="l">
+                  <b>Interface sounds</b>
+                  <span>Menu ticks and clicks</span>
+                </span>
+                <button
+                  type="button"
+                  className={`menu-toggle${uiSounds ? " on" : ""}`}
+                  onClick={toggleUiSounds}
+                  onPointerEnter={playUiHover}
+                  aria-pressed={uiSounds}
+                  aria-label={uiSounds ? "Disable interface sounds" : "Enable interface sounds"}
+                />
+              </div>
+              <div className="menu-opt-row">
+                <span className="l">
+                  <b>Performance readout</b>
+                  <span>FPS and ping in the corner of the match HUD</span>
+                </span>
+                <button
+                  type="button"
+                  className={`menu-toggle${perfHud ? " on" : ""}`}
+                  onClick={togglePerfHud}
+                  onPointerEnter={playUiHover}
+                  aria-pressed={perfHud}
+                  aria-label={
+                    perfHud ? "Disable performance readout" : "Enable performance readout"
+                  }
+                />
+              </div>
+            </div>
           )}
+
+          {pane === "stats" && <StatsPane />}
         </section>
       )}
     </div>

@@ -68,16 +68,14 @@ import {
   type WeaponId,
   type Winner,
 } from "@morphy/shared";
+import { parseDeviceId } from "../identity";
 import { buildMap } from "../maps";
-import { type PlayerStatTotals, playerStats, type RoundOutcome } from "../stats/repository";
+import { playerStats, type RoundOutcome } from "../stats/repository";
 
 const FALLBACK_NAME = "Player";
 const SPAWN_CLEARANCE = 1.5;
 const PARTY_CODE_MAX_ATTEMPTS = 16;
 const PARTY_CODE_EXHAUSTED_STATUS = 503;
-const DEVICE_ID_MIN_LENGTH = 8;
-const DEVICE_ID_MAX_LENGTH = 64;
-const DEVICE_ID_PATTERN = /^[A-Za-z0-9-]+$/;
 
 export class PlayerState extends Schema {
   @type("string") id = "";
@@ -99,10 +97,6 @@ export class PlayerState extends Schema {
   @type("string") avatar = "";
   @type("string") weapon: WeaponId = DEFAULT_WEAPON;
   @type("uint16") ping = 0;
-  @type("uint32") statRounds = 0;
-  @type("uint32") statWins = 0;
-  @type("uint32") statKills = 0;
-  @type("uint32") statSurvivals = 0;
 }
 
 export class DecoyState extends Schema {
@@ -218,25 +212,6 @@ function parseProfile(payload: unknown): { name: string; avatar: AvatarId } | nu
   const p = payload as Record<string, unknown>;
   if (!isAvatarId(p.avatar)) return null;
   return { name: sanitizeName(p.name), avatar: p.avatar };
-}
-
-/**
- * Narrow the client-supplied device identity. Returns null for anything that is
- * not a plausible opaque token, in which case the session plays without stats
- * being recorded rather than accruing them against a garbage key.
- */
-function parseDeviceId(raw: unknown): string | null {
-  if (typeof raw !== "string") return null;
-  const trimmed = raw.trim();
-  if (trimmed.length < DEVICE_ID_MIN_LENGTH || trimmed.length > DEVICE_ID_MAX_LENGTH) return null;
-  return DEVICE_ID_PATTERN.test(trimmed) ? trimmed : null;
-}
-
-function applyTotals(player: PlayerState, totals: PlayerStatTotals): void {
-  player.statRounds = totals.rounds;
-  player.statWins = totals.wins;
-  player.statKills = totals.kills;
-  player.statSurvivals = totals.survivals;
 }
 
 const UNTRANSFORMED_PROP_BOUNDS: PropBounds = {
@@ -430,14 +405,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     player.y = spawn.y;
     player.z = spawn.z;
     const deviceId = parseDeviceId((options as { deviceId?: unknown } | undefined)?.deviceId);
-    if (deviceId) {
-      this.deviceIds.set(client.sessionId, deviceId);
-      try {
-        applyTotals(player, playerStats.get(deviceId));
-      } catch (error) {
-        console.error(`[morphy] stats load failed for ${client.sessionId}:`, error);
-      }
-    }
+    if (deviceId) this.deviceIds.set(client.sessionId, deviceId);
     this.state.players.set(client.sessionId, player);
     if (this.state.hostId === "") this.state.hostId = client.sessionId;
     this.maybeStartRound();
@@ -820,13 +788,12 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   }
 
   /**
-   * Fold the just-finished round into the lifetime stats of every player who was
-   * present when roles were assigned, and mirror the new totals back into synced
-   * state so the round-end scoreboard and lobby reflect them immediately. Only
-   * the start-of-round roster counts, so a mid-round joiner cannot claim a round.
-   * Runs once per genuinely completed round; rounds aborted to the lobby (too few
-   * players) never reach here. Stat writes are best-effort: a DB failure is
-   * logged and skips that player rather than breaking round progression.
+   * Persist the just-finished round into the lifetime stats of every player who
+   * was present when roles were assigned. Only the start-of-round roster counts,
+   * so a mid-round joiner cannot claim a round. Runs once per genuinely completed
+   * round; rounds aborted to the lobby (too few players) never reach here. Stat
+   * writes are best-effort: a DB failure is logged and skips that player rather
+   * than breaking round progression.
    */
   private recordRoundStats(): void {
     const winner = this.state.winner;
@@ -842,7 +809,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
         survived: player.role === "prop" && player.alive,
       };
       try {
-        applyTotals(player, playerStats.recordRound(deviceId, player.name, outcome));
+        playerStats.recordRound(deviceId, player.name, outcome);
       } catch (error) {
         console.error(`[morphy] stats record failed for ${sessionId}:`, error);
       }

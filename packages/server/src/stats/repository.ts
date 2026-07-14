@@ -1,15 +1,11 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import type { PlayerStatsPayload } from "@morphy/shared";
 import { DB_PATH } from "../config";
 
 /** Cumulative lifetime stats for one device identity. */
-export interface PlayerStatTotals {
-  rounds: number;
-  wins: number;
-  kills: number;
-  survivals: number;
-}
+export type PlayerStatTotals = PlayerStatsPayload;
 
 /** What a single finished round contributed for one player. */
 export interface RoundOutcome {

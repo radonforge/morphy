@@ -1,6 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { COLYSEUS_PROXY_PATH, DEFAULT_PORT } from "../shared/src/constants";
+import { COLYSEUS_PROXY_PATH, DEFAULT_PORT, STATS_PATH } from "../shared/src/constants";
 
 export default defineConfig({
   plugins: [react()],
@@ -13,6 +13,10 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
         rewrite: (path) => path.slice(COLYSEUS_PROXY_PATH.length),
+      },
+      [STATS_PATH]: {
+        target: `http://localhost:${DEFAULT_PORT}`,
+        changeOrigin: true,
       },
     },
     fs: {

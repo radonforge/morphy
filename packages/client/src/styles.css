@@ -156,7 +156,6 @@ canvas {
   inset: 0;
   display: grid;
   place-items: center;
-  gap: 1rem;
   background: rgba(4, 7, 12, 0.66);
 }
 
@@ -234,21 +233,6 @@ canvas {
   font-size: 0.74rem;
   letter-spacing: 0.04em;
   color: var(--muted);
-}
-
-.stats-card {
-  width: min(400px, 90vw);
-  padding: 1.2rem 1.6rem;
-  text-align: center;
-}
-
-.stats-card h3 {
-  font-family: var(--font-mono);
-  font-size: 0.9rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--cyan);
-  margin-bottom: 0.9rem;
 }
 
 .stats-grid {

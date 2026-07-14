@@ -2,6 +2,7 @@ import { defineRoom, defineServer } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
 import { DEFAULT_PORT, ROOM_NAME } from "@morphy/shared";
 import cors from "cors";
+import { registerStatsRoute } from "./http";
 import { MorphyRoom } from "./rooms/MorphyRoom";
 import { playerStats } from "./stats/repository";
 
@@ -15,6 +16,7 @@ const server = defineServer({
   },
   express: (app) => {
     app.use(cors());
+    registerStatsRoute(app);
   },
 });
 

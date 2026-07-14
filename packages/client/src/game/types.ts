@@ -18,10 +18,6 @@ export interface RemotePlayerView {
   ready: boolean;
   avatar: string;
   ping: number;
-  statRounds: number;
-  statWins: number;
-  statKills: number;
-  statSurvivals: number;
 }
 
 export type PlayersRef = { readonly current: Map<string, RemotePlayerView> };
@@ -47,10 +43,6 @@ export interface PlayerMeta {
   ready: boolean;
   avatar: string;
   ping: number;
-  statRounds: number;
-  statWins: number;
-  statKills: number;
-  statSurvivals: number;
 }
 
 export type MetaMap = Record<string, PlayerMeta>;
