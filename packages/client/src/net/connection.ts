@@ -8,6 +8,7 @@ import {
   type PublicJoinOptions,
   ROOM_NAME,
   type RoomJoinOptions,
+  withTimeout,
 } from "@morphy/shared";
 
 const CONNECT_TIMEOUT_MS = 8_000;
@@ -30,19 +31,9 @@ function registerPingEcho(room: Room): void {
   });
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label}: timed out after ${ms}ms`)), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        clearTimeout(timer);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      },
-    );
+function leaveLateRoom(room: Room): void {
+  void room.leave().catch((error: unknown) => {
+    console.warn("[morphy] failed to leave a room resolved after connection timeout", error);
   });
 }
 
@@ -55,6 +46,7 @@ export async function connectToRoom(
     client.joinOrCreate(ROOM_NAME, options),
     CONNECT_TIMEOUT_MS,
     "server connection",
+    leaveLateRoom,
   );
   registerPingEcho(room);
   return { room, sessionId: room.sessionId };
@@ -69,6 +61,7 @@ export async function createPartyRoom(
     client.create(ROOM_NAME, { ...options, private: true } satisfies PartyCreateOptions),
     CONNECT_TIMEOUT_MS,
     "party creation",
+    leaveLateRoom,
   );
   registerPingEcho(room);
   return { room, sessionId: room.sessionId };
@@ -93,6 +86,7 @@ export async function joinPartyRoom(
       client.joinById(normalizePartyCode(code), options),
       CONNECT_TIMEOUT_MS,
       "party join",
+      leaveLateRoom,
     );
     registerPingEcho(room);
     return { room, sessionId: room.sessionId };
