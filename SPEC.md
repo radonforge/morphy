@@ -30,16 +30,16 @@ The round starts from `lobby` when there are at least `MIN_PLAYERS_TO_START` pla
 - **Hunters** win if **all props are converted** (no prop alive).
 - **Props** win if **at least one prop is still alive when** `ROUND_DURATION_MS` **expires**, or if **all hunters self-eliminate** (HP to 0 from missed shots).
 
-The early end is evaluated by the server after each shot.
+The early end is evaluated by the server after each shot, when hunting begins, and when a player leaves.
 
 ## 3. The "caught" mechanic — shoot + penalty
 
 The heart of the balance. The hunter shoots; missing costs.
 
-- **Left click = shot**, with a cooldown (`FIRE_COOLDOWN_MS`) to prevent spam.
-- The client sends `shoot { origin, dir }`. The **server does the raycast** (within `SHOOT_RANGE`) against the authoritative hitboxes of the living props, occluded by walls:
+- **Left click = shot**, with a per-weapon cooldown to prevent spam.
+- The client sends only `shoot { dir }`. The server derives the ray origin from the synchronized player position plus `PLAYER_EYE_HEIGHT`, then performs the raycast within the selected weapon's range against the authoritative hitboxes of living props, occluded by walls:
   - **Hit a prop-player** → **converted**: switches to the **hunters** team (stays in play, first person + weapon) instead of becoming a spectator. **Infection mode**: the round ends when the last prop is converted.
-  - **No prop hit** (wall, void, out of bounds) → **missed shot**: the hunter takes `WRONG_SHOT_DAMAGE`.
+  - **No prop or decoy hit** (wall, void, out of bounds) → **missed shot**: the hunter takes the selected weapon's `missDamage`.
 - A hunter at 0 HP (`HUNTER_MAX_HP`) is **out for the round** (spectator).
 
 **Prop hitbox**: derived from the volume of the prop you morphed into — a vertical cylinder (`computePropBounds`) computed from its primitives, approximated to an AABB server-side. An un-morphed prop uses a fixed hitbox (`UNTRANSFORMED_PROP_RADIUS` × `UNTRANSFORMED_PROP_HEIGHT`). Design consequence: morphing into a large object makes you a larger target.
@@ -56,16 +56,20 @@ Why it works: the penalty turns "shooting at random" into **deduction** — you 
 |---|---|
 | `WASD` / arrows | Movement |
 | `Shift` | Run (everyone; hunter `RUN_MULTIPLIER_HUNTER` > prop `RUN_MULTIPLIER_PROP`) |
-| `Space` | Jump (hunter only) |
+| `Space` | Jump |
 | Mouse | Look rotation (pointer lock; hunter in first person, prop in third) |
 | Left click | Shot (hunter only) |
-| `E` | Morph (prop only): look at a prop in the map within a short distance and press `E` |
+| `R` | Change disguise to another random prop (limited reroll budget) |
+| `Q` / `E` | Rotate the prop disguise |
+| `C` | Drop a decoy of the current disguise (limited budget) |
+| `1` / `2` / `3` | Select hunter weapon |
 | `T` | Chat: opens the input; `Enter` sends, `Esc` closes |
 | `Tab` | Standings (hold) |
 | `M` | Mute / unmute audio |
+| `?` | Open / close the controls panel |
 | `Esc` | Releases the mouse pointer / closes the chat |
 
-**Prop morph**: raycast from the screen center onto a prop from the map catalog + `E` → the player's **visual mesh** becomes that one. The **movement collider stays a fixed-radius circle** (player-sized), so you never get stuck; what changes is the appearance and the shot hitbox (§3), not the movement physics. An MVP choice to avoid getting stuck and physics headaches.
+**Prop disguise**: a prop receives a random catalog entry at role assignment and can spend a limited reroll with `R`. The player's **visual mesh** becomes that object. The **movement collider stays a fixed-radius circle** (player-sized), so you never get stuck; what changes is the appearance and the shot hitbox (§3), not the movement physics. `Q`/`E` rotates the disguise independently of movement, and `C` drops a destructible decoy using the same appearance.
 
 ## 5. Chat
 
@@ -120,7 +124,6 @@ export interface SceneryInstance {    // decorative exterior scenery (no collide
 
 export interface MapDefinition {
   id: string;
-  name: string;
   bounds: { min: Vec3; max: Vec3 };       // movement clamp
   spawnPoints: { props: Vec3[] };         // shared spawn ring; roles assigned in place
   colliders: BoxCollider[];   // static shell (floor + walls + solid scenery)
@@ -163,9 +166,12 @@ Each map is a builder `(seed: number) => MapDefinition` registered in `packages/
 
 ```ts
 // packages/server/src/rooms/MorphyRoom.ts
-PlayerState  { id, name, x, y, z, rot, aim, role: 'hunter'|'prop',
-               alive, hp, kills, propType: string, ready, avatar }
-RoomState    { mapId, phase, phaseEndsAt, winner, players: Map<id, PlayerState> }
+PlayerState  { id, name, x, y, z, rot, aim, propRot, role: 'hunter'|'prop',
+               alive, hp, kills, propType, rerollsLeft, decoysLeft, ready,
+               avatar, weapon, ping }
+DecoyState   { id, x, y, z, rot, propType, owner }
+RoomState    { mapId, phase, phaseEndsAt, winner, hostId, isPrivate,
+               players: Map<id, PlayerState>, decoys: Map<id, DecoyState> }
 ```
 
 Phase, timer (`phaseEndsAt`) and winner live **in the synchronized state**, not in events: the client reads them by polling `room.state`.
@@ -176,20 +182,29 @@ Messages are separate Colyseus channels identified by `MSG_*` constants (`packag
 
 ```ts
 // client → server
-input     { x, y, z, rot, aim }       // position + body heading + look heading
-transform { propType }                // prop morphing
-shoot     { origin, dir }             // shot ray
+input     { x, y, z, rot, aim, propRot } // position, body/look heading, disguise heading
+reroll                                  // random prop disguise, budgeted
+decoy                                   // place a decoy, budgeted and rate-limited
+shoot     { dir }                       // direction only; origin is server-derived
 chat      { text }
 ready     { ready }
 map                                   // request the current MapDefinition
+start                                 // private-room host starts the countdown
+set_map     { map }                   // private-room host changes map in lobby
+set_profile { name, avatar }          // live lobby profile update
+set_weapon  { weapon }
+pong         { n }                    // latency-probe echo
 
 // server → client
-map           MapDefinition           // generated map (also on each new round)
+map           MapDefinition           // generated once per room; rebroadcast after a lobby map change
 teleport      { x, z }                // reposition to spawn
 taunt         { playerId, x, z }
 shot_result   { hit }                 // result of your own shot
+shot_fired    { shooterId, weapon, origin, ends }
+decoy_break   { x, y, z, propType }
 kill          { byId, byName, victimId, victimName, reason }
 chat          { fromId, name, text }
+ping          { n }
 ```
 
 The `reason` of `kill` ∈ `"shot" | "self" | "converted"`. All inbound payloads are **validated at the boundary** by `parse*` helpers that return `null` on invalid input (discarded, never propagated). No `any` in internal code.
@@ -201,7 +216,7 @@ morphy.lol/
   package.json            # pnpm workspaces; dev/typecheck/tunnel scripts
   packages/
     shared/               # contract: types, protocol, constants, map model + catalogs
-      src/{constants,protocol,map,maps,avatars,index}.ts
+      src/{constants,protocol,map,maps,avatars,weapons,geometry,async,index}.ts
     server/               # Colyseus: room + authoritative logic + map builders
       src/index.ts
       src/rooms/MorphyRoom.ts
@@ -209,7 +224,7 @@ morphy.lol/
       src/{furnish,propDef,spaceCatalog,marsCatalog,urbanCatalog}.ts
     client/               # Vite + React + R3F
       src/ui/{App,Lobby,prefs}.tsx   # lobby / connection / saved prefs
-      src/net/connection.ts          # Colyseus SDK
+      src/net/{connection,endpoints,stats}.ts  # Colyseus SDK + HTTP endpoint derivation
       src/game/{Game,Scene,audio,useControls,types}.ts(x)
       public/models/{space,space-station,space-kit,pets,blaster}/  # glTF assets (Kenney)
       index.html
@@ -236,11 +251,9 @@ export const ROUND_END_MS = 8_000;
 export const TAUNT_INTERVAL_MS = 30_000;
 
 export const HUNTER_MAX_HP = 100;
-export const WRONG_SHOT_DAMAGE = 20;
-export const FIRE_COOLDOWN_MS = 800;
-export const SHOOT_RANGE = 50;             // world units
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
+export const PLAYER_EYE_HEIGHT = 1.6;
 
 export const MOVE_SPEED = 5;               // units/s
 export const RUN_MULTIPLIER_HUNTER = 1.7;
@@ -255,34 +268,36 @@ export const MAX_NAME_LENGTH = 16;
 export const MAX_CHAT_LENGTH = 200;
 ```
 
-Client-side server URL from the `VITE_SERVER_URL` env; default = same origin + `COLYSEUS_PROXY_PATH` (`/colyseus`), which Vite proxies to the server in dev. Server port from the `PORT` env (default `2567`).
+Weapon range, cooldown, pellet spread and miss damage live in `packages/shared/src/weapons.ts`, keyed by weapon id. Client-side server URL comes from `VITE_SERVER_URL`; default = same origin + `COLYSEUS_PROXY_PATH` (`/colyseus`), which Vite proxies to the server in dev. The stats HTTP URL is derived from that same endpoint. Server port comes from `PORT` (default `2567`).
 
 ## 9. How to play (LAN-first → cloud)
 
 - **Dev / LAN**: the host starts everything with `pnpm dev` (Colyseus server on `:2567`, Vite on `:5173`). Vite exposes on the network (`host: true`) and **proxies** `/colyseus` to the server, also deriving the WebSocket. Teammates open `http://<host-ip>:5173`: the client talks to the server through the proxy, **without configuring anything**. Alternatively you can point to a separate server with `VITE_SERVER_URL`.
 - **Remote**: `pnpm tunnel` (ngrok on `5173`, optional `NGROK_DOMAIN`) exposes a single tunnel covering both client and WebSocket; the ngrok domain is already in Vite's `allowedHosts`.
-- **Cloud (Phase 2)**: the **same** Colyseus server deploys to fly.io/render; only the URL changes. Authoritative server = clients don't know where the others are (no trivial wallhacks).
+- **Cloud**: the production workflow publishes the server image under the immutable commit SHA, rsyncs the built client, and deploys that exact server tag behind nginx. Only the configured public URL changes.
 
 ## 10. Scope
 
 ### Implemented (baseline)
 - Three hand-authored, themed maps (station / Mars / urban) picked in the lobby, each seed-varied (tile/furnishing/scenery variation) with its own prop catalog (~29 station props)
-- Lobby with map + avatar pickers, name + ready
+- Public matchmaking plus code-protected private rooms with host-controlled map/start
+- Lobby with map, avatar and weapon pickers, name + ready
 - Complete round state machine (incl. `hiding` phase with hunters locked and blacked out)
 - WASD movement + mouse look (hunter first person, prop third person), run and jump
-- Prop morph (`E`), fixed-radius movement collider
-- Shooting with a penalty on missed shot, server-side hit resolution, cooldown, infection model
+- Random prop disguise with limited rerolls, manual rotation, fixed-radius movement collider and decoys
+- Three hunter weapons, penalty on missed shot, server-derived shot origin, server-side hit resolution and infection model
 - Mandatory taunt (positional audio + wiggle)
 - `T` chat, `Tab` standings, kill feed, result screen + return to lobby
 - Random animal avatars (cube-pets) per player
 - Runtime-synthesized audio (Web Audio), shadows, persistent mute
 - Spectator after a hunter self-eliminates
+- Per-device lifetime rounds, wins, captures and survivals persisted in SQLite
 
 ### Phase 2 (unlocked by the structure, not now)
 - More themes/catalogs; further art/polish
-- Persistent scores/leaderboards, between-round statistics
+- Public leaderboards and richer between-round statistics
 - Selectable skins/variants, emotes, manual taunts
-- Reconnection, room persistence, public cloud deploy
+- Reconnection and room persistence across server restarts
 - Mobile/touch
 
 ### Non-goals (for now)

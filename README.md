@@ -4,8 +4,8 @@ Browser multiplayer prop hunt. Low-poly 3D, LAN-first. See [`SPEC.md`](./SPEC.md
 
 ## Requirements
 
-- Node ≥ 20
-- pnpm
+- Node ≥ 24
+- pnpm 11 (the pinned version is declared in `package.json`)
 
 ## Setup
 
@@ -32,8 +32,10 @@ pnpm dev:client
 ## Checks
 
 ```bash
-pnpm typecheck   # tsc --noEmit across all packages (the only required gate)
+pnpm typecheck   # tsc --noEmit across all packages
 pnpm check       # Biome lint + format check
+pnpm test        # boundary, map, bot, storage and room regression tests
+pnpm ci          # the non-mutating Biome gate used in CI
 ```
 
 ## LAN play
@@ -56,7 +58,9 @@ Set `NGROK_DOMAIN` to use a reserved domain.
 
 ## Status
 
-Playable: lobby with map + avatar pickers and name + ready; full round state machine
+Playable: public matchmaking and private party rooms; lobby with map, avatar and weapon pickers,
+name and ready state; full round state machine
 (`lobby → starting → hiding → hunting → round_end`); server-authoritative roles, HP, shooting
-(infection capture) and win conditions; client-side movement + collision; prop morphing; chat,
-standings and kill feed; runtime-synthesized audio. See `SPEC.md` §10 for the roadmap.
+(infection capture), decoys and win conditions; client-side movement + collision; prop disguises;
+chat, standings, kill feed and persistent lifetime stats; runtime-synthesized audio. See `SPEC.md`
+§10 for the roadmap.
