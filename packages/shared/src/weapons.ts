@@ -67,5 +67,5 @@ export const WEAPON_IDS: WeaponId[] = ["pistol", "shotgun", "rifle"];
 export const DEFAULT_WEAPON: WeaponId = "pistol";
 
 export function isWeaponId(value: unknown): value is WeaponId {
-  return typeof value === "string" && value in WEAPONS;
+  return typeof value === "string" && Object.hasOwn(WEAPONS, value);
 }

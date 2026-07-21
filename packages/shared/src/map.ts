@@ -100,7 +100,6 @@ export interface MapBounds {
 
 export interface MapDefinition {
   id: string;
-  name: string;
   bounds: MapBounds;
   spawnPoints: { props: Vec3[] };
   colliders: BoxCollider[];
@@ -110,7 +109,7 @@ export interface MapDefinition {
   propCatalog: PropDefinition[];
 }
 
-class MapValidationError extends Error {
+export class MapValidationError extends Error {
   constructor(mapId: string, detail: string) {
     super(`invalid map "${mapId}": ${detail}`);
     this.name = "MapValidationError";
@@ -121,13 +120,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
 function isVec3(value: unknown): value is Vec3 {
   return (
-    isRecord(value) &&
-    typeof value.x === "number" &&
-    typeof value.y === "number" &&
-    typeof value.z === "number"
+    isRecord(value) && isFiniteNumber(value.x) && isFiniteNumber(value.y) && isFiniteNumber(value.z)
   );
+}
+
+function isPositiveVec3(value: unknown): value is Vec3 {
+  return isVec3(value) && value.x > 0 && value.y > 0 && value.z > 0;
 }
 
 function vec3List(value: unknown): value is Vec3[] {
@@ -140,7 +144,7 @@ function isPrimitive(value: unknown): value is PrimitiveSpec {
     typeof value.kind === "string" &&
     PRIMITIVE_KINDS.includes(value.kind as PrimitiveKind) &&
     isVec3(value.position) &&
-    isVec3(value.size) &&
+    isPositiveVec3(value.size) &&
     typeof value.color === "string"
   );
 }
@@ -153,7 +157,7 @@ function isPropDefinition(value: unknown): value is PropDefinition {
     Array.isArray(value.parts) &&
     value.parts.every(isPrimitive) &&
     (value.model === undefined || typeof value.model === "string") &&
-    (value.modelScale === undefined || typeof value.modelScale === "number")
+    (value.modelScale === undefined || (isFiniteNumber(value.modelScale) && value.modelScale > 0))
   );
 }
 
@@ -162,12 +166,12 @@ function isPropInstance(value: unknown): value is PropInstance {
     isRecord(value) &&
     typeof value.type === "string" &&
     isVec3(value.position) &&
-    typeof value.rotation === "number"
+    isFiniteNumber(value.rotation)
   );
 }
 
 function isBoxCollider(value: unknown): value is BoxCollider {
-  return isRecord(value) && isVec3(value.position) && isVec3(value.size);
+  return isRecord(value) && isVec3(value.position) && isPositiveVec3(value.size);
 }
 
 function isTileInstance(value: unknown): value is TileInstance {
@@ -175,9 +179,9 @@ function isTileInstance(value: unknown): value is TileInstance {
     isRecord(value) &&
     typeof value.model === "string" &&
     isVec3(value.position) &&
-    typeof value.rotationY === "number" &&
-    (value.scale === undefined || typeof value.scale === "number") &&
-    (value.scaleY === undefined || typeof value.scaleY === "number")
+    isFiniteNumber(value.rotationY) &&
+    (value.scale === undefined || (isFiniteNumber(value.scale) && value.scale > 0)) &&
+    (value.scaleY === undefined || (isFiniteNumber(value.scaleY) && value.scaleY > 0))
   );
 }
 
@@ -186,8 +190,9 @@ function isSceneryInstance(value: unknown): value is SceneryInstance {
     isRecord(value) &&
     typeof value.model === "string" &&
     isVec3(value.position) &&
-    typeof value.rotationY === "number" &&
-    typeof value.scale === "number"
+    isFiniteNumber(value.rotationY) &&
+    isFiniteNumber(value.scale) &&
+    value.scale > 0
   );
 }
 
@@ -203,14 +208,14 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
   if (id === "?") {
     throw new MapValidationError(id, "missing string field 'id'");
   }
-  if (typeof raw.name !== "string") {
-    throw new MapValidationError(id, "missing string field 'name'");
-  }
   if (!isRecord(raw.bounds) || !isVec3(raw.bounds.min) || !isVec3(raw.bounds.max)) {
     throw new MapValidationError(id, "field 'bounds' must have Vec3 'min' and 'max'");
   }
   if (!isRecord(raw.spawnPoints) || !vec3List(raw.spawnPoints.props)) {
     throw new MapValidationError(id, "field 'spawnPoints' must have Vec3[] 'props'");
+  }
+  if (raw.spawnPoints.props.length === 0) {
+    throw new MapValidationError(id, "field 'spawnPoints.props' must not be empty");
   }
   if (!Array.isArray(raw.colliders) || !raw.colliders.every(isBoxCollider)) {
     throw new MapValidationError(id, "field 'colliders' must be BoxCollider[]");
@@ -232,7 +237,30 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
     throw new MapValidationError(id, "field 'propCatalog' must be PropDefinition[]");
   }
 
-  const catalogIds = new Set(raw.propCatalog.map((p) => p.id));
+  const { min, max } = raw.bounds;
+  if (min.x >= max.x || min.y >= max.y || min.z >= max.z) {
+    throw new MapValidationError(id, "field 'bounds' must have min < max on every axis");
+  }
+  for (const spawn of raw.spawnPoints.props) {
+    if (
+      spawn.x < min.x ||
+      spawn.x > max.x ||
+      spawn.y < min.y ||
+      spawn.y > max.y ||
+      spawn.z < min.z ||
+      spawn.z > max.z
+    ) {
+      throw new MapValidationError(id, "spawn point lies outside map bounds");
+    }
+  }
+
+  const catalogIds = new Set<string>();
+  for (const definition of raw.propCatalog) {
+    if (catalogIds.has(definition.id)) {
+      throw new MapValidationError(id, `prop catalog contains duplicate id '${definition.id}'`);
+    }
+    catalogIds.add(definition.id);
+  }
   for (const instance of raw.props) {
     if (!catalogIds.has(instance.type)) {
       throw new MapValidationError(id, `prop instance references unknown type '${instance.type}'`);
@@ -241,7 +269,6 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
 
   return {
     id,
-    name: raw.name,
     bounds: { min: raw.bounds.min, max: raw.bounds.max },
     spawnPoints: { props: raw.spawnPoints.props },
     colliders: raw.colliders,

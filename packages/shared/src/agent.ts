@@ -34,7 +34,6 @@ export type Intent =
   | (IntentMeta & { kind: "hideAs"; x: number; z: number })
   | (IntentMeta & { kind: "inspect"; targetId: string })
   | (IntentMeta & { kind: "shootTarget"; targetId: string })
-  | (IntentMeta & { kind: "taunt" })
   | (IntentMeta & { kind: "chat"; text: string });
 
 export type IntentKind = Intent["kind"];
@@ -89,7 +88,6 @@ export interface ObservedMap {
   bounds: MapBounds;
   doorways: ObservedDoorway[];
   nearbyProps: ObservedProp[];
-  propCatalogIds: string[];
 }
 
 /** The compact JSON snapshot handed to a {@link Policy.decide} call. */
@@ -144,6 +142,11 @@ function plainString(value: unknown, field: string, Err: ErrorCtor): string {
   return value;
 }
 
+function strictBoolean(value: unknown, field: string, Err: ErrorCtor): boolean {
+  if (typeof value !== "boolean") throw new Err(`field '${field}' must be a boolean`);
+  return value;
+}
+
 function parseRole(value: unknown, Err: ErrorCtor): Role {
   if (value === "hunter" || value === "prop") return value;
   throw new Err(`field 'role' must be 'hunter' or 'prop'`);
@@ -167,14 +170,12 @@ export function parseIntent(raw: unknown): Intent {
       return { kind: "idle", ...meta };
     case "patrol":
       return { kind: "patrol", ...meta };
-    case "taunt":
-      return { kind: "taunt", ...meta };
     case "moveTo":
       return {
         kind: "moveTo",
         x: finiteNumber(raw.x, "x", IntentValidationError),
         z: finiteNumber(raw.z, "z", IntentValidationError),
-        run: raw.run === true,
+        run: strictBoolean(raw.run, "run", IntentValidationError),
         ...meta,
       };
     case "hideAs":
@@ -211,13 +212,13 @@ function parseObservedSelf(raw: unknown): ObservedSelf {
   if (!isRecord(raw)) throw new ObservationValidationError("field 'self' is not an object");
   return {
     role: parseRole(raw.role, ObservationValidationError),
-    alive: raw.alive === true,
+    alive: strictBoolean(raw.alive, "self.alive", ObservationValidationError),
     hp: finiteNumber(raw.hp, "self.hp", ObservationValidationError),
     x: finiteNumber(raw.x, "self.x", ObservationValidationError),
     z: finiteNumber(raw.z, "self.z", ObservationValidationError),
     rot: finiteNumber(raw.rot, "self.rot", ObservationValidationError),
     propType: plainString(raw.propType, "self.propType", ObservationValidationError),
-    canShootNow: raw.canShootNow === true,
+    canShootNow: strictBoolean(raw.canShootNow, "self.canShootNow", ObservationValidationError),
   };
 }
 
@@ -228,15 +229,31 @@ function parseObservedEntity(raw: unknown): ObservedEntity {
     x: finiteNumber(raw.x, "entity.x", ObservationValidationError),
     z: finiteNumber(raw.z, "entity.z", ObservationValidationError),
     distance: finiteNumber(raw.distance, "entity.distance", ObservationValidationError),
-    hasLineOfSight: raw.hasLineOfSight === true,
+    hasLineOfSight: strictBoolean(
+      raw.hasLineOfSight,
+      "entity.hasLineOfSight",
+      ObservationValidationError,
+    ),
   };
   if (raw.role !== undefined) entity.role = parseRole(raw.role, ObservationValidationError);
-  if (raw.alive !== undefined) entity.alive = raw.alive === true;
+  if (raw.alive !== undefined)
+    entity.alive = strictBoolean(raw.alive, "entity.alive", ObservationValidationError);
   if (raw.propType !== undefined)
     entity.propType = plainString(raw.propType, "entity.propType", ObservationValidationError);
-  if (raw.looksLikeProp !== undefined) entity.looksLikeProp = raw.looksLikeProp === true;
-  if (raw.movedRecently !== undefined) entity.movedRecently = raw.movedRecently === true;
-  if (raw.facingMe !== undefined) entity.facingMe = raw.facingMe === true;
+  if (raw.looksLikeProp !== undefined)
+    entity.looksLikeProp = strictBoolean(
+      raw.looksLikeProp,
+      "entity.looksLikeProp",
+      ObservationValidationError,
+    );
+  if (raw.movedRecently !== undefined)
+    entity.movedRecently = strictBoolean(
+      raw.movedRecently,
+      "entity.movedRecently",
+      ObservationValidationError,
+    );
+  if (raw.facingMe !== undefined)
+    entity.facingMe = strictBoolean(raw.facingMe, "entity.facingMe", ObservationValidationError);
   return entity;
 }
 
@@ -267,8 +284,6 @@ function parseObservedMap(raw: unknown): ObservedMap {
     throw new ObservationValidationError("field 'map.doorways' must be an array");
   if (!Array.isArray(raw.nearbyProps))
     throw new ObservationValidationError("field 'map.nearbyProps' must be an array");
-  if (!Array.isArray(raw.propCatalogIds))
-    throw new ObservationValidationError("field 'map.propCatalogIds' must be an array");
   return {
     bounds: parseBounds(raw.bounds),
     doorways: raw.doorways.map((d) => {
@@ -286,9 +301,6 @@ function parseObservedMap(raw: unknown): ObservedMap {
         z: finiteNumber(p.z, "nearbyProp.z", ObservationValidationError),
       };
     }),
-    propCatalogIds: raw.propCatalogIds.map((id) =>
-      nonEmptyString(id, "propCatalogId", ObservationValidationError),
-    ),
   };
 }
 
@@ -319,7 +331,7 @@ export function parseObservation(raw: unknown): Observation {
     seq: finiteNumber(raw.seq, "seq", ObservationValidationError),
     visibility: raw.visibility,
     phase,
-    pathBlocked: raw.pathBlocked === true,
+    pathBlocked: strictBoolean(raw.pathBlocked, "pathBlocked", ObservationValidationError),
     self: parseObservedSelf(raw.self),
     entities: raw.entities.map((e) => parseObservedEntity(e)),
     map: parseObservedMap(raw.map),
