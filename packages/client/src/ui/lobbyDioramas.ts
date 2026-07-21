@@ -1,0 +1,83 @@
+import type { MapId } from "@morphy/shared";
+
+export interface SetPiece {
+  url: string;
+  position: [number, number, number];
+  rotationY?: number;
+  scale?: number;
+}
+
+const mod = (name: string): string => `/models/space/modular/${name}.glb`;
+const sta = (name: string): string => `/models/space/station/${name}.glb`;
+const ext = (name: string): string => `/models/space/exterior/${name}.glb`;
+const urb = (name: string): string => `/models/urban/${name}.glb`;
+
+/** Model set pieces rendered behind the lobby for each selected map. */
+export const LOBBY_DIORAMAS: Record<MapId, SetPiece[]> = {
+  station: [
+    { url: mod("gate-door-window"), position: [0, 0, -11] },
+    { url: mod("template-wall"), position: [-4, 0, -11] },
+    { url: mod("template-wall"), position: [4, 0, -11] },
+    { url: mod("template-wall-top"), position: [-8, 0, -11] },
+    { url: mod("template-wall-top"), position: [8, 0, -11] },
+    { url: mod("template-wall"), position: [-12, 0, -11] },
+    { url: mod("template-wall"), position: [12, 0, -11] },
+    { url: mod("template-wall"), position: [-16, 0, -11] },
+    { url: mod("template-wall"), position: [16, 0, -11] },
+    { url: mod("template-detail"), position: [-10, 0, -8] },
+    { url: mod("template-detail"), position: [10, 0, -8] },
+    { url: mod("cables"), position: [-6.5, 0, -9.8] },
+    { url: mod("cables"), position: [5.5, 0, -9.9], rotationY: 1.6 },
+    { url: sta("container-tall"), position: [-3.4, 0, -5.2], rotationY: 0.4, scale: 2.4 },
+    { url: sta("container-wide"), position: [-4.6, 0, -6.4], rotationY: -0.2, scale: 2.4 },
+    { url: sta("container"), position: [-2.5, 0, -6.8], rotationY: 0.9, scale: 2.4 },
+    { url: sta("skip"), position: [-6.2, 0, -4.8], rotationY: 0.7, scale: 2.4 },
+    { url: sta("computer-wide"), position: [3.6, 0, -6], rotationY: -0.55, scale: 2.6 },
+    { url: sta("chair"), position: [4.8, 0, -5], rotationY: -2.4, scale: 2.6 },
+    { url: sta("table-display-planet"), position: [7.6, 0, -9.4], rotationY: -0.8, scale: 3.2 },
+  ],
+  mars: [
+    { url: ext("hangar_smallA"), position: [8.5, 0, -17], rotationY: -0.5, scale: 3.5 },
+    { url: ext("hangar_smallB"), position: [-8, 0, -20], rotationY: 0.4, scale: 3.5 },
+    { url: ext("satelliteDish_large"), position: [-3.5, 0, -13], rotationY: -0.3, scale: 2 },
+    { url: ext("machine_generatorLarge"), position: [4, 0, -8.5], rotationY: 0.3, scale: 2 },
+    { url: ext("craft_speederA"), position: [-5, 0, -6.5], rotationY: 0.9, scale: 1.8 },
+    { url: ext("craterLarge"), position: [-5.5, 0, -3], rotationY: 0.5, scale: 3.5 },
+    { url: ext("crater"), position: [3, 0, -4], rotationY: 1.8, scale: 3 },
+    { url: ext("rocks_smallA"), position: [-3.5, 0, -3.2], rotationY: 0.7, scale: 2.5 },
+    { url: ext("rock_largeA"), position: [5.5, 0, -5.5], rotationY: 1.2, scale: 2.5 },
+    { url: ext("meteor"), position: [1, 0, -9], rotationY: 2.1, scale: 1.5 },
+    { url: ext("rocket_baseA"), position: [3.7, 0, -18.1], scale: 2.4 },
+    { url: ext("rocket_sidesA"), position: [3.7, 3.84, -18.1], scale: 2.4 },
+    { url: ext("rocket_topA"), position: [3.7, 6.24, -18.1], scale: 2.4 },
+    { url: ext("rocket_fuelA"), position: [6.7, 0, -15.6], scale: 2.4 },
+    { url: ext("astronautA"), position: [-6.7, 0, -7.6], scale: 1.6 },
+    { url: ext("rover"), position: [1.5, 0, -10], scale: 2 },
+    { url: ext("machine_wireless"), position: [-12.9, 0, -11.3], scale: 2.2 },
+    { url: ext("barrels"), position: [-10.2, 0, -10.1], scale: 2.2 },
+    { url: ext("rock_crystalsLargeA"), position: [-9.5, 0, -7.5], scale: 2 },
+  ],
+  urban: [
+    { url: urb("roads/road-straight"), position: [-8, -0.05, -1], scale: 4 },
+    { url: urb("roads/road-straight"), position: [-4, -0.05, -1], scale: 4 },
+    { url: urb("roads/road-crossing"), position: [0, -0.05, -1], scale: 4 },
+    { url: urb("roads/road-straight"), position: [4, -0.05, -1], scale: 4 },
+    { url: urb("roads/road-straight"), position: [8, -0.05, -1], scale: 4 },
+    { url: urb("commercial/building-g"), position: [-11.1, 0, -10.3], scale: 6 },
+    { url: urb("commercial/building-a"), position: [-5.5, 0, -10], scale: 6 },
+    { url: urb("commercial/building-d"), position: [-0.4, 0, -10.2], scale: 6 },
+    { url: urb("commercial/building-skyscraper-a"), position: [6.2, 0, -10], scale: 6 },
+    { url: urb("commercial/building-h"), position: [12.9, 0, -10.3], scale: 6 },
+    { url: urb("roads/light-curved"), position: [-8, 0, -4.2], rotationY: Math.PI, scale: 6 },
+    { url: urb("roads/light-curved"), position: [6, 0, -4.2], rotationY: Math.PI, scale: 6 },
+    { url: urb("tree-large"), position: [-11.5, 0, -4.6], scale: 6 },
+    { url: urb("tree-small"), position: [10.5, 0, -4.6], rotationY: 0.8, scale: 6 },
+    { url: urb("planter"), position: [2.5, 0, -4.4], rotationY: -0.2, scale: 6 },
+    { url: urb("roads/construction-cone"), position: [-4.6, 0, -2.2], scale: 6 },
+    { url: urb("roads/construction-cone"), position: [-5.3, 0, -2.7], scale: 6 },
+  ],
+};
+
+export const LOBBY_DIORAMA_MODEL_PATHS = [
+  ...new Set(Object.values(LOBBY_DIORAMAS).flatMap((pieces) => pieces.map((piece) => piece.url))),
+];
