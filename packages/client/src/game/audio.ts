@@ -336,19 +336,23 @@ export function startLobbyMusic(): void {
       return;
     }
     if (!musicWanted || musicSource) return;
-    const gain = e.ctx.createGain();
-    gain.gain.value = 0;
-    gain.connect(e.master);
-    const src = e.ctx.createBufferSource();
-    src.buffer = buffer;
-    src.loop = true;
-    src.connect(gain);
-    src.onended = () => gain.disconnect();
-    const now = e.ctx.currentTime;
-    gain.gain.setTargetAtTime(musicVolume, now, MUSIC_FADE_IN_S);
-    src.start(now);
-    musicSource = src;
-    musicGain = gain;
+    try {
+      const gain = e.ctx.createGain();
+      gain.gain.value = 0;
+      gain.connect(e.master);
+      const src = e.ctx.createBufferSource();
+      src.buffer = buffer;
+      src.loop = true;
+      src.connect(gain);
+      src.onended = () => gain.disconnect();
+      const now = e.ctx.currentTime;
+      gain.gain.setTargetAtTime(musicVolume, now, MUSIC_FADE_IN_S);
+      src.start(now);
+      musicSource = src;
+      musicGain = gain;
+    } catch {
+      musicWanted = false;
+    }
   });
 }
 
