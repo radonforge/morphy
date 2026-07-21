@@ -1933,3 +1933,14 @@ canvas {
     animation: none;
   }
 }
+/* Route-level fallback while the game-only bundle is loaded. */
+.game-loading {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: #070b12;
+  color: #dcecff;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

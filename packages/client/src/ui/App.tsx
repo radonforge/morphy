@@ -1,6 +1,5 @@
 import {
   type AvatarId,
-  COLYSEUS_PROXY_PATH,
   type MapId,
   MSG_SET_MAP,
   MSG_SET_PROFILE,
@@ -8,18 +7,16 @@ import {
   type SetMapMessage,
   type SetProfileMessage,
 } from "@morphy/shared";
-import { useCallback, useEffect, useState } from "react";
-import { Game } from "../game/Game";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { type Connection, connectToRoom, createPartyRoom, joinPartyRoom } from "../net/connection";
+import { SERVER_URL } from "../net/endpoints";
 import { usePartyRoom } from "../net/usePartyRoom";
 import { getDeviceId } from "../storage";
 import { type ConnectStatus, Lobby, type PartyViewProps } from "./Lobby";
 
-const SERVER_URL =
-  (import.meta.env.VITE_SERVER_URL as string | undefined) ??
-  `${window.location.origin}${COLYSEUS_PROXY_PATH}`;
-
 type View = "menu" | "party" | "game";
+
+const Game = lazy(() => import("../game/Game").then((module) => ({ default: module.Game })));
 
 export function App() {
   const [connection, setConnection] = useState<Connection | null>(null);
@@ -105,7 +102,11 @@ export function App() {
   const handleBackToMenu = useCallback(() => setView("party"), []);
 
   if (view === "game" && connection) {
-    return <Game connection={connection} onBackToMenu={handleBackToMenu} />;
+    return (
+      <Suspense fallback={<div className="game-loading">Loading match…</div>}>
+        <Game connection={connection} onBackToMenu={handleBackToMenu} />
+      </Suspense>
+    );
   }
 
   const partyProps: PartyViewProps | null =

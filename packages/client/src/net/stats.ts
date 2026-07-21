@@ -1,4 +1,5 @@
-import { type PlayerStatsPayload, STATS_PATH } from "@morphy/shared";
+import type { PlayerStatsPayload } from "@morphy/shared";
+import { STATS_URL } from "./endpoints";
 
 const STATS_TIMEOUT_MS = 8_000;
 const DEVICE_ID_HEADER = "x-device-id";
@@ -16,15 +17,16 @@ function isStatsPayload(value: unknown): value is PlayerStatsPayload {
 
 /**
  * Fetch this device's lifetime stats from the game server's HTTP endpoint. The
- * device id travels in a header, never the URL. Resolves the same origin the app
- * is served from (Vite proxies it in dev; a reverse proxy forwards it in prod).
+ * device id travels in a header, never the URL. The URL is derived from the
+ * configured Colyseus endpoint, so direct standalone servers work as well as
+ * the same-origin Vite/nginx proxy.
  * Throws on network error, non-2xx, timeout, or a malformed body.
  */
 export async function fetchStats(deviceId: string): Promise<PlayerStatsPayload> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), STATS_TIMEOUT_MS);
   try {
-    const res = await fetch(`${window.location.origin}${STATS_PATH}`, {
+    const res = await fetch(STATS_URL, {
       headers: { [DEVICE_ID_HEADER]: deviceId },
       signal: controller.signal,
     });
