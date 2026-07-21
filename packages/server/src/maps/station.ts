@@ -141,7 +141,6 @@ export function buildStation(seed: number): MapDefinition {
 
   return {
     id: "station",
-    name: "Stazione Kepler-9",
     bounds: {
       min: { x: -grid.halfW, y: 0, z: -grid.halfD },
       max: { x: grid.halfW, y: WALL_HEIGHT, z: grid.halfD },

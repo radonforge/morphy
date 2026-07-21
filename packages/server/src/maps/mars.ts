@@ -143,6 +143,21 @@ const BARRIER_ROCKS: SolidModel[] = [
   { model: "meteor_detailed", scale: 3.2, ox: 2.0, oz: 1.5, hx: 0.433, hz: 0.413, hy: 0.735 },
 ];
 
+/** Every scenery model path that {@link buildMars} can emit for any seed. */
+export const MARS_SCENERY_MODEL_PATHS = [
+  ...new Set(
+    [
+      ...ROCKET_PARTS.map((item) => item.model),
+      ...CRAFT.map((item) => item.model),
+      ...BIG_ROCKS.map((item) => item.model),
+      ...SOLID_DEBRIS.map((item) => item.model),
+      ...FLAT_DECOR,
+      ...BARRIER_ROCKS.map((item) => item.model),
+      "hangar_largeA",
+    ].map(ex),
+  ),
+];
+
 const PROP_COUNT = 56;
 const PROP_SPAWN_TARGET = 16;
 const PLACE_ATTEMPTS = 24;
@@ -390,7 +405,6 @@ export function buildMars(seed: number): MapDefinition {
 
   return {
     id: "mars",
-    name: "Avamposto Ares",
     bounds: {
       min: { x: -BOUND, y: 0, z: -BOUND },
       max: { x: BOUND, y: 12, z: BOUND },

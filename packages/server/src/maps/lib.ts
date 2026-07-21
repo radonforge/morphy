@@ -29,6 +29,15 @@ const WALL_VARIANTS: WeightedModel[] = [
   { model: "/models/space/modular/template-wall-detail-a.glb", weight: 3 },
 ];
 
+/** Every model path that {@link emitFloorplan} can emit for any seed. */
+export const FLOORPLAN_MODEL_PATHS = [
+  ...new Set(
+    [GATE_MODEL, ...FLOOR_VARIANTS, ...WALL_VARIANTS].map((entry) =>
+      typeof entry === "string" ? entry : entry.model,
+    ),
+  ),
+];
+
 /** Deterministic mulberry32 PRNG seeded by `seed`. */
 export function makeRng(seed: number): () => number {
   let s = seed >>> 0;

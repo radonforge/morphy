@@ -74,6 +74,15 @@ const INDUSTRIAL: { kit: string; models: BModel[] } = {
   ],
 };
 
+/** Every tile/scenery model path that {@link buildUrban} can emit for any seed. */
+export const URBAN_SCENERY_MODEL_PATHS = [
+  ROAD_STRAIGHT,
+  ROAD_CROSS,
+  ...[RESIDENTIAL, COMMERCIAL, INDUSTRIAL].flatMap((zone) =>
+    zone.models.map((model) => `/models/${zone.kit}/${model.id}.glb`),
+  ),
+];
+
 const BUILD_TARGET_MIN = 8.5;
 const BUILD_TARGET_MAX = 10.5;
 const EMPTY_LOT_CHANCE = 0.22;
@@ -216,6 +225,7 @@ export function buildUrban(seed: number): MapDefinition {
       const z = c.z + randRange(rng, -2, 2);
       if (nearCenter(x, z, PLAZA_CLEAR)) continue;
       if (!clearOf(x, z, 1.2, buildingObstacles, 0.3)) continue;
+      if (!clearOf(x, z, 1.2, placed, 0.3)) continue;
       if (!clearOf(x, z, 1.2, spawnObstacles, 5)) continue;
       propSpawns.push({ x, y: 0, z });
       spawnObstacles.push({ x, z, r: 1.2 });
@@ -224,7 +234,6 @@ export function buildUrban(seed: number): MapDefinition {
 
   return {
     id: "urban",
-    name: "Distretto Nord",
     bounds: {
       min: { x: -BOUND, y: 0, z: -BOUND },
       max: { x: BOUND, y: 40, z: BOUND },
