@@ -63,7 +63,6 @@ import type {
   TeleportRef,
 } from "./types";
 
-const STATE_POLL_MS = 200;
 const COUNTDOWN_TICK_MS = 250;
 const TAUNT_MAX_DISTANCE = 40;
 const SHOT_SOUND_MAX_DISTANCE = 60;
@@ -99,6 +98,20 @@ interface RoomStateView {
   hostId: string;
   isPrivate: boolean;
 }
+
+const PLAYER_META_FIELDS = [
+  "name",
+  "role",
+  "alive",
+  "hp",
+  "kills",
+  "propType",
+  "rerollsLeft",
+  "decoysLeft",
+  "ready",
+  "avatar",
+  "ping",
+] as const;
 
 interface ChatLine {
   key: number;
@@ -386,6 +399,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   const chatOpenRef = useRef(false);
   const fxSeq = useRef(0);
   const muzzleSeq = useRef(0);
+  const killTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
 
   const [map, setMap] = useState<MapDefinition | null>(null);
   const [ids, setIds] = useState<string[]>([]);
@@ -424,22 +438,66 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   useEffect(() => {
     const callbacks = Callbacks.get(room);
     const unsubscribers: Array<() => void> = [];
+    const playerMetaUnsubscribers = new Map<string, Array<() => void>>();
+
+    const syncRoomMeta = () => {
+      const view = room.state as unknown as RoomStateView;
+      setPhase((prev) => (prev === view.phase ? prev : view.phase));
+      setPhaseEndsAt((prev) => (prev === view.phaseEndsAt ? prev : view.phaseEndsAt));
+      setWinner((prev) => (prev === view.winner ? prev : view.winner));
+      setHostId((prev) => (prev === view.hostId ? prev : view.hostId));
+      setIsPrivate((prev) => (prev === view.isPrivate ? prev : view.isPrivate));
+    };
+
+    const syncPlayerMeta = () => {
+      const next: MetaMap = {};
+      for (const [id, player] of playersRef.current) {
+        next[id] = {
+          name: player.name,
+          role: player.role,
+          alive: player.alive,
+          hp: player.hp,
+          kills: player.kills,
+          propType: player.propType,
+          rerollsLeft: player.rerollsLeft,
+          decoysLeft: player.decoysLeft,
+          ready: player.ready,
+          avatar: player.avatar,
+          ping: player.ping,
+        };
+      }
+      setMeta((prev) => (metaEqual(prev, next) ? prev : next));
+    };
 
     unsubscribers.push(
       callbacks.onAdd("players", (player: unknown, key: unknown) => {
         const id = String(key);
-        playersRef.current.set(id, player as RemotePlayerView);
+        const remote = player as RemotePlayerView;
+        playersRef.current.set(id, remote);
+        playerMetaUnsubscribers.set(
+          id,
+          PLAYER_META_FIELDS.map((field) => callbacks.listen(remote, field, syncPlayerMeta)),
+        );
         setIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+        syncPlayerMeta();
       }),
     );
 
     unsubscribers.push(
       callbacks.onRemove("players", (_player: unknown, key: unknown) => {
         const id = String(key);
+        for (const unsubscribe of playerMetaUnsubscribers.get(id) ?? []) unsubscribe();
+        playerMetaUnsubscribers.delete(id);
         playersRef.current.delete(id);
         setIds((prev) => prev.filter((existing) => existing !== id));
+        syncPlayerMeta();
       }),
     );
+
+    for (const field of ["phase", "phaseEndsAt", "winner", "hostId", "isPrivate"] as const) {
+      unsubscribers.push(callbacks.listen(field, syncRoomMeta));
+    }
+    syncRoomMeta();
 
     unsubscribers.push(
       callbacks.onAdd("decoys", (decoy: unknown, key: unknown) => {
@@ -589,10 +647,11 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           ...prev.slice(-(KILL_FEED_MAX - 1)),
           { key, text: killText(event) },
         ]);
-        setTimeout(
-          () => setKillFeed((prev) => prev.filter((line) => line.key !== key)),
-          KILL_FEED_MS,
-        );
+        const timer = setTimeout(() => {
+          killTimersRef.current.delete(timer);
+          setKillFeed((prev) => prev.filter((line) => line.key !== key));
+        }, KILL_FEED_MS);
+        killTimersRef.current.add(timer);
         if (event.victimId === sessionId) {
           if (event.reason === "converted") {
             playRoundStart();
@@ -609,7 +668,13 @@ export function Game({ connection, onBackToMenu }: GameProps) {
     room.send(MSG_MAP);
 
     return () => {
+      for (const nested of playerMetaUnsubscribers.values()) {
+        for (const unsubscribe of nested) unsubscribe();
+      }
       for (const unsubscribe of unsubscribers) unsubscribe();
+      for (const timer of killTimersRef.current) clearTimeout(timer);
+      killTimersRef.current.clear();
+      playerMetaUnsubscribers.clear();
       playersRef.current.clear();
     };
   }, [room, sessionId]);
@@ -697,36 +762,6 @@ export function Game({ connection, onBackToMenu }: GameProps) {
       window.removeEventListener("blur", onBlur);
     };
   }, []);
-
-  useEffect(() => {
-    const poll = setInterval(() => {
-      const view = room.state as unknown as RoomStateView;
-      setPhase((prev) => (prev === view.phase ? prev : view.phase));
-      setPhaseEndsAt((prev) => (prev === view.phaseEndsAt ? prev : view.phaseEndsAt));
-      setWinner((prev) => (prev === view.winner ? prev : view.winner));
-      setHostId((prev) => (prev === view.hostId ? prev : view.hostId));
-      setIsPrivate((prev) => (prev === view.isPrivate ? prev : view.isPrivate));
-
-      const next: MetaMap = {};
-      for (const [id, player] of playersRef.current) {
-        next[id] = {
-          name: player.name,
-          role: player.role,
-          alive: player.alive,
-          hp: player.hp,
-          kills: player.kills,
-          propType: player.propType,
-          rerollsLeft: player.rerollsLeft,
-          decoysLeft: player.decoysLeft,
-          ready: player.ready,
-          avatar: player.avatar,
-          ping: player.ping,
-        };
-      }
-      setMeta((prev) => (metaEqual(prev, next) ? prev : next));
-    }, STATE_POLL_MS);
-    return () => clearInterval(poll);
-  }, [room]);
 
   const localMeta = meta[sessionId];
   const localRole: Role = localMeta?.role ?? "prop";

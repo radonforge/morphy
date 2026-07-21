@@ -11,8 +11,6 @@ import {
 import { useEffect, useRef, useState } from "react";
 import type { Connection } from "./connection";
 
-const PARTY_POLL_MS = 200;
-
 export interface PartyMember {
   id: string;
   name: string;
@@ -71,8 +69,9 @@ function partyViewEqual(a: PartyView, b: PartyView): boolean {
 /**
  * Lifts the live room state the menu needs (phase, host, privacy, map, roster
  * in join order) into React state while the player is on the menu stage.
- * Mirrors Game's pattern: schema callbacks feed a ref, a poll snapshots it,
- * gated by an equality check so unchanged state never re-renders.
+ * Schema callbacks update a compact, equality-gated snapshot only when one of
+ * the fields used by the menu changes; high-frequency position patches do not
+ * cause React work.
  */
 export function usePartyRoom(connection: Connection | null): PartyView {
   const [view, setView] = useState<PartyView>(EMPTY_PARTY);
@@ -88,16 +87,7 @@ export function usePartyRoom(connection: Connection | null): PartyView {
     const { room } = connection;
     const callbacks = Callbacks.get(room);
     const ignore = () => {};
-    const unsubscribers = [
-      callbacks.onAdd("players", (player: unknown, key: unknown) => {
-        players.set(String(key), player as PartyPlayerView);
-      }),
-      callbacks.onRemove("players", (_player: unknown, key: unknown) => {
-        players.delete(String(key));
-      }),
-      room.onMessage(MSG_MAP, ignore),
-      room.onMessage(MSG_TELEPORT, ignore),
-    ];
+    const memberUnsubscribers = new Map<string, Array<() => void>>();
     const update = () => {
       const state = room.state as unknown as PartyStateView;
       const next: PartyView = {
@@ -113,11 +103,38 @@ export function usePartyRoom(connection: Connection | null): PartyView {
       };
       setView((prev) => (partyViewEqual(prev, next) ? prev : next));
     };
+    const unsubscribers: Array<() => void> = [
+      callbacks.onAdd("players", (player: unknown, key: unknown) => {
+        const id = String(key);
+        const member = player as PartyPlayerView;
+        players.set(id, member);
+        memberUnsubscribers.set(id, [
+          callbacks.listen(member, "name", update),
+          callbacks.listen(member, "avatar", update),
+        ]);
+        update();
+      }),
+      callbacks.onRemove("players", (_player: unknown, key: unknown) => {
+        const id = String(key);
+        for (const unsubscribe of memberUnsubscribers.get(id) ?? []) unsubscribe();
+        memberUnsubscribers.delete(id);
+        players.delete(id);
+        update();
+      }),
+      callbacks.listen("phase", update),
+      callbacks.listen("hostId", update),
+      callbacks.listen("isPrivate", update),
+      callbacks.listen("mapId", update),
+      room.onMessage(MSG_MAP, ignore),
+      room.onMessage(MSG_TELEPORT, ignore),
+    ];
     update();
-    const poll = setInterval(update, PARTY_POLL_MS);
     return () => {
-      clearInterval(poll);
+      for (const nested of memberUnsubscribers.values()) {
+        for (const unsubscribe of nested) unsubscribe();
+      }
       for (const unsubscribe of unsubscribers) unsubscribe();
+      memberUnsubscribers.clear();
       players.clear();
       setView(EMPTY_PARTY);
     };
