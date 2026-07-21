@@ -15,12 +15,11 @@ export const ROUND_END_MS = 8_000;
 export const TAUNT_INTERVAL_MS = 30_000;
 
 export const HUNTER_MAX_HP = 100;
-export const SHOOT_RANGE = 50;
-export const SHOOT_ORIGIN_SLACK = 3;
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 
 export const PLAYER_HEIGHT = 1.8;
+export const PLAYER_EYE_HEIGHT = 1.6;
 
 export const MOVE_SPEED = 5;
 export const RUN_MULTIPLIER_HUNTER = 1.7;

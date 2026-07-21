@@ -34,7 +34,6 @@ interface Spot {
 export class ScriptedPolicy implements Policy {
   readonly name = "scripted";
 
-  private hideType: string | null = null;
   private hideSpot: Spot | null = null;
   private prevPhase: Phase | null = null;
   private prevRole: Role | null = null;
@@ -81,8 +80,7 @@ export class ScriptedPolicy implements Policy {
     if (obs.phase !== "hiding" && obs.phase !== "hunting") return { kind: "idle", seq };
     this.ensureHidePlan(obs);
     const spot = this.hideSpot;
-    const type = this.hideType;
-    if (!spot || !type) return { kind: "idle", seq };
+    if (!spot) return { kind: "idle", seq };
 
     const threat =
       obs.visibility === "limited" ? this.nearestThreatLimited(obs) : this.nearestHunter(obs);
@@ -131,21 +129,18 @@ export class ScriptedPolicy implements Policy {
   }
 
   private ensureHidePlan(obs: Observation): void {
-    if (this.hideSpot && this.hideType) return;
+    if (this.hideSpot) return;
     const props = obs.map.nearbyProps;
     if (props.length > 0) {
       const pick = props[Math.floor(Math.random() * props.length)]!;
       const angle = Math.random() * Math.PI * 2;
       const offset = HIDE_OFFSET_MIN + Math.random() * (HIDE_OFFSET_MAX - HIDE_OFFSET_MIN);
-      this.hideType = pick.type;
       this.hideSpot = this.clampToBounds(obs.map.bounds, {
         x: pick.x + Math.cos(angle) * offset,
         z: pick.z + Math.sin(angle) * offset,
       });
       return;
     }
-    const ids = obs.map.propCatalogIds;
-    this.hideType = ids.length > 0 ? ids[Math.floor(Math.random() * ids.length)]! : null;
     this.hideSpot = { x: obs.self.x, z: obs.self.z };
   }
 
@@ -168,7 +163,6 @@ export class ScriptedPolicy implements Policy {
   }
 
   private clearHidePlan(): void {
-    this.hideType = null;
     this.hideSpot = null;
   }
 }

@@ -20,6 +20,7 @@ import {
   MSG_REROLL,
   MSG_SHOOT,
   type Phase,
+  PLAYER_EYE_HEIGHT,
   PLAYER_HEIGHT,
   PROP_TURN_SNAP,
   PROP_TURN_SPEED,
@@ -39,6 +40,7 @@ import { Billboard, Sky, Text, useGLTF } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
+import { MAP_THEME_BASE } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
 import type {
   BreaksRef,
@@ -152,7 +154,6 @@ const PITCH_MAX = 1.4;
 const TP_PITCH_MIN = -0.15;
 const TP_PITCH_MAX = 1.2;
 const DEFAULT_PITCH = 0.5;
-const EYE_HEIGHT = 1.6;
 const SUN_POSITION: [number, number, number] = [14, 26, 10];
 const SHADOW_MAP_SIZE = 2048;
 const SHADOW_MARGIN = 4;
@@ -214,37 +215,37 @@ const DEFAULT_THEME: ThemePreset = {
 
 const THEMES: Record<string, ThemePreset> = {
   station: {
-    ground: "#3a414e",
-    background: "#0e131b",
-    hemiSky: "#b8c8de",
-    hemiGround: "#42474f",
+    ground: MAP_THEME_BASE.station.ground,
+    background: MAP_THEME_BASE.station.background,
+    hemiSky: MAP_THEME_BASE.station.hemiSky,
+    hemiGround: MAP_THEME_BASE.station.hemiGround,
     hemiIntensity: 1.05,
     ambient: 0.85,
-    dir: 1.15,
+    dir: MAP_THEME_BASE.station.directional,
     sky: true,
     turbidity: 9,
     rayleigh: 0.5,
   },
   mars: {
-    ground: "#9c5a40",
-    background: "#c89a78",
-    hemiSky: "#e8b48f",
-    hemiGround: "#5a3a2c",
+    ground: MAP_THEME_BASE.mars.ground,
+    background: MAP_THEME_BASE.mars.background,
+    hemiSky: MAP_THEME_BASE.mars.hemiSky,
+    hemiGround: MAP_THEME_BASE.mars.hemiGround,
     hemiIntensity: 1.1,
     ambient: 0.8,
-    dir: 1.5,
+    dir: MAP_THEME_BASE.mars.directional,
     sky: false,
     turbidity: 6,
     rayleigh: 1.2,
   },
   urban: {
-    ground: "#5b5f66",
-    background: "#acc6e0",
-    hemiSky: "#d4e3f6",
-    hemiGround: "#6a6f78",
+    ground: MAP_THEME_BASE.urban.ground,
+    background: MAP_THEME_BASE.urban.background,
+    hemiSky: MAP_THEME_BASE.urban.hemiSky,
+    hemiGround: MAP_THEME_BASE.urban.hemiGround,
     hemiIntensity: 1.0,
     ambient: 0.8,
-    dir: 1.45,
+    dir: MAP_THEME_BASE.urban.directional,
     sky: true,
     turbidity: 4,
     rayleigh: 1.4,
@@ -844,7 +845,7 @@ function Shooter({
 }) {
   const { camera, gl } = useThree();
   const raycaster = useMemo(() => new THREE.Raycaster(), []);
-  const lastShotAt = useRef(0);
+  const nextShotAt = useRef(0);
 
   useEffect(() => {
     if (!enabled) {
@@ -857,15 +858,13 @@ function Shooter({
       }
       const spec = WEAPONS[weapon];
       const now = performance.now();
-      if (now - lastShotAt.current < spec.cooldownMs) {
+      if (now < nextShotAt.current) {
         return;
       }
-      lastShotAt.current = now;
+      nextShotAt.current = now + spec.cooldownMs;
       raycaster.setFromCamera(SCREEN_CENTER, camera);
-      const o = raycaster.ray.origin;
       const d = raycaster.ray.direction;
       room.send(MSG_SHOOT, {
-        origin: { x: o.x, y: o.y, z: o.z },
         dir: { x: d.x, y: d.y, z: d.z },
       });
       playWeaponShot(weapon);
@@ -1436,7 +1435,6 @@ function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) 
       mesh.setMatrixAt(i, matrix.compose(pos, quat, scale));
     });
     mesh.instanceMatrix.needsUpdate = true;
-    mesh.computeBoundingSphere();
   }, [tiles]);
 
   return (
@@ -2016,7 +2014,7 @@ function LocalPlayer({
     if (role === "hunter") {
       const aimPitch = pitch - motion.recoil * RECOIL_MAX_PITCH;
       const cosPitch = Math.cos(aimPitch);
-      const eyeY = pos.y + EYE_HEIGHT - motion.landing * LAND_DIP_Y;
+      const eyeY = pos.y + PLAYER_EYE_HEIGHT - motion.landing * LAND_DIP_Y;
       camera.position.set(pos.x, eyeY, pos.z);
       camera.lookAt(
         pos.x - Math.sin(yaw) * cosPitch,

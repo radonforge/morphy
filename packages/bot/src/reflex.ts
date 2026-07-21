@@ -1,5 +1,6 @@
 import {
   computePropBounds,
+  type InputMessage,
   type Intent,
   type MapDefinition,
   MOVE_SPEED,
@@ -63,7 +64,7 @@ import {
 } from "./nav/grid";
 import { PathFollower, smoothPath } from "./nav/path";
 import { canHitTarget, lineOfSightClear, normalize3, type Vec3 } from "./raycast";
-import type { BotPlayer } from "./view";
+import type { BotDecoy, BotPlayer } from "./view";
 
 const STEER_MIN_DIST = 1e-4;
 
@@ -83,12 +84,13 @@ export interface ReflexWorld {
   phase: Phase;
   self: BotPlayer;
   others: BotPlayer[];
+  decoys: BotDecoy[];
 }
 
 /** The synchronous motor commands the bot ships to the server this tick. */
 export interface MotorOutput {
-  input: { x: number; y: number; z: number; rot: number; aim: number };
-  shoot: { origin: Vec3; dir: Vec3 } | null;
+  input: InputMessage;
+  shoot: { dir: Vec3 } | null;
 }
 
 interface MovementSample {
@@ -98,7 +100,7 @@ interface MovementSample {
 }
 
 const HOLD = (x: number, z: number, rot: number): MotorOutput => ({
-  input: { x, y: 0, z, rot, aim: rot },
+  input: { x, y: 0, z, rot, aim: rot, propRot: rot },
   shoot: null,
 });
 
@@ -114,6 +116,7 @@ export class Reflex {
   private grid: NavGrid | null = null;
   private walls: Wall[] = [];
   private obstacles: Obstacle[] = [];
+  private activeObstacles: Obstacle[] = [];
   private propBounds = new Map<string, PropBounds>();
   private doorways: Point2[] = [];
 
@@ -154,11 +157,11 @@ export class Reflex {
 
   /** Whether the bot has clear line of sight to a world point (eye height to eye
    * height) — the scheduler's cheap per-tick "new contact?" probe. */
-  canSee(x: number, z: number): boolean {
+  canSee(x: number, y: number, z: number): boolean {
     const map = this.map;
     if (!map) return false;
     const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };
-    return lineOfSightClear(origin, { x, y: BOT_EYE_HEIGHT, z }, map.colliders);
+    return lineOfSightClear(origin, { x, y: y + BOT_EYE_HEIGHT, z }, map.colliders);
   }
 
   /** Rebuild navigation from a freshly received map. One source of truth: the
@@ -167,6 +170,7 @@ export class Reflex {
     this.map = map;
     this.walls = buildWalls(map);
     this.obstacles = buildObstacles(map);
+    this.activeObstacles = this.obstacles;
     this.grid = buildNavGrid(map.bounds, this.walls, this.obstacles);
     this.propBounds = new Map(
       map.propCatalog.map((def) => [def.id, computePropBounds(def)] as const),
@@ -239,7 +243,7 @@ export class Reflex {
       if (!other.alive) continue;
       const distance = Math.hypot(other.x - this.posX, other.z - this.posZ);
       const bounds = this.propBounds.get(other.propType) ?? UNTRANSFORMED_BOUNDS;
-      const aimY = (bounds.yMin + bounds.yMax) / 2;
+      const aimY = other.y + (bounds.yMin + bounds.yMax) / 2;
       const hasLineOfSight = lineOfSightClear(
         origin,
         { x: other.x, y: aimY, z: other.z },
@@ -298,7 +302,6 @@ export class Reflex {
         bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } },
         doorways: [],
         nearbyProps: [],
-        propCatalogIds: [],
       };
     }
     const nearbyProps = map.props
@@ -310,7 +313,6 @@ export class Reflex {
       bounds: map.bounds,
       doorways: this.doorways.map((d) => ({ x: d.x, z: d.z })),
       nearbyProps,
-      propCatalogIds: map.propCatalog.map((def) => def.id),
     };
   }
 
@@ -338,6 +340,16 @@ export class Reflex {
 
   executeIntent(intent: Intent, world: ReflexWorld, dt: number, now: number): MotorOutput {
     if (!this.grid || !this.map) return HOLD(this.posX, this.posZ, this.rot);
+    this.activeObstacles = [
+      ...this.obstacles,
+      ...world.decoys
+        .filter((decoy) => decoy.y < UNTRANSFORMED_PROP_HEIGHT)
+        .map((decoy) => ({
+          x: decoy.x,
+          z: decoy.z,
+          radius: (this.propBounds.get(decoy.propType) ?? UNTRANSFORMED_BOUNDS).radius,
+        })),
+    ];
     let shoot: MotorOutput["shoot"] = null;
 
     // Drop the aim lock whenever we are not actively shooting, so re-acquiring a
@@ -346,7 +358,6 @@ export class Reflex {
 
     switch (intent.kind) {
       case "idle":
-      case "taunt":
       case "chat":
         break;
       case "patrol":
@@ -368,7 +379,14 @@ export class Reflex {
 
     this.separateFromCrowd(world.others);
     return {
-      input: { x: this.posX, y: 0, z: this.posZ, rot: this.rot, aim: this.rot },
+      input: {
+        x: this.posX,
+        y: 0,
+        z: this.posZ,
+        rot: this.rot,
+        aim: this.rot,
+        propRot: this.rot,
+      },
       shoot,
     };
   }
@@ -406,7 +424,7 @@ export class Reflex {
       pushed = true;
     }
     if (!pushed) return;
-    const resolved = resolveCollisions({ x, z }, this.walls, this.obstacles, this.map.bounds);
+    const resolved = resolveCollisions({ x, z }, this.walls, this.activeObstacles, this.map.bounds);
     this.posX = resolved.x;
     this.posZ = resolved.z;
   }
@@ -497,14 +515,14 @@ export class Reflex {
     }
     const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };
     const bounds = this.propBounds.get(target.propType) ?? UNTRANSFORMED_BOUNDS;
-    const aimY = (bounds.yMin + bounds.yMax) / 2;
+    const aimY = target.y + (bounds.yMin + bounds.yMax) / 2;
     const dir = normalize3({ x: target.x - origin.x, y: aimY - origin.y, z: target.z - origin.z });
     const dist = Math.hypot(target.x - this.posX, target.z - this.posZ);
     const engageRange = lerp(ENGAGE_RANGE_MIN, ENGAGE_RANGE_MAX, this.difficulty);
     const canHit =
       dir !== null &&
       dist <= engageRange &&
-      canHitTarget(origin, dir, target.x, target.z, bounds, map.colliders);
+      canHitTarget(origin, dir, target.x, target.y, target.z, bounds, map.colliders);
 
     if (canHit && dir) {
       this.follower.clear();
@@ -522,7 +540,7 @@ export class Reflex {
       const ready = now - this.aimAcquiredAt >= reactionMs;
       if (ready && now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS) {
         this.lastShotAt = now;
-        return { origin, dir };
+        return { dir };
       }
       return null;
     }
@@ -647,7 +665,7 @@ export class Reflex {
     const resolved = resolveCollisions(
       { x: this.posX + dirX * step, z: this.posZ + dirZ * step },
       this.walls,
-      this.obstacles,
+      this.activeObstacles,
       this.map!.bounds,
     );
     this.posX = resolved.x;

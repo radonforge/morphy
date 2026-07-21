@@ -2,7 +2,7 @@ import { type Client, matchMaker, Room, ServerError } from "@colyseus/core";
 import { MapSchema, Schema, type } from "@colyseus/schema";
 import {
   type AvatarId,
-  type BoxCollider,
+  colliderAabb,
   computePropBounds,
   DECOY_BUDGET,
   DECOY_COOLDOWN_MS,
@@ -49,6 +49,7 @@ import {
   PING_INTERVAL_MS,
   PING_MAX_MS,
   type PingMessage,
+  PLAYER_EYE_HEIGHT,
   type PongMessage,
   type PropBounds,
   REROLL_BUDGET,
@@ -56,7 +57,7 @@ import {
   ROUND_END_MS,
   type Role,
   randomAvatarId,
-  SHOOT_ORIGIN_SLACK,
+  rayAabb,
   type ShootMessage,
   type ShotFiredEvent,
   START_COUNTDOWN_MS,
@@ -163,10 +164,9 @@ function parseInput(payload: unknown): InputMessage | null {
 function parseShoot(payload: unknown): ShootMessage | null {
   if (typeof payload !== "object" || payload === null) return null;
   const p = payload as Record<string, unknown>;
-  const origin = parseVec3(p.origin);
   const dir = parseVec3(p.dir);
-  if (!origin || !dir) return null;
-  return { origin, dir };
+  if (!dir) return null;
+  return { dir };
 }
 
 function parseReady(payload: unknown): boolean | null {
@@ -220,37 +220,6 @@ const UNTRANSFORMED_PROP_BOUNDS: PropBounds = {
   yMax: UNTRANSFORMED_PROP_HEIGHT,
 };
 
-const SLAB_EPSILON = 1e-6;
-
-type Vec3Tuple = [number, number, number];
-
-/** Distance along the ray to an axis-aligned box (slab method), or null if it misses or lies beyond `maxDist`. */
-function rayAabb(
-  origin: { x: number; y: number; z: number },
-  dir: { x: number; y: number; z: number },
-  min: Vec3Tuple,
-  max: Vec3Tuple,
-  maxDist: number,
-): number | null {
-  const o: Vec3Tuple = [origin.x, origin.y, origin.z];
-  const d: Vec3Tuple = [dir.x, dir.y, dir.z];
-  let tEnter = 0;
-  let tExit = maxDist;
-  for (let axis = 0; axis < 3; axis++) {
-    if (Math.abs(d[axis]!) < SLAB_EPSILON) {
-      if (o[axis]! < min[axis]! || o[axis]! > max[axis]!) return null;
-      continue;
-    }
-    let t1 = (min[axis]! - o[axis]!) / d[axis]!;
-    let t2 = (max[axis]! - o[axis]!) / d[axis]!;
-    if (t1 > t2) [t1, t2] = [t2, t1];
-    if (t1 > tEnter) tEnter = t1;
-    if (t2 < tExit) tExit = t2;
-    if (tEnter > tExit) return null;
-  }
-  return tEnter;
-}
-
 /**
  * Distance along the ray to the prop's hit box: its bounding cylinder squared
  * off in X/Z and spanning [yMin, yMax] in Y, centered at (cx, cz) and lifted
@@ -268,17 +237,10 @@ function rayHitsBox(
   return rayAabb(
     origin,
     dir,
-    [cx - bounds.radius, cy + bounds.yMin, cz - bounds.radius],
-    [cx + bounds.radius, cy + bounds.yMax, cz + bounds.radius],
+    { x: cx - bounds.radius, y: cy + bounds.yMin, z: cz - bounds.radius },
+    { x: cx + bounds.radius, y: cy + bounds.yMax, z: cz + bounds.radius },
     maxDist,
   );
-}
-
-function colliderAabb(c: BoxCollider): { min: Vec3Tuple; max: Vec3Tuple } {
-  return {
-    min: [c.position.x - c.size.x / 2, c.position.y - c.size.y / 2, c.position.z - c.size.z / 2],
-    max: [c.position.x + c.size.x / 2, c.position.y + c.size.y / 2, c.position.z + c.size.z / 2],
-  };
 }
 
 /** Random direction within a cone of half-angle `spreadRad` around unit vector `dir`. */
@@ -394,6 +356,9 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   }
 
   onJoin(client: Client, options: unknown): void {
+    if (this.state.phase !== "lobby") {
+      throw new ServerError(409, "round already in progress");
+    }
     const name = sanitizeName((options as { name?: unknown } | undefined)?.name);
     const rawAvatar = (options as { avatar?: unknown } | undefined)?.avatar;
     const spawn = this.pickLobbySpawn();
@@ -424,6 +389,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     if (this.state.players.size < MIN_PLAYERS_TO_START && this.state.phase !== "lobby") {
       this.resetToLobby();
     } else {
+      this.checkRoundEnd();
       this.maybeStartRound();
     }
   }
@@ -661,15 +627,10 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
     const ray = parseShoot(payload);
     if (!ray) return;
-    if (
-      Math.hypot(ray.origin.x - player.x, ray.origin.z - player.z) > SHOOT_ORIGIN_SLACK ||
-      Math.abs(ray.origin.y - player.y) > SHOOT_ORIGIN_SLACK
-    ) {
-      return;
-    }
     const len = Math.hypot(ray.dir.x, ray.dir.y, ray.dir.z);
     if (len === 0) return;
     const dir = { x: ray.dir.x / len, y: ray.dir.y / len, z: ray.dir.z / len };
+    const origin: Vec3 = { x: player.x, y: player.y + PLAYER_EYE_HEIGHT, z: player.z };
     this.nextShotAt.set(client.sessionId, now + weapon.cooldownMs);
 
     const ends: Vec3[] = [];
@@ -679,7 +640,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       const pelletDir = jitterDir(dir, weapon.spreadRad);
       const { end, target, decoy } = this.resolvePellet(
         player,
-        ray.origin,
+        origin,
         pelletDir,
         weapon.range,
         captured,
@@ -693,7 +654,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.broadcast(MSG_SHOT_FIRED, {
       shooterId: player.id,
       weapon: weapon.id,
-      origin: ray.origin,
+      origin,
       ends,
     } satisfies ShotFiredEvent);
 
@@ -753,6 +714,11 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
   private startCountdown(): void {
     this.state.winner = "";
+    if (!this.locked) {
+      void this.lock().catch((error: unknown) => {
+        console.error(`[morphy] failed to lock room ${this.roomId}:`, error);
+      });
+    }
     this.setPhase("starting", START_COUNTDOWN_MS, () => this.beginHiding());
   }
 
@@ -770,6 +736,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       this.state.winner = "props";
       this.endRound();
     });
+    this.checkRoundEnd();
   }
 
   private broadcastTaunts(): void {
@@ -840,6 +807,11 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     });
     this.state.decoys.clear();
     this.nextDecoyAt.clear();
+    if (this.locked) {
+      void this.unlock().catch((error: unknown) => {
+        console.error(`[morphy] failed to unlock room ${this.roomId}:`, error);
+      });
+    }
   }
 
   private checkRoundEnd(): void {

@@ -59,7 +59,6 @@ export interface InputMessage {
 }
 
 export interface ShootMessage {
-  origin: Vec3;
   dir: Vec3;
 }
 

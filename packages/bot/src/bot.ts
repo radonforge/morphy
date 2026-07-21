@@ -21,6 +21,7 @@ import {
   ROOM_NAME,
   type Role,
   type Visibility,
+  withTimeout,
 } from "@morphy/shared";
 import {
   ARRIVE_EPSILON,
@@ -70,22 +71,6 @@ export interface BotOptions {
   trace: Trace | null;
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label}: timeout after ${ms}ms`)), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error: unknown) => {
-        clearTimeout(timer);
-        reject(error instanceof Error ? error : new Error(String(error)));
-      },
-    );
-  });
-}
-
 /**
  * The async/sync bridge. Every 20 Hz tick runs the synchronous reflex against
  * the current intent (never awaits); a single-flight, abortable `decide` runs in
@@ -127,6 +112,11 @@ export class Bot {
         : client.joinOrCreate(ROOM_NAME, { name: this.options.name, map: this.options.map }),
       CONNECT_TIMEOUT_MS,
       `bot ${this.options.name} connect`,
+      (lateRoom) => {
+        void lateRoom.leave().catch((error: unknown) => {
+          console.warn(`[bot ${this.options.name}] failed to leave late room`, error);
+        });
+      },
     );
     this.room = room;
 
@@ -159,6 +149,8 @@ export class Bot {
       this.ticker = null;
     }
     this.decideController?.abort();
+    this.decideSeq += 1;
+    this.decideInFlight = false;
     const room = this.room;
     this.room = null;
     if (this.options.trace) await this.options.trace.close();
@@ -243,11 +235,16 @@ export class Bot {
 
     if (!self.alive) return;
 
-    const reflexWorld: ReflexWorld = { phase: world.phase, self, others: world.others };
+    const reflexWorld: ReflexWorld = {
+      phase: world.phase,
+      self,
+      others: world.others,
+      decoys: world.decoys,
+    };
     const motor = this.reflex.executeIntent(this.currentIntent, reflexWorld, dt, now);
     room.send(MSG_INPUT, motor.input);
     if (motor.shoot) {
-      room.send(MSG_SHOOT, { origin: motor.shoot.origin, dir: motor.shoot.dir });
+      room.send(MSG_SHOOT, { dir: motor.shoot.dir });
     }
 
     this.maybeKickDecide(reflexWorld, now);
@@ -292,7 +289,7 @@ export class Bot {
     for (const other of world.others) {
       if (!other.alive || other.role !== wantHostile) continue;
       const dist = Math.hypot(other.x - this.reflex.x, other.z - this.reflex.z);
-      if (dist > BOT_VISION_RANGE || !this.reflex.canSee(other.x, other.z)) continue;
+      if (dist > BOT_VISION_RANGE || !this.reflex.canSee(other.x, other.y, other.z)) continue;
       seen.add(other.id);
       if (!this.losIds.has(other.id)) gained = true;
     }
@@ -309,23 +306,34 @@ export class Bot {
     const obs = this.reflex.buildObservation(world, seq, this.options.visibility, now);
     const timer = setTimeout(() => controller.abort(), DECIDE_TIMEOUT_MS);
 
-    this.options.policy
-      .decide(obs, controller.signal)
+    withTimeout(
+      Promise.resolve().then(() => this.options.policy.decide(obs, controller.signal)),
+      DECIDE_TIMEOUT_MS,
+      `bot ${this.options.name} decision`,
+    )
       .then((intent) => this.onDecided(intent, obs))
       .catch((error: unknown) => this.onDecideError(error))
       .finally(() => {
         clearTimeout(timer);
-        this.decideInFlight = false;
+        if (this.decideController === controller) {
+          this.decideController = null;
+          this.decideInFlight = false;
+        }
       });
   }
 
   private onDecided(intent: Intent, obs: Observation): void {
     if (intent.seq !== this.decideSeq) return;
     this.decideErrored = false;
+    const speechChanged =
+      this.currentIntent.say !== intent.say ||
+      (this.currentIntent.kind === "chat" &&
+        intent.kind === "chat" &&
+        this.currentIntent.text !== intent.text);
     const changed = behaviorChanged(this.currentIntent, intent);
     this.currentIntent = intent;
     if (changed) this.reflex.onIntentChanged();
-    this.speak(intent);
+    if (changed || speechChanged) this.speak(intent);
     this.options.trace?.recordDecision(this.options.policy.name, obs, intent, Date.now());
   }
 

@@ -1,8 +1,8 @@
-import { DEFAULT_PORT, DEFAULT_WEAPON, SHOOT_RANGE, WEAPONS } from "@morphy/shared";
+import { DEFAULT_PORT, DEFAULT_WEAPON, PLAYER_EYE_HEIGHT, WEAPONS } from "@morphy/shared";
 
 export const CONNECT_TIMEOUT_MS = 8_000;
 
-export const BOT_EYE_HEIGHT = 1.6;
+export const BOT_EYE_HEIGHT = PLAYER_EYE_HEIGHT;
 export const BOT_BODY_RADIUS = 0.4;
 export const FURNITURE_MIN_RADIUS = 0.3;
 
@@ -54,7 +54,7 @@ export const PATROL_PICK_ATTEMPTS = 8;
 export const DECIDE_INTERVAL_MS = 700;
 export const DECIDE_TIMEOUT_MS = 500;
 
-export const BOT_VISION_RANGE = SHOOT_RANGE;
+export const BOT_VISION_RANGE = WEAPONS[DEFAULT_WEAPON].range;
 export const BOT_HEARING_RADIUS = 12;
 export const MOVED_RECENTLY_MS = 600;
 export const MOVED_RECENTLY_MIN_DIST = 0.3;
