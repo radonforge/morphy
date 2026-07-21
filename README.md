@@ -1,6 +1,6 @@
 # morphy.lol
 
-Browser multiplayer prop hunt. Low-poly 3D, LAN-first. See [`SPEC.md`](./SPEC.md) for the design.
+Browser multiplayer prop hunt. Low-poly 3D, LAN-first.
 
 ## Requirements
 
@@ -62,5 +62,4 @@ Playable: public matchmaking and private party rooms; lobby with map, avatar and
 name and ready state; full round state machine
 (`lobby → starting → hiding → hunting → round_end`); server-authoritative roles, HP, shooting
 (infection capture), decoys and win conditions; client-side movement + collision; prop disguises;
-chat, standings, kill feed and persistent lifetime stats; runtime-synthesized audio. See `SPEC.md`
-§10 for the roadmap.
+chat, standings, kill feed and persistent lifetime stats; runtime-synthesized audio.

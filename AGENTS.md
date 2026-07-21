@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-morphy.lol is a browser multiplayer prop-hunt game: low-poly 3D, LAN-first, server-authoritative. Hunters stalk players disguised as scene objects (props). See `SPEC.md` for the design intent — but note it has **diverged from the code** (see "Spec vs. code" below); the code is the source of truth.
+morphy.lol is a browser multiplayer prop-hunt game: low-poly 3D, LAN-first, server-authoritative. Hunters stalk players disguised as scene objects (props). The code is the source of truth.
 
 ## Commands
 
