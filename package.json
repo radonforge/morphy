@@ -13,6 +13,7 @@
     "dev:client": "pnpm --filter @morphy/client dev",
     "bot": "pnpm --filter @morphy/bot start",
     "tunnel": "ngrok http 5173 ${NGROK_DOMAIN:+--url=https://$NGROK_DOMAIN}",
+    "test": "node --import tsx --test tests/shared.test.mjs tests/maps.test.mjs tests/assets.test.mjs tests/bot-raycast.test.mjs tests/bot-scheduler.test.mjs tests/endpoints.test.mjs tests/safe-storage.test.mjs tests/storage.test.mjs && tsx --tsconfig packages/server/tsconfig.json --test tests/server-room.test.mjs",
     "typecheck": "pnpm -r typecheck",
     "format": "biome format --write .",
     "lint": "biome lint .",
@@ -21,6 +22,7 @@
     "ci": "biome ci ."
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.1"
+    "@biomejs/biome": "^2.5.1",
+    "tsx": "^4.22.4"
   }
 }
