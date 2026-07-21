@@ -5,6 +5,10 @@ on:
     branches:
       - master
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   checks:
     uses: ./.github/workflows/ci.yml
@@ -18,7 +22,7 @@ jobs:
     with:
       deploy-dir: /opt/morphy
       web-dir: /var/www/morphy.smyile.com/dist
-      tag: latest
+      tag: ${{ github.sha }}
     secrets:
       TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
       TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
