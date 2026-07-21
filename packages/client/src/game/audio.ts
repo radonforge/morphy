@@ -1,4 +1,5 @@
 import type { WeaponId } from "@morphy/shared";
+import { storageGet, storageSet } from "../safeStorage";
 
 const DEFAULT_VOLUME = 0.6;
 const MUTE_STORAGE_KEY = "morphy:muted";
@@ -67,34 +68,29 @@ let musicSource: AudioBufferSourceNode | null = null;
 let musicWanted = false;
 
 function readMuted(): boolean {
-  if (typeof localStorage === "undefined") return false;
-  return localStorage.getItem(MUTE_STORAGE_KEY) === "1";
+  return storageGet(MUTE_STORAGE_KEY) === "1";
 }
 
 function readMusicEnabled(): boolean {
-  if (typeof localStorage === "undefined") return true;
-  return localStorage.getItem(MUSIC_STORAGE_KEY) !== "0";
+  return storageGet(MUSIC_STORAGE_KEY) !== "0";
 }
 
 function readMusicVolume(): number {
-  if (typeof localStorage === "undefined") return MUSIC_DEFAULT_VOLUME;
-  const raw = localStorage.getItem(MUSIC_VOLUME_STORAGE_KEY);
+  const raw = storageGet(MUSIC_VOLUME_STORAGE_KEY);
   if (raw === null) return MUSIC_DEFAULT_VOLUME;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : MUSIC_DEFAULT_VOLUME;
 }
 
 function readVolume(): number {
-  if (typeof localStorage === "undefined") return DEFAULT_VOLUME;
-  const raw = localStorage.getItem(VOLUME_STORAGE_KEY);
+  const raw = storageGet(VOLUME_STORAGE_KEY);
   if (raw === null) return DEFAULT_VOLUME;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : DEFAULT_VOLUME;
 }
 
 function readUiSoundsEnabled(): boolean {
-  if (typeof localStorage === "undefined") return true;
-  return localStorage.getItem(UI_SOUNDS_STORAGE_KEY) !== "0";
+  return storageGet(UI_SOUNDS_STORAGE_KEY) !== "0";
 }
 
 function ensure(): { ctx: AudioContext; master: GainNode } | null {
@@ -209,9 +205,7 @@ export function isMuted(): boolean {
 
 export function setMuted(value: boolean): void {
   muted = value;
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(MUTE_STORAGE_KEY, value ? "1" : "0");
-  }
+  storageSet(MUTE_STORAGE_KEY, value ? "1" : "0");
   if (masterGain && audioContext) {
     const now = audioContext.currentTime;
     masterGain.gain.cancelScheduledValues(now);
@@ -231,9 +225,7 @@ export function getVolume(): number {
 /** Set master volume (0..1), persisted; a live context ramps smoothly unless muted. */
 export function setVolume(value: number): void {
   volume = Math.min(1, Math.max(0, value));
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(VOLUME_STORAGE_KEY, String(volume));
-  }
+  storageSet(VOLUME_STORAGE_KEY, String(volume));
   if (masterGain && audioContext && !muted) {
     const now = audioContext.currentTime;
     masterGain.gain.cancelScheduledValues(now);
@@ -248,9 +240,7 @@ export function areUiSoundsEnabled(): boolean {
 /** Toggle menu interface cues, persisted. Game sounds are unaffected. */
 export function setUiSoundsEnabled(value: boolean): void {
   uiSoundsEnabled = value;
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(UI_SOUNDS_STORAGE_KEY, value ? "1" : "0");
-  }
+  storageSet(UI_SOUNDS_STORAGE_KEY, value ? "1" : "0");
 }
 
 /** Create/resume the context and warm the UI sample cache; call on the first user gesture. */
@@ -312,9 +302,7 @@ export function isMusicEnabled(): boolean {
 /** Persist the music preference; the caller starts/stops playback to match. */
 export function setMusicEnabled(value: boolean): void {
   musicEnabled = value;
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(MUSIC_STORAGE_KEY, value ? "1" : "0");
-  }
+  storageSet(MUSIC_STORAGE_KEY, value ? "1" : "0");
 }
 
 export function getMusicVolume(): number {
@@ -324,9 +312,7 @@ export function getMusicVolume(): number {
 /** Set music level (0..1) relative to the master volume, persisted; ramps live playback. */
 export function setMusicVolume(value: number): void {
   musicVolume = Math.min(1, Math.max(0, value));
-  if (typeof localStorage !== "undefined") {
-    localStorage.setItem(MUSIC_VOLUME_STORAGE_KEY, String(musicVolume));
-  }
+  storageSet(MUSIC_VOLUME_STORAGE_KEY, String(musicVolume));
   if (musicGain && audioContext && musicSource) {
     const now = audioContext.currentTime;
     musicGain.gain.cancelScheduledValues(now);
@@ -341,11 +327,15 @@ export function setMusicVolume(value: number): void {
  */
 export function startLobbyMusic(): void {
   if (!musicEnabled || musicWanted) return;
-  musicWanted = true;
   const e = ensure();
   if (!e) return;
+  musicWanted = true;
   void loadSample(e.ctx, MUSIC_SAMPLE).then((buffer) => {
-    if (!buffer || !musicWanted || musicSource) return;
+    if (!buffer) {
+      musicWanted = false;
+      return;
+    }
+    if (!musicWanted || musicSource) return;
     const gain = e.ctx.createGain();
     gain.gain.value = 0;
     gain.connect(e.master);

@@ -1,3 +1,5 @@
+import { storageGet, storageKeys, storageRemove, storageSet } from "./safeStorage";
+
 const LEGACY_PREFIX = "webhunt:";
 const CURRENT_PREFIX = "morphy:";
 
@@ -12,21 +14,15 @@ const CURRENT_PREFIX = "morphy:";
  * side-effect import ordered first in `main.tsx`.
  */
 function migrateLegacyStorage(): void {
-  if (typeof localStorage === "undefined") return;
-
-  const legacyKeys: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(LEGACY_PREFIX)) legacyKeys.push(key);
-  }
+  const legacyKeys = storageKeys().filter((key) => key.startsWith(LEGACY_PREFIX));
 
   for (const oldKey of legacyKeys) {
     const newKey = CURRENT_PREFIX + oldKey.slice(LEGACY_PREFIX.length);
-    const value = localStorage.getItem(oldKey);
-    if (value !== null && localStorage.getItem(newKey) === null) {
-      localStorage.setItem(newKey, value);
+    const value = storageGet(oldKey);
+    if (value !== null && storageGet(newKey) === null) {
+      storageSet(newKey, value);
     }
-    localStorage.removeItem(oldKey);
+    storageRemove(oldKey);
   }
 }
 
@@ -36,6 +32,31 @@ const DEVICE_ID_KEY = `${CURRENT_PREFIX}deviceId`;
 
 let ephemeralDeviceId: string | null = null;
 
+interface RandomSource {
+  randomUUID?(): string;
+  getRandomValues?(array: Uint8Array): Uint8Array;
+}
+
+/** UUID v4 generation that also works on an insecure LAN origin. */
+export function createDeviceId(source: RandomSource | undefined = globalThis.crypto): string {
+  try {
+    if (source?.randomUUID) return source.randomUUID();
+  } catch {
+    // Some browsers expose the method but reject it outside a secure context.
+  }
+  const bytes = new Uint8Array(16);
+  if (source?.getRandomValues) {
+    source.getRandomValues(bytes);
+  } else {
+    // Identity is not an authentication secret; this only supports very old browsers.
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 /**
  * Stable opaque identity for this browser, minted on first call and persisted so
  * lifetime stats survive reloads. Sent with every room join; the server maps it
@@ -43,13 +64,9 @@ let ephemeralDeviceId: string | null = null;
  * single id kept stable for the page's lifetime (stats won't survive a reload).
  */
 export function getDeviceId(): string {
-  if (typeof localStorage === "undefined") {
-    if (ephemeralDeviceId === null) ephemeralDeviceId = crypto.randomUUID();
-    return ephemeralDeviceId;
-  }
-  const existing = localStorage.getItem(DEVICE_ID_KEY);
+  const existing = storageGet(DEVICE_ID_KEY);
   if (existing) return existing;
-  const id = crypto.randomUUID();
-  localStorage.setItem(DEVICE_ID_KEY, id);
-  return id;
+  if (ephemeralDeviceId === null) ephemeralDeviceId = createDeviceId();
+  storageSet(DEVICE_ID_KEY, ephemeralDeviceId);
+  return ephemeralDeviceId;
 }

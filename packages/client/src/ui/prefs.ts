@@ -7,6 +7,7 @@ import {
   MAX_NAME_LENGTH,
   type MapId,
 } from "@morphy/shared";
+import { storageGet, storageSet } from "../safeStorage";
 
 /**
  * Client-side lobby preferences persisted to localStorage so a returning player
@@ -25,8 +26,7 @@ const DEFAULTS: LobbyPrefs = { name: "", map: DEFAULT_MAP_ID, avatar: DEFAULT_AV
 
 /** Read and validate stored prefs; unknown/corrupt values fall back to defaults. */
 export function loadPrefs(): LobbyPrefs {
-  if (typeof localStorage === "undefined") return { ...DEFAULTS };
-  const raw = localStorage.getItem(PREFS_KEY);
+  const raw = storageGet(PREFS_KEY);
   if (raw === null) return { ...DEFAULTS };
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -42,9 +42,8 @@ export function loadPrefs(): LobbyPrefs {
   }
 }
 
-/** Merge a patch into stored prefs. No-ops where localStorage is unavailable. */
+/** Merge a patch into stored prefs, using the page-lifetime fallback if persistence is unavailable. */
 export function savePrefs(patch: Partial<LobbyPrefs>): void {
-  if (typeof localStorage === "undefined") return;
   const next: LobbyPrefs = { ...loadPrefs(), ...patch };
-  localStorage.setItem(PREFS_KEY, JSON.stringify(next));
+  storageSet(PREFS_KEY, JSON.stringify(next));
 }
