@@ -1,9 +1,10 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { COLYSEUS_PROXY_PATH, DEFAULT_PORT, STATS_PATH } from "../shared/src/constants";
+import { runtimeAssetsPlugin } from "./viteRuntimeAssets";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), runtimeAssetsPlugin()],
   server: {
     host: true,
     allowedHosts: [".ngrok-free.dev"],
