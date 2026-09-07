@@ -174,6 +174,16 @@ test("the last human leaving takes every bot with them", () => {
   assert.equal(room.state.players.size, 0);
 });
 
+test("the host seat passes to a human, never to a bot", () => {
+  const room = publicRoom();
+  joinRoom(room, "alice");
+  fireBotFill(room);
+  joinRoom(room, "bob");
+  assert.equal(room.state.hostId, "alice");
+  room.onLeave({ sessionId: "alice" });
+  assert.equal(room.state.hostId, "bob");
+});
+
 test("a private room is never filled with bots", () => {
   const room = publicRoom();
   room.state.isPrivate = true;

@@ -409,7 +409,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.pendingPings.delete(client.sessionId);
     this.deviceIds.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
-      this.state.hostId = this.state.players.keys().next().value ?? "";
+      this.state.hostId = this.firstHumanId();
     }
     if (this.state.players.size < MIN_PLAYERS_TO_START && this.state.phase !== "lobby") {
       this.awardAbortedRound();
@@ -887,6 +887,14 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.cancelBotFill();
     for (const bot of this.bots.values()) this.stopDriver(bot);
     this.bots.clear();
+  }
+
+  /** A bot must never inherit the host seat: it would never press start. */
+  private firstHumanId(): string {
+    for (const sessionId of this.state.players.keys()) {
+      if (!isBotSessionId(sessionId)) return sessionId;
+    }
+    return "";
   }
 
   private humanCount(): number {
