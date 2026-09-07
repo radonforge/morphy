@@ -8,6 +8,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Removed
+
+- The `morphy.smyile.com` redirect and its tunnel route. The old host no longer
+  resolves, so links that predate the move now fail at DNS instead of landing on
+  the game.
+
 ## [0.1.1] — 2026-09-07
 
 Infrastructure release: the game moved to its own domain under the Radon Forge
