@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Bot } from "../packages/bot/src/bot.ts";
+import { BotDriver } from "../packages/bot/src/driver.ts";
 
 test("bot decision timeout releases single-flight even when policy ignores abort", async () => {
-  const bot = new Bot({
-    serverUrl: "ws://invalid",
+  const bot = new BotDriver({
     name: "TimeoutTest",
-    map: "station",
-    code: null,
     difficulty: 0.5,
     readyAtPlayers: 2,
     policy: { name: "never", decide: () => new Promise(() => {}) },
@@ -48,11 +45,8 @@ test("bot decision timeout releases single-flight even when policy ignores abort
 });
 
 test("bot decision scheduler releases single-flight after a synchronous policy throw", async () => {
-  const bot = new Bot({
-    serverUrl: "ws://invalid",
+  const bot = new BotDriver({
     name: "ThrowTest",
-    map: "station",
-    code: null,
     difficulty: 0.5,
     readyAtPlayers: 2,
     policy: {
