@@ -1,4 +1,4 @@
-# morphy.lol
+# Morphy
 
 Browser multiplayer prop hunt. Low-poly 3D, LAN-first.
 

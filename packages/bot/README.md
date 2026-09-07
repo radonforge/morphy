@@ -1,6 +1,6 @@
 # @morphy/bot
 
-Headless autonomous players for morphy.lol. They connect to a running Colyseus
+Headless autonomous players for Morphy. They connect to a running Colyseus
 server exactly like the browser client (`@colyseus/sdk` over `ws`, no rendering),
 auto-ready in the lobby, and play whatever role the server assigns each round —
 switching behaviour on the fly when a prop gets converted to a hunter.
