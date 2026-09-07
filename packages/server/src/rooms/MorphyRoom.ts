@@ -905,11 +905,13 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
   /**
    * Colyseus guards a room's clock callbacks and message handlers only when
-   * this hook exists. Without it any throw — a malformed payload reaching a
-   * handler, a bot's pathfinding — escapes its interval uncaught and takes down
-   * the whole server process, every other room with it. Defining it contains
-   * those two sites; lifecycle methods (`onJoin`, `onLeave`, …) still rethrow
-   * afterwards, so Colyseus's own handling of them is unchanged.
+   * this hook exists. Without it a throw inside any interval or phase timer —
+   * `sendPings` runs in every room every {@link PING_INTERVAL_MS} — escapes
+   * uncaught and takes down the whole server process, every other room with it.
+   * A throw inside a message handler was already contained, but vanished
+   * without a log; this makes it visible. Lifecycle methods (`onJoin`,
+   * `onLeave`, …) still rethrow afterwards, so Colyseus's own handling of them
+   * is unchanged.
    */
   onUncaughtException(error: RoomException, methodName: RoomMethodName): void {
     const cause = error.cause;
@@ -981,11 +983,11 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   }
 
   /**
-   * Bot code runs inside a room `clock` callback, and Colyseus only wraps those
-   * when a room defines `onUncaughtException` — this one does not, and
-   * `@colyseus/clock` has no guard of its own, so a throw from the bot brain
-   * would take down the whole server process and every room on it. A bot is an
-   * amenity: if its brain fails, drop that bot and keep the match running.
+   * Bot code runs inside a room `clock` callback, where a throw is contained by
+   * {@link onUncaughtException} — but contained means the whole callback dies,
+   * so one failing brain would cost every other bot its tick, and go on doing
+   * so every tick. A bot is an amenity: if its brain fails, drop that bot and
+   * keep the match running.
    */
   private addBot(): void {
     const seq = ++this.botSeq;
