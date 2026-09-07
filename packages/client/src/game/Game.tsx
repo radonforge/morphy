@@ -88,7 +88,8 @@ const PHASE_DURATION_MS: Record<Phase, number> = {
 
 interface GameProps {
   connection: Connection;
-  onBackToMenu: () => void;
+  onBackToParty: () => void;
+  onLeaveMatch: () => void;
 }
 
 interface RoomStateView {
@@ -309,12 +310,14 @@ function ResultScreen({
   ids,
   meta,
   localId,
+  onLeave,
 }: {
   winner: Winner;
   endsAt: number;
   ids: string[];
   meta: MetaMap;
   localId: string;
+  onLeave: () => void;
 }) {
   const mvp = topHunter(ids, meta);
   const role = meta[localId]?.role ?? "prop";
@@ -337,6 +340,11 @@ function ResultScreen({
         <div className="result-next">
           New round
           <Countdown endsAt={endsAt} />
+        </div>
+        <div className="result-actions">
+          <button type="button" className="btn-ghost" onClick={onLeave}>
+            Leave match
+          </button>
         </div>
       </div>
     </div>
@@ -388,7 +396,18 @@ function RingTimer({ endsAt, total }: { endsAt: number; total: number }) {
   );
 }
 
-export function Game({ connection, onBackToMenu }: GameProps) {
+/**
+ * Re-acquire pointer lock when the pause overlay closes. Tolerates both DOM
+ * typings of `requestPointerLock` (void and Promise) and Chrome's refusal to
+ * re-lock right after an Escape-driven unlock: the player's next click on the
+ * canvas locks again through the same path the game already uses.
+ */
+function relockPointer(canvas: HTMLCanvasElement | null): void {
+  const pending: unknown = canvas?.requestPointerLock();
+  if (pending instanceof Promise) pending.catch(() => undefined);
+}
+
+export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   const { room, sessionId } = connection;
   const playersRef = useRef<Map<string, RemotePlayerView>>(new Map());
   const teleportRef = useRef<{ x: number; z: number } | null>(null) as TeleportRef;
@@ -400,6 +419,8 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   const fxSeq = useRef(0);
   const muzzleSeq = useRef(0);
   const killTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chatUnlockRef = useRef(false);
 
   const [map, setMap] = useState<MapDefinition | null>(null);
   const [ids, setIds] = useState<string[]>([]);
@@ -417,6 +438,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   const [muzzle, setMuzzle] = useState<number | null>(null);
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [decoys, setDecoys] = useState<DecoyView[]>([]);
   const [muted, setMuted] = useState(() => isMuted());
   const [weapon, setWeapon] = useState<WeaponId>(DEFAULT_WEAPON);
@@ -427,6 +449,10 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   chatOpenRef.current = chatOpen;
 
   const onShoot = useCallback(() => setMuzzle(muzzleSeq.current++), []);
+  const resume = useCallback(() => {
+    setPaused(false);
+    relockPointer(canvasRef.current);
+  }, []);
   const pickWeapon = useCallback(
     (id: WeaponId) => {
       setWeapon(id);
@@ -697,6 +723,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
       if (e.code === "KeyT") {
         e.preventDefault();
         if (document.pointerLockElement) {
+          chatUnlockRef.current = true;
           document.exitPointerLock();
         }
         setChatOpen(true);
@@ -739,7 +766,11 @@ export function Game({ connection, onBackToMenu }: GameProps) {
         return;
       }
       if (e.key === "Escape") {
-        setControlsOpen(false);
+        if (controlsOpen) {
+          setControlsOpen(false);
+        } else if (phase !== "lobby") {
+          setPaused((open) => !open);
+        }
         return;
       }
       if (e.code !== "Tab") return;
@@ -761,7 +792,28 @@ export function Game({ connection, onBackToMenu }: GameProps) {
       window.removeEventListener("keyup", onUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, []);
+  }, [controlsOpen, phase]);
+
+  useEffect(() => {
+    if (phase === "lobby") {
+      setPaused(false);
+      return;
+    }
+    const onLockChange = () => {
+      if (document.pointerLockElement) {
+        setPaused(false);
+        return;
+      }
+      if (chatUnlockRef.current) {
+        chatUnlockRef.current = false;
+        return;
+      }
+      if (chatOpenRef.current || controlsOpen) return;
+      setPaused(true);
+    };
+    document.addEventListener("pointerlockchange", onLockChange);
+    return () => document.removeEventListener("pointerlockchange", onLockChange);
+  }, [phase, controlsOpen]);
 
   const localMeta = meta[sessionId];
   const localRole: Role = localMeta?.role ?? "prop";
@@ -782,10 +834,11 @@ export function Game({ connection, onBackToMenu }: GameProps) {
     return player && player.role === "prop" && player.alive ? n + 1 : n;
   }, 0);
 
+  const inputBlocked = chatOpen || paused;
   const canTransform =
     localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
-  const showCrosshair = (canTransform || canShoot) && !chatOpen;
+  const showCrosshair = (canTransform || canShoot) && !inputBlocked;
 
   const closeChat = () => {
     setChatOpen(false);
@@ -793,6 +846,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
   };
 
   const onChatKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     if (e.key === "Enter") {
       const text = chatDraft.trim();
       if (text) {
@@ -816,7 +870,12 @@ export function Game({ connection, onBackToMenu }: GameProps) {
 
   return (
     <>
-      <Canvas dpr={GAME_DPR} shadows camera={{ position: [0, 12, 18], fov: GAME_FOV }}>
+      <Canvas
+        ref={canvasRef}
+        dpr={GAME_DPR}
+        shadows
+        camera={{ position: [0, 12, 18], fov: GAME_FOV }}
+      >
         <Scene
           key={map.id}
           room={room}
@@ -832,7 +891,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           shotsRef={shotsRef}
           breaksRef={breaksRef}
           weapon={weapon}
-          chatOpen={chatOpen}
+          inputBlocked={inputBlocked}
           onShoot={onShoot}
         />
         {perfHud && <PerfProbe playersRef={playersRef} localId={sessionId} nodeRef={perfNodeRef} />}
@@ -868,8 +927,8 @@ export function Game({ connection, onBackToMenu }: GameProps) {
                 ) : (
                   <span className="lobby-overlay-meta">Waiting for the host to start</span>
                 )}
-                <button type="button" className="btn-ghost" onClick={onBackToMenu}>
-                  Back to menu
+                <button type="button" className="btn-ghost" onClick={onBackToParty}>
+                  Back to party
                 </button>
                 {isHost && ids.length < MIN_PLAYERS_TO_START && (
                   <span className="lobby-overlay-meta">
@@ -893,6 +952,9 @@ export function Game({ connection, onBackToMenu }: GameProps) {
                 </ul>
                 <button type="button" onClick={toggleReady}>
                   {localReady ? "Cancel" : "Ready"}
+                </button>
+                <button type="button" className="btn-ghost" onClick={onLeaveMatch}>
+                  Leave
                 </button>
                 <span className="lobby-overlay-meta">
                   {ids.length < MIN_PLAYERS_TO_START
@@ -954,6 +1016,7 @@ export function Game({ connection, onBackToMenu }: GameProps) {
           ids={ids}
           meta={meta}
           localId={sessionId}
+          onLeave={onLeaveMatch}
         />
       )}
 
@@ -1039,6 +1102,22 @@ export function Game({ connection, onBackToMenu }: GameProps) {
         />
       )}
       {controlsOpen && <ControlsDialog onClose={() => setControlsOpen(false)} />}
+
+      {paused && phase !== "lobby" && (
+        <div className="pause">
+          <div className="pause-card panel">
+            <span className="eyebrow">Round in progress</span>
+            <h2>Match menu</h2>
+            <button type="button" onClick={resume}>
+              Resume
+            </button>
+            <button type="button" className="btn-ghost" onClick={onLeaveMatch}>
+              Leave match
+            </button>
+            <span className="pause-hint">The round keeps running — click the game to resume</span>
+          </div>
+        </div>
+      )}
     </>
   );
 }

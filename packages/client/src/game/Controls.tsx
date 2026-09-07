@@ -48,7 +48,7 @@ const CONTROL_GROUPS: ControlGroup[] = [
     items: [
       { keys: ["M"], label: "Mute" },
       { keys: ["?"], label: "Controls" },
-      { keys: ["Esc"], label: "Close" },
+      { keys: ["Esc"], label: "Match menu / close" },
     ],
   },
 ];

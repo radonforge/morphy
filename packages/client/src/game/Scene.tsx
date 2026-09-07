@@ -515,7 +515,7 @@ interface SceneProps {
   shotsRef: ShotsRef;
   breaksRef: BreaksRef;
   weapon: WeaponId;
-  chatOpen: boolean;
+  inputBlocked: boolean;
   onShoot: () => void;
 }
 
@@ -533,7 +533,7 @@ export function Scene({
   shotsRef,
   breaksRef,
   weapon,
-  chatOpen,
+  inputBlocked,
   onShoot,
 }: SceneProps) {
   const catalog = useMemo<Catalog>(
@@ -602,8 +602,11 @@ export function Scene({
     }
   }, [meta, ids, localId, catalog, playersRef]);
   const canTransform =
-    localRole === "prop" && localAlive && !chatOpen && (phase === "hiding" || phase === "hunting");
-  const canShoot = localRole === "hunter" && localAlive && !chatOpen && phase === "hunting";
+    localRole === "prop" &&
+    localAlive &&
+    !inputBlocked &&
+    (phase === "hiding" || phase === "hunting");
+  const canShoot = localRole === "hunter" && localAlive && !inputBlocked && phase === "hunting";
 
   return (
     <>
@@ -651,7 +654,7 @@ export function Scene({
         alive={localAlive}
         teleportRef={teleportRef}
         tauntPulseRef={tauntPulseRef}
-        chatOpen={chatOpen}
+        inputBlocked={inputBlocked}
         playersRef={playersRef}
         colliders={colliders}
         walls={walls}
@@ -1775,7 +1778,7 @@ interface LocalPlayerProps {
   alive: boolean;
   teleportRef: TeleportRef;
   tauntPulseRef: TauntPulseRef;
-  chatOpen: boolean;
+  inputBlocked: boolean;
   playersRef: PlayersRef;
   colliders: ObbCollider[];
   walls: Wall[];
@@ -1795,7 +1798,7 @@ function LocalPlayer({
   alive,
   teleportRef,
   tauntPulseRef,
-  chatOpen,
+  inputBlocked,
   playersRef,
   colliders,
   walls,
@@ -1804,7 +1807,7 @@ function LocalPlayer({
   motionRef,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
-  const keys = useControls(!chatOpen);
+  const keys = useControls(!inputBlocked);
   const look = useMouseLook();
   const { camera } = useThree();
 

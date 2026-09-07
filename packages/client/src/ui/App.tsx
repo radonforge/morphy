@@ -99,12 +99,12 @@ export function App() {
     }
   }, []);
 
-  const handleBackToMenu = useCallback(() => setView("party"), []);
+  const handleBackToParty = useCallback(() => setView("party"), []);
 
   if (view === "game" && connection) {
     return (
       <Suspense fallback={<div className="game-loading">Loading match…</div>}>
-        <Game connection={connection} onBackToMenu={handleBackToMenu} />
+        <Game connection={connection} onBackToParty={handleBackToParty} onLeaveMatch={disconnect} />
       </Suspense>
     );
   }
