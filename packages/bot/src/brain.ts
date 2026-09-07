@@ -5,7 +5,7 @@
  * drives it against its own authoritative room state to fill quiet public
  * rooms, which is why this entry point exists as `@morphy/bot/brain`.
  */
-export { clampDifficulty, DEFAULT_DIFFICULTY } from "./config";
+export { BOT_NAMES, clampDifficulty, DEFAULT_DIFFICULTY } from "./config";
 export { BotDriver, type BotDriverOptions, type DriverAction } from "./driver";
 export { ScriptedPolicy } from "./policy/scripted";
 export type { Policy } from "./policy/types";

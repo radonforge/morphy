@@ -9,6 +9,8 @@ export const MIN_PLAYERS_TO_START = 2;
 export const HUNTER_RATIO = 0.25;
 
 export const LOBBY_AUTOSTART_MS = 20_000;
+export const BOT_FILL_DELAY_MS = 10_000;
+export const BOT_FILL_TARGET = 4;
 export const START_COUNTDOWN_MS = 5_000;
 export const HIDE_DURATION_MS = 20_000;
 export const ROUND_DURATION_MS = 240_000;

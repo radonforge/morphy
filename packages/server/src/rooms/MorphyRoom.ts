@@ -1,7 +1,9 @@
 import { type Client, matchMaker, Room, ServerError } from "@colyseus/core";
 import { MapSchema, Schema, type } from "@colyseus/schema";
+import { BotDriver, DEFAULT_DIFFICULTY, ScriptedPolicy, snapshot } from "@morphy/bot/brain";
 import {
   type AvatarId,
+  BOT_FILL_DELAY_MS,
   colliderAabb,
   computePropBounds,
   DECOY_BUDGET,
@@ -13,6 +15,7 @@ import {
   HIDE_DURATION_MS,
   HUNTER_MAX_HP,
   HUNTER_RATIO,
+  INPUT_SEND_RATE_MS,
   type InputMessage,
   isAvatarId,
   isMapId,
@@ -73,6 +76,7 @@ import {
 import { parseDeviceId } from "../identity";
 import { buildMap } from "../maps";
 import { playerStats, type RoundOutcome } from "../stats/repository";
+import { botName, botSessionId, desiredBotCount, isBotSessionId } from "./botFill";
 
 const FALLBACK_NAME = "Player";
 const SPAWN_CLEARANCE = 1.5;
@@ -124,6 +128,21 @@ export class RoomState extends Schema {
 
 interface ClearableTimer {
   clear(): void;
+}
+
+/**
+ * The part of a Colyseus `Client` the gameplay handlers actually use, so a
+ * server-driven bot can stand in for one and go through the very same
+ * validation and hit resolution as a human player. `Client` satisfies it.
+ */
+interface Actor {
+  readonly sessionId: string;
+  send(type: string, message?: unknown): void;
+}
+
+interface BotRuntime {
+  driver: BotDriver;
+  actor: Actor;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -283,6 +302,10 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private pingNonce = 0;
   private deviceIds = new Map<string, string>();
   private roundRoster = new Set<string>();
+  private bots = new Map<string, BotRuntime>();
+  private botSeq = 0;
+  private botTicker?: ClearableTimer;
+  private botFillTimer?: ClearableTimer;
 
   async onCreate(options: unknown): Promise<void> {
     const requested = (options as { map?: unknown } | undefined)?.map;
@@ -348,7 +371,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.state.mapId = map.id;
   }
 
-  private handleChat(client: Client, payload: unknown): void {
+  private handleChat(client: Actor, payload: unknown): void {
     const text = parseChatText(payload);
     if (!text) return;
     const player = this.state.players.get(client.sessionId);
@@ -374,6 +397,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     if (deviceId) this.deviceIds.set(client.sessionId, deviceId);
     this.state.players.set(client.sessionId, player);
     if (this.state.hostId === "") this.state.hostId = client.sessionId;
+    this.syncBots();
     this.maybeStartRound();
   }
 
@@ -392,6 +416,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       this.resetToLobby();
     } else {
       this.checkRoundEnd();
+      this.syncBots();
       this.maybeStartRound();
     }
   }
@@ -441,7 +466,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     });
   }
 
-  private handleReady(client: Client, payload: unknown): void {
+  private handleReady(client: Actor, payload: unknown): void {
     if (this.state.phase !== "lobby") return;
     const ready = parseReady(payload);
     if (ready === null) return;
@@ -463,7 +488,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     return spawns[this.state.players.size % spawns.length] ?? this.map.bounds.min;
   }
 
-  private handleInput(client: Client, payload: unknown): void {
+  private handleInput(client: Actor, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
     if (!player?.alive) return;
     if (player.role === "hunter" && this.state.phase === "hiding") return;
@@ -617,7 +642,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     };
   }
 
-  private handleShoot(client: Client, payload: unknown): void {
+  private handleShoot(client: Actor, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
     if (player?.role !== "hunter" || !player.alive) return;
     if (this.state.phase !== "hunting") return;
@@ -853,7 +878,131 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
         console.error(`[morphy] failed to unlock room ${this.roomId}:`, error);
       });
     }
+    this.syncBots();
     this.maybeStartRound();
+  }
+
+  onDispose(): void {
+    this.stopBotTicker();
+    this.cancelBotFill();
+    for (const bot of this.bots.values()) this.stopDriver(bot);
+    this.bots.clear();
+  }
+
+  private humanCount(): number {
+    let humans = 0;
+    this.state.players.forEach((_player, sessionId) => {
+      if (!isBotSessionId(sessionId)) humans++;
+    });
+    return humans;
+  }
+
+  /**
+   * Bring the bot population in line with {@link desiredBotCount}. Removals are
+   * immediate so an arriving human takes a bot's seat at once; additions wait
+   * out {@link BOT_FILL_DELAY_MS}, giving real players a chance to show up
+   * first. Only ever runs in a public lobby, so a round's roster never changes
+   * under the players.
+   */
+  private syncBots(): void {
+    if (this.state.isPrivate || this.state.phase !== "lobby") return;
+    const want = desiredBotCount(this.humanCount());
+    for (const sessionId of [...this.bots.keys()]) {
+      if (this.bots.size <= want) break;
+      this.removeBot(sessionId);
+    }
+    if (this.bots.size >= want) {
+      this.cancelBotFill();
+      return;
+    }
+    if (!this.botFillTimer) {
+      this.botFillTimer = this.clock.setTimeout(() => {
+        this.botFillTimer = undefined;
+        this.fillBots();
+      }, BOT_FILL_DELAY_MS);
+    }
+  }
+
+  private cancelBotFill(): void {
+    this.botFillTimer?.clear();
+    this.botFillTimer = undefined;
+  }
+
+  private fillBots(): void {
+    if (this.state.isPrivate || this.state.phase !== "lobby") return;
+    const want = desiredBotCount(this.humanCount());
+    while (this.bots.size < want) this.addBot();
+    this.maybeStartRound();
+  }
+
+  private addBot(): void {
+    const seq = ++this.botSeq;
+    const sessionId = botSessionId(seq);
+    const spawn = this.pickLobbySpawn();
+    const player = new PlayerState();
+    player.id = sessionId;
+    player.name = botName(seq);
+    player.avatar = randomAvatarId();
+    player.x = spawn.x;
+    player.y = spawn.y;
+    player.z = spawn.z;
+    this.state.players.set(sessionId, player);
+
+    const driver = new BotDriver({
+      name: player.name,
+      difficulty: DEFAULT_DIFFICULTY,
+      readyAtPlayers: MIN_PLAYERS_TO_START,
+      policy: new ScriptedPolicy(DEFAULT_DIFFICULTY),
+      visibility: "full",
+      trace: null,
+    });
+    driver.setMap(this.map);
+    driver.syncPosition(spawn.x, spawn.z);
+    this.bots.set(sessionId, { driver, actor: { sessionId, send: () => undefined } });
+    if (!this.botTicker) {
+      this.botTicker = this.clock.setInterval(() => this.tickBots(), INPUT_SEND_RATE_MS);
+    }
+  }
+
+  private removeBot(sessionId: string): void {
+    const bot = this.bots.get(sessionId);
+    if (!bot) return;
+    this.bots.delete(sessionId);
+    this.stopDriver(bot);
+    this.removeDecoysOf(sessionId);
+    this.state.players.delete(sessionId);
+    this.nextShotAt.delete(sessionId);
+    this.nextDecoyAt.delete(sessionId);
+    if (this.bots.size === 0) this.stopBotTicker();
+  }
+
+  private stopDriver(bot: BotRuntime): void {
+    void bot.driver.stop().catch((error: unknown) => {
+      console.error(`[morphy] bot ${bot.actor.sessionId} failed to stop:`, error);
+    });
+  }
+
+  private stopBotTicker(): void {
+    this.botTicker?.clear();
+    this.botTicker = undefined;
+  }
+
+  /**
+   * Drive every bot one tick. Their motor output goes through the same
+   * `handle*` entry points a real client's messages do, so bots get no
+   * authority a player does not have.
+   */
+  private tickBots(): void {
+    const now = Date.now();
+    for (const sessionId of [...this.bots.keys()]) {
+      const bot = this.bots.get(sessionId);
+      if (!bot) continue;
+      const action = bot.driver.tick(snapshot(this.state, sessionId), now);
+      if (action.ready) this.handleReady(bot.actor, { ready: true });
+      if (action.input) this.handleInput(bot.actor, action.input);
+      if (action.shoot) this.handleShoot(bot.actor, { dir: action.shoot.dir });
+      if (action.say) this.handleChat(bot.actor, { text: action.say });
+    }
   }
 
   private checkRoundEnd(): void {

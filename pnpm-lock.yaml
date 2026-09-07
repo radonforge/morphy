@@ -94,6 +94,9 @@ importers:
       '@colyseus/ws-transport':
         specifier: ^0.17.13
         version: 0.17.13(@colyseus/core@0.17.44)(express@5.2.1)
+      '@morphy/bot':
+        specifier: workspace:*
+        version: link:../bot
       '@morphy/shared':
         specifier: workspace:*
         version: link:../shared

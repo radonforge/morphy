@@ -31,10 +31,16 @@ Single-package typecheck: `pnpm --filter @morphy/server typecheck` (or `@morphy/
 ## Architecture
 
 pnpm-workspace monorepo, four packages with a strict runtime dependency direction:
-**client → shared ← server**, plus **bot → shared** (client and server never import each other at
-runtime; each depends only on `@morphy/shared`).
+**client → shared ← server**, plus **bot → shared** and **server → bot/brain** (client and server
+still never import each other at runtime).
 
-The one deliberate exception is build-time: `packages/client/runtimeAssets.ts` imports the map
+`server → bot` exists so the room-filling bots and the CLI bots run the *same* behaviour instead of
+two copies that drift. It is confined to the `@morphy/bot/brain` entry point — the package's
+`exports` map deliberately splits the transport-free half (`driver.ts`, `reflex.ts`, `view.ts`,
+`nav/`, `policy/`) from `bot.ts`, the only module that touches `@colyseus/sdk`. Import
+`@morphy/bot/brain` from the server, never `@morphy/bot`, or the SDK lands in the server's graph.
+
+The other deliberate exception is build-time: `packages/client/runtimeAssets.ts` imports the map
 builders and prop catalogs from `../server/src/…` so the production GLB allow-list is derived from
 the same data the server emits. Nothing of it reaches the browser — the Vite plugin consuming it is
 `apply: "build"`.
@@ -58,6 +64,7 @@ The single source of truth for everything client and server must agree on. **Exp
 - `index.ts` boots `defineServer` with `WebSocketTransport`. **Uses `@colyseus/core` + `@colyseus/ws-transport` directly, never the `colyseus` meta-package** — this is deliberate (see pnpm-workspace `allowBuilds` / `minimumReleaseAgeExclude`).
 - `rooms/MorphyRoom.ts` — the whole game. Holds `RoomState`/`PlayerState` (`@colyseus/schema` classes; note `experimentalDecorators` + `useDefineForClassFields: false` in its tsconfig). Owns the round state machine (`lobby → starting → hiding → hunting → round_end`), role assignment, the patch loop, and **server-side hit resolution** (ray vs. prop bounding cylinders + wall AABBs). Every inbound WS payload is validated by a `parse*` helper that returns `null` on bad input (silently ignored, never trusted). Capture is **infection**: a hit prop becomes a hunter and stays in play, so the round ends when no prop is left.
 - Maps: **three hand-authored maps**, one builder each (`maps/station.ts`, `maps/mars.ts`, `maps/urban.ts`), registered in `maps/index.ts` as `MAP_BUILDERS` and chosen from the lobby picker. `buildMap(id, seed)` runs on `onCreate` and again when a party host switches map — **not** per round; a fresh seed only reshuffles the seeded variation (tile variants, furniture, scenery) inside the authored layout. `maps/lib.ts` holds the shared grid primitives (`TILE`, wall/floor variants, colliders), `furnish.ts` fills rooms from semantic **archetypes** (mess hall, quarters, control room, storage bay, lab), and `spaceCatalog.ts` / `marsCatalog.ts` / `urbanCatalog.ts` are the per-theme prop catalogs — the shapes players can morph into. Each builder also exports **every model path it can emit for any seed**, which is what the client's production asset allow-list is built from.
+- `rooms/botFill.ts` + the bot block in `MorphyRoom.ts` — a quiet **public** room pads itself to `BOT_FILL_TARGET` presences with server-driven bots after `BOT_FILL_DELAY_MS`, and hands a bot's seat back the moment a human joins, so bots never take a slot a player wants nor make the room look fuller to the matchmaker. They hold a synthetic `bot:<n>` session id, are never added or removed mid-round, and their motor output goes through the same `handleInput` / `handleShoot` / `handleReady` entry points a real client's messages do — so a bot has no authority a player lacks. Those handlers take an `Actor` (just `sessionId` + `send`) rather than a Colyseus `Client` for exactly that reason. Private rooms are never filled.
 - `stats/repository.ts` — lifetime player stats in SQLite (`node:sqlite`), keyed by an opaque device id the client mints in localStorage and sends both as a join option and as the `x-device-id` header of `GET /stats` (`http.ts`). `config.ts` reads `MORPHY_DB_PATH`, which production sets outside the deploy directory so a redeploy never wipes accumulated stats.
 
 ### `packages/client` — Vite + React + react-three-fiber

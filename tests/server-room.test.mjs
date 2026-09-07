@@ -3,12 +3,18 @@ import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
-import { MSG_SHOT_FIRED } from "../packages/shared/src/index.ts";
+import {
+  BOT_FILL_DELAY_MS,
+  BOT_FILL_TARGET,
+  LOBBY_AUTOSTART_MS,
+  MSG_SHOT_FIRED,
+} from "../packages/shared/src/index.ts";
 
 const databasePath = join(tmpdir(), `morphy-room-test-${process.pid}.db`);
 process.env.MORPHY_DB_PATH = databasePath;
 
 const { MorphyRoom, PlayerState } = await import("../packages/server/src/rooms/MorphyRoom.ts");
+const { buildMap } = await import("../packages/server/src/maps/index.ts");
 const { playerStats } = await import("../packages/server/src/stats/repository.ts");
 
 after(() => {
@@ -40,24 +46,10 @@ function fakeClock() {
   return { scheduled, setTimeout: schedule, setInterval: schedule };
 }
 
-function lobbyMap() {
-  return {
-    spawnPoints: {
-      props: [
-        { x: 0, y: 0, z: 0 },
-        { x: 2, y: 0, z: 0 },
-        { x: 4, y: 0, z: 0 },
-      ],
-    },
-    bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 10, y: 10, z: 10 } },
-    propCatalog: [],
-  };
-}
-
 function publicRoom() {
   const room = new MorphyRoom();
   room.clock = fakeClock();
-  room.map = lobbyMap();
+  room.map = buildMap("station", 1);
   room.propBounds = new Map();
   room.lock = async () => {};
   return room;
@@ -65,6 +57,24 @@ function publicRoom() {
 
 function joinRoom(room, id) {
   room.onJoin({ sessionId: id }, { name: id });
+}
+
+function timersOf(room, ms) {
+  return room.clock.scheduled.filter((entry) => entry.ms === ms && !entry.cleared);
+}
+
+function fireBotFill(room) {
+  const fill = timersOf(room, BOT_FILL_DELAY_MS).at(-1);
+  assert.ok(fill, "expected a pending bot-fill timer");
+  fill.fn();
+}
+
+function botCount(room) {
+  let bots = 0;
+  room.state.players.forEach((_player, id) => {
+    if (id.startsWith("bot:")) bots++;
+  });
+  return bots;
 }
 
 test("a public lobby arms the auto-start clock at the minimum player count", () => {
@@ -83,14 +93,15 @@ test("a later joiner does not push the auto-start further out", () => {
   const armedAt = room.state.phaseEndsAt;
   joinRoom(room, "c");
   assert.equal(room.state.phaseEndsAt, armedAt);
-  assert.equal(room.clock.scheduled.length, 1);
+  assert.equal(timersOf(room, LOBBY_AUTOSTART_MS).length, 1);
 });
 
 test("the auto-start clock starts the round when it expires", () => {
   const room = publicRoom();
   joinRoom(room, "a");
   joinRoom(room, "b");
-  const armed = room.clock.scheduled.at(-1);
+  const armed = timersOf(room, LOBBY_AUTOSTART_MS).at(-1);
+  assert.ok(armed);
   armed.fn();
   assert.equal(room.state.phase, "starting");
 });
@@ -109,7 +120,8 @@ test("dropping below the minimum player count disarms the auto-start", () => {
   const room = publicRoom();
   joinRoom(room, "a");
   joinRoom(room, "b");
-  const armed = room.clock.scheduled.at(-1);
+  const armed = timersOf(room, LOBBY_AUTOSTART_MS).at(-1);
+  assert.ok(armed);
   room.onLeave({ sessionId: "b" });
   assert.equal(room.state.phaseEndsAt, 0);
   assert.equal(armed.cleared, true);
@@ -122,6 +134,52 @@ test("a private room waits for its host instead of auto-starting", () => {
   joinRoom(room, "b");
   assert.equal(room.state.phase, "lobby");
   assert.equal(room.state.phaseEndsAt, 0);
+});
+
+test("a lone player is given bots once the fill delay expires", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  assert.equal(botCount(room), 0);
+  fireBotFill(room);
+  assert.equal(room.state.players.size, BOT_FILL_TARGET);
+  assert.equal(botCount(room), BOT_FILL_TARGET - 1);
+});
+
+test("an arriving human takes a bot's seat rather than adding to it", () => {
+  const room = publicRoom();
+  joinRoom(room, "first");
+  fireBotFill(room);
+  joinRoom(room, "second");
+  assert.equal(room.state.players.size, BOT_FILL_TARGET);
+  assert.equal(botCount(room), BOT_FILL_TARGET - 2);
+});
+
+test("a round in progress keeps its roster when a player leaves", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  fireBotFill(room);
+  joinRoom(room, "b");
+  const bots = botCount(room);
+  room.state.phase = "hunting";
+  room.onLeave({ sessionId: "b" });
+  assert.equal(botCount(room), bots);
+});
+
+test("the last human leaving takes every bot with them", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  room.onLeave({ sessionId: "human" });
+  assert.equal(botCount(room), 0);
+  assert.equal(room.state.players.size, 0);
+});
+
+test("a private room is never filled with bots", () => {
+  const room = publicRoom();
+  room.state.isPrivate = true;
+  joinRoom(room, "host");
+  assert.equal(timersOf(room, BOT_FILL_DELAY_MS).length, 0);
+  assert.equal(botCount(room), 0);
 });
 
 test("joining an in-progress round is rejected", () => {
