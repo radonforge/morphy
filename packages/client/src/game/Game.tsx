@@ -86,6 +86,15 @@ const PHASE_DURATION_MS: Record<Phase, number> = {
   round_end: ROUND_END_MS,
 };
 
+/**
+ * The match menu belongs to a round that is actually being played. The lobby
+ * overlay and the result screen carry their own way out, and letting the menu
+ * outlive the round would paint it over those.
+ */
+function isRoundInPlay(phase: Phase): boolean {
+  return phase === "starting" || phase === "hiding" || phase === "hunting";
+}
+
 interface GameProps {
   connection: Connection;
   onBackToParty: () => void;
@@ -768,7 +777,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
       if (e.key === "Escape") {
         if (controlsOpen) {
           setControlsOpen(false);
-        } else if (phase !== "lobby") {
+        } else if (isRoundInPlay(phase)) {
           setPaused((open) => !open);
         }
         return;
@@ -795,7 +804,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   }, [controlsOpen, phase]);
 
   useEffect(() => {
-    if (phase === "lobby") {
+    if (!isRoundInPlay(phase)) {
       setPaused(false);
       return;
     }
@@ -1109,7 +1118,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
       )}
       {controlsOpen && <ControlsDialog onClose={() => setControlsOpen(false)} />}
 
-      {paused && phase !== "lobby" && (
+      {paused && isRoundInPlay(phase) && (
         <div className="pause">
           <div className="pause-card panel">
             <span className="eyebrow">Round in progress</span>
