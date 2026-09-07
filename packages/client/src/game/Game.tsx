@@ -719,7 +719,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (chatOpenRef.current) return;
+      if (chatOpenRef.current || paused) return;
       if (e.code === "KeyT") {
         e.preventDefault();
         if (document.pointerLockElement) {
@@ -737,7 +737,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pickWeapon]);
+  }, [pickWeapon, paused]);
 
   useEffect(() => {
     preloadSamples();
