@@ -6,8 +6,11 @@ import { after, test } from "node:test";
 import {
   BOT_FILL_DELAY_MS,
   BOT_FILL_TARGET,
+  HIDE_DURATION_MS,
+  HUNTER_MAX_HP,
   LOBBY_AUTOSTART_MS,
   MSG_SHOT_FIRED,
+  START_COUNTDOWN_MS,
 } from "../packages/shared/src/index.ts";
 
 const databasePath = join(tmpdir(), `morphy-room-test-${process.pid}.db`);
@@ -67,6 +70,38 @@ function fireBotFill(room) {
   const fill = timersOf(room, BOT_FILL_DELAY_MS).at(-1);
   assert.ok(fill, "expected a pending bot-fill timer");
   fill.fn();
+}
+
+/** Run the real lobby -> starting -> hiding -> hunting transitions so roles are assigned. */
+function startRound(room) {
+  room.startCountdown();
+  room.clock.scheduled
+    .filter((e) => e.ms === START_COUNTDOWN_MS)
+    .at(-1)
+    .fn();
+  room.clock.scheduled
+    .filter((e) => e.ms === HIDE_DURATION_MS)
+    .at(-1)
+    .fn();
+  assert.equal(room.state.phase, "hunting");
+}
+
+/**
+ * Pin the hunter on a bot so a departing human is always a prop. `assignRoles`
+ * shuffles, so without this a test that needs the round to survive a departure
+ * fails whenever the leaver happens to draw the only hunter.
+ */
+function pinHunterOnABot(room) {
+  let hunter = null;
+  room.state.players.forEach((_player, id) => {
+    if (hunter === null && id.startsWith("bot:")) hunter = id;
+  });
+  assert.ok(hunter, "expected at least one bot to pin the hunter on");
+  room.state.players.forEach((player, id) => {
+    player.role = id === hunter ? "hunter" : "prop";
+    player.alive = true;
+    player.hp = id === hunter ? HUNTER_MAX_HP : 0;
+  });
 }
 
 function botCount(room) {
@@ -154,15 +189,33 @@ test("an arriving human takes a bot's seat rather than adding to it", () => {
   assert.equal(botCount(room), BOT_FILL_TARGET - 2);
 });
 
-test("a round in progress keeps its roster when a player leaves", () => {
+test("a live round keeps its roster when one of several humans leaves", () => {
   const room = publicRoom();
   joinRoom(room, "a");
   fireBotFill(room);
   joinRoom(room, "b");
   const bots = botCount(room);
-  room.state.phase = "hunting";
+  startRound(room);
+  pinHunterOnABot(room);
+  const pendingFills = timersOf(room, BOT_FILL_DELAY_MS).length;
   room.onLeave({ sessionId: "b" });
+  assert.equal(room.state.phase, "hunting");
   assert.equal(botCount(room), bots);
+  assert.equal(timersOf(room, BOT_FILL_DELAY_MS).length, pendingFills);
+});
+
+test("a bot-filled round ends when its last human walks out", () => {
+  const deviceId = "abandoned-round-device";
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  room.deviceIds.set("human", deviceId);
+  startRound(room);
+  room.onLeave({ sessionId: "human" });
+  assert.equal(room.state.phase, "lobby");
+  assert.equal(botCount(room), 0);
+  assert.equal(room.state.players.size, 0);
+  assert.deepEqual(playerStats.get(deviceId), { rounds: 0, wins: 0, kills: 0, survivals: 0 });
 });
 
 test("the last human leaving takes every bot with them", () => {

@@ -411,7 +411,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     if (this.state.hostId === client.sessionId) {
       this.state.hostId = this.firstHumanId();
     }
-    if (this.state.players.size < MIN_PLAYERS_TO_START && this.state.phase !== "lobby") {
+    if (this.state.phase !== "lobby" && !this.canContinueRound()) {
       this.awardAbortedRound();
       this.resetToLobby();
     } else {
@@ -838,16 +838,29 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   }
 
   /**
+   * A round is worth continuing while a human is still in it and enough players
+   * remain to hold both roles. Bots satisfy the second condition but never the
+   * first: the bot fill target exceeds {@link MIN_PLAYERS_TO_START}, so a
+   * headcount that counts bots can never fall below the threshold, and a room
+   * whose last human walked out would keep an unattended match ticking for the
+   * rest of {@link ROUND_DURATION_MS}.
+   */
+  private canContinueRound(): boolean {
+    return this.humanCount() > 0 && this.state.players.size >= MIN_PLAYERS_TO_START;
+  }
+
+  /**
    * A round that runs out of players used to end without touching anyone's
    * record, so one player quitting erased the round for whoever was left too.
-   * The remaining player now takes the win — at most one, since the abort
-   * threshold is {@link MIN_PLAYERS_TO_START}. Only a round with roles already
-   * assigned counts: an abort during the start countdown has no roster for this
-   * round yet, and a round in `round_end` was recorded by `endRound`.
+   * The human left holding the room now takes the win instead. Only a round
+   * with roles already assigned counts: an abort during the start countdown has
+   * no roster for this round yet, and a round in `round_end` was recorded by
+   * `endRound`. A round abandoned by its last human awards nobody — there is no
+   * survivor to reward, and a bot's record is not kept.
    */
   private awardAbortedRound(): void {
     if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
-    const survivor = this.state.players.values().next().value;
+    const survivor = this.state.players.get(this.firstHumanId());
     if (!survivor) return;
     this.state.winner = survivor.role === "hunter" ? "hunters" : "props";
     this.recordRoundStats();
