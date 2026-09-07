@@ -18,6 +18,7 @@ import {
   isMapId,
   isWeaponId,
   type KillEvent,
+  LOBBY_AUTOSTART_MS,
   MAX_CHAT_LENGTH,
   MAX_CLIENT_MESSAGES_PER_SECOND,
   MAX_NAME_LENGTH,
@@ -695,15 +696,38 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.checkRoundEnd();
   }
 
+  /**
+   * Public rooms start on their own: reaching {@link MIN_PLAYERS_TO_START} arms
+   * a {@link LOBBY_AUTOSTART_MS} clock, and `ready` only shortens it rather
+   * than authorising the round, so one idle player can no longer hold a lobby
+   * hostage. A non-zero `phaseEndsAt` is the armed clock, so a later joiner
+   * does not push the start further out. Private rooms are unaffected — their
+   * host starts the round with {@link MSG_START}.
+   */
   private maybeStartRound(): void {
     if (this.state.isPrivate) return;
     if (this.state.phase !== "lobby") return;
-    if (this.state.players.size < MIN_PLAYERS_TO_START) return;
+    if (this.state.players.size < MIN_PLAYERS_TO_START) {
+      this.cancelAutoStart();
+      return;
+    }
     let allReady = true;
     this.state.players.forEach((player) => {
       if (!player.ready) allReady = false;
     });
-    if (allReady) this.startCountdown();
+    if (allReady) {
+      this.startCountdown();
+      return;
+    }
+    if (this.state.phaseEndsAt === 0) {
+      this.setPhase("lobby", LOBBY_AUTOSTART_MS, () => this.startCountdown());
+    }
+  }
+
+  private cancelAutoStart(): void {
+    this.phaseTimer?.clear();
+    this.phaseTimer = undefined;
+    this.state.phaseEndsAt = 0;
   }
 
   private setPhase(phase: Phase, durationMs: number, next: () => void): void {
@@ -829,6 +853,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
         console.error(`[morphy] failed to unlock room ${this.roomId}:`, error);
       });
     }
+    this.maybeStartRound();
   }
 
   private checkRoundEnd(): void {

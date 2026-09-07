@@ -959,8 +959,14 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
                 <span className="lobby-overlay-meta">
                   {ids.length < MIN_PLAYERS_TO_START
                     ? `Need at least ${MIN_PLAYERS_TO_START} players`
-                    : `Ready: ${readyCount}/${ids.length} — starts when everyone is ready`}
+                    : `Ready: ${readyCount}/${ids.length} — everyone ready starts it now`}
                 </span>
+                {phaseEndsAt > 0 && (
+                  <span className="lobby-overlay-meta">
+                    Auto-start
+                    <Countdown endsAt={phaseEndsAt} />
+                  </span>
+                )}
               </>
             )}
           </div>

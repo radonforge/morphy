@@ -26,6 +26,104 @@ function player(id, role) {
   return state;
 }
 
+function fakeClock() {
+  const scheduled = [];
+  const schedule = (fn, ms) => {
+    const entry = { fn, ms, cleared: false };
+    scheduled.push(entry);
+    return {
+      clear() {
+        entry.cleared = true;
+      },
+    };
+  };
+  return { scheduled, setTimeout: schedule, setInterval: schedule };
+}
+
+function lobbyMap() {
+  return {
+    spawnPoints: {
+      props: [
+        { x: 0, y: 0, z: 0 },
+        { x: 2, y: 0, z: 0 },
+        { x: 4, y: 0, z: 0 },
+      ],
+    },
+    bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 10, y: 10, z: 10 } },
+    propCatalog: [],
+  };
+}
+
+function publicRoom() {
+  const room = new MorphyRoom();
+  room.clock = fakeClock();
+  room.map = lobbyMap();
+  room.propBounds = new Map();
+  room.lock = async () => {};
+  return room;
+}
+
+function joinRoom(room, id) {
+  room.onJoin({ sessionId: id }, { name: id });
+}
+
+test("a public lobby arms the auto-start clock at the minimum player count", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  assert.equal(room.state.phaseEndsAt, 0);
+  joinRoom(room, "b");
+  assert.equal(room.state.phase, "lobby");
+  assert.ok(room.state.phaseEndsAt > Date.now());
+});
+
+test("a later joiner does not push the auto-start further out", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  const armedAt = room.state.phaseEndsAt;
+  joinRoom(room, "c");
+  assert.equal(room.state.phaseEndsAt, armedAt);
+  assert.equal(room.clock.scheduled.length, 1);
+});
+
+test("the auto-start clock starts the round when it expires", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  const armed = room.clock.scheduled.at(-1);
+  armed.fn();
+  assert.equal(room.state.phase, "starting");
+});
+
+test("everyone ready starts the round without waiting out the clock", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  room.handleReady({ sessionId: "a" }, { ready: true });
+  assert.equal(room.state.phase, "lobby");
+  room.handleReady({ sessionId: "b" }, { ready: true });
+  assert.equal(room.state.phase, "starting");
+});
+
+test("dropping below the minimum player count disarms the auto-start", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  const armed = room.clock.scheduled.at(-1);
+  room.onLeave({ sessionId: "b" });
+  assert.equal(room.state.phaseEndsAt, 0);
+  assert.equal(armed.cleared, true);
+});
+
+test("a private room waits for its host instead of auto-starting", () => {
+  const room = publicRoom();
+  room.state.isPrivate = true;
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  assert.equal(room.state.phase, "lobby");
+  assert.equal(room.state.phaseEndsAt, 0);
+});
+
 test("joining an in-progress round is rejected", () => {
   const room = new MorphyRoom();
   room.state.phase = "hunting";
