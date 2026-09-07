@@ -16,6 +16,7 @@ export const HIDE_DURATION_MS = 20_000;
 export const ROUND_DURATION_MS = 240_000;
 export const ROUND_END_MS = 8_000;
 export const TAUNT_INTERVAL_MS = 30_000;
+export const RECONNECT_WINDOW_MS = 30_000;
 
 export const HUNTER_MAX_HP = 100;
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;

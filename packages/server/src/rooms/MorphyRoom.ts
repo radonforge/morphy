@@ -63,6 +63,7 @@ import {
   PLAYER_EYE_HEIGHT,
   type PongMessage,
   type PropBounds,
+  RECONNECT_WINDOW_MS,
   REROLL_BUDGET,
   ROUND_DURATION_MS,
   ROUND_END_MS,
@@ -90,6 +91,7 @@ const FALLBACK_NAME = "Player";
 const SPAWN_CLEARANCE = 1.5;
 const PARTY_CODE_MAX_ATTEMPTS = 16;
 const PARTY_CODE_EXHAUSTED_STATUS = 503;
+const MS_PER_SECOND = 1_000;
 
 export class PlayerState extends Schema {
   @type("string") id = "";
@@ -111,6 +113,7 @@ export class PlayerState extends Schema {
   @type("string") avatar = "";
   @type("string") weapon: WeaponId = DEFAULT_WEAPON;
   @type("uint16") ping = 0;
+  @type("boolean") connected = true;
 }
 
 export class DecoyState extends Schema {
@@ -427,6 +430,30 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       this.syncBots();
       this.maybeStartRound();
     }
+  }
+
+  /**
+   * A dropped connection is not a departure. Hold the seat for
+   * {@link RECONNECT_WINDOW_MS} so a network blip does not cost a player the
+   * round it is standing in: the player stays in `state.players`, keeps its
+   * role and position, and rejoins on the same session id without passing
+   * through {@link onJoin} — so neither the in-progress guard there nor the
+   * lock a running round takes can shut it out. Colyseus runs {@link onLeave}
+   * itself once the window lapses, releasing the seat exactly as a deliberate
+   * quit would. A lobby gets no window: there is nothing to come back to, and
+   * the seat is better handed straight back.
+   */
+  onDrop(client: Client): void {
+    if (this.state.phase === "lobby") return;
+    const player = this.state.players.get(client.sessionId);
+    if (!player) return;
+    player.connected = false;
+    void this.allowReconnection(client, RECONNECT_WINDOW_MS / MS_PER_SECOND).catch(() => undefined);
+  }
+
+  onReconnect(client: Client): void {
+    const player = this.state.players.get(client.sessionId);
+    if (player) player.connected = true;
   }
 
   private handleStart(client: Client): void {

@@ -121,6 +121,7 @@ const PLAYER_META_FIELDS = [
   "ready",
   "avatar",
   "ping",
+  "connected",
 ] as const;
 
 interface ChatLine {
@@ -187,7 +188,8 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
       ai.decoysLeft === bi.decoysLeft &&
       ai.ready === bi.ready &&
       ai.avatar === bi.avatar &&
-      ai.ping === bi.ping
+      ai.ping === bi.ping &&
+      ai.connected === bi.connected
     );
   });
 }
@@ -223,11 +225,13 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
           <span>{player.name}</span>
           <span className={`role-${player.role}`}>{ROLE_LABEL[player.role]}</span>
           <span>
-            {player.alive
-              ? player.role === "hunter"
-                ? `Alive · ${player.hp} HP`
-                : "Alive"
-              : "Eliminated"}
+            {!player.connected
+              ? "Reconnecting…"
+              : player.alive
+                ? player.role === "hunter"
+                  ? `Alive · ${player.hp} HP`
+                  : "Alive"
+                : "Eliminated"}
           </span>
           <span>{player.role === "hunter" ? player.kills : "—"}</span>
           <span>{player.ping} ms</span>
@@ -499,6 +503,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
           ready: player.ready,
           avatar: player.avatar,
           ping: player.ping,
+          connected: player.connected,
         };
       }
       setMeta((prev) => (metaEqual(prev, next) ? prev : next));

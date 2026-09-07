@@ -10,8 +10,11 @@ import {
   HUNTER_MAX_HP,
   LOBBY_AUTOSTART_MS,
   MSG_SHOT_FIRED,
+  RECONNECT_WINDOW_MS,
   START_COUNTDOWN_MS,
 } from "../packages/shared/src/index.ts";
+
+const MS_PER_SECOND = 1_000;
 
 const databasePath = join(tmpdir(), `morphy-room-test-${process.pid}.db`);
 process.env.MORPHY_DB_PATH = databasePath;
@@ -103,6 +106,21 @@ function pinHunterOnABot(room) {
     player.alive = true;
     player.hp = id === hunter ? HUNTER_MAX_HP : 0;
   });
+}
+
+/**
+ * Stand in for Colyseus's seat holding, which needs a real transport. The
+ * returned array records every seat the room asked to hold; the promise never
+ * settles, so the window stays open until a test runs `onLeave` itself — which
+ * is what Colyseus does once the window lapses.
+ */
+function trackReconnections(room) {
+  const held = [];
+  room.allowReconnection = (client, seconds) => {
+    held.push({ sessionId: client.sessionId, seconds });
+    return new Promise(() => {});
+  };
+  return held;
 }
 
 function botCount(room) {
@@ -325,6 +343,71 @@ test("a round aborted during the start countdown records nothing", () => {
   room.onLeave({ sessionId: "quitter" });
   assert.equal(room.state.phase, "lobby");
   assert.deepEqual(playerStats.get(deviceId), { rounds: 0, wins: 0, kills: 0, survivals: 0 });
+});
+
+test("a drop mid-round holds the player's seat instead of releasing it", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  fireBotFill(room);
+  joinRoom(room, "b");
+  startRound(room);
+  pinHunterOnABot(room);
+  const held = trackReconnections(room);
+  room.onDrop({ sessionId: "b" });
+  const dropped = room.state.players.get("b");
+  assert.equal(room.state.phase, "hunting");
+  assert.ok(dropped, "the dropped player keeps its seat for the whole window");
+  assert.equal(dropped.connected, false);
+  assert.deepEqual(held, [{ sessionId: "b", seconds: RECONNECT_WINDOW_MS / MS_PER_SECOND }]);
+});
+
+test("a drop in the lobby gives the seat straight back", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  const held = trackReconnections(room);
+  room.onDrop({ sessionId: "b" });
+  assert.deepEqual(held, [], "a lobby seat is worth nothing to come back to");
+  assert.equal(room.state.players.get("b").connected, true);
+});
+
+test("a reconnected player resumes the round it dropped out of", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  fireBotFill(room);
+  joinRoom(room, "b");
+  startRound(room);
+  pinHunterOnABot(room);
+  trackReconnections(room);
+  const before = room.state.players.get("b");
+  const role = before.role;
+  const position = { x: before.x, y: before.y, z: before.z };
+  room.onDrop({ sessionId: "b" });
+  room.onReconnect({ sessionId: "b" });
+  const after = room.state.players.get("b");
+  assert.equal(after.connected, true);
+  assert.equal(after.role, role);
+  assert.deepEqual({ x: after.x, y: after.y, z: after.z }, position);
+});
+
+test("a reconnect window that lapses still awards the round to whoever is left", () => {
+  const deviceId = "lapsed-window-device";
+  const room = new MorphyRoom();
+  room.state.phase = "hunting";
+  const survivor = player("survivor", "hunter");
+  survivor.kills = 2;
+  room.state.players.set(survivor.id, survivor);
+  room.state.players.set("dropped", player("dropped", "prop"));
+  room.roundRoster = new Set(["survivor", "dropped"]);
+  room.deviceIds.set("survivor", deviceId);
+  trackReconnections(room);
+
+  room.onDrop({ sessionId: "dropped" });
+  assert.equal(room.state.phase, "hunting", "the round runs on while the seat is held");
+
+  room.onLeave({ sessionId: "dropped" });
+  assert.equal(room.state.phase, "lobby");
+  assert.deepEqual(playerStats.get(deviceId), { rounds: 1, wins: 1, kills: 2, survivals: 0 });
 });
 
 test("a logged room exception never carries the payload or the device id", () => {
