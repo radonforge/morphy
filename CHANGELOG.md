@@ -8,6 +8,38 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Security
+
+- The nginx security headers (`X-Frame-Options`, `X-Content-Type-Options`,
+  `Referrer-Policy`, `Permissions-Policy`) now reach the HTML document and the
+  static assets. nginx only inherits `add_header` where a level declares none of
+  its own, so the four locations that set `Cache-Control` had been silently
+  dropping them.
+- Transitive dependencies refreshed to clear four advisories (`nanoid`,
+  `postcss`, `qs`, `fflate`). None was reachable from this deployment.
+
+### Added
+
+- `LICENSE`: proprietary, copyright Radon Forge.
+
+### Changed
+
+- The game moved to `morphy.radonforge.com`. The old host answers `301` with the
+  path and query preserved, so existing links keep working.
+- **Lifetime stats restart from zero.** They are keyed by a device id kept in
+  browser storage, which is scoped to the origin and therefore does not follow
+  the move; the stored rows survive but no longer match any player.
+- Production ships on a version tag (`v*`) or a manual dispatch, no longer on
+  every push to `master`. CI still runs on pushes and pull requests.
+- The `ci` script is now `check:ci`: pnpm has its own built-in `ci` command,
+  which shadowed the script and ran a clean reinstall instead of Biome.
+
+### Fixed
+
+- The deployed nginx config now applies the model and sound revalidation policy
+  that 0.1.0 claimed: the live file had kept the year-long `immutable` headers,
+  so a deploy could not invalidate a changed GLB.
+
 ## [0.1.0] — 2026-07-21
 
 First tracked release: server-authority hardening, a slimmer asset pipeline,
