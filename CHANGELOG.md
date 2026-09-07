@@ -19,6 +19,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - Quiet public rooms pad themselves with server-driven bots after 10 s and hand
   a bot's seat back the moment a human joins, so a lone player still gets a
   match. Private rooms are never filled.
+- Losing the connection mid-round no longer costs the round: the seat, role and
+  position are held for 30 s while the client rejoins, and the scoreboard shows
+  the player as `Reconnecting…` in the meantime. A round that outlives the
+  window ends exactly as an abandoned one always did. Leaving on purpose is
+  still immediate.
 
 ### Changed
 
