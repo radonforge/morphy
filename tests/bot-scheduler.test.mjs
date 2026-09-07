@@ -89,3 +89,54 @@ test("bot decision scheduler releases single-flight after a synchronous policy t
     await bot.stop();
   }
 });
+
+const { buildMap } = await import("../packages/server/src/maps/index.ts");
+
+function livePlayer(alive) {
+  return {
+    id: "self",
+    name: "self",
+    x: 0,
+    y: 0,
+    z: 0,
+    rot: 0,
+    aim: 0,
+    role: "hunter",
+    alive,
+    hp: 100,
+    kills: 0,
+    propType: "",
+    ready: true,
+  };
+}
+
+test("a chat line decided before the bot died is dropped, not saved for later", async () => {
+  const driver = new BotDriver({
+    name: "Chatty",
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "chatty",
+      decide: (obs) => Promise.resolve({ kind: "chat", text: "look behind you", seq: obs.seq }),
+    },
+    visibility: "full",
+    trace: null,
+  });
+  driver.setMap(buildMap("station", 1));
+  const world = (alive) => ({
+    phase: "hunting",
+    winner: "",
+    self: livePlayer(alive),
+    others: [],
+    decoys: [],
+  });
+
+  driver.tick(world(true), Date.now());
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(driver.pendingSay, "look behind you");
+
+  driver.tick(world(false), Date.now());
+  assert.equal(driver.pendingSay, null);
+  assert.equal(driver.tick(world(true), Date.now()).say, null);
+  await driver.stop();
+});

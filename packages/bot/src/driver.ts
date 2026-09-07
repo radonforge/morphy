@@ -95,6 +95,7 @@ export class BotDriver {
   private eventRole: Role = "prop";
   private eventHp = 0;
   private losIds = new Set<string>();
+  /** A decided chat line is only worth saying on the very next tick; a bot that dies or returns to the lobby first drops it rather than blurting it out a round later. */
   private pendingSay: string | null = null;
 
   constructor(private readonly options: BotDriverOptions) {
@@ -142,12 +143,16 @@ export class BotDriver {
     }
 
     if (world.phase === "lobby") {
+      this.pendingSay = null;
       const playerCount = world.others.length + 1;
       const wantsReady = !self.ready && playerCount >= this.options.readyAtPlayers;
       return { ...IDLE, ready: wantsReady };
     }
 
-    if (!self.alive) return IDLE;
+    if (!self.alive) {
+      this.pendingSay = null;
+      return IDLE;
+    }
 
     const reflexWorld: ReflexWorld = {
       phase: world.phase,
