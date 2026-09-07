@@ -8,6 +8,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-09-07
+
+Infrastructure release: the game moved to its own domain under the Radon Forge
+org, and the deployed edge config caught up with what 0.1.0 had claimed.
+
 ### Security
 
 - The nginx security headers (`X-Frame-Options`, `X-Content-Type-Options`,
