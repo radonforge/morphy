@@ -95,10 +95,24 @@ Audio samples in active use ship from `packages/client/public/sounds/` (`sci-fi/
 
 ## Deploy
 
-A push to `master` runs `.github/workflows/deploy-prod.yml`: CI, then `deploy.yml` builds
-`ghcr.io/${{ github.repository }}:<sha>`, joins the deploy host's tailnet, rsyncs `compose.yml` and
-the built client to it, and runs `docker compose pull && up -d`. The server runs in Docker behind
-nginx; the client is static files nginx serves directly.
+Work on a branch and open a pull request. `master` has **no branch protection** — the org is on
+GitHub's free plan, which gates that feature (and CODEOWNERS) behind a paid plan for private
+repositories — so the PR flow is convention, not enforcement. CI runs on every pull request and on
+every push to `master`.
+
+Production ships on a **version tag**, never on a push to a branch:
+
+```bash
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+That fires two workflows. `release.yml` cuts a GitHub release from the matching `CHANGELOG.md`
+section (and fails if the section is missing). `deploy-prod.yml` runs CI, then `deploy.yml` builds
+`ghcr.io/${{ github.repository }}:<sha>` — the tagged **commit** sha, so the deployed image is
+immutable and independent of the tag — joins the deploy host's tailnet, rsyncs `compose.yml` and
+the built client, and runs `docker compose pull && up -d`. `deploy-prod.yml` also accepts a manual
+`workflow_dispatch`, for a redeploy without a new tag. The server runs in Docker behind nginx; the
+client is static files nginx serves directly.
 
 `deploy/nginx.conf` is a **reference copy that CI does not deploy** — the workflow only ships
 `compose.yml` and `dist/`. Changing it means applying it on the host by hand
