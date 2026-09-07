@@ -387,6 +387,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       this.state.hostId = this.state.players.keys().next().value ?? "";
     }
     if (this.state.players.size < MIN_PLAYERS_TO_START && this.state.phase !== "lobby") {
+      this.awardAbortedRound();
       this.resetToLobby();
     } else {
       this.checkRoundEnd();
@@ -785,6 +786,22 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
   private afterRound(): void {
     this.resetToLobby();
+  }
+
+  /**
+   * A round that runs out of players used to end without touching anyone's
+   * record, so one player quitting erased the round for whoever was left too.
+   * The remaining player now takes the win — at most one, since the abort
+   * threshold is {@link MIN_PLAYERS_TO_START}. Only a round with roles already
+   * assigned counts: an abort during the start countdown has no roster for this
+   * round yet, and a round in `round_end` was recorded by `endRound`.
+   */
+  private awardAbortedRound(): void {
+    if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
+    const survivor = this.state.players.values().next().value;
+    if (!survivor) return;
+    this.state.winner = survivor.role === "hunter" ? "hunters" : "props";
+    this.recordRoundStats();
   }
 
   private resetToLobby(): void {

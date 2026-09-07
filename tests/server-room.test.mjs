@@ -46,6 +46,46 @@ test("disconnecting the last prop immediately awards hunters", () => {
   assert.equal(room.state.phase, "round_end");
 });
 
+test("a round aborted for lack of players awards the survivor", () => {
+  const deviceId = "abort-survivor-device";
+  const room = new MorphyRoom();
+  room.state.phase = "hunting";
+  const survivor = player("survivor", "hunter");
+  survivor.kills = 3;
+  room.state.players.set(survivor.id, survivor);
+  room.state.players.set("quitter", player("quitter", "prop"));
+  room.roundRoster = new Set(["survivor", "quitter"]);
+  room.deviceIds.set("survivor", deviceId);
+  room.onLeave({ sessionId: "quitter" });
+  assert.equal(room.state.phase, "lobby");
+  assert.deepEqual(playerStats.get(deviceId), { rounds: 1, wins: 1, kills: 3, survivals: 0 });
+});
+
+test("a surviving prop is credited with the survival", () => {
+  const deviceId = "abort-prop-device";
+  const room = new MorphyRoom();
+  room.state.phase = "hunting";
+  room.state.players.set("survivor", player("survivor", "prop"));
+  room.state.players.set("quitter", player("quitter", "hunter"));
+  room.roundRoster = new Set(["survivor", "quitter"]);
+  room.deviceIds.set("survivor", deviceId);
+  room.onLeave({ sessionId: "quitter" });
+  assert.deepEqual(playerStats.get(deviceId), { rounds: 1, wins: 1, kills: 0, survivals: 1 });
+});
+
+test("a round aborted during the start countdown records nothing", () => {
+  const deviceId = "abort-countdown-device";
+  const room = new MorphyRoom();
+  room.state.phase = "starting";
+  room.state.players.set("survivor", player("survivor", "hunter"));
+  room.state.players.set("quitter", player("quitter", "prop"));
+  room.roundRoster = new Set(["survivor", "quitter"]);
+  room.deviceIds.set("survivor", deviceId);
+  room.onLeave({ sessionId: "quitter" });
+  assert.equal(room.state.phase, "lobby");
+  assert.deepEqual(playerStats.get(deviceId), { rounds: 0, wins: 0, kills: 0, survivals: 0 });
+});
+
 test("shot origin is derived from the authoritative player position", () => {
   const room = new MorphyRoom();
   room.state.phase = "hunting";
