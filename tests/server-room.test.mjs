@@ -227,6 +227,27 @@ test("the last human leaving takes every bot with them", () => {
   assert.equal(room.state.players.size, 0);
 });
 
+test("a bot whose brain throws is dropped instead of taking the room with it", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  const before = botCount(room);
+  assert.ok(before > 0);
+  const [victim] = room.bots.keys();
+  room.bots.get(victim).driver.tick = () => {
+    throw new Error("simulated bot-brain failure");
+  };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    assert.doesNotThrow(() => room.tickBots());
+  } finally {
+    console.error = originalError;
+  }
+  assert.equal(botCount(room), before - 1);
+  assert.equal(room.state.players.has(victim), false);
+});
+
 test("the host seat passes to a human, never to a bot", () => {
   const room = publicRoom();
   joinRoom(room, "alice");

@@ -956,6 +956,13 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.maybeStartRound();
   }
 
+  /**
+   * Bot code runs inside a room `clock` callback, and Colyseus only wraps those
+   * when a room defines `onUncaughtException` — this one does not, and
+   * `@colyseus/clock` has no guard of its own, so a throw from the bot brain
+   * would take down the whole server process and every room on it. A bot is an
+   * amenity: if its brain fails, drop that bot and keep the match running.
+   */
   private addBot(): void {
     const seq = ++this.botSeq;
     const sessionId = botSessionId(seq);
@@ -977,8 +984,14 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       visibility: "full",
       trace: null,
     });
-    driver.setMap(this.map);
-    driver.syncPosition(spawn.x, spawn.z);
+    try {
+      driver.setMap(this.map);
+      driver.syncPosition(spawn.x, spawn.z);
+    } catch (error) {
+      console.error(`[morphy] bot ${sessionId} failed to take the map, skipping it:`, error);
+      this.state.players.delete(sessionId);
+      return;
+    }
     this.bots.set(sessionId, { driver, actor: { sessionId, send: () => undefined } });
     if (!this.botTicker) {
       this.botTicker = this.clock.setInterval(() => this.tickBots(), INPUT_SEND_RATE_MS);
@@ -1018,12 +1031,21 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     for (const sessionId of [...this.bots.keys()]) {
       const bot = this.bots.get(sessionId);
       if (!bot) continue;
-      const action = bot.driver.tick(snapshot(this.state, sessionId), now);
-      if (action.ready) this.handleReady(bot.actor, { ready: true });
-      if (action.input) this.handleInput(bot.actor, action.input);
-      if (action.shoot) this.handleShoot(bot.actor, { dir: action.shoot.dir });
-      if (action.say) this.handleChat(bot.actor, { text: action.say });
+      try {
+        this.driveBot(bot, sessionId, now);
+      } catch (error) {
+        console.error(`[morphy] bot ${sessionId} brain failed, dropping it:`, error);
+        this.removeBot(sessionId);
+      }
     }
+  }
+
+  private driveBot(bot: BotRuntime, sessionId: string, now: number): void {
+    const action = bot.driver.tick(snapshot(this.state, sessionId), now);
+    if (action.ready) this.handleReady(bot.actor, { ready: true });
+    if (action.input) this.handleInput(bot.actor, action.input);
+    if (action.shoot) this.handleShoot(bot.actor, { dir: action.shoot.dir });
+    if (action.say) this.handleChat(bot.actor, { text: action.say });
   }
 
   private checkRoundEnd(): void {
