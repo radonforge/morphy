@@ -1,4 +1,11 @@
-import { type Client, matchMaker, Room, ServerError } from "@colyseus/core";
+import {
+  type Client,
+  matchMaker,
+  Room,
+  type RoomException,
+  type RoomMethodName,
+  ServerError,
+} from "@colyseus/core";
 import { MapSchema, Schema, type } from "@colyseus/schema";
 import { BotDriver, DEFAULT_DIFFICULTY, ScriptedPolicy, snapshot } from "@morphy/bot/brain";
 import {
@@ -77,6 +84,7 @@ import { parseDeviceId } from "../identity";
 import { buildMap } from "../maps";
 import { playerStats, type RoundOutcome } from "../stats/repository";
 import { botName, botSessionId, desiredBotCount, isBotSessionId } from "./botFill";
+import { describeRoomException } from "./roomErrors";
 
 const FALLBACK_NAME = "Player";
 const SPAWN_CLEARANCE = 1.5;
@@ -893,6 +901,22 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     }
     this.syncBots();
     this.maybeStartRound();
+  }
+
+  /**
+   * Colyseus guards a room's clock callbacks and message handlers only when
+   * this hook exists. Without it any throw — a malformed payload reaching a
+   * handler, a bot's pathfinding — escapes its interval uncaught and takes down
+   * the whole server process, every other room with it. Defining it contains
+   * those two sites; lifecycle methods (`onJoin`, `onLeave`, …) still rethrow
+   * afterwards, so Colyseus's own handling of them is unchanged.
+   */
+  onUncaughtException(error: RoomException, methodName: RoomMethodName): void {
+    const cause = error.cause;
+    console.error(
+      `[morphy] ${describeRoomException(error, methodName, this.roomId)}`,
+      cause instanceof Error ? cause.stack : cause,
+    );
   }
 
   onDispose(): void {

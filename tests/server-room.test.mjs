@@ -18,6 +18,7 @@ process.env.MORPHY_DB_PATH = databasePath;
 
 const { MorphyRoom, PlayerState } = await import("../packages/server/src/rooms/MorphyRoom.ts");
 const { buildMap } = await import("../packages/server/src/maps/index.ts");
+const { describeRoomException } = await import("../packages/server/src/rooms/roomErrors.ts");
 const { playerStats } = await import("../packages/server/src/stats/repository.ts");
 
 after(() => {
@@ -324,6 +325,25 @@ test("a round aborted during the start countdown records nothing", () => {
   room.onLeave({ sessionId: "quitter" });
   assert.equal(room.state.phase, "lobby");
   assert.deepEqual(playerStats.get(deviceId), { rounds: 0, wins: 0, kills: 0, survivals: 0 });
+});
+
+test("a logged room exception never carries the payload or the device id", () => {
+  const error = Object.assign(new Error("boom"), {
+    name: "OnMessageException",
+    client: { sessionId: "abcdef123456" },
+    payload: { deviceId: "device-must-not-leak", dir: { x: 0, y: 0, z: 1 } },
+    type: "shoot",
+  });
+  const line = describeRoomException(error, "onMessage", "ROOM1");
+
+  assert.match(line, /room=ROOM1/);
+  assert.match(line, /method=onMessage/);
+  assert.match(line, /msg=shoot/);
+  assert.match(line, /session=abcdef…/);
+  assert.match(line, /OnMessageException: boom/);
+  assert.doesNotMatch(line, /device-must-not-leak/);
+  assert.doesNotMatch(line, /deviceId/);
+  assert.equal(line.includes("abcdef123456"), false, "full session id must be truncated");
 });
 
 test("shot origin is derived from the authoritative player position", () => {
