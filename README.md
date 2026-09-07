@@ -35,7 +35,7 @@ pnpm dev:client
 pnpm typecheck   # tsc --noEmit across all packages
 pnpm check       # Biome lint + format check
 pnpm test        # boundary, map, bot, storage and room regression tests
-pnpm ci          # the non-mutating Biome gate used in CI
+pnpm run ci      # the Biome gate used in CI (bare `pnpm ci` is pnpm's clean reinstall)
 ```
 
 ## LAN play
