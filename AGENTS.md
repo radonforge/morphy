@@ -15,13 +15,12 @@ pnpm bot                # headless bots against a running server — see package
 pnpm typecheck          # tsc --noEmit across all packages
 pnpm check              # Biome lint + format (also: check:write, format, lint)
 pnpm test               # node:test suite under tests/
-pnpm run ci             # the Biome gate CI runs — `run` is required, `pnpm ci`
-                        # is pnpm's own clean-reinstall command and shadows the script
+pnpm check:ci           # the non-mutating Biome gate CI runs
 pnpm tunnel             # ngrok http 5173 — share a LAN/remote session
 pnpm --filter @morphy/client build   # production client bundle
 ```
 
-CI (`.github/workflows/ci.yml`) runs `pnpm run ci`, `pnpm typecheck`, `pnpm test` and a production
+CI (`.github/workflows/ci.yml`) runs `pnpm check:ci`, `pnpm typecheck`, `pnpm test` and a production
 client build on every pull request — run the same four locally after changes. The suite in
 `tests/` is plain `node:test` over the real modules (validators, map builders, geometry, storage,
 HTTP endpoints, bot scheduling, room lifecycle); there is no mocking framework and no browser

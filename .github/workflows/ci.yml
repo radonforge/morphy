@@ -28,7 +28,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Biome (format + lint)
-        run: pnpm run ci
+        run: pnpm run check:ci
 
       - name: Typecheck
         run: pnpm run typecheck
