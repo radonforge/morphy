@@ -1,12 +1,20 @@
 # Changelog
 
-All notable changes to morphy.lol are documented here.
+All notable changes to Morphy are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 (0.x releases are pre-1.0).
 
 ## [Unreleased]
+
+### Changed
+
+- The name shown to players is now `Morphy`, with no TLD: browser title, Open
+  Graph title, PWA install name and the lobby wordmark. The game has never been
+  served from `morphy.lol` and there are no plans to buy it, so the brand no
+  longer names a domain it does not own. Stored player prefs are untouched — the
+  `morphy:` localStorage namespace already carried no TLD.
 
 ### Removed
 
