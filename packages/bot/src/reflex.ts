@@ -37,6 +37,7 @@ import {
   ENGAGE_RANGE_MAX,
   ENGAGE_RANGE_MIN,
   FACING_CONE_COS,
+  HEARD_POSITION_CELL,
   lerp,
   MAX_REPLANS_BEFORE_BLOCKED,
   MOVED_RECENTLY_MIN_DIST,
@@ -141,7 +142,10 @@ export class Reflex {
 
   private readonly movement = new Map<string, MovementSample>();
 
-  constructor(private readonly difficulty: number) {}
+  constructor(
+    private readonly difficulty: number,
+    private readonly visibility: Visibility,
+  ) {}
 
   get ready(): boolean {
     return this.grid !== null;
@@ -158,10 +162,37 @@ export class Reflex {
   /** Whether the bot has clear line of sight to a world point (eye height to eye
    * height) — the scheduler's cheap per-tick "new contact?" probe. */
   canSee(x: number, y: number, z: number): boolean {
+    return this.canSeePoint(x, y + BOT_EYE_HEIGHT, z);
+  }
+
+  /** As {@link canSee}, for a point already at an absolute world height. */
+  private canSeePoint(x: number, y: number, z: number): boolean {
     const map = this.map;
     if (!map) return false;
     const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };
-    return lineOfSightClear(origin, { x, y: y + BOT_EYE_HEIGHT, z }, map.colliders);
+    return lineOfSightClear(origin, { x, y, z }, map.colliders);
+  }
+
+  /**
+   * Where the bot may believe a contact is. A contact in line of sight is at its
+   * true position; one known only because it was *heard* is snapped to a
+   * {@link HEARD_POSITION_CELL} cell, so a noise through a wall yields a
+   * neighbourhood to search rather than a point to walk onto. A human hearing
+   * footsteps gets a rough direction, and this is the one place a filling bot
+   * still knew better.
+   *
+   * `"full"` visibility keeps ground truth: it is the measuring anchor, not a
+   * mode any live room runs.
+   */
+  private sensedPosition(
+    other: { readonly x: number; readonly z: number },
+    hasLineOfSight: boolean,
+  ): Point2 {
+    if (this.visibility === "full" || hasLineOfSight) return { x: other.x, z: other.z };
+    return {
+      x: Math.round(other.x / HEARD_POSITION_CELL) * HEARD_POSITION_CELL,
+      z: Math.round(other.z / HEARD_POSITION_CELL) * HEARD_POSITION_CELL,
+    };
   }
 
   /** Rebuild navigation from a freshly received map. One source of truth: the
@@ -218,12 +249,7 @@ export class Reflex {
     return v;
   }
 
-  buildObservation(
-    world: ReflexWorld,
-    seq: number,
-    visibility: Visibility,
-    now: number,
-  ): Observation {
+  buildObservation(world: ReflexWorld, seq: number, now: number): Observation {
     const self = world.self;
     const selfObs: ObservedSelf = {
       role: self.role,
@@ -252,7 +278,7 @@ export class Reflex {
       const movedRecently = this.trackMovement(other, now);
       const looksLikeProp = other.propType !== "" && !movedRecently;
       const facingMe = hasLineOfSight && this.isAimedAtMe(other);
-      if (visibility === "full") {
+      if (this.visibility === "full") {
         entities.push({
           id: other.id,
           x: other.x,
@@ -272,11 +298,12 @@ export class Reflex {
         (hasLineOfSight && distance <= BOT_VISION_RANGE) ||
         (movedRecently && distance <= BOT_HEARING_RADIUS);
       if (!sensed) continue;
+      const sensedAt = this.sensedPosition(other, hasLineOfSight);
       entities.push({
         id: other.id,
-        x: other.x,
-        z: other.z,
-        distance,
+        x: sensedAt.x,
+        z: sensedAt.z,
+        distance: Math.hypot(sensedAt.x - this.posX, sensedAt.z - this.posZ),
         hasLineOfSight,
         looksLikeProp,
         movedRecently,
@@ -286,7 +313,7 @@ export class Reflex {
 
     return {
       seq,
-      visibility,
+      visibility: this.visibility,
       phase: world.phase,
       pathBlocked: this.pathBlocked,
       self: selfObs,
@@ -495,10 +522,13 @@ export class Reflex {
   ): void {
     const target = world.others.find((o) => o.id === targetId);
     if (!target?.alive) return;
-    this.ensurePath(target.x, target.z, now, true);
+    const bounds = this.propBounds.get(target.propType) ?? UNTRANSFORMED_BOUNDS;
+    const aimY = target.y + (bounds.yMin + bounds.yMax) / 2;
+    const goal = this.sensedPosition(target, this.canSeePoint(target.x, aimY, target.z));
+    this.ensurePath(goal.x, goal.z, now, true);
     const wp = this.follower.advance(this.posX, this.posZ);
     if (wp) this.steer(wp, run, world.self.role, dt);
-    else this.faceToward(target.x, target.z);
+    else this.faceToward(goal.x, goal.z);
   }
 
   private runShoot(
