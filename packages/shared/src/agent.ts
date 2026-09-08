@@ -40,8 +40,6 @@ export type Intent =
   | (IntentMeta & { kind: "shootTarget"; targetId: string })
   | (IntentMeta & { kind: "chat"; text: string });
 
-export type IntentKind = Intent["kind"];
-
 export type Visibility = "full" | "limited";
 
 /** The bot's own state, always known in full. */
