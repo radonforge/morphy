@@ -82,6 +82,21 @@ The single source of truth for everything client and server must agree on. **Exp
 
 **Authority split.** The server is authoritative for the things that matter competitively: phase/timers, roles, HP, alive/dead, and **hit resolution**. Movement is _not_ fully authoritative — the client computes its own position and collision and sends `position + rotation` ~20 Hz; the server only **clamps to map bounds**. Wall/furniture collision exists **only client-side** (`Scene.tsx`). This is an intentional LAN-pragmatic tradeoff, not a bug.
 
+**The disguise is visual only, and that is accepted.** `PlayerState` broadcasts `role`, `propType`
+and `x`/`y`/`z` to every client as plain `@type` fields — there is no `@view`/`StateView` filtering
+anywhere — so anyone with devtools open can read which scene object is a player and where. Roles are
+public by design already (`StandingsTable` renders a Role column, and `Tab` opens the scoreboard
+mid-round); the part that leaks is *which crate is whom*.
+
+Hiding it properly means interest management: adding and removing props from each hunter's
+`StateView` as line of sight changes, so the position never reaches a client that should not have it.
+`@colyseus/schema` ships `view()` and `StateView`, so no dependency is missing — what stops it is the
+cost. It is a design pass over `Scene.tsx`, the densest file in the client, and its failure mode is
+**popping**: a crate materialising as you round a corner, visible to every honest player. Trading felt
+gameplay against a devtools cheat nobody has run is the wrong trade at this player count, so the
+tradeoff stands (decided 2026-09-08, closing #26). Revisit when the game is actually public and the
+threat is real, not before. Do not re-file this as a bug.
+
 **State propagation has three distinct paths**, all in `Game.tsx`/`Scene.tsx`:
 
 1. `Callbacks.get(room).onAdd/onRemove("players", …)` maintains the live `playersRef` map and the `ids` list.
