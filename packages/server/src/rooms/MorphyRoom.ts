@@ -932,13 +932,13 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
   /**
    * Colyseus guards a room's clock callbacks and message handlers only when
-   * this hook exists. Without it a throw inside any interval or phase timer —
-   * `sendPings` runs in every room every {@link PING_INTERVAL_MS} — escapes
-   * uncaught and takes down the whole server process, every other room with it.
-   * A throw inside a message handler was already contained, but vanished
-   * without a log; this makes it visible. Lifecycle methods (`onJoin`,
+   * this hook exists, and `index.ts` asks for no graceful shutdown, so there is
+   * no process-level net underneath either. Without it a throw takes down the
+   * whole server process and every other room on it — measured both ways, for
+   * a phase timer, for the {@link PING_INTERVAL_MS} ping interval, and for a
+   * message handler reached by a bad payload. Lifecycle methods (`onJoin`,
    * `onLeave`, …) still rethrow afterwards, so Colyseus's own handling of them
-   * is unchanged.
+   * is unchanged. Do not remove it.
    */
   onUncaughtException(error: RoomException, methodName: RoomMethodName): void {
     const cause = error.cause;
@@ -1012,9 +1012,9 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   /**
    * Bot code runs inside a room `clock` callback, where a throw is contained by
    * {@link onUncaughtException} — but contained means the whole callback dies,
-   * so one failing brain would cost every other bot its tick, and go on doing
-   * so every tick. A bot is an amenity: if its brain fails, drop that bot and
-   * keep the match running.
+   * so one failing brain would cost every bot behind it in that tick its turn,
+   * and go on doing so every tick. A bot is an amenity: if its brain fails,
+   * drop that bot and keep the match running.
    */
   private addBot(): void {
     const seq = ++this.botSeq;
