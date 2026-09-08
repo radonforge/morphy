@@ -92,7 +92,6 @@ const BASE_PLANE_Y = -0.02;
 const animalModel = (id: string): string => `/models/pets/animal-${id}.glb`;
 const WEAPON_SCALE = 0.32;
 const WEAPON_OFFSET: [number, number, number] = [0.2, -0.22, -0.6];
-const WEAPON_ROTATION: [number, number, number] = [0, Math.PI, 0];
 const NAMEPLATE_GAP = 0.45;
 const NAMEPLATE_FONT_SIZE = 0.34;
 const NAMEPLATE_COLOR = "#eef4ff";
@@ -1504,6 +1503,14 @@ function WeaponModel({ url, scale }: { url: string; scale: number }) {
   return <primitive object={object} scale={scale} />;
 }
 
+/**
+ * The hunter's first-person weapon, parented to the camera so it rides the view.
+ *
+ * No yaw correction: every blaster in the Kenney kit is authored with its muzzle
+ * along -Z, which is already the direction a three.js camera looks, so the model
+ * needs no rotation to point downrange. It used to carry a 180° yaw, which aimed
+ * the muzzle back at the player.
+ */
 function HunterViewmodel({
   enabled,
   weapon,
@@ -1553,7 +1560,7 @@ function HunterViewmodel({
   }
   return (
     <primitive object={camera}>
-      <group ref={groupRef} position={WEAPON_OFFSET} rotation={WEAPON_ROTATION}>
+      <group ref={groupRef} position={WEAPON_OFFSET}>
         <Suspense fallback={null}>
           <WeaponModel url={WEAPONS[weapon].model} scale={WEAPON_SCALE} />
         </Suspense>

@@ -37,6 +37,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   The server still tracks it to expire a player's decoys; the owner now learns
   which decoy is theirs from a `decoy_placed` ack sent to them alone.
 
+### Fixed
+
+- The hunter's weapon pointed backwards. The first-person viewmodel carried a
+  180° yaw, but every blaster in the kit is authored with its muzzle along `-Z`
+  — already the direction a three.js camera looks — so the correction turned the
+  gun around and aimed it at the player. Present since the viewmodel was added.
+
 ### Removed
 
 - The `parseIntent` / `parseObservation` validators in `shared/agent.ts`. They
