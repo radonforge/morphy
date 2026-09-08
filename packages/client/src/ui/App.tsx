@@ -70,6 +70,12 @@ export function App() {
     setView("menu");
   }, [stopReconnecting]);
 
+  /**
+   * Own the current room's lifecycle. A room that died between being handed to
+   * `setConnection` and this effect subscribing would have fired its close
+   * signals into nobody, leaving the app holding a dead room with no overlay
+   * and no retry — hence the `isOpen` check after subscribing.
+   */
   useEffect(() => {
     if (!connection) return;
     const { room } = connection;
@@ -113,6 +119,7 @@ export function App() {
     room.onError(handleError);
     room.onLeave(handleLeave);
     room.onDrop(handleDrop);
+    if (!room.connection.isOpen) handleLeave();
     return () => {
       room.onError.remove(handleError);
       room.onLeave.remove(handleLeave);
