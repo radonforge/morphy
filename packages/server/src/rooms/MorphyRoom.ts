@@ -448,7 +448,13 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     const player = this.state.players.get(client.sessionId);
     if (!player) return;
     player.connected = false;
-    void this.allowReconnection(client, RECONNECT_WINDOW_MS / MS_PER_SECOND).catch(() => undefined);
+    void this.allowReconnection(client, RECONNECT_WINDOW_MS / MS_PER_SECOND).catch(
+      (reason: unknown) => {
+        if (reason instanceof Error) {
+          console.error(`[morphy] could not hold a seat in ${this.roomId}:`, reason.message);
+        }
+      },
+    );
   }
 
   onReconnect(client: Client): void {
@@ -460,7 +466,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     if (!this.state.isPrivate) return;
     if (client.sessionId !== this.state.hostId) return;
     if (this.state.phase !== "lobby") return;
-    if (this.state.players.size < MIN_PLAYERS_TO_START) return;
+    if (this.presentCount() < MIN_PLAYERS_TO_START) return;
     this.startCountdown();
   }
 
@@ -767,7 +773,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private maybeStartRound(): void {
     if (this.state.isPrivate) return;
     if (this.state.phase !== "lobby") return;
-    if (this.state.players.size < MIN_PLAYERS_TO_START) {
+    if (this.presentCount() < MIN_PLAYERS_TO_START) {
       this.cancelAutoStart();
       return;
     }
@@ -891,11 +897,13 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * with roles already assigned counts: an abort during the start countdown has
    * no roster for this round yet, and a round in `round_end` was recorded by
    * `endRound`. A round abandoned by its last human awards nobody — there is no
-   * survivor to reward, and a bot's record is not kept.
+   * survivor to reward, and a bot's record is not kept. A held seat is not a
+   * survivor either: someone still inside their reconnect window has not
+   * outlasted the round, they are simply absent from its end.
    */
   private awardAbortedRound(): void {
     if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
-    const survivor = this.state.players.get(this.firstHumanId());
+    const survivor = this.state.players.get(this.firstPresentHumanId());
     if (!survivor) return;
     this.state.winner = survivor.role === "hunter" ? "hunters" : "props";
     this.recordRoundStats();
@@ -961,6 +969,28 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       if (!isBotSessionId(sessionId)) return sessionId;
     }
     return "";
+  }
+
+  /** The human a round can be credited to: present in the room and still on it. */
+  private firstPresentHumanId(): string {
+    for (const sessionId of this.state.players.keys()) {
+      if (isBotSessionId(sessionId)) continue;
+      if (this.state.players.get(sessionId)?.connected) return sessionId;
+    }
+    return "";
+  }
+
+  /**
+   * Players a round can actually be built from. Bots count — they exist to make
+   * the threshold reachable — but a player inside their reconnect window does
+   * not: their seat is held, they are not there to play.
+   */
+  private presentCount(): number {
+    let present = 0;
+    this.state.players.forEach((player) => {
+      if (player.connected) present++;
+    });
+    return present;
   }
 
   private humanCount(): number {
@@ -1119,9 +1149,30 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     }
   }
 
+  /**
+   * Deal the round to the players who are there for it. Someone inside their
+   * reconnect window is in `state.players` but not in the round: they take no
+   * role slot, join no roster, and sit in the same state a dead player already
+   * occupies, so nothing counts them as a live prop or a missing hunter. The
+   * role they had when they dropped is untouched — this only runs at the start
+   * of a round, never during one.
+   */
   private assignRoles(): void {
-    const players = Array.from(this.state.players.values());
-    this.roundRoster = new Set(this.state.players.keys());
+    const players: PlayerState[] = [];
+    this.roundRoster = new Set();
+    this.state.players.forEach((player, sessionId) => {
+      if (player.connected) {
+        players.push(player);
+        this.roundRoster.add(sessionId);
+        return;
+      }
+      player.role = "prop";
+      player.alive = false;
+      player.hp = 0;
+      player.propType = "";
+      player.rerollsLeft = 0;
+      player.decoysLeft = 0;
+    });
     for (let i = players.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       const a = players[i];

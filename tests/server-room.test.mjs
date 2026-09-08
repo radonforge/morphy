@@ -383,6 +383,7 @@ test("a reconnected player resumes the round it dropped out of", () => {
   const role = before.role;
   const position = { x: before.x, y: before.y, z: before.z };
   room.onDrop({ sessionId: "b" });
+  assert.equal(room.state.players.get("b").connected, false, "dropped, seat held");
   room.onReconnect({ sessionId: "b" });
   const after = room.state.players.get("b");
   assert.equal(after.connected, true);
@@ -408,6 +409,66 @@ test("a reconnect window that lapses still awards the round to whoever is left",
   room.onLeave({ sessionId: "dropped" });
   assert.equal(room.state.phase, "lobby");
   assert.deepEqual(playerStats.get(deviceId), { rounds: 1, wins: 1, kills: 2, survivals: 0 });
+});
+
+test("a held seat is not a survivor when the round is abandoned", () => {
+  const deviceId = "held-seat-device";
+  const room = new MorphyRoom();
+  room.state.phase = "hunting";
+  const dropped = player("dropped", "prop");
+  room.state.players.set(dropped.id, dropped);
+  room.state.players.set("quitter", player("quitter", "hunter"));
+  room.roundRoster = new Set(["dropped", "quitter"]);
+  room.deviceIds.set("dropped", deviceId);
+  trackReconnections(room);
+
+  room.onDrop({ sessionId: "dropped" });
+  room.onLeave({ sessionId: "quitter" });
+
+  assert.equal(room.state.phase, "lobby");
+  assert.deepEqual(
+    playerStats.get(deviceId),
+    { rounds: 0, wins: 0, kills: 0, survivals: 0 },
+    "a player still inside their window has not outlasted the round",
+  );
+});
+
+test("a round deals no role to a player inside their reconnect window", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  fireBotFill(room);
+  joinRoom(room, "b");
+  trackReconnections(room);
+  startRound(room);
+  pinHunterOnABot(room);
+  room.onDrop({ sessionId: "b" });
+  room.resetToLobby();
+  startRound(room);
+
+  const held = room.state.players.get("b");
+  assert.equal(held.alive, false, "a held seat takes no part in the round");
+  assert.equal(held.propType, "");
+  assert.equal(room.roundRoster.has("b"), false, "and cannot be credited for it");
+  let hunters = 0;
+  room.state.players.forEach((p, id) => {
+    if (p.role === "hunter" && id !== "b") hunters++;
+  });
+  assert.ok(hunters > 0, "the hunter slot went to someone who is present");
+});
+
+test("a lobby does not start a round on the strength of an absent player", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  assert.ok(room.state.phaseEndsAt > 0, "two present players arm the clock");
+  trackReconnections(room);
+  room.state.phase = "hunting";
+  room.onDrop({ sessionId: "b" });
+  room.state.phase = "lobby";
+  room.cancelAutoStart();
+
+  room.maybeStartRound();
+  assert.equal(room.state.phaseEndsAt, 0, "one player and one held seat is not two players");
 });
 
 test("a logged room exception never carries the payload or the device id", () => {
