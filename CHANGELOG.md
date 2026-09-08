@@ -16,6 +16,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   prop, it targeted the disguise through the disguise. They now run `"limited"`:
   line of sight, distance, and whether a contact moved recently. `"full"`
   remains as a measuring anchor and is not wired into any live room.
+- A bot also no longer gets a privileged *reaction time*: the trigger that woke
+  its policy early filtered contacts by `role`, so it slept through a teammate
+  and woke the instant an enemy entered its line of sight — decided before the
+  policy had been shown anything about either. It now wakes for any contact that
+  comes into view, and works out who they are from the observation it is allowed
+  to see.
 
 ### Removed
 

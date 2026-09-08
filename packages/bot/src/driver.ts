@@ -187,8 +187,8 @@ export class BotDriver {
     this.launchDecide(world, now);
   }
 
-  /** Cheap per-tick triggers that wake the policy early; ground-truth role here
-   * is scheduling only (the policy still gets the visibility-filtered obs). */
+  /** Cheap per-tick triggers that wake the policy early. Reads the bot's *own*
+   * state — phase, role, hp — which an observation always carries in full. */
   private detectEvent(world: ReflexWorld): boolean {
     const self = world.self;
     let event = false;
@@ -211,12 +211,20 @@ export class BotDriver {
     return event;
   }
 
+  /**
+   * Wake the policy when *anyone* comes into view, not when an enemy does.
+   * Filtering this on `other.role` gave the bot a reaction time no player has:
+   * it stayed asleep while a teammate walked past and woke the instant a prop
+   * appeared, before its policy had been told anything about either. Working
+   * out who a contact is belongs to the policy, from the observation it is
+   * allowed to see. Dead players are skipped because they are not rendered for
+   * a human either, so they are not there to be noticed.
+   */
   private detectLineOfSightGain(world: ReflexWorld): boolean {
-    const wantHostile: Role = world.self.role === "hunter" ? "prop" : "hunter";
     const seen = new Set<string>();
     let gained = false;
     for (const other of world.others) {
-      if (!other.alive || other.role !== wantHostile) continue;
+      if (!other.alive) continue;
       const dist = Math.hypot(other.x - this.reflex.x, other.z - this.reflex.z);
       if (dist > BOT_VISION_RANGE || !this.reflex.canSee(other.x, other.y, other.z)) continue;
       seen.add(other.id);
