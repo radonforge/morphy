@@ -22,6 +22,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   policy had been shown anything about either. It now wakes for any contact that
   comes into view, and works out who they are from the observation it is allowed
   to see.
+- A bot no longer gets a heard contact's exact coordinates. A contact sensed by
+  sound alone — moving within earshot, with no line of sight — is reported at a
+  4 m cell rather than a point, and its distance is derived from that cell, so a
+  noise through a wall becomes a neighbourhood to search instead of a
+  destination to walk onto. A contact actually in view is still exact. This was
+  the last place a filling bot knew something a player could not.
 
 ### Removed
 

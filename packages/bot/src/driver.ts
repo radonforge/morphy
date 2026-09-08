@@ -99,7 +99,7 @@ export class BotDriver {
   private pendingSay: string | null = null;
 
   constructor(private readonly options: BotDriverOptions) {
-    this.reflex = new Reflex(options.difficulty);
+    this.reflex = new Reflex(options.difficulty, options.visibility);
   }
 
   get ready(): boolean {
@@ -240,7 +240,7 @@ export class BotDriver {
     this.decideController = controller;
     this.decideInFlight = true;
     this.lastDecideAt = now;
-    const obs = this.reflex.buildObservation(world, seq, this.options.visibility, now);
+    const obs = this.reflex.buildObservation(world, seq, now);
     const timer = setTimeout(() => controller.abort(), DECIDE_TIMEOUT_MS);
 
     withTimeout(

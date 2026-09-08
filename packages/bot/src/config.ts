@@ -56,6 +56,10 @@ export const DECIDE_TIMEOUT_MS = 500;
 
 export const BOT_VISION_RANGE = WEAPONS[DEFAULT_WEAPON].range;
 export const BOT_HEARING_RADIUS = 12;
+/** Cell size a contact known only by sound is snapped to, so hearing yields a
+ * neighbourhood rather than a point. Sized to a map tile: within earshot a
+ * heard contact resolves to one of a handful of cells. */
+export const HEARD_POSITION_CELL = 4;
 export const MOVED_RECENTLY_MS = 600;
 export const MOVED_RECENTLY_MIN_DIST = 0.3;
 export const NEARBY_PROP_RADIUS = 12;
