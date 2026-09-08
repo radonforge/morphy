@@ -8,6 +8,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-09-08
+
+Fairness release: a room-filling bot no longer knows anything a player could
+not, a decoy no longer gives itself away on the wire, and the hunter's weapon
+points downrange instead of at its owner.
+
 ### Changed
 
 - Room-filling bots play with a player's information instead of the server's.
