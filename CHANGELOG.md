@@ -8,6 +8,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-08
+
+A public match is now playable alone and leavable from every screen: rounds
+start on their own, bots fill a quiet room, a lost connection no longer costs
+the round, and a room's own failure no longer takes the server down with it.
+
 ### Added
 
 - A match menu on `Escape` during a round, with `Leave match`, plus a leave
