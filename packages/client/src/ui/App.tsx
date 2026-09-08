@@ -71,26 +71,32 @@ export function App() {
   }, [stopReconnecting]);
 
   /**
-   * Own the current room's lifecycle. A room that died between being handed to
-   * `setConnection` and this effect subscribing would have fired its close
-   * signals into nobody, leaving the app holding a dead room with no overlay
-   * and no retry — hence the `isOpen` check after subscribing.
+   * Own the current room's lifecycle, from subscribing to its close signals to
+   * ending exactly once. A room that died between being handed to
+   * `setConnection` and this effect subscribing fired those signals into
+   * nobody, so a closed socket found at subscription time counts as a close —
+   * but the socket's own event may still be a queued task, so every ending
+   * goes through `ended` and the first one wins. Otherwise a late real drop
+   * would start a reconnect for a match the player has already left.
    */
   useEffect(() => {
     if (!connection) return;
     const { room } = connection;
+    let ended = false;
     const handleError = (code: number, message?: string) => {
       console.error("[morphy] room error", code, message);
-      if (droppedRef.current) return;
+      if (ended || droppedRef.current) return;
       disconnect();
     };
     const handleLeave = () => {
-      if (droppedRef.current) return;
+      if (ended || droppedRef.current) return;
+      ended = true;
       setConnection(null);
       setView("menu");
     };
     const handleDrop = () => {
-      if (droppedRef.current) return;
+      if (ended || droppedRef.current) return;
+      ended = true;
       droppedRef.current = true;
       setReconnecting(true);
       const controller = new AbortController();
@@ -124,6 +130,7 @@ export function App() {
       room.onError.remove(handleError);
       room.onLeave.remove(handleLeave);
       room.onDrop.remove(handleDrop);
+      stopReconnecting();
     };
   }, [connection, disconnect, stopReconnecting]);
 
