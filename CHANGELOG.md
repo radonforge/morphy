@@ -8,6 +8,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- The lobby shows the client's version and build under the wordmark, e.g.
+  `0.2.1 · 3d50685`, so a bug report can name the exact build it came from.
+  The sha matters on its own: production also deploys on `workflow_dispatch`,
+  so one version can ship from more than one commit. A build made outside a
+  checkout reads `dev` rather than claiming a commit.
+
 ## [0.2.1] — 2026-09-08
 
 Fairness release: a room-filling bot no longer knows anything a player could
