@@ -1,7 +1,16 @@
-import { type Client, matchMaker, Room, ServerError } from "@colyseus/core";
+import {
+  type Client,
+  matchMaker,
+  Room,
+  type RoomException,
+  type RoomMethodName,
+  ServerError,
+} from "@colyseus/core";
 import { MapSchema, Schema, type } from "@colyseus/schema";
+import { BotDriver, DEFAULT_DIFFICULTY, ScriptedPolicy, snapshot } from "@morphy/bot/brain";
 import {
   type AvatarId,
+  BOT_FILL_DELAY_MS,
   colliderAabb,
   computePropBounds,
   DECOY_BUDGET,
@@ -13,11 +22,13 @@ import {
   HIDE_DURATION_MS,
   HUNTER_MAX_HP,
   HUNTER_RATIO,
+  INPUT_SEND_RATE_MS,
   type InputMessage,
   isAvatarId,
   isMapId,
   isWeaponId,
   type KillEvent,
+  LOBBY_AUTOSTART_MS,
   MAX_CHAT_LENGTH,
   MAX_CLIENT_MESSAGES_PER_SECOND,
   MAX_NAME_LENGTH,
@@ -52,6 +63,7 @@ import {
   PLAYER_EYE_HEIGHT,
   type PongMessage,
   type PropBounds,
+  RECONNECT_WINDOW_MS,
   REROLL_BUDGET,
   ROUND_DURATION_MS,
   ROUND_END_MS,
@@ -72,11 +84,14 @@ import {
 import { parseDeviceId } from "../identity";
 import { buildMap } from "../maps";
 import { playerStats, type RoundOutcome } from "../stats/repository";
+import { botName, botSessionId, desiredBotCount, isBotSessionId } from "./botFill";
+import { describeRoomException } from "./roomErrors";
 
 const FALLBACK_NAME = "Player";
 const SPAWN_CLEARANCE = 1.5;
 const PARTY_CODE_MAX_ATTEMPTS = 16;
 const PARTY_CODE_EXHAUSTED_STATUS = 503;
+const MS_PER_SECOND = 1_000;
 
 export class PlayerState extends Schema {
   @type("string") id = "";
@@ -98,6 +113,7 @@ export class PlayerState extends Schema {
   @type("string") avatar = "";
   @type("string") weapon: WeaponId = DEFAULT_WEAPON;
   @type("uint16") ping = 0;
+  @type("boolean") connected = true;
 }
 
 export class DecoyState extends Schema {
@@ -123,6 +139,21 @@ export class RoomState extends Schema {
 
 interface ClearableTimer {
   clear(): void;
+}
+
+/**
+ * The part of a Colyseus `Client` the gameplay handlers actually use, so a
+ * server-driven bot can stand in for one and go through the very same
+ * validation and hit resolution as a human player. `Client` satisfies it.
+ */
+interface Actor {
+  readonly sessionId: string;
+  send(type: string, message?: unknown): void;
+}
+
+interface BotRuntime {
+  driver: BotDriver;
+  actor: Actor;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -282,6 +313,10 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private pingNonce = 0;
   private deviceIds = new Map<string, string>();
   private roundRoster = new Set<string>();
+  private bots = new Map<string, BotRuntime>();
+  private botSeq = 0;
+  private botTicker?: ClearableTimer;
+  private botFillTimer?: ClearableTimer;
 
   async onCreate(options: unknown): Promise<void> {
     const requested = (options as { map?: unknown } | undefined)?.map;
@@ -347,7 +382,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.state.mapId = map.id;
   }
 
-  private handleChat(client: Client, payload: unknown): void {
+  private handleChat(client: Actor, payload: unknown): void {
     const text = parseChatText(payload);
     if (!text) return;
     const player = this.state.players.get(client.sessionId);
@@ -373,6 +408,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     if (deviceId) this.deviceIds.set(client.sessionId, deviceId);
     this.state.players.set(client.sessionId, player);
     if (this.state.hostId === "") this.state.hostId = client.sessionId;
+    this.syncBots();
     this.maybeStartRound();
   }
 
@@ -384,21 +420,53 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.pendingPings.delete(client.sessionId);
     this.deviceIds.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
-      this.state.hostId = this.state.players.keys().next().value ?? "";
+      this.state.hostId = this.firstHumanId();
     }
-    if (this.state.players.size < MIN_PLAYERS_TO_START && this.state.phase !== "lobby") {
+    if (this.state.phase !== "lobby" && !this.canContinueRound()) {
+      this.awardAbortedRound();
       this.resetToLobby();
     } else {
       this.checkRoundEnd();
+      this.syncBots();
       this.maybeStartRound();
     }
+  }
+
+  /**
+   * A dropped connection is not a departure. Hold the seat for
+   * {@link RECONNECT_WINDOW_MS} so a network blip does not cost a player the
+   * round it is standing in: the player stays in `state.players`, keeps its
+   * role and position, and rejoins on the same session id without passing
+   * through {@link onJoin} — so neither the in-progress guard there nor the
+   * lock a running round takes can shut it out. Colyseus runs {@link onLeave}
+   * itself once the window lapses, releasing the seat exactly as a deliberate
+   * quit would. A lobby gets no window: there is nothing to come back to, and
+   * the seat is better handed straight back.
+   */
+  onDrop(client: Client): void {
+    if (this.state.phase === "lobby") return;
+    const player = this.state.players.get(client.sessionId);
+    if (!player) return;
+    player.connected = false;
+    void this.allowReconnection(client, RECONNECT_WINDOW_MS / MS_PER_SECOND).catch(
+      (reason: unknown) => {
+        if (reason instanceof Error) {
+          console.error(`[morphy] could not hold a seat in ${this.roomId}:`, reason.message);
+        }
+      },
+    );
+  }
+
+  onReconnect(client: Client): void {
+    const player = this.state.players.get(client.sessionId);
+    if (player) player.connected = true;
   }
 
   private handleStart(client: Client): void {
     if (!this.state.isPrivate) return;
     if (client.sessionId !== this.state.hostId) return;
     if (this.state.phase !== "lobby") return;
-    if (this.state.players.size < MIN_PLAYERS_TO_START) return;
+    if (this.presentCount() < MIN_PLAYERS_TO_START) return;
     this.startCountdown();
   }
 
@@ -439,7 +507,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     });
   }
 
-  private handleReady(client: Client, payload: unknown): void {
+  private handleReady(client: Actor, payload: unknown): void {
     if (this.state.phase !== "lobby") return;
     const ready = parseReady(payload);
     if (ready === null) return;
@@ -461,7 +529,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     return spawns[this.state.players.size % spawns.length] ?? this.map.bounds.min;
   }
 
-  private handleInput(client: Client, payload: unknown): void {
+  private handleInput(client: Actor, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
     if (!player?.alive) return;
     if (player.role === "hunter" && this.state.phase === "hiding") return;
@@ -615,7 +683,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     };
   }
 
-  private handleShoot(client: Client, payload: unknown): void {
+  private handleShoot(client: Actor, payload: unknown): void {
     const player = this.state.players.get(client.sessionId);
     if (player?.role !== "hunter" || !player.alive) return;
     if (this.state.phase !== "hunting") return;
@@ -694,15 +762,38 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.checkRoundEnd();
   }
 
+  /**
+   * Public rooms start on their own: reaching {@link MIN_PLAYERS_TO_START} arms
+   * a {@link LOBBY_AUTOSTART_MS} clock, and `ready` only shortens it rather
+   * than authorising the round, so one idle player can no longer hold a lobby
+   * hostage. A non-zero `phaseEndsAt` is the armed clock, so a later joiner
+   * does not push the start further out. Private rooms are unaffected — their
+   * host starts the round with {@link MSG_START}.
+   */
   private maybeStartRound(): void {
     if (this.state.isPrivate) return;
     if (this.state.phase !== "lobby") return;
-    if (this.state.players.size < MIN_PLAYERS_TO_START) return;
+    if (this.presentCount() < MIN_PLAYERS_TO_START) {
+      this.cancelAutoStart();
+      return;
+    }
     let allReady = true;
     this.state.players.forEach((player) => {
       if (!player.ready) allReady = false;
     });
-    if (allReady) this.startCountdown();
+    if (allReady) {
+      this.startCountdown();
+      return;
+    }
+    if (this.state.phaseEndsAt === 0) {
+      this.setPhase("lobby", LOBBY_AUTOSTART_MS, () => this.startCountdown());
+    }
+  }
+
+  private cancelAutoStart(): void {
+    this.phaseTimer?.clear();
+    this.phaseTimer = undefined;
+    this.state.phaseEndsAt = 0;
   }
 
   private setPhase(phase: Phase, durationMs: number, next: () => void): void {
@@ -787,6 +878,37 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.resetToLobby();
   }
 
+  /**
+   * A round is worth continuing while a human is still in it and enough players
+   * remain to hold both roles. Bots satisfy the second condition but never the
+   * first: the bot fill target exceeds {@link MIN_PLAYERS_TO_START}, so a
+   * headcount that counts bots can never fall below the threshold, and a room
+   * whose last human walked out would keep an unattended match ticking for the
+   * rest of {@link ROUND_DURATION_MS}.
+   */
+  private canContinueRound(): boolean {
+    return this.humanCount() > 0 && this.state.players.size >= MIN_PLAYERS_TO_START;
+  }
+
+  /**
+   * A round that runs out of players used to end without touching anyone's
+   * record, so one player quitting erased the round for whoever was left too.
+   * The human left holding the room now takes the win instead. Only a round
+   * with roles already assigned counts: an abort during the start countdown has
+   * no roster for this round yet, and a round in `round_end` was recorded by
+   * `endRound`. A round abandoned by its last human awards nobody — there is no
+   * survivor to reward, and a bot's record is not kept. A held seat is not a
+   * survivor either: someone still inside their reconnect window has not
+   * outlasted the round, they are simply absent from its end.
+   */
+  private awardAbortedRound(): void {
+    if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
+    const survivor = this.state.players.get(this.firstPresentHumanId());
+    if (!survivor) return;
+    this.state.winner = survivor.role === "hunter" ? "hunters" : "props";
+    this.recordRoundStats();
+  }
+
   private resetToLobby(): void {
     this.phaseTimer?.clear();
     this.phaseTimer = undefined;
@@ -812,6 +934,201 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
         console.error(`[morphy] failed to unlock room ${this.roomId}:`, error);
       });
     }
+    this.syncBots();
+    this.maybeStartRound();
+  }
+
+  /**
+   * Colyseus guards a room's clock callbacks and message handlers only when
+   * this hook exists, and `index.ts` asks for no graceful shutdown, so there is
+   * no process-level net underneath either. Without it a throw takes down the
+   * whole server process and every other room on it — measured both ways, for
+   * a phase timer, for the {@link PING_INTERVAL_MS} ping interval, and for a
+   * message handler reached by a bad payload. Lifecycle methods (`onJoin`,
+   * `onLeave`, …) still rethrow afterwards, so Colyseus's own handling of them
+   * is unchanged. Do not remove it.
+   */
+  onUncaughtException(error: RoomException, methodName: RoomMethodName): void {
+    const cause = error.cause;
+    console.error(
+      `[morphy] ${describeRoomException(error, methodName, this.roomId)}`,
+      cause instanceof Error ? cause.stack : cause,
+    );
+  }
+
+  onDispose(): void {
+    this.stopBotTicker();
+    this.cancelBotFill();
+    for (const bot of this.bots.values()) this.stopDriver(bot);
+    this.bots.clear();
+  }
+
+  /** A bot must never inherit the host seat: it would never press start. */
+  private firstHumanId(): string {
+    for (const sessionId of this.state.players.keys()) {
+      if (!isBotSessionId(sessionId)) return sessionId;
+    }
+    return "";
+  }
+
+  /** The human a round can be credited to: present in the room and still on it. */
+  private firstPresentHumanId(): string {
+    for (const sessionId of this.state.players.keys()) {
+      if (isBotSessionId(sessionId)) continue;
+      if (this.state.players.get(sessionId)?.connected) return sessionId;
+    }
+    return "";
+  }
+
+  /**
+   * Players a round can actually be built from. Bots count — they exist to make
+   * the threshold reachable — but a player inside their reconnect window does
+   * not: their seat is held, they are not there to play.
+   */
+  private presentCount(): number {
+    let present = 0;
+    this.state.players.forEach((player) => {
+      if (player.connected) present++;
+    });
+    return present;
+  }
+
+  private humanCount(): number {
+    let humans = 0;
+    this.state.players.forEach((_player, sessionId) => {
+      if (!isBotSessionId(sessionId)) humans++;
+    });
+    return humans;
+  }
+
+  /**
+   * Bring the bot population in line with {@link desiredBotCount}. Removals are
+   * immediate so an arriving human takes a bot's seat at once; additions wait
+   * out {@link BOT_FILL_DELAY_MS}, giving real players a chance to show up
+   * first. Only ever runs in a public lobby, so a round's roster never changes
+   * under the players.
+   */
+  private syncBots(): void {
+    if (this.state.isPrivate || this.state.phase !== "lobby") return;
+    const want = desiredBotCount(this.humanCount());
+    for (const sessionId of [...this.bots.keys()]) {
+      if (this.bots.size <= want) break;
+      this.removeBot(sessionId);
+    }
+    if (this.bots.size >= want) {
+      this.cancelBotFill();
+      return;
+    }
+    if (!this.botFillTimer) {
+      this.botFillTimer = this.clock.setTimeout(() => {
+        this.botFillTimer = undefined;
+        this.fillBots();
+      }, BOT_FILL_DELAY_MS);
+    }
+  }
+
+  private cancelBotFill(): void {
+    this.botFillTimer?.clear();
+    this.botFillTimer = undefined;
+  }
+
+  private fillBots(): void {
+    if (this.state.isPrivate || this.state.phase !== "lobby") return;
+    const want = desiredBotCount(this.humanCount());
+    while (this.bots.size < want) this.addBot();
+    this.maybeStartRound();
+  }
+
+  /**
+   * Bot code runs inside a room `clock` callback, where a throw is contained by
+   * {@link onUncaughtException} — but contained means the whole callback dies,
+   * so one failing brain would cost every bot behind it in that tick its turn,
+   * and go on doing so every tick. A bot is an amenity: if its brain fails,
+   * drop that bot and keep the match running.
+   */
+  private addBot(): void {
+    const seq = ++this.botSeq;
+    const sessionId = botSessionId(seq);
+    const spawn = this.pickLobbySpawn();
+    const player = new PlayerState();
+    player.id = sessionId;
+    player.name = botName(seq);
+    player.avatar = randomAvatarId();
+    player.x = spawn.x;
+    player.y = spawn.y;
+    player.z = spawn.z;
+    this.state.players.set(sessionId, player);
+
+    const driver = new BotDriver({
+      name: player.name,
+      difficulty: DEFAULT_DIFFICULTY,
+      readyAtPlayers: MIN_PLAYERS_TO_START,
+      policy: new ScriptedPolicy(DEFAULT_DIFFICULTY),
+      visibility: "full",
+      trace: null,
+    });
+    try {
+      driver.setMap(this.map);
+      driver.syncPosition(spawn.x, spawn.z);
+    } catch (error) {
+      console.error(`[morphy] bot ${sessionId} failed to take the map, skipping it:`, error);
+      this.state.players.delete(sessionId);
+      return;
+    }
+    this.bots.set(sessionId, { driver, actor: { sessionId, send: () => undefined } });
+    if (!this.botTicker) {
+      this.botTicker = this.clock.setInterval(() => this.tickBots(), INPUT_SEND_RATE_MS);
+    }
+  }
+
+  private removeBot(sessionId: string): void {
+    const bot = this.bots.get(sessionId);
+    if (!bot) return;
+    this.bots.delete(sessionId);
+    this.stopDriver(bot);
+    this.removeDecoysOf(sessionId);
+    this.state.players.delete(sessionId);
+    this.nextShotAt.delete(sessionId);
+    this.nextDecoyAt.delete(sessionId);
+    if (this.bots.size === 0) this.stopBotTicker();
+  }
+
+  private stopDriver(bot: BotRuntime): void {
+    void bot.driver.stop().catch((error: unknown) => {
+      console.error(`[morphy] bot ${bot.actor.sessionId} failed to stop:`, error);
+    });
+  }
+
+  private stopBotTicker(): void {
+    this.botTicker?.clear();
+    this.botTicker = undefined;
+  }
+
+  /**
+   * Drive every bot one tick. Their motor output goes through the same
+   * `handle*` entry points a real client's messages do, so bots get no
+   * authority a player does not have.
+   */
+  private tickBots(): void {
+    const now = Date.now();
+    for (const sessionId of [...this.bots.keys()]) {
+      const bot = this.bots.get(sessionId);
+      if (!bot) continue;
+      try {
+        this.driveBot(bot, sessionId, now);
+      } catch (error) {
+        console.error(`[morphy] bot ${sessionId} brain failed, dropping it:`, error);
+        this.removeBot(sessionId);
+      }
+    }
+  }
+
+  private driveBot(bot: BotRuntime, sessionId: string, now: number): void {
+    const action = bot.driver.tick(snapshot(this.state, sessionId), now);
+    if (action.ready) this.handleReady(bot.actor, { ready: true });
+    if (action.input) this.handleInput(bot.actor, action.input);
+    if (action.shoot) this.handleShoot(bot.actor, { dir: action.shoot.dir });
+    if (action.say) this.handleChat(bot.actor, { text: action.say });
   }
 
   private checkRoundEnd(): void {
@@ -832,9 +1149,30 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     }
   }
 
+  /**
+   * Deal the round to the players who are there for it. Someone inside their
+   * reconnect window is in `state.players` but not in the round: they take no
+   * role slot, join no roster, and sit in the same state a dead player already
+   * occupies, so nothing counts them as a live prop or a missing hunter. The
+   * role they had when they dropped is untouched — this only runs at the start
+   * of a round, never during one.
+   */
   private assignRoles(): void {
-    const players = Array.from(this.state.players.values());
-    this.roundRoster = new Set(this.state.players.keys());
+    const players: PlayerState[] = [];
+    this.roundRoster = new Set();
+    this.state.players.forEach((player, sessionId) => {
+      if (player.connected) {
+        players.push(player);
+        this.roundRoster.add(sessionId);
+        return;
+      }
+      player.role = "prop";
+      player.alive = false;
+      player.hp = 0;
+      player.propType = "";
+      player.rerollsLeft = 0;
+      player.decoysLeft = 0;
+    });
     for (let i = players.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       const a = players[i];

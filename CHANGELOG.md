@@ -8,6 +8,29 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-08
+
+A public match is now playable alone and leavable from every screen: rounds
+start on their own, bots fill a quiet room, a lost connection no longer costs
+the round, and a room's own failure no longer takes the server down with it.
+
+### Added
+
+- A match menu on `Escape` during a round, with `Leave match`, plus a leave
+  button on the results screen and in the public lobby overlay. Leaving a match
+  was previously only possible by reloading or closing the tab.
+- Public rounds start on their own: reaching the minimum player count arms a
+  20 s clock, and `Ready` now shortens that clock instead of authorising the
+  start, so one idle player can no longer hold a lobby hostage.
+- Quiet public rooms pad themselves with server-driven bots after 10 s and hand
+  a bot's seat back the moment a human joins, so a lone player still gets a
+  match. Private rooms are never filled.
+- Losing the connection mid-round no longer costs the round: the seat, role and
+  position are held for 30 s while the client rejoins, and the scoreboard shows
+  the player as `Reconnecting…` in the meantime. A round that outlives the
+  window ends exactly as an abandoned one always did. Leaving on purpose is
+  still immediate.
+
 ### Changed
 
 - The name shown to players is now `Morphy`, with no TLD: browser title, Open
@@ -15,6 +38,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   served from `morphy.lol` and there are no plans to buy it, so the brand no
   longer names a domain it does not own. Stored player prefs are untouched — the
   `morphy:` localStorage namespace already carried no TLD.
+- Quick play pools everyone into the busiest room instead of splitting the pool
+  three ways by map. The lobby's map pick now only decides the map of a newly
+  created room; private rooms are unaffected.
+- A round interrupted below the minimum player count awards the win to the
+  player left in it, instead of ending without touching anyone's record.
+
+### Fixed
+
+- A throw inside a room's own clock callback — a phase timer, the 2 s ping
+  interval, a bot's brain — no longer exits the server process and takes every
+  other match down with it. Failures inside message handlers, previously
+  swallowed silently, are now logged (without their payloads).
+- The match menu no longer paints over the results screen at the end of a round,
+  and no longer leaves chat, weapon-switch and mute keys live underneath itself.
+- Bots no longer inherit the host seat when the last human leaves a filled room,
+  and no longer deliver a chat line a round after they meant to say it.
 
 ### Removed
 

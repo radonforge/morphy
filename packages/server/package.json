@@ -13,6 +13,7 @@
     "@colyseus/core": "^0.17.44",
     "@colyseus/schema": "^4.0.26",
     "@colyseus/ws-transport": "^0.17.13",
+    "@morphy/bot": "workspace:*",
     "@morphy/shared": "workspace:*",
     "cors": "^2.8.5",
     "express": "^5.2.1"

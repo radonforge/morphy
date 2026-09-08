@@ -18,6 +18,7 @@ export interface RemotePlayerView {
   ready: boolean;
   avatar: string;
   ping: number;
+  connected: boolean;
 }
 
 export type PlayersRef = { readonly current: Map<string, RemotePlayerView> };
@@ -43,6 +44,7 @@ export interface PlayerMeta {
   ready: boolean;
   avatar: string;
   ping: number;
+  connected: boolean;
 }
 
 export type MetaMap = Record<string, PlayerMeta>;

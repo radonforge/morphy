@@ -428,7 +428,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
       <form className="menu-bottom" onSubmit={handleSubmit}>
         <div className="menu-strip">
-          <span className="menu-strip-label">Map</span>
+          <span className="menu-strip-label">{inParty ? "Map" : "Preferred map"}</span>
           <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
             {MAP_CATALOG.map((info) => (
               <button

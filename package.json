@@ -1,7 +1,7 @@
 {
   "name": "morphy",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "packageManager": "pnpm@11.9.0",
   "engines": {
@@ -13,7 +13,7 @@
     "dev:client": "pnpm --filter @morphy/client dev",
     "bot": "pnpm --filter @morphy/bot start",
     "tunnel": "ngrok http 5173 ${NGROK_DOMAIN:+--url=https://$NGROK_DOMAIN}",
-    "test": "node --import tsx --test tests/shared.test.mjs tests/maps.test.mjs tests/assets.test.mjs tests/bot-raycast.test.mjs tests/bot-scheduler.test.mjs tests/endpoints.test.mjs tests/safe-storage.test.mjs tests/storage.test.mjs && tsx --tsconfig packages/server/tsconfig.json --test tests/server-room.test.mjs",
+    "test": "node --import tsx --test tests/shared.test.mjs tests/maps.test.mjs tests/assets.test.mjs tests/bot-raycast.test.mjs tests/bot-scheduler.test.mjs tests/endpoints.test.mjs tests/safe-storage.test.mjs tests/storage.test.mjs tests/reconnect.test.mjs && tsx --tsconfig packages/server/tsconfig.json --test tests/server-room.test.mjs",
     "typecheck": "pnpm -r typecheck",
     "format": "biome format --write .",
     "lint": "biome lint .",

@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Bot } from "../packages/bot/src/bot.ts";
+import { BotDriver } from "../packages/bot/src/driver.ts";
 
 test("bot decision timeout releases single-flight even when policy ignores abort", async () => {
-  const bot = new Bot({
-    serverUrl: "ws://invalid",
+  const bot = new BotDriver({
     name: "TimeoutTest",
-    map: "station",
-    code: null,
     difficulty: 0.5,
     readyAtPlayers: 2,
     policy: { name: "never", decide: () => new Promise(() => {}) },
@@ -48,11 +45,8 @@ test("bot decision timeout releases single-flight even when policy ignores abort
 });
 
 test("bot decision scheduler releases single-flight after a synchronous policy throw", async () => {
-  const bot = new Bot({
-    serverUrl: "ws://invalid",
+  const bot = new BotDriver({
     name: "ThrowTest",
-    map: "station",
-    code: null,
     difficulty: 0.5,
     readyAtPlayers: 2,
     policy: {
@@ -94,4 +88,55 @@ test("bot decision scheduler releases single-flight after a synchronous policy t
     console.error = originalError;
     await bot.stop();
   }
+});
+
+const { buildMap } = await import("../packages/server/src/maps/index.ts");
+
+function livePlayer(alive) {
+  return {
+    id: "self",
+    name: "self",
+    x: 0,
+    y: 0,
+    z: 0,
+    rot: 0,
+    aim: 0,
+    role: "hunter",
+    alive,
+    hp: 100,
+    kills: 0,
+    propType: "",
+    ready: true,
+  };
+}
+
+test("a chat line decided before the bot died is dropped, not saved for later", async () => {
+  const driver = new BotDriver({
+    name: "Chatty",
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "chatty",
+      decide: (obs) => Promise.resolve({ kind: "chat", text: "look behind you", seq: obs.seq }),
+    },
+    visibility: "full",
+    trace: null,
+  });
+  driver.setMap(buildMap("station", 1));
+  const world = (alive) => ({
+    phase: "hunting",
+    winner: "",
+    self: livePlayer(alive),
+    others: [],
+    decoys: [],
+  });
+
+  driver.tick(world(true), Date.now());
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(driver.pendingSay, "look behind you");
+
+  driver.tick(world(false), Date.now());
+  assert.equal(driver.pendingSay, null);
+  assert.equal(driver.tick(world(true), Date.now()).say, null);
+  await driver.stop();
 });
