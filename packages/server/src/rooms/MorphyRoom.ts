@@ -39,6 +39,7 @@ import {
   MSG_CHAT,
   MSG_DECOY,
   MSG_DECOY_BREAK,
+  MSG_DECOY_PLACED,
   MSG_INPUT,
   MSG_KILL,
   MSG_MAP,
@@ -123,7 +124,15 @@ export class DecoyState extends Schema {
   @type("float32") z = 0;
   @type("float32") rot = 0;
   @type("string") propType = "";
-  @type("string") owner = "";
+  /**
+   * Deliberately not a `@type` field: a decoy exists to be mistaken for a real
+   * prop, and broadcasting its owner tells every client which props are fake
+   * and whose they are. The server needs it to expire a player's decoys, and
+   * the owner is told it placed one by `MSG_DECOY_PLACED` — sent to it alone,
+   * carrying nothing, because a self-feedback cue is all the client does with
+   * it. Nobody else needs any of it.
+   */
+  owner = "";
 }
 
 export class RoomState extends Schema {
@@ -581,6 +590,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.state.decoys.set(decoy.id, decoy);
     player.decoysLeft -= 1;
     this.nextDecoyAt.set(client.sessionId, now + DECOY_COOLDOWN_MS);
+    client.send(MSG_DECOY_PLACED);
   }
 
   private removeDecoysOf(ownerId: string): void {

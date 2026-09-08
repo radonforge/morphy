@@ -10,6 +10,7 @@ import {
   MIN_PLAYERS_TO_START,
   MSG_CHAT,
   MSG_DECOY_BREAK,
+  MSG_DECOY_PLACED,
   MSG_KILL,
   MSG_MAP,
   MSG_READY,
@@ -541,7 +542,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
 
     unsubscribers.push(
       callbacks.onAdd("decoys", (decoy: unknown, key: unknown) => {
-        const d = decoy as Partial<DecoyView & { owner: string }>;
+        const d = decoy as Partial<DecoyView>;
         if (
           !isFiniteNumber(d.x) ||
           !isFiniteNumber(d.y) ||
@@ -560,9 +561,10 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
           propType: d.propType,
         };
         setDecoys((prev) => [...prev, view]);
-        if (d.owner === sessionId) playMorph(1);
       }),
     );
+
+    unsubscribers.push(room.onMessage(MSG_DECOY_PLACED, () => playMorph(1)));
 
     unsubscribers.push(
       callbacks.onRemove("decoys", (_decoy: unknown, key: unknown) => {

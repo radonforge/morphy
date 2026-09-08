@@ -29,6 +29,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   destination to walk onto. A contact actually in view is still exact. This was
   the last place a filling bot knew something a player could not.
 
+### Security
+
+- A decoy no longer travels with its owner on it. `DecoyState.owner` was a
+  broadcast schema field, so any client could read which props in the room were
+  fake and whose they were — and deception is the whole point of the mechanic.
+  The server still tracks it to expire a player's decoys; the owner now learns
+  which decoy is theirs from a `decoy_placed` ack sent to them alone.
+
 ### Removed
 
 - The `parseIntent` / `parseObservation` validators in `shared/agent.ts`. They
