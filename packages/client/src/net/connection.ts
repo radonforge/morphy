@@ -1,4 +1,4 @@
-import { Client, type Room, ServerError } from "@colyseus/sdk";
+import { Client, CloseCode, ErrorCode, type Room } from "@colyseus/sdk";
 import {
   MSG_PING,
   MSG_PONG,
@@ -129,12 +129,28 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * Whether the server answered the reconnection request. An answer — an expired
- * token, a disposed room — is final and settles the matter; only a request that
- * never reached the server is worth repeating.
+ * Answers that settle the matter: the server replied, and its reply is no — an
+ * unknown room, a seat it no longer holds, a room that refused the socket.
  */
-function wasAnswered(error: unknown): boolean {
-  return error instanceof ServerError && error.status !== undefined;
+const REFUSED_CODES: ReadonlySet<number> = new Set([
+  ErrorCode.MATCHMAKE_NO_HANDLER,
+  ErrorCode.MATCHMAKE_INVALID_ROOM_ID,
+  ErrorCode.MATCHMAKE_EXPIRED,
+  CloseCode.FAILED_TO_RECONNECT,
+]);
+
+/**
+ * Whether the server refused the reconnection, as opposed to never having
+ * answered. The discriminator has to be the numeric `code`: the matchmaking
+ * call rewraps every failure into a `MatchMakeError`, which keeps `code` (the
+ * HTTP status, itself the Colyseus error code) and drops everything else, and
+ * leaves it undefined when the request never reached the server at all.
+ * Anything unrecognised — including `MAY_TRY_RECONNECT` — is worth one more
+ * try; the window bounds the loop either way.
+ */
+export function isRefusedReconnection(error: unknown): boolean {
+  const code: unknown = (error as { code?: unknown } | null)?.code;
+  return typeof code === "number" && REFUSED_CODES.has(code);
 }
 
 /**
@@ -142,7 +158,9 @@ function wasAnswered(error: unknown): boolean {
  * session id. Retries because a network blip is rarely over on the first try,
  * and stops at {@link RECONNECT_WINDOW_MS} because that is exactly how long the
  * server holds the seat: past it the token is gone and another attempt can only
- * fail. Aborting the signal gives up early — the player asked to leave.
+ * fail. A refusal ends it sooner. Aborting the signal gives up early — the
+ * player asked to leave. The message it rejects with is player-facing copy, not
+ * the transport's own words.
  */
 export async function reconnectToRoom(
   serverUrl: string,
@@ -152,6 +170,7 @@ export async function reconnectToRoom(
   const client = new Client(serverUrl);
   const deadline = Date.now() + RECONNECT_WINDOW_MS;
   let attempt = 0;
+  let refused = false;
   let lastError: unknown;
   while (!signal.aborted && Date.now() < deadline) {
     if (attempt > 0) await sleep(reconnectDelayMs(attempt), signal);
@@ -167,9 +186,15 @@ export async function reconnectToRoom(
       return adopt(room);
     } catch (error) {
       lastError = error;
-      if (wasAnswered(error)) break;
+      if (isRefusedReconnection(error)) {
+        refused = true;
+        break;
+      }
     }
   }
-  const reason = lastError instanceof Error ? lastError.message : "the connection stayed down";
-  throw new Error(`Lost the match — ${reason}`);
+  if (!signal.aborted) {
+    const detail = lastError instanceof Error ? lastError.message : "no answer from the server";
+    console.warn(`[morphy] gave up reconnecting after ${attempt} attempt(s): ${detail}`);
+  }
+  throw new Error(refused ? "The match moved on without you" : "Lost the connection to the match");
 }
