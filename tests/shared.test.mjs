@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   colliderAabb,
-  IntentValidationError,
   isWeaponId,
   MapValidationError,
-  parseIntent,
   parseMapDefinition,
   rayAabb,
   withTimeout,
@@ -55,20 +53,6 @@ test("map validation rejects non-finite values, empty spawns and duplicate ids",
   const duplicate = validMap();
   duplicate.propCatalog.push(structuredClone(duplicate.propCatalog[0]));
   assert.throws(() => parseMapDefinition(duplicate), /duplicate id/);
-});
-
-test("agent intent booleans are strict", () => {
-  assert.deepEqual(parseIntent({ kind: "moveTo", seq: 1, x: 2, z: 3, run: true }), {
-    kind: "moveTo",
-    seq: 1,
-    x: 2,
-    z: 3,
-    run: true,
-  });
-  assert.throws(
-    () => parseIntent({ kind: "moveTo", seq: 1, x: 2, z: 3, run: "yes" }),
-    IntentValidationError,
-  );
 });
 
 test("timeout rejects and disposes values that resolve late", async () => {

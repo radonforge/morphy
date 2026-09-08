@@ -140,3 +140,154 @@ test("a chat line decided before the bot died is dropped, not saved for later", 
   assert.equal(driver.tick(world(true), Date.now()).say, null);
   await driver.stop();
 });
+
+/**
+ * The room-filling bots run with `"limited"` vision (`MorphyRoom.addBot`). The
+ * two modes differ in exactly one thing — whether a contact carries ground
+ * truth — and that is what makes a filler bot fair to the humans it pads out.
+ */
+function worldWithOneContact(selfRole, contactRole, contactPropType) {
+  const body = (id, role, propType) => ({
+    id,
+    name: id,
+    x: id === "self" ? 0 : 3,
+    y: 0,
+    z: 0,
+    rot: 0,
+    aim: 0,
+    role,
+    alive: true,
+    hp: role === "hunter" ? 100 : 0,
+    kills: 0,
+    propType,
+    ready: true,
+  });
+  return {
+    phase: "hunting",
+    self: body("self", selfRole, ""),
+    others: [body("contact", contactRole, contactPropType)],
+    decoys: [],
+  };
+}
+
+async function observationSeenBy(visibility) {
+  const seen = [];
+  const bot = new BotDriver({
+    name: `Vision-${visibility}`,
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "capture",
+      decide: (obs) => {
+        seen.push(obs);
+        return { kind: "patrol", seq: obs.seq };
+      },
+    },
+    visibility,
+    trace: null,
+  });
+  try {
+    bot.launchDecide(worldWithOneContact("hunter", "prop", "crate"), Date.now());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return seen[0];
+  } finally {
+    await bot.stop();
+  }
+}
+
+test("a limited-vision bot is never told who the props are", async () => {
+  const obs = await observationSeenBy("limited");
+  assert.equal(obs.visibility, "limited");
+  const contact = obs.entities.find((e) => e.id === "contact");
+  assert.ok(contact, "a contact in the open and in line of sight is sensed");
+  assert.equal(contact.role, undefined, "role is ground truth and must not leak");
+  assert.equal(contact.propType, undefined, "nor the disguise it is wearing");
+  assert.equal(contact.alive, undefined);
+  assert.equal(typeof contact.hasLineOfSight, "boolean", "what a player can see is kept");
+  assert.equal(typeof contact.distance, "number");
+});
+
+test("the full-vision anchor still reads ground truth", async () => {
+  const obs = await observationSeenBy("full");
+  const contact = obs.entities.find((e) => e.id === "contact");
+  assert.ok(contact);
+  assert.equal(contact.role, "prop");
+  assert.equal(contact.propType, "crate");
+  assert.equal(contact.alive, true);
+});
+
+/**
+ * The wake-up detector used to filter on `other.role`, so a bot slept through a
+ * teammate and woke the instant an enemy appeared — a reaction time no player
+ * has, decided before the policy had been shown anything.
+ */
+test("a bot wakes its policy for any contact that comes into view, not just enemies", async () => {
+  const calls = [];
+  const bot = new BotDriver({
+    name: "WakeTest",
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "counter",
+      decide: (obs) => {
+        calls.push(obs.seq);
+        return { kind: "patrol", seq: obs.seq };
+      },
+    },
+    visibility: "limited",
+    trace: null,
+  });
+  const body = (id, role, x) => ({
+    id,
+    name: id,
+    x,
+    y: 0,
+    z: 0,
+    rot: 0,
+    aim: 0,
+    role,
+    alive: true,
+    hp: role === "hunter" ? 100 : 0,
+    kills: 0,
+    propType: role === "prop" ? "crate" : "",
+    ready: true,
+  });
+  const self = body("self", "hunter", 0);
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 15));
+
+  // An open map with no colliders: `canSee` needs a map at all (it answers
+  // false without one), and no walls means line of sight is purely a matter of
+  // distance, which is what this test is about.
+  bot.setMap({
+    id: "open",
+    bounds: { min: { x: -20, y: 0, z: -20 }, max: { x: 20, y: 10, z: 20 } },
+    spawnPoints: { props: [{ x: 0, y: 0, z: 0 }] },
+    colliders: [],
+    tiles: [],
+    scenery: [],
+    props: [],
+    propCatalog: [],
+  });
+  bot.syncPosition(0, 0);
+
+  try {
+    // First kick establishes the baseline: nobody in view, and the phase change
+    // itself is the event that fires it.
+    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [] }, 1_000);
+    await settle();
+    const baseline = calls.length;
+    assert.ok(baseline > 0, "the first kick fires on the phase change");
+
+    // 1 ms later the decide interval is nowhere near due, so anything that
+    // fires now fires because a contact was noticed — and the contact is a
+    // fellow hunter, which the old role filter skipped.
+    bot.maybeKickDecide(
+      { phase: "hunting", self, others: [body("mate", "hunter", 3)], decoys: [] },
+      1_001,
+    );
+    await settle();
+    assert.equal(calls.length, baseline + 1, "a hunter walking into view is noticed too");
+  } finally {
+    await bot.stop();
+  }
+});

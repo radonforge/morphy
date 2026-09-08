@@ -1040,6 +1040,14 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   }
 
   /**
+   * A room-filling bot plays with `"limited"` vision on purpose. The `"full"`
+   * mode reads ground truth — `role`, `alive`, `propType` — and exists as the
+   * parity anchor for measuring policies, not as a way to play: a hunter given
+   * it never has to *find* a prop, it targets the disguise straight through.
+   * These bots are here to make a thin room playable for the humans in it, so
+   * they get what a player gets: line of sight, distance, and whether a contact
+   * has moved recently.
+   *
    * Bot code runs inside a room `clock` callback, where a throw is contained by
    * {@link onUncaughtException} — but contained means the whole callback dies,
    * so one failing brain would cost every bot behind it in that tick its turn,
@@ -1064,7 +1072,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       difficulty: DEFAULT_DIFFICULTY,
       readyAtPlayers: MIN_PLAYERS_TO_START,
       policy: new ScriptedPolicy(DEFAULT_DIFFICULTY),
-      visibility: "full",
+      visibility: "limited",
       trace: null,
     });
     try {
