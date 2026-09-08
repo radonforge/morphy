@@ -471,6 +471,17 @@ test("a lobby does not start a round on the strength of an absent player", () =>
   assert.equal(room.state.phaseEndsAt, 0, "one player and one held seat is not two players");
 });
 
+test("a room-filling bot is given a player's view, not ground truth", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  fireBotFill(room);
+  const bot = [...room.bots.values()][0];
+  assert.ok(bot, "expected a bot to have been added");
+  // Reaching into the driver's options: the vision mode has no observable
+  // effect until a bot ticks, and this is the decision worth pinning.
+  assert.equal(bot.driver.options.visibility, "limited");
+});
+
 test("a logged room exception never carries the payload or the device id", () => {
   const error = Object.assign(new Error("boom"), {
     name: "OnMessageException",
