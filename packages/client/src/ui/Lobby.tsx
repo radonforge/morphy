@@ -360,7 +360,6 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         <div className="menu-wordmark">
           <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
           <span>MORPHY</span>
-          <span className="b">.LOL</span>
         </div>
         <nav className="menu-tabs" aria-label="Menu">
           {NAV_ITEMS.map((item) => (

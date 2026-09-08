@@ -1,6 +1,6 @@
 {
-  "name": "morphy.lol",
-  "short_name": "morphy",
+  "name": "Morphy",
+  "short_name": "Morphy",
   "description": "Browser multiplayer prop hunt — morph into objects, then hunt or hide.",
   "start_url": "/",
   "display": "standalone",

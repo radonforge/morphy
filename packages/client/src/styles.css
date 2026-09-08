@@ -326,9 +326,6 @@ canvas {
   margin-right: 0.4em;
   align-self: center;
 }
-.menu-wordmark .b {
-  color: var(--muted);
-}
 
 .menu-tabs {
   display: flex;
