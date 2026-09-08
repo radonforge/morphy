@@ -357,9 +357,14 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       <div className="menu-vignette" />
 
       <header className="menu-top">
-        <div className="menu-wordmark">
-          <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
-          <span>MORPHY</span>
+        <div className="menu-brand">
+          <div className="menu-wordmark">
+            <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
+            <span>MORPHY</span>
+          </div>
+          <span className="menu-build" title="Version and build of this client">
+            {__MORPHY_VERSION__} · {__MORPHY_BUILD__}
+          </span>
         </div>
         <nav className="menu-tabs" aria-label="Menu">
           {NAV_ITEMS.map((item) => (
