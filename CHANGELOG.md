@@ -8,6 +8,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Room-filling bots play with a player's information instead of the server's.
+  They ran on the `"full"` visibility mode, which reads `role`, `alive` and
+  `propType` straight off every contact — a bot hunter never had to *find* a
+  prop, it targeted the disguise through the disguise. They now run `"limited"`:
+  line of sight, distance, and whether a contact moved recently. `"full"`
+  remains as a measuring anchor and is not wired into any live room.
+
+### Removed
+
+- The `parseIntent` / `parseObservation` validators in `shared/agent.ts`. They
+  guarded output from an out-of-process agent policy that does not exist — the
+  server drives its bots in-process — so `parseObservation` had no caller at all
+  and `parseIntent` only had a test. The contract is types only now.
+
 ## [0.2.0] — 2026-09-08
 
 A public match is now playable alone and leavable from every screen: rounds
