@@ -8,6 +8,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Morphy asks to be opened on a PC when it is opened on a phone or a tablet,
+  instead of showing a lobby that leads to a game those devices cannot run:
+  aiming needs the pointer locked, which no mobile browser grants, and movement
+  is on WASD. The test is a capability, not a width — `(pointer: fine)`, so a
+  desktop window dragged narrow still plays and a tablet held wide does not —
+  and it is re-evaluated live, so plugging in a mouse lifts the notice without
+  a reload.
+
 ### Fixed
 
 - A hunter bot no longer treats another hunter as something to identify. The

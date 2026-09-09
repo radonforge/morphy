@@ -107,6 +107,12 @@ canvas {
   color: var(--cyan);
 }
 
+.desktop-only-note {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .lobby-card input,
 .lobby-overlay-card input {
   font-family: var(--font-sans);
