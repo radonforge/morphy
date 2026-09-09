@@ -10,11 +10,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
-- The lobby shows the client's version and build under the wordmark, e.g.
-  `0.2.1 · 3d50685`, so a bug report can name the exact build it came from.
-  The sha matters on its own: production also deploys on `workflow_dispatch`,
-  so one version can ship from more than one commit. A build made outside a
-  checkout reads `dev` rather than claiming a commit.
+- The lobby shows the client's version and build under the wordmark, so a bug
+  report can name the exact build it came from. A tagged build reads its
+  version from the tag — `0.2.2 · 1a2b3c4` — which makes the tag authoritative
+  rather than the manifest on disk. Every other build sits *past* a release
+  instead of being it, and says so: `0.2.1+ · a49e58f`. That distinction is
+  what earns the stamp its place, because production also deploys on
+  `workflow_dispatch`, so one version can ship from more than one commit. A
+  build made outside a checkout reads `dev` rather than claiming a commit.
 
 ## [0.2.1] — 2026-09-08
 

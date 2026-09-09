@@ -362,7 +362,10 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
             <span>MORPHY</span>
           </div>
-          <span className="menu-build" title="Version and build of this client">
+          <span
+            className="menu-build"
+            title="Version and build of this client. A trailing + means the build is past that release."
+          >
             {__MORPHY_VERSION__} · {__MORPHY_BUILD__}
           </span>
         </div>
