@@ -107,6 +107,12 @@ canvas {
   color: var(--cyan);
 }
 
+.desktop-only-note {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .lobby-card input,
 .lobby-overlay-card input {
   font-family: var(--font-sans);
@@ -1269,13 +1275,25 @@ canvas {
   animation: pulse 1s ease-in-out infinite;
 }
 
-/* ---------- Vitals (hunter HP) ---------- */
+/* ---------- Bottom HUD: hunter HP over the controls bar ---------- */
 
-.vitals {
+/* One stack rather than two absolute offsets: the controls bar wraps to a
+   second row on a narrow window, and a hand-tuned `bottom` for the vitals sat
+   underneath it. */
+.hud-bottom {
   position: absolute;
   left: 50%;
-  bottom: 44px;
+  bottom: 14px;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 94vw;
+  pointer-events: none;
+}
+
+.vitals {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1806,16 +1824,12 @@ canvas {
 }
 
 .controls-bar {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
   gap: 14px;
-  max-width: 94vw;
+  max-width: 100%;
   padding: 6px 12px;
   background: rgba(4, 7, 12, 0.4);
   border-radius: 6px;

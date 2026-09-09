@@ -8,6 +8,40 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Morphy asks to be opened on a PC when it is opened on a phone or a tablet,
+  instead of showing a lobby that leads to a game those devices cannot run:
+  aiming needs the pointer locked, which no mobile browser grants, and movement
+  is on WASD. The test is a capability, not a width — `(pointer: fine)`, so a
+  desktop window dragged narrow still plays and a tablet held wide does not —
+  and it is re-evaluated live, so plugging in a mouse lifts the notice without
+  a reload.
+
+### Fixed
+
+- A hunter bot no longer treats another hunter as something to identify. The
+  0.2.3 inspect budget bounded the symptom at arm's reach and left the chase
+  untouched: a contact that keeps more than two metres away never spends the
+  budget, so a bot hunter followed a human hunter around the map for the whole
+  round, and a pack re-formed every time a park expired. The cause was the one
+  perception signal the policy had, `looksLikeProp`, which folded "wears a
+  disguise" together with "is standing still" — leaving a moving disguise and
+  an undisguised teammate indistinguishable. Perception now reports the shape
+  itself (`ObservedEntity.disguised`, whether a contact wears a disguise, never
+  which one — what a player reads off the screen), a hunter is excluded from
+  suspect selection because it can only ever be a teammate, and the budget and
+  its park are gone rather than kept alongside the fix. The shape is reported
+  only for a contact in line of sight: footsteps through a wall tell a player
+  nothing about who is making them, so a heard contact still gets investigated
+  whoever it is. A prop bot reads a threat the same way — a seen disguise is a
+  fellow prop and no reason to break cover, an unseen noise still is.
+- The hunter's health bar no longer sits on top of the controls bar. Both were
+  positioned from the bottom of the screen by hand, eight pixels apart in the
+  wrong direction, and the controls bar wraps to two or three rows on a narrow
+  window and buried the bar completely. They are now one bottom-centred stack,
+  so the spacing holds however many rows the controls take.
+
 ## [0.2.3] — 2026-09-09
 
 Hunter bots no longer deadlock on each other. A round that filled with bots

@@ -69,7 +69,19 @@ export interface ObservedEntity {
   role?: Role;
   alive?: boolean;
   propType?: string;
-  looksLikeProp?: boolean;
+  /**
+   * Whether this contact is wearing a disguise at all, rather than which one —
+   * the shape a player reads off the screen. An undisguised contact renders as a
+   * character carrying a weapon, so it can only be a hunter; a disguised one
+   * renders as a scene object.
+   *
+   * **Absent when the contact is not in line of sight**, because footsteps
+   * through a wall tell a player nothing about shape. A contact known only by
+   * sound is therefore "might be anyone", not "known teammate" — the difference
+   * between a bot that searches a noise and one that reads the room. `"full"`
+   * visibility always reports it: that mode is ground truth by definition.
+   */
+  disguised?: boolean;
   movedRecently?: boolean;
   /** This entity has line of sight to the bot and is aiming roughly at it — i.e. it is watching the bot right now. */
   facingMe?: boolean;
