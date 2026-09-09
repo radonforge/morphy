@@ -79,6 +79,32 @@ test("a contact in line of sight keeps its exact position", () => {
   assert.equal(seen.z, 1.9);
 });
 
+/**
+ * Shape is a sighting, not a sense. Footsteps through a wall tell a player
+ * nothing about what is making them, so a heard contact carries no `disguised`
+ * — otherwise a bot would know a noise was a teammate's and walk away from it.
+ */
+test("a contact known only by sound reports no shape", () => {
+  const obs = observeMoving(ready("limited"), contact(5.0, 1.0), contact(5.9, 1.9));
+  const heard = obs.entities.find((e) => e.id === "target");
+  assert.ok(heard);
+  assert.equal(heard.hasLineOfSight, false);
+  assert.equal(heard.disguised, undefined, "the disguise a wall hides is not sensed");
+});
+
+test("a contact in line of sight reports whether it wears a disguise", () => {
+  const obs = observeMoving(ready("limited"), contact(-5.0, 1.0), contact(-5.9, 1.9));
+  const seen = obs.entities.find((e) => e.id === "target");
+  assert.ok(seen);
+  assert.equal(seen.disguised, true, "a crate in plain sight reads as a disguise");
+
+  const hunter = { ...contact(-5.9, 1.9), role: "hunter", propType: "" };
+  const next = observeMoving(ready("limited"), { ...hunter, x: -5.0, z: 1.0 }, hunter);
+  const character = next.entities.find((e) => e.id === "target");
+  assert.ok(character);
+  assert.equal(character.disguised, false, "a character with a weapon cannot be a prop");
+});
+
 test("full visibility keeps ground truth even without line of sight", () => {
   const reflex = ready("full");
   const obs = observeMoving(reflex, contact(5.0, 1.0), contact(5.9, 1.9));
@@ -87,4 +113,5 @@ test("full visibility keeps ground truth even without line of sight", () => {
   assert.equal(seen.hasLineOfSight, false);
   assert.equal(seen.x, 5.9, "the measuring anchor is untouched");
   assert.equal(seen.z, 1.9);
+  assert.equal(seen.disguised, true, "the anchor reads shape through the wall too");
 });

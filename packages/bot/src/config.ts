@@ -22,20 +22,6 @@ export const FACING_CONE_COS = Math.cos((35 * Math.PI) / 180);
 /** A watched prop freezes (rather than relocating) only when the watcher is within this range. */
 export const FREEZE_RADIUS = 20;
 
-/**
- * Decisions a hunter may stand at {@link INSPECT_CONTACT_RANGE} from a sensed
- * contact, in clear line of sight, without it ever resolving into something
- * shootable, before the contact is parked. Counted in decisions rather than
- * seconds because an {@link Observation} carries no clock and the driver wakes
- * the policy on events as well as on {@link DECIDE_INTERVAL_MS}, so the
- * wall-clock equivalent is a floor (~4 s), not a constant.
- */
-export const INSPECT_BUDGET_DECISIONS = 6;
-/** Decisions a parked contact stays skipped, unless it starts reading as a prop first. */
-export const INSPECT_PARK_DECISIONS = 14;
-/** Distance past which walking closer is what identifies a contact, rather than a wasted approach. */
-export const INSPECT_CONTACT_RANGE = 2;
-
 export const ENGAGE_RANGE_MIN = 14;
 export const ENGAGE_RANGE_MAX = WEAPONS[DEFAULT_WEAPON].range;
 export const BOT_FIRE_COOLDOWN_MS = WEAPONS[DEFAULT_WEAPON].cooldownMs;

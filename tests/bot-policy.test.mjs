@@ -1,27 +1,48 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { INSPECT_BUDGET_DECISIONS, INSPECT_PARK_DECISIONS } from "../packages/bot/src/config.ts";
+import { PANIC_RADIUS } from "../packages/bot/src/config.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
 
 const DIFFICULTY = 0.6;
 const BOUNDS = { min: { x: -20, y: 0, z: -20 }, max: { x: 20, y: 10, z: 20 } };
+const DECISIONS = 12;
 
-/** A contact a hunter can never identify: in sight, and never reading as a prop. */
-const unidentified = (id, distance) => ({
+/** A contact on the +x axis, in plain sight, disguised and standing still. */
+const contact = (id, distance, over = {}) => ({
   id,
   x: distance,
   z: 0,
   distance,
   hasLineOfSight: true,
-  looksLikeProp: false,
+  disguised: true,
   movedRecently: false,
   facingMe: false,
+  ...over,
 });
 
-const observation = (seq, entities, phase = "hunting") => ({
+/** A contact wearing no disguise: a character with a weapon, so a hunter. */
+const character = (id, distance, over = {}) => contact(id, distance, { disguised: false, ...over });
+
+/** A disguise that is on the move, so not yet worth a shot. */
+const mover = (id, distance, over = {}) => contact(id, distance, { movedRecently: true, ...over });
+
+/**
+ * A contact known only by sound: moving, out of sight, and — like the footsteps
+ * a player hears through a wall — carrying no shape at all. The reflex omits
+ * `disguised` for these, so the fixture must too.
+ */
+const heard = (id, distance) => {
+  const { disguised, ...rest } = contact(id, distance, {
+    movedRecently: true,
+    hasLineOfSight: false,
+  });
+  return rest;
+};
+
+const observation = (seq, entities, self = {}) => ({
   seq,
   visibility: "limited",
-  phase,
+  phase: "hunting",
   pathBlocked: false,
   self: {
     role: "hunter",
@@ -32,82 +53,144 @@ const observation = (seq, entities, phase = "hunting") => ({
     rot: 0,
     propType: "",
     canShootNow: true,
+    ...self,
   },
   entities,
   map: { bounds: BOUNDS, doorways: [], nearbyProps: [] },
 });
 
-/** Run `count` decision cycles from `seq`, collecting the intent kind of each. */
-async function run(policy, count, entitiesAt, seq = 1) {
-  const kinds = [];
+const asProp = { role: "prop", hp: 0, propType: "crate" };
+
+/** Run `count` decision cycles, collecting every intent. */
+async function run(policy, count, entitiesAt, self) {
+  const intents = [];
   for (let i = 0; i < count; i++) {
-    const intent = await policy.decide(observation(seq + i, entitiesAt(i)));
-    kinds.push(intent.kind);
+    intents.push(await policy.decide(observation(i + 1, entitiesAt(i), self)));
   }
-  return kinds;
+  return intents;
 }
 
-test("a hunter gives up on a contact it has stood next to without identifying", async () => {
+const kinds = (intents) => [...new Set(intents.map((intent) => intent.kind))];
+
+/**
+ * The regression that made a hunter follow another hunter around the map. A
+ * teammate can never come to look like a prop, so as a suspect it is one the
+ * hunter can never finish inspecting.
+ *
+ * The moving case is the one that mattered: a teammate standing still was
+ * already distinguishable from the two signals perception used to carry, and a
+ * teammate on the move was not — which is why the hunter that got followed
+ * around the map was the one walking about.
+ */
+test("a hunter never walks up to a contact wearing no disguise", async () => {
+  for (const distance of [0.8, 6, 15]) {
+    for (const moving of [false, true]) {
+      const policy = new ScriptedPolicy(DIFFICULTY);
+      const intents = await run(policy, DECISIONS, () => [
+        character("hunter-b", distance, { movedRecently: moving }),
+      ]);
+      assert.deepEqual(
+        kinds(intents),
+        ["patrol"],
+        `a ${moving ? "moving" : "still"} teammate at ${distance}m is neither chased nor shot at`,
+      );
+    }
+  }
+});
+
+test("a hunter keeps hunting past a teammate stood in the way", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const kinds = await run(policy, INSPECT_BUDGET_DECISIONS + 3, () => [
-    unidentified("hunter-b", 0.8),
+  const intents = await run(policy, DECISIONS, () => [
+    character("hunter-b", 0.8),
+    contact("prop-a", 9),
   ]);
-  assert.equal(kinds[0], "inspect");
-  assert.ok(kinds.includes("patrol"), `expected the lock to break, got ${kinds.join(",")}`);
+  assert.deepEqual(kinds(intents), ["shootTarget"]);
+  assert.equal(intents[0].targetId, "prop-a", "the nearer teammate is not a target");
 });
 
-test("a clump whose nearest member keeps changing still breaks apart", async () => {
+test("a hunter shoots a disguise standing still in range", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const jitter = (i) => [
-    unidentified("hunter-b", i % 2 === 0 ? 0.7 : 0.9),
-    unidentified("hunter-c", i % 2 === 0 ? 0.9 : 0.7),
-    unidentified("hunter-d", 1.1),
-  ];
-  const kinds = await run(policy, INSPECT_PARK_DECISIONS + 6, jitter);
-  assert.ok(kinds.includes("patrol"), `expected the clump to break, got ${kinds.join(",")}`);
-});
-
-test("a contact still being approached is never given up on", async () => {
-  const policy = new ScriptedPolicy(DIFFICULTY);
-  const kinds = await run(policy, INSPECT_BUDGET_DECISIONS * 3, () => [unidentified("prop-a", 15)]);
-  assert.ok(
-    kinds.every((kind) => kind === "inspect"),
-    `expected an uninterrupted chase, got ${kinds.join(",")}`,
-  );
-});
-
-test("a contact known only by sound is never given up on", async () => {
-  const policy = new ScriptedPolicy(DIFFICULTY);
-  const heard = () => [{ ...unidentified("prop-a", 0.8), hasLineOfSight: false }];
-  const kinds = await run(policy, INSPECT_BUDGET_DECISIONS * 3, heard);
-  assert.ok(
-    kinds.every((kind) => kind === "inspect"),
-    `expected the search to continue, got ${kinds.join(",")}`,
-  );
-});
-
-test("a given-up contact is shot the moment it reads as a prop", async () => {
-  const policy = new ScriptedPolicy(DIFFICULTY);
-  const kinds = await run(policy, INSPECT_BUDGET_DECISIONS + 3, () => [
-    unidentified("mystery", 0.8),
-  ]);
-  assert.ok(kinds.includes("patrol"), `expected the lock to break, got ${kinds.join(",")}`);
-
-  const revealed = { ...unidentified("mystery", 0.8), looksLikeProp: true };
-  const intent = await policy.decide(observation(INSPECT_BUDGET_DECISIONS + 4, [revealed]));
+  const intent = (await run(policy, 1, () => [contact("prop-a", 9)]))[0];
   assert.equal(intent.kind, "shootTarget");
-  assert.equal(intent.targetId, "mystery");
+  assert.equal(intent.targetId, "prop-a");
 });
 
-test("a new round forgets which contacts were given up on", async () => {
+test("a hunter chases a disguise it cannot shoot yet, however long it takes", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const clump = () => [unidentified("hunter-b", 0.8)];
-  const kinds = await run(policy, INSPECT_BUDGET_DECISIONS + 3, clump);
-  assert.ok(kinds.includes("patrol"), `expected the lock to break, got ${kinds.join(",")}`);
+  const pointBlank = await run(policy, DECISIONS, () => [mover("prop-a", 0.8)]);
+  assert.deepEqual(kinds(pointBlank), ["inspect"], "a mover at arm's reach is not given up on");
 
-  const seq = INSPECT_BUDGET_DECISIONS + 4;
-  await policy.decide(observation(seq, clump(0), "hiding"));
-  const intent = await policy.decide(observation(seq + 1, clump(0)));
+  const bySound = await run(new ScriptedPolicy(DIFFICULTY), DECISIONS, () => [heard("prop-b", 4)]);
+  assert.deepEqual(kinds(bySound), ["inspect"], "nor is a contact known only by sound");
+});
+
+/**
+ * The fairness half of the shape signal: a player who only hears footsteps
+ * cannot tell a teammate from a prop, so neither may a bot. A heard contact
+ * carries no shape, and is investigated whoever it turns out to be.
+ */
+test("a hunter investigates a noise without knowing whose it is", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intents = await run(policy, DECISIONS, () => [heard("someone", 5)]);
+  assert.deepEqual(kinds(intents), ["inspect"]);
+  assert.equal(intents[0].targetId, "someone");
+});
+
+test("a hunter prefers a seen disguise to a noise, and a noise to a seen teammate", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = (
+    await run(policy, 1, () => [character("hunter-b", 1), heard("noise", 9), mover("prop-a", 12)])
+  )[0];
   assert.equal(intent.kind, "inspect");
-  assert.equal(intent.targetId, "hunter-b");
+  assert.equal(intent.targetId, "noise", "the nearest contact that is not a known teammate");
+});
+
+test("a hunter chases the nearest disguise, not the nearest contact", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = (
+    await run(policy, 1, () => [
+      character("hunter-b", 1),
+      mover("prop-far", 12),
+      mover("prop-near", 6),
+    ])
+  )[0];
+  assert.equal(intent.kind, "inspect");
+  assert.equal(intent.targetId, "prop-near");
+});
+
+test("a prop flees the nearest contact wearing no disguise", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = (await run(policy, 1, () => [character("hunter-b", PANIC_RADIUS - 3)], asProp))[0];
+  assert.equal(intent.kind, "moveTo");
+  assert.equal(intent.run, true);
+  assert.ok(intent.x < 0, `the flee goes away from the hunter on +x, got x=${intent.x}`);
+});
+
+test("a prop freezes instead of running when the hunter is already watching", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = (
+    await run(
+      policy,
+      1,
+      () => [character("hunter-b", PANIC_RADIUS - 3, { facingMe: true })],
+      asProp,
+    )
+  )[0];
+  assert.equal(intent.kind, "idle");
+});
+
+/** A fellow prop is not a threat, whatever it is doing — it cannot shoot. */
+test("a prop holds its hiding plan next to another disguise", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intents = await run(policy, DECISIONS, () => [mover("prop-b", 1)], asProp);
+  assert.deepEqual(kinds(intents), ["hideAs"]);
+});
+
+/** Footsteps nearby could be the hunter's, and a prop that assumed otherwise
+ * would be reading information a player does not have. */
+test("a prop runs from a noise it cannot see", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = (await run(policy, 1, () => [heard("noise", PANIC_RADIUS - 3)], asProp))[0];
+  assert.equal(intent.kind, "moveTo");
+  assert.equal(intent.run, true);
 });

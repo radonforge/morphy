@@ -205,6 +205,35 @@ test("a limited-vision bot is never told who the props are", async () => {
   assert.equal(contact.alive, undefined);
   assert.equal(typeof contact.hasLineOfSight, "boolean", "what a player can see is kept");
   assert.equal(typeof contact.distance, "number");
+  assert.equal(contact.disguised, true, "and so is whether it is wearing a disguise at all");
+});
+
+test("a limited-vision bot reads a hunter as undisguised, which is what a player sees", async () => {
+  const seen = [];
+  const bot = new BotDriver({
+    name: "Shape",
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "capture",
+      decide: (obs) => {
+        seen.push(obs);
+        return { kind: "patrol", seq: obs.seq };
+      },
+    },
+    visibility: "limited",
+    trace: null,
+  });
+  try {
+    bot.launchDecide(worldWithOneContact("hunter", "hunter", ""), Date.now());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const contact = seen[0].entities.find((e) => e.id === "contact");
+    assert.ok(contact);
+    assert.equal(contact.disguised, false);
+    assert.equal(contact.role, undefined, "the shape is sensed, the role still is not");
+  } finally {
+    await bot.stop();
+  }
 });
 
 test("the full-vision anchor still reads ground truth", async () => {
@@ -214,6 +243,7 @@ test("the full-vision anchor still reads ground truth", async () => {
   assert.equal(contact.role, "prop");
   assert.equal(contact.propType, "crate");
   assert.equal(contact.alive, true);
+  assert.equal(contact.disguised, true);
 });
 
 /**

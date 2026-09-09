@@ -276,7 +276,7 @@ export class Reflex {
         colliders,
       );
       const movedRecently = this.trackMovement(other, now);
-      const looksLikeProp = other.propType !== "" && !movedRecently;
+      const disguised = other.propType !== "";
       const facingMe = hasLineOfSight && this.isAimedAtMe(other);
       if (this.visibility === "full") {
         entities.push({
@@ -288,7 +288,7 @@ export class Reflex {
           role: other.role,
           alive: other.alive,
           propType: other.propType,
-          looksLikeProp,
+          disguised,
           movedRecently,
           facingMe,
         });
@@ -305,7 +305,7 @@ export class Reflex {
         z: sensedAt.z,
         distance: Math.hypot(sensedAt.x - this.posX, sensedAt.z - this.posZ),
         hasLineOfSight,
-        looksLikeProp,
+        disguised: hasLineOfSight ? disguised : undefined,
         movedRecently,
         facingMe,
       });
