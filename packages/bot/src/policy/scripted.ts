@@ -5,6 +5,9 @@ import {
   FREEZE_RADIUS,
   HIDE_OFFSET_MAX,
   HIDE_OFFSET_MIN,
+  INSPECT_BUDGET_DECISIONS,
+  INSPECT_CONTACT_RANGE,
+  INSPECT_PARK_DECISIONS,
   lerp,
   PANIC_RADIUS,
   WAYPOINT_MARGIN,
@@ -26,7 +29,8 @@ interface Spot {
  *   must explore to find props and deduce who they are. Because a hunter is never
  *   disguised (`propType ""`), a `looksLikeProp` contact can only be a prop, so the
  *   hunter shoots those on sight and never wastes HP on a teammate; ambiguous movers
- *   get chased down (`inspect`) until they read as a static prop.
+ *   get chased down (`inspect`) until they read as a static prop, or until the
+ *   inspect budget in {@link ScriptedPolicy.pickSuspect} gives up on them.
  *
  * It picks *what* to do; the reflex still owns aim, the line-of-sight gate and the
  * fire cooldown, and difficulty still tunes trigger latency inside the reflex.
@@ -37,6 +41,8 @@ export class ScriptedPolicy implements Policy {
   private hideSpot: Spot | null = null;
   private prevPhase: Phase | null = null;
   private prevRole: Role | null = null;
+  private readonly contactSince = new Map<string, number>();
+  private readonly parkedUntil = new Map<string, number>();
 
   constructor(private readonly difficulty: number) {}
 
@@ -70,9 +76,76 @@ export class ScriptedPolicy implements Policy {
       .filter((e) => e.looksLikeProp === true && e.hasLineOfSight && e.distance <= engageRange)
       .sort((a, b) => a.distance - b.distance);
     if (shootable[0]) return { kind: "shootTarget", targetId: shootable[0].id, seq };
-    const suspect = [...obs.entities].sort((a, b) => a.distance - b.distance)[0];
+    const suspect = this.pickSuspect(obs);
     if (suspect) return { kind: "inspect", targetId: suspect.id, seq };
     return { kind: "patrol", seq };
+  }
+
+  /**
+   * The nearest sensed contact still worth walking up to.
+   *
+   * A hunter is never disguised, so to another hunter it reads as a contact that
+   * can never resolve into a prop: left alone, both pick each other as their
+   * nearest suspect and converge into a mutually staring, body-blocked pair that
+   * spends the rest of the round in one spot. The escape is a budget — a contact
+   * stood next to in clear view for {@link INSPECT_BUDGET_DECISIONS} decisions
+   * without becoming shootable is parked, and the hunter moves on to the next
+   * one or back to patrol.
+   *
+   * The budget runs only at contact range and in line of sight, so approaching a
+   * distant contact is never counted against it and a chase is never cut short;
+   * a heard contact, whose reported distance is snapped to a cell, never counts
+   * either. A park is released the moment the contact reads as a prop, so a
+   * disguise that merely happened to be moving is not written off for the rest of
+   * the round.
+   */
+  private pickSuspect(obs: Observation): ObservedEntity | null {
+    const candidates = [...obs.entities].sort((a, b) => a.distance - b.distance);
+    for (const candidate of candidates) {
+      if (this.isParked(candidate, obs.seq)) continue;
+      if (this.spentInspectBudget(candidate, obs.seq)) {
+        this.parkedUntil.set(candidate.id, obs.seq + INSPECT_PARK_DECISIONS);
+        this.contactSince.delete(candidate.id);
+        continue;
+      }
+      return candidate;
+    }
+    return null;
+  }
+
+  /**
+   * Whether this contact is still parked, expiring the park in passing. Only
+   * suspect selection consults it: `shootable` deliberately does not, because a
+   * contact that has identified itself as a prop should always be shot.
+   */
+  private isParked(candidate: ObservedEntity, seq: number): boolean {
+    const until = this.parkedUntil.get(candidate.id);
+    if (until === undefined) return false;
+    if (seq >= until || candidate.looksLikeProp === true) {
+      this.parkedUntil.delete(candidate.id);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Whether this contact has been stood next to long enough to give up on.
+   * Advances the contact's own record — one per id, so a clump whose nearest
+   * member keeps changing still accumulates a budget per member — and clears it
+   * whenever the contact is out of reach or out of sight, because the budget
+   * measures time spent *at* a contact, not time spent getting there.
+   */
+  private spentInspectBudget(candidate: ObservedEntity, seq: number): boolean {
+    if (!candidate.hasLineOfSight || candidate.distance > INSPECT_CONTACT_RANGE) {
+      this.contactSince.delete(candidate.id);
+      return false;
+    }
+    const since = this.contactSince.get(candidate.id);
+    if (since === undefined) {
+      this.contactSince.set(candidate.id, seq);
+      return false;
+    }
+    return seq - since >= INSPECT_BUDGET_DECISIONS;
   }
 
   private prop(obs: Observation): Intent {
@@ -154,15 +227,22 @@ export class ScriptedPolicy implements Policy {
   private syncRoundState(obs: Observation): void {
     if (obs.phase !== this.prevPhase) {
       if (obs.phase === "hiding") this.clearHidePlan();
+      this.clearHuntPlan();
       this.prevPhase = obs.phase;
     }
     if (obs.self.role !== this.prevRole) {
       this.clearHidePlan();
+      this.clearHuntPlan();
       this.prevRole = obs.self.role;
     }
   }
 
   private clearHidePlan(): void {
     this.hideSpot = null;
+  }
+
+  private clearHuntPlan(): void {
+    this.contactSince.clear();
+    this.parkedUntil.clear();
   }
 }
