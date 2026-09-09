@@ -4,12 +4,25 @@ import { readFileSync } from "node:fs";
 const ROOT_MANIFEST = new URL("../../package.json", import.meta.url);
 const SHA_LENGTH = 7;
 const UNRELEASED_BUILD = "dev";
+const UNRELEASED_SUFFIX = "+";
+const TAG_REF_TYPE = "tag";
+const TAG_VERSION = /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
 
 export interface BuildInfo {
-  /** The release version, from the workspace root manifest — the only one that carries it. */
+  /**
+   * The version this build reports: the tag itself on a tagged build, otherwise
+   * the last release the build sits past, marked with a trailing `+`.
+   */
   version: string;
   /** Short commit sha of the build, or `dev` outside a checkout. */
   build: string;
+}
+
+function readTagVersion(): string | null {
+  if (process.env.GITHUB_REF_TYPE !== TAG_REF_TYPE) return null;
+  const tag = process.env.GITHUB_REF_NAME;
+  if (tag === undefined) return null;
+  return TAG_VERSION.exec(tag)?.[1] ?? null;
 }
 
 function readRootVersion(): string {
@@ -40,15 +53,25 @@ function readBuildSha(): string {
 /**
  * Identify the build being compiled, so a bug report can name it exactly.
  *
- * The version comes from the workspace root manifest because every package under
- * `packages/` is pinned at `0.0.0` — the root is the only one a release bumps.
- * The sha comes from `GITHUB_SHA`, which every GitHub Actions job sets and which
- * `deploy-prod.yml` also uses as the server image tag, so one sha names both
- * halves of a deploy. Version alone would not be enough: production also deploys
- * on `workflow_dispatch`, so the same version can ship from different commits.
+ * A tagged build reads its version from the tag, which makes the tag
+ * authoritative: a tag pushed without the matching manifest bump stamps the
+ * release it claims to be instead of the stale one on disk. Every other build
+ * — a `workflow_dispatch` redeploy, CI, a local `pnpm build` — sits *past* a
+ * release rather than being it, so it reports the root manifest's version
+ * marked with `+`. A flat version there would claim to be the release.
  *
- * Outside a checkout the sha degrades to `dev` rather than guessing.
+ * The version cannot come from a workspace package: everything under
+ * `packages/` is pinned at `0.0.0`, so reading one would stamp a credible lie.
+ *
+ * The sha comes from `GITHUB_SHA`, which every GitHub Actions job sets and
+ * which `deploy-prod.yml` also uses as the server image tag, so one sha names
+ * both halves of a deploy. Outside a checkout it degrades to `dev` rather than
+ * guessing a commit.
  */
 export function resolveBuildInfo(): BuildInfo {
-  return { version: readRootVersion(), build: readBuildSha() };
+  const tagged = readTagVersion();
+  return {
+    version: tagged ?? `${readRootVersion()}${UNRELEASED_SUFFIX}`,
+    build: readBuildSha(),
+  };
 }
