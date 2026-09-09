@@ -8,6 +8,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-09-09
+
+Hunter bots now tell a teammate from a disguise by shape, which ends the pack
+0.2.3 only bounded at arm's reach. Morphy also turns away a device it cannot be
+played on instead of leading it into a match, and the hunter's health bar is
+readable again on a narrow window.
+
 ### Added
 
 - Morphy asks to be opened on a PC when it is opened on a phone or a tablet,
