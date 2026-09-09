@@ -8,6 +8,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-09-09
+
+Hunter bots no longer deadlock on each other. A round that filled with bots
+could stall completely: the hunters converged on one spot and stayed there,
+leaving props unhunted until the timer ran out.
+
+### Fixed
+
+- A hunter bot gives up on a contact it cannot identify. Under `"limited"`
+  visibility it picked the nearest sensed contact and walked up to it, and
+  because a hunter is never disguised it can never come to look like a prop —
+  so two hunters chose each other, met, and stayed there staring for the rest
+  of the round, growing into a pack on every infection. An `inspect` that has
+  stood at arm's reach in clear line of sight for six decisions now parks that
+  contact and moves on. The budget only runs at contact range and in sight, so
+  an approach, a chase, or a contact known only by sound is never cut short,
+  and a park is released the moment the contact reads as a prop. Measured over
+  a 150-second run of six bots: not one round finished before, three finished
+  after, and the worst hunter went from 122 seconds pinned inside a 1.5-metre
+  circle to 4.
+
 ## [0.2.2] — 2026-09-09
 
 The lobby now names the build it is running: a tagged deploy shows the tag
