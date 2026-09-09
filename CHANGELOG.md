@@ -26,6 +26,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   nothing about who is making them, so a heard contact still gets investigated
   whoever it is. A prop bot reads a threat the same way — a seen disguise is a
   fellow prop and no reason to break cover, an unseen noise still is.
+- The hunter's health bar no longer sits on top of the controls bar. Both were
+  positioned from the bottom of the screen by hand, eight pixels apart in the
+  wrong direction, and the controls bar wraps to two or three rows on a narrow
+  window and buried the bar completely. They are now one bottom-centred stack,
+  so the spacing holds however many rows the controls take.
 
 ## [0.2.3] — 2026-09-09
 

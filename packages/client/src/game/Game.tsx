@@ -1099,29 +1099,33 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
         </div>
       )}
 
-      {localRole === "hunter" && localAlive && phase !== "lobby" && (
-        <div className={`vitals panel${localHp <= HP_LOW_THRESHOLD ? " hp-low" : ""}`}>
-          <span className="eyebrow">Integrity</span>
-          <div className="vitals-row">
-            <div className="hp">
-              <div className="hp-fill" style={{ width: `${(localHp / HUNTER_MAX_HP) * 100}%` }} />
-            </div>
-            <span className="hp-val">{localHp}</span>
-          </div>
-        </div>
-      )}
-
       {phase !== "lobby" && (
-        <ControlsBar
-          role={localRole}
-          alive={localAlive}
-          canShoot={canShoot}
-          canTransform={canTransform}
-          phase={phase}
-          rerollsLeft={localMeta?.rerollsLeft ?? 0}
-          decoysLeft={localMeta?.decoysLeft ?? 0}
-          onOpen={() => setControlsOpen(true)}
-        />
+        <div className="hud-bottom">
+          {localRole === "hunter" && localAlive && (
+            <div className={`vitals panel${localHp <= HP_LOW_THRESHOLD ? " hp-low" : ""}`}>
+              <span className="eyebrow">Integrity</span>
+              <div className="vitals-row">
+                <div className="hp">
+                  <div
+                    className="hp-fill"
+                    style={{ width: `${(localHp / HUNTER_MAX_HP) * 100}%` }}
+                  />
+                </div>
+                <span className="hp-val">{localHp}</span>
+              </div>
+            </div>
+          )}
+          <ControlsBar
+            role={localRole}
+            alive={localAlive}
+            canShoot={canShoot}
+            canTransform={canTransform}
+            phase={phase}
+            rerollsLeft={localMeta?.rerollsLeft ?? 0}
+            decoysLeft={localMeta?.decoysLeft ?? 0}
+            onOpen={() => setControlsOpen(true)}
+          />
+        </div>
       )}
       {controlsOpen && <ControlsDialog onClose={() => setControlsOpen(false)} />}
 
