@@ -8,6 +8,37 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.2.5] — 2026-09-11
+
+A public lobby now says what it is waiting for instead of going quiet until
+three bots land at once. iOS stops framing the page in white, and the notice a
+phone gets says its piece in one line.
+
+### Added
+
+- A public lobby counts down the wait for its bots. The room pads itself to
+  four presences ten seconds after someone arrives, but the auto-start clock
+  only arms once there are enough players to start, so a player alone had no
+  countdown at all for those ten seconds and then met three bots arriving
+  together. The room now publishes that deadline and the lobby reads
+  `Searching for players — bots join · 9s`, handing over to the auto-start
+  clock as soon as there is one.
+
+### Fixed
+
+- iOS no longer shows a white band above and below the page. Every dark
+  surface was painted by an absolutely positioned child, so the CSS canvas
+  kept the user-agent default — and Safari both fills the safe areas with that
+  colour and tints its own toolbar from it, which framed the page in white
+  whatever `theme-color` asked for. The background and `color-scheme` now sit
+  on the root itself, where a stray uncovered pixel cannot be white again.
+- The desktop-only notice stops explaining itself. It spelled out why a
+  browser withholds the pointer and which keys the game moves on, to a reader
+  holding a phone who can act on neither.
+- The lobby's player threshold counts only connected seats, the way the server
+  does. A seat held open for a dropped player made the client say there were
+  enough players to start while the server, which counts presence, would not.
+
 ## [0.2.4] — 2026-09-09
 
 Hunter bots now tell a teammate from a disguise by shape, which ends the pack
