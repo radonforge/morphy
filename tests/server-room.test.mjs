@@ -274,6 +274,34 @@ test("the last human leaving takes every bot with them", () => {
   assert.equal(room.state.players.size, 0);
 });
 
+test("a bot that cannot take the map is reported as unseated, not seated", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  room.map = { ...room.map, propCatalog: null };
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    assert.equal(room.addBot(), false);
+  } finally {
+    console.error = originalError;
+  }
+  assert.equal(botCount(room), 0);
+  assert.equal(room.state.players.size, 1);
+});
+
+test("the bot fill stops at the first bot it cannot seat", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  let attempts = 0;
+  room.addBot = () => {
+    attempts++;
+    if (attempts > BOT_FILL_TARGET) throw new Error("fillBots never stopped asking");
+    return false;
+  };
+  assert.doesNotThrow(() => room.fillBots());
+  assert.equal(attempts, 1);
+});
+
 test("a bot whose brain throws is dropped instead of taking the room with it", () => {
   const room = publicRoom();
   joinRoom(room, "human");
