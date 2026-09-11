@@ -199,6 +199,34 @@ test("a lone player is given bots once the fill delay expires", () => {
   assert.equal(botCount(room), BOT_FILL_TARGET - 1);
 });
 
+test("a lone player is told when the bots are due", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  assert.equal(room.state.phaseEndsAt, 0);
+  assert.ok(room.state.fillAt > Date.now());
+  assert.ok(room.state.fillAt <= Date.now() + BOT_FILL_DELAY_MS);
+});
+
+test("the bot-fill deadline clears once the bots land", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  assert.equal(room.state.fillAt, 0);
+});
+
+test("a round starting cancels the bot fill it no longer needs", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  const armed = timersOf(room, BOT_FILL_DELAY_MS).at(-1);
+  assert.ok(armed);
+  room.handleReady({ sessionId: "a" }, { ready: true });
+  room.handleReady({ sessionId: "b" }, { ready: true });
+  assert.equal(room.state.phase, "starting");
+  assert.equal(room.state.fillAt, 0);
+  assert.equal(armed.cleared, true);
+});
+
 test("an arriving human takes a bot's seat rather than adding to it", () => {
   const room = publicRoom();
   joinRoom(room, "first");

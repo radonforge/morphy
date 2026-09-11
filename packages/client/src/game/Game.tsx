@@ -108,6 +108,38 @@ interface RoomStateView {
   winner: Winner;
   hostId: string;
   isPrivate: boolean;
+  fillAt: number;
+}
+
+interface LobbyStatus {
+  label: string;
+  endsAt: number;
+}
+
+/**
+ * What a public lobby is waiting on, in the order the server resolves it: an
+ * armed auto-start outranks a pending bot fill, which outranks having nobody
+ * to play against yet. `present` counts connected seats the way the server's
+ * start threshold does, while the ready tally spans every seat, because a
+ * held seat that never readied still blocks an all-ready start.
+ */
+function publicLobbyStatus(
+  present: number,
+  ready: number,
+  seats: number,
+  phaseEndsAt: number,
+  fillAt: number,
+): LobbyStatus {
+  if (phaseEndsAt > 0) {
+    return { label: `Ready ${ready}/${seats} — auto-start`, endsAt: phaseEndsAt };
+  }
+  if (fillAt > 0) {
+    return { label: "Searching for players — bots join", endsAt: fillAt };
+  }
+  if (present < MIN_PLAYERS_TO_START) {
+    return { label: `Need at least ${MIN_PLAYERS_TO_START} players`, endsAt: 0 };
+  }
+  return { label: `Ready ${ready}/${seats} — everyone ready starts it now`, endsAt: 0 };
 }
 
 const PLAYER_META_FIELDS = [
@@ -441,6 +473,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   const [meta, setMeta] = useState<MetaMap>({});
   const [phase, setPhase] = useState<Phase>("lobby");
   const [phaseEndsAt, setPhaseEndsAt] = useState(0);
+  const [fillAt, setFillAt] = useState(0);
   const [winner, setWinner] = useState<Winner>("");
   const [hostId, setHostId] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
@@ -487,6 +520,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
       setWinner((prev) => (prev === view.winner ? prev : view.winner));
       setHostId((prev) => (prev === view.hostId ? prev : view.hostId));
       setIsPrivate((prev) => (prev === view.isPrivate ? prev : view.isPrivate));
+      setFillAt((prev) => (prev === view.fillAt ? prev : view.fillAt));
     };
 
     const syncPlayerMeta = () => {
@@ -535,7 +569,14 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
       }),
     );
 
-    for (const field of ["phase", "phaseEndsAt", "winner", "hostId", "isPrivate"] as const) {
+    for (const field of [
+      "phase",
+      "phaseEndsAt",
+      "winner",
+      "hostId",
+      "isPrivate",
+      "fillAt",
+    ] as const) {
       unsubscribers.push(callbacks.listen(field, syncRoomMeta));
     }
     syncRoomMeta();
@@ -845,6 +886,8 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   const isHost = sessionId === hostId;
 
   const readyCount = ids.reduce((n, id) => (meta[id]?.ready ? n + 1 : n), 0);
+  const presentCount = ids.reduce((n, id) => (meta[id]?.connected === false ? n : n + 1), 0);
+  const lobbyStatus = publicLobbyStatus(presentCount, readyCount, ids.length, phaseEndsAt, fillAt);
   const aliveProps = ids.reduce((n, id) => {
     const player = meta[id];
     return player && player.role === "prop" && player.alive ? n + 1 : n;
@@ -973,16 +1016,9 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
                   Leave
                 </button>
                 <span className="lobby-overlay-meta">
-                  {ids.length < MIN_PLAYERS_TO_START
-                    ? `Need at least ${MIN_PLAYERS_TO_START} players`
-                    : `Ready: ${readyCount}/${ids.length} — everyone ready starts it now`}
+                  {lobbyStatus.label}
+                  <Countdown endsAt={lobbyStatus.endsAt} />
                 </span>
-                {phaseEndsAt > 0 && (
-                  <span className="lobby-overlay-meta">
-                    Auto-start
-                    <Countdown endsAt={phaseEndsAt} />
-                  </span>
-                )}
               </>
             )}
           </div>

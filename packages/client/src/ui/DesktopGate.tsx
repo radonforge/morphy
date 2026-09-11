@@ -25,11 +25,7 @@ function DesktopOnly() {
     <div className="lobby">
       <div className="lobby-card panel">
         <span className="eyebrow">Desktop only</span>
-        <h1>Open Morphy on a PC</h1>
-        <p className="desktop-only-note">
-          Morphy is a mouse-and-keyboard game: you aim with the mouse and move with WASD, and
-          browsers only hand a page the pointer on a desktop. Open this page on a computer to play.
-        </p>
+        <h1>Morphy needs a mouse</h1>
       </div>
     </div>
   );

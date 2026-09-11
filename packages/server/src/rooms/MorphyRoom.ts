@@ -141,6 +141,7 @@ export class RoomState extends Schema {
   @type("number") phaseEndsAt = 0;
   @type("string") winner: Winner = "";
   @type("string") hostId = "";
+  @type("number") fillAt = 0;
   @type("boolean") isPrivate = false;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type({ map: DecoyState }) decoys = new MapSchema<DecoyState>();
@@ -815,6 +816,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
   private startCountdown(): void {
     this.state.winner = "";
+    this.cancelBotFill();
     if (!this.locked) {
       void this.lock().catch((error: unknown) => {
         console.error(`[morphy] failed to lock room ${this.roomId}:`, error);
@@ -1017,6 +1019,12 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * out {@link BOT_FILL_DELAY_MS}, giving real players a chance to show up
    * first. Only ever runs in a public lobby, so a round's roster never changes
    * under the players.
+   *
+   * `state.fillAt` publishes when that wait ends, so a player alone in a room
+   * sees the wait counted down instead of three bots appearing unannounced. It
+   * is the only window in which the lobby has no other countdown to show:
+   * {@link maybeStartRound} leaves `phaseEndsAt` at 0 below
+   * {@link MIN_PLAYERS_TO_START}.
    */
   private syncBots(): void {
     if (this.state.isPrivate || this.state.phase !== "lobby") return;
@@ -1030,8 +1038,10 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       return;
     }
     if (!this.botFillTimer) {
+      this.state.fillAt = Date.now() + BOT_FILL_DELAY_MS;
       this.botFillTimer = this.clock.setTimeout(() => {
         this.botFillTimer = undefined;
+        this.state.fillAt = 0;
         this.fillBots();
       }, BOT_FILL_DELAY_MS);
     }
@@ -1040,6 +1050,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private cancelBotFill(): void {
     this.botFillTimer?.clear();
     this.botFillTimer = undefined;
+    this.state.fillAt = 0;
   }
 
   private fillBots(): void {
