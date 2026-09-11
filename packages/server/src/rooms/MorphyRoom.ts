@@ -1053,10 +1053,21 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.state.fillAt = 0;
   }
 
+  /**
+   * Seat bots up to {@link desiredBotCount}, stopping at the first one that
+   * cannot be seated. Every bot in a room takes the same `this.map`, so a map
+   * one driver rejects no driver will accept: without the stop, a failing
+   * {@link addBot} never grows `this.bots` and this loop spins forever. It is
+   * synchronous, so that would pin the event loop and take down every other
+   * room on the process, and no exception handler would see it — nothing
+   * throws, the method simply never returns.
+   */
   private fillBots(): void {
     if (this.state.isPrivate || this.state.phase !== "lobby") return;
     const want = desiredBotCount(this.humanCount());
-    while (this.bots.size < want) this.addBot();
+    while (this.bots.size < want) {
+      if (!this.addBot()) break;
+    }
     this.maybeStartRound();
   }
 
@@ -1069,13 +1080,16 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * they get what a player gets: line of sight, distance, and whether a contact
    * has moved recently.
    *
+   * Returns whether the bot took its seat, so {@link fillBots} can stop rather
+   * than ask again for something that cannot succeed.
+   *
    * Bot code runs inside a room `clock` callback, where a throw is contained by
    * {@link onUncaughtException} — but contained means the whole callback dies,
    * so one failing brain would cost every bot behind it in that tick its turn,
    * and go on doing so every tick. A bot is an amenity: if its brain fails,
    * drop that bot and keep the match running.
    */
-  private addBot(): void {
+  private addBot(): boolean {
     const seq = ++this.botSeq;
     const sessionId = botSessionId(seq);
     const spawn = this.pickLobbySpawn();
@@ -1102,12 +1116,13 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     } catch (error) {
       console.error(`[morphy] bot ${sessionId} failed to take the map, skipping it:`, error);
       this.state.players.delete(sessionId);
-      return;
+      return false;
     }
     this.bots.set(sessionId, { driver, actor: { sessionId, send: () => undefined } });
     if (!this.botTicker) {
       this.botTicker = this.clock.setInterval(() => this.tickBots(), INPUT_SEND_RATE_MS);
     }
+    return true;
   }
 
   private removeBot(sessionId: string): void {
