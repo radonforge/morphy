@@ -177,3 +177,26 @@ test("full visibility still paths to ground truth", () => {
 
   assert.deepEqual(reflex.pathGoal, { x: 16, z: 3 }, "the measuring anchor is untouched");
 });
+
+test("a contact that has not moved is never heard through the wall", () => {
+  const reflex = ready("limited");
+  const still = contact(5.9, 1.9);
+
+  for (const [seq, at] of [1_000, 1_200, 1_700].entries()) {
+    const obs = reflex.buildObservation(world(still), seq + 1, at);
+    assert.deepEqual(obs.entities, [], `a motionless contact makes no noise at t=${at}`);
+  }
+});
+
+test("a contact is forgotten when it leaves the room", () => {
+  const reflex = ready("limited");
+  const empty = { ...world(contact(5.0, 1.0)), others: [] };
+
+  reflex.buildObservation(world(contact(5.0, 1.0)), 1, 1_000);
+  reflex.buildObservation(world(contact(5.9, 1.9)), 2, 1_200);
+  assert.equal(reflex.buildObservation(world(contact(5.9, 1.9)), 3, 1_300).entities.length, 1);
+
+  reflex.buildObservation(empty, 4, 1_400);
+  const back = reflex.buildObservation(world(contact(5.9, 1.9)), 5, 1_500);
+  assert.deepEqual(back.entities, [], "a returning id is not measured against its previous life");
+});
