@@ -561,10 +561,17 @@ function Atmosphere({ theme }: { theme: StageTheme }) {
   return null;
 }
 
+/**
+ * Drives the stage camera: pointer parallax in the menu, a dolly onto `focus` in morph mode.
+ * The aim point is damped alongside the position rather than set outright — snapping it the
+ * frame morph mode opens swings the camera ~13° in one step, which reads as a cut however
+ * smoothly the position travels.
+ */
 function ParallaxRig({ morphMode, focus }: { morphMode: boolean; focus: StageSlot }) {
   const camera = useThree((state) => state.camera);
   const reduced = useReducedMotion();
   const scratch = useMemo(() => ({ target: new THREE.Vector3(), look: new THREE.Vector3() }), []);
+  const aim = useMemo(() => CAMERA_LOOK_AT.clone(), []);
 
   useFrame((state, delta) => {
     if (morphMode) {
@@ -579,8 +586,10 @@ function ParallaxRig({ morphMode, focus }: { morphMode: boolean; focus: StageSlo
       scratch.look.copy(CAMERA_LOOK_AT);
     }
     const damp = morphMode ? MORPH_DOLLY_DAMP : PARALLAX_DAMP;
-    camera.position.lerp(scratch.target, reduced ? 1 : 1 - Math.exp(-damp * delta));
-    camera.lookAt(scratch.look);
+    const k = reduced ? 1 : 1 - Math.exp(-damp * delta);
+    camera.position.lerp(scratch.target, k);
+    aim.lerp(scratch.look, k);
+    camera.lookAt(aim);
   });
   return null;
 }
