@@ -59,5 +59,5 @@ so a bug reachable only under limited vision will not reproduce under the
 default.
 
 `--trace <path>` writes one JSONL file per bot — one line per *applied* decision
-(`{t,botName,policy,seq,phase,visibility,obs,intent}`) plus terminal `kill` and
-`round_end` events. It is the practical way to measure what a bot actually did.
+(`{t,botName,policy,seq,phase,visibility,obs,intent}`), plus a `kill` line for
+every kill broadcast in the room and a terminal `round_end`. It is the practical way to measure what a bot actually did.
