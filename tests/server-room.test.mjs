@@ -595,3 +595,26 @@ test("lifetime stats accumulate round outcomes in SQLite", () => {
   });
   assert.deepEqual(totals, { rounds: 2, wins: 1, kills: 3, survivals: 1 });
 });
+
+test("a dead player cannot switch weapon", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  room.handleSetWeapon({ sessionId: "a" }, { weapon: "rifle" });
+  assert.equal(room.state.players.get("a").weapon, "rifle");
+
+  room.state.players.get("a").alive = false;
+  room.handleSetWeapon({ sessionId: "a" }, { weapon: "shotgun" });
+  assert.equal(room.state.players.get("a").weapon, "rifle");
+});
+
+test("the weapon a player chose survives the round it was chosen in", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  room.handleSetWeapon({ sessionId: "a" }, { weapon: "shotgun" });
+  startRound(room);
+  assert.equal(room.state.players.get("a").weapon, "shotgun");
+
+  room.resetToLobby();
+  assert.equal(room.state.players.get("a").weapon, "shotgun");
+});

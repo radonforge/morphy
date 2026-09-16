@@ -63,6 +63,7 @@ import type {
   TauntPulseRef,
   TeleportRef,
 } from "./types";
+import { PLAYER_META_FIELDS } from "./types";
 
 const COUNTDOWN_TICK_MS = 250;
 const TAUNT_MAX_DISTANCE = 40;
@@ -142,21 +143,6 @@ function publicLobbyStatus(
   return { label: `Ready ${ready}/${seats} — everyone ready starts it now`, endsAt: 0 };
 }
 
-const PLAYER_META_FIELDS = [
-  "name",
-  "role",
-  "alive",
-  "hp",
-  "kills",
-  "propType",
-  "rerollsLeft",
-  "decoysLeft",
-  "ready",
-  "avatar",
-  "ping",
-  "connected",
-] as const;
-
 interface ChatLine {
   key: number;
   name: string;
@@ -211,18 +197,7 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
     return (
       ai !== undefined &&
       bi !== undefined &&
-      ai.name === bi.name &&
-      ai.role === bi.role &&
-      ai.alive === bi.alive &&
-      ai.hp === bi.hp &&
-      ai.kills === bi.kills &&
-      ai.propType === bi.propType &&
-      ai.rerollsLeft === bi.rerollsLeft &&
-      ai.decoysLeft === bi.decoysLeft &&
-      ai.ready === bi.ready &&
-      ai.avatar === bi.avatar &&
-      ai.ping === bi.ping &&
-      ai.connected === bi.connected
+      PLAYER_META_FIELDS.every((field) => ai[field] === bi[field])
     );
   });
 }
@@ -488,7 +463,6 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   const [paused, setPaused] = useState(false);
   const [decoys, setDecoys] = useState<DecoyView[]>([]);
   const [muted, setMuted] = useState(() => isMuted());
-  const [weapon, setWeapon] = useState<WeaponId>(DEFAULT_WEAPON);
   const [perfHud] = useState(() => isPerfHudEnabled());
   const perfNodeRef = useRef<HTMLDivElement | null>(null);
   const prevPhaseRef = useRef<Phase>("lobby");
@@ -500,9 +474,10 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
     setPaused(false);
     relockPointer(canvasRef.current);
   }, []);
+  const weapon = meta[sessionId]?.weapon ?? DEFAULT_WEAPON;
+
   const pickWeapon = useCallback(
     (id: WeaponId) => {
-      setWeapon(id);
       room.send(MSG_SET_WEAPON, { weapon: id });
     },
     [room],
@@ -537,6 +512,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
           decoysLeft: player.decoysLeft,
           ready: player.ready,
           avatar: player.avatar,
+          weapon: player.weapon,
           ping: player.ping,
           connected: player.connected,
         };
