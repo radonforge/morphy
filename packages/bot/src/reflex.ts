@@ -97,7 +97,8 @@ export interface MotorOutput {
 interface MovementSample {
   x: number;
   z: number;
-  lastMovedAt: number;
+  /** Null until the contact has actually been seen to move. */
+  lastMovedAt: number | null;
 }
 
 const HOLD = (x: number, z: number, rot: number): MotorOutput => ({
@@ -267,6 +268,7 @@ export class Reflex {
     const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };
     const colliders = this.map?.colliders ?? [];
     const entities: ObservedEntity[] = [];
+    this.forgetDeparted(world.others);
     for (const other of world.others) {
       if (!other.alive) continue;
       const distance = Math.hypot(other.x - this.posX, other.z - this.posZ);
@@ -349,7 +351,7 @@ export class Reflex {
   private trackMovement(other: BotPlayer, now: number): boolean {
     const prev = this.movement.get(other.id);
     if (!prev) {
-      this.movement.set(other.id, { x: other.x, z: other.z, lastMovedAt: now });
+      this.movement.set(other.id, { x: other.x, z: other.z, lastMovedAt: null });
       return false;
     }
     if (Math.hypot(other.x - prev.x, other.z - prev.z) > MOVED_RECENTLY_MIN_DIST) {
@@ -364,7 +366,24 @@ export class Reflex {
    * run every tick without disturbing the movement history the observation reads. */
   private movedRecently(id: string, now: number): boolean {
     const prev = this.movement.get(id);
-    return prev !== undefined && now - prev.lastMovedAt <= MOVED_RECENTLY_MS;
+    if (prev === undefined || prev.lastMovedAt === null) return false;
+    return now - prev.lastMovedAt <= MOVED_RECENTLY_MS;
+  }
+
+  /**
+   * Drop what the bot remembers about players who have left the room. Both maps
+   * are keyed by session id and were only ever cleared with the map, so a long
+   * session accumulated an entry per player who ever appeared — and a returning
+   * id would be measured against a sample from its previous life.
+   */
+  private forgetDeparted(others: readonly BotPlayer[]): void {
+    const present = new Set(others.map((o) => o.id));
+    for (const id of [...this.movement.keys()]) {
+      if (!present.has(id)) this.movement.delete(id);
+    }
+    for (const id of [...this.lastPerceived.keys()]) {
+      if (!present.has(id)) this.lastPerceived.delete(id);
+    }
   }
 
   /**
