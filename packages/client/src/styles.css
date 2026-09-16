@@ -985,7 +985,7 @@ canvas {
   color: var(--muted);
 }
 
-.morph-rail-done {
+.morph-rail-close {
   appearance: none;
   cursor: pointer;
   margin-left: 4px;
@@ -1001,10 +1001,10 @@ canvas {
   border-radius: 999px;
   transition: filter 0.12s ease;
 }
-.morph-rail-done:hover {
+.morph-rail-close:hover {
   filter: brightness(1.1);
 }
-.morph-rail-done:focus-visible {
+.morph-rail-close:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
