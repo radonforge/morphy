@@ -913,17 +913,40 @@ canvas {
   background: transparent;
 }
 
-.morph-rail {
+.morph-rail-dock {
   position: absolute;
   left: 50%;
   bottom: clamp(28px, 6vh, 64px);
   z-index: 3;
   transform: translateX(-50%);
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  animation: morph-railin 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/*
+ * The dock is click-through and only the pill takes pointer events back, so the hint and the
+ * gap around it fall through to the backdrop beneath — clicking the words does what they say
+ * instead of landing on a dead strip of layout.
+ */
+.morph-rail {
+  pointer-events: auto;
+  display: flex;
   align-items: center;
   gap: 14px;
   padding: 12px 16px;
-  animation: morph-railin 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.morph-rail-hint {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 @keyframes morph-railin {
@@ -1244,7 +1267,7 @@ canvas {
     --mx: 30%;
     --my: 0%;
   }
-  .morph-rail {
+  .morph-rail-dock {
     animation: none;
   }
 }
