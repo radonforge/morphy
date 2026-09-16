@@ -141,6 +141,7 @@ export class Reflex {
   private aimAcquiredAt = 0;
 
   private readonly movement = new Map<string, MovementSample>();
+  private readonly lastPerceived = new Map<string, Point2>();
 
   constructor(
     private readonly difficulty: number,
@@ -211,6 +212,7 @@ export class Reflex {
       .map((tile) => ({ x: tile.position.x, z: tile.position.z }));
     this.resetMotion();
     this.movement.clear();
+    this.lastPerceived.clear();
     this.lastShotAt = 0;
   }
 
@@ -299,6 +301,7 @@ export class Reflex {
         (movedRecently && distance <= BOT_HEARING_RADIUS);
       if (!sensed) continue;
       const sensedAt = this.sensedPosition(other, hasLineOfSight);
+      this.lastPerceived.set(other.id, sensedAt);
       entities.push({
         id: other.id,
         x: sensedAt.x,
@@ -354,7 +357,40 @@ export class Reflex {
       prev.z = other.z;
       prev.lastMovedAt = now;
     }
-    return now - prev.lastMovedAt <= MOVED_RECENTLY_MS;
+    return this.movedRecently(other.id, now);
+  }
+
+  /** As {@link trackMovement}, without recording a sample: a query the motor can
+   * run every tick without disturbing the movement history the observation reads. */
+  private movedRecently(id: string, now: number): boolean {
+    const prev = this.movement.get(id);
+    return prev !== undefined && now - prev.lastMovedAt <= MOVED_RECENTLY_MS;
+  }
+
+  /**
+   * Where the bot is entitled to believe a contact is: its sensed position while
+   * the contact clears the same sight/hearing gate {@link buildObservation}
+   * applies, and the last such position once it does not. Null when the contact
+   * has never been sensed.
+   *
+   * The motor runs on an intent for as long as a decision cycle, so without this
+   * it kept reading `world.others` — a target that broke line of sight was still
+   * pathed to by its live coordinates, letting a bot follow someone through a
+   * wall that a player would have lost.
+   */
+  private perceivedPosition(other: BotPlayer, now: number): Point2 | null {
+    const bounds = this.propBounds.get(other.propType) ?? UNTRANSFORMED_BOUNDS;
+    const aimY = other.y + (bounds.yMin + bounds.yMax) / 2;
+    const hasLineOfSight = this.canSeePoint(other.x, aimY, other.z);
+    const distance = Math.hypot(other.x - this.posX, other.z - this.posZ);
+    const sensed =
+      this.visibility === "full" ||
+      (hasLineOfSight && distance <= BOT_VISION_RANGE) ||
+      (this.movedRecently(other.id, now) && distance <= BOT_HEARING_RADIUS);
+    if (!sensed) return this.lastPerceived.get(other.id) ?? null;
+    const at = this.sensedPosition(other, hasLineOfSight);
+    this.lastPerceived.set(other.id, at);
+    return at;
   }
 
   private isAimedAtMe(other: BotPlayer): boolean {
@@ -528,9 +564,8 @@ export class Reflex {
   ): void {
     const target = world.others.find((o) => o.id === targetId);
     if (!target?.alive) return;
-    const bounds = this.propBounds.get(target.propType) ?? UNTRANSFORMED_BOUNDS;
-    const aimY = target.y + (bounds.yMin + bounds.yMax) / 2;
-    const goal = this.sensedPosition(target, this.canSeePoint(target.x, aimY, target.z));
+    const goal = this.perceivedPosition(target, now);
+    if (!goal) return;
     this.ensurePath(goal.x, goal.z, now, true);
     const wp = this.follower.advance(this.posX, this.posZ);
     if (wp) this.steer(wp, run, world.self.role, dt);
@@ -582,10 +617,12 @@ export class Reflex {
     }
 
     this.aimTargetId = null;
-    this.ensurePath(target.x, target.z, now, true);
+    const goal = this.perceivedPosition(target, now);
+    if (!goal) return null;
+    this.ensurePath(goal.x, goal.z, now, true);
     const wp = this.follower.advance(this.posX, this.posZ);
     if (wp) this.steer(wp, true, world.self.role, dt);
-    else this.faceToward(target.x, target.z);
+    else this.faceToward(goal.x, goal.z);
     return null;
   }
 
