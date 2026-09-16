@@ -397,7 +397,7 @@ export class Reflex {
         this.runHideAs(intent.x, intent.z, world, dt, now);
         break;
       case "inspect":
-        this.runApproach(intent.targetId, false, world, dt, now);
+        this.runApproach(intent.targetId, intent.run, world, dt, now);
         break;
       case "shootTarget":
         shoot = this.runShoot(intent.targetId, world, dt, now);

@@ -36,7 +36,7 @@ export type Intent =
   | (IntentMeta & { kind: "patrol" })
   | (IntentMeta & { kind: "moveTo"; x: number; z: number; run: boolean })
   | (IntentMeta & { kind: "hideAs"; x: number; z: number })
-  | (IntentMeta & { kind: "inspect"; targetId: string })
+  | (IntentMeta & { kind: "inspect"; targetId: string; run: boolean })
   | (IntentMeta & { kind: "shootTarget"; targetId: string })
   | (IntentMeta & { kind: "chat"; text: string });
 
