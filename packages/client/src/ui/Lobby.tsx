@@ -33,6 +33,7 @@ import {
   unlockAudio,
 } from "../game/audio";
 import { isPerfHudEnabled, setPerfHudEnabled } from "../game/prefs";
+import { MAP_GLASS } from "../theme";
 import { loadPrefs, savePrefs } from "./prefs";
 import { StatsPane } from "./StatsPane";
 import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
@@ -142,6 +143,7 @@ const PANE_TITLES: Record<PaneId, string> = {
 };
 
 const VOLUME_SLIDER_MAX = 100;
+const SHEEN_PERCENT = 100;
 
 export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: LobbyProps) {
   const [name, setName] = useState(() => loadPrefs().name);
@@ -183,6 +185,30 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       stopLobbyMusic();
     };
   }, []);
+
+  const menuRef = useRef<HTMLDivElement>(null);
+  const sheenFrame = useRef(0);
+  const sheenPoint = useRef({ x: 0, y: 0 });
+
+  const handleSheenMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    sheenPoint.current.x = (e.clientX / window.innerWidth) * SHEEN_PERCENT;
+    sheenPoint.current.y = (e.clientY / window.innerHeight) * SHEEN_PERCENT;
+    if (sheenFrame.current !== 0) return;
+    sheenFrame.current = requestAnimationFrame(() => {
+      sheenFrame.current = 0;
+      const node = menuRef.current;
+      if (node === null) return;
+      node.style.setProperty("--mx", `${sheenPoint.current.x}%`);
+      node.style.setProperty("--my", `${sheenPoint.current.y}%`);
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (sheenFrame.current !== 0) cancelAnimationFrame(sheenFrame.current);
+    },
+    [],
+  );
 
   const profileRef = useRef({ party, name, avatar: selectedAvatar, pane });
   profileRef.current = { party, name, avatar: selectedAvatar, pane };
@@ -351,7 +377,12 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       : [{ id: "local", name: trimmedName || "Guest", avatar: selectedAvatar, isHost: false }];
 
   return (
-    <div className="menu">
+    <div
+      className="menu"
+      ref={menuRef}
+      onPointerMove={handleSheenMove}
+      style={{ "--glass-tint": MAP_GLASS[activeMap] } as React.CSSProperties}
+    >
       <Suspense fallback={null}>
         <LobbyStage
           map={activeMap}
@@ -448,7 +479,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               <button
                 type="button"
                 key={info.id}
-                className={`menu-mapcard panel${activeMap === info.id ? " sel" : ""}`}
+                className={`menu-mapcard${activeMap === info.id ? " sel" : ""}`}
                 style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
                 onClick={() => handleMapPick(info.id)}
                 onPointerEnter={playUiHover}

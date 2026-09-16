@@ -1075,7 +1075,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
       </div>
 
       {phase !== "lobby" && (
-        <div className="topbar panel">
+        <div className="topbar hud-surface">
           <div className="topbar-phase">
             <span className="eyebrow">Round</span>
             <span className="topbar-phase-name">{PHASE_LABEL[phase]}</span>
@@ -1105,7 +1105,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
       {phase !== "lobby" && (
         <div className="hud-bottom">
           {localRole === "hunter" && localAlive && (
-            <div className={`vitals panel${localHp <= HP_LOW_THRESHOLD ? " hp-low" : ""}`}>
+            <div className={`vitals hud-surface${localHp <= HP_LOW_THRESHOLD ? " hp-low" : ""}`}>
               <span className="eyebrow">Integrity</span>
               <div className="vitals-row">
                 <div className="hp">

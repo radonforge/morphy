@@ -32,3 +32,13 @@ export const MAP_THEME_BASE: Record<MapId, MapThemeBase> = {
     directional: 1.45,
   },
 };
+
+/**
+ * Per-map tint for the lobby glass. Mars and urban are bright skies: a neutral tint over
+ * them leaves panel text short of contrast, so each map carries its own density.
+ */
+export const MAP_GLASS: Record<MapId, string> = {
+  station: "rgba(11, 18, 31, 0.55)",
+  mars: "rgba(26, 15, 10, 0.76)",
+  urban: "rgba(11, 19, 31, 0.82)",
+};
