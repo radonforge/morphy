@@ -23,39 +23,42 @@ export function MorphRail({
   const info = AVATAR_CATALOG.find((entry) => entry.id === avatar);
 
   return (
-    <div className="morph-rail panel">
-      <button
-        type="button"
-        className="morph-rail-arrow"
-        onClick={() => onStep(STEP_BACK)}
-        onPointerEnter={playUiHover}
-        aria-label="Previous avatar"
-      >
-        ◀
-      </button>
-      <span className="morph-rail-id">
-        <span className="morph-rail-name">{info?.name ?? avatar}</span>
-        <span className="morph-rail-count">
-          {avatarIndex(avatar) + 1} / {AVATAR_COUNT}
+    <div className="morph-rail-dock">
+      <div className="morph-rail panel">
+        <button
+          type="button"
+          className="morph-rail-arrow"
+          onClick={() => onStep(STEP_BACK)}
+          onPointerEnter={playUiHover}
+          aria-label="Previous avatar"
+        >
+          ◀
+        </button>
+        <span className="morph-rail-id">
+          <span className="morph-rail-name">{info?.name ?? avatar}</span>
+          <span className="morph-rail-count">
+            {avatarIndex(avatar) + 1} / {AVATAR_COUNT}
+          </span>
         </span>
-      </span>
-      <button
-        type="button"
-        className="morph-rail-arrow"
-        onClick={() => onStep(STEP_FORWARD)}
-        onPointerEnter={playUiHover}
-        aria-label="Next avatar"
-      >
-        ▶
-      </button>
-      <button
-        type="button"
-        className="morph-rail-close"
-        onClick={onClose}
-        onPointerEnter={playUiHover}
-      >
-        Close
-      </button>
+        <button
+          type="button"
+          className="morph-rail-arrow"
+          onClick={() => onStep(STEP_FORWARD)}
+          onPointerEnter={playUiHover}
+          aria-label="Next avatar"
+        >
+          ▶
+        </button>
+        <button
+          type="button"
+          className="morph-rail-close"
+          onClick={onClose}
+          onPointerEnter={playUiHover}
+        >
+          Close
+        </button>
+      </div>
+      <p className="morph-rail-hint">Click anywhere to close</p>
     </div>
   );
 }
