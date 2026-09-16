@@ -221,3 +221,53 @@ test("a prop runs from a noise it cannot see", async () => {
   assert.equal(intent.kind, "moveTo");
   assert.equal(intent.run, true);
 });
+
+/** A prop's view of a map offering several distinct spots to hide among. */
+const hidingObservation = (seq, pathBlocked) => ({
+  seq,
+  visibility: "limited",
+  phase: "hiding",
+  pathBlocked,
+  self: {
+    role: "prop",
+    alive: true,
+    hp: 0,
+    x: 0,
+    z: 0,
+    rot: 0,
+    propType: "crate",
+    canShootNow: true,
+  },
+  entities: [],
+  map: {
+    bounds: BOUNDS,
+    doorways: [],
+    nearbyProps: [
+      { type: "crate", x: 6, z: 6 },
+      { type: "crate", x: -6, z: 6 },
+      { type: "crate", x: 6, z: -6 },
+      { type: "crate", x: -6, z: -6 },
+    ],
+  },
+});
+
+async function hideSpots(pathBlocked) {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const spots = [];
+  for (let i = 0; i < DECISIONS; i++) {
+    const intent = await policy.decide(hidingObservation(i + 1, pathBlocked));
+    assert.equal(intent.kind, "hideAs");
+    spots.push(`${intent.x},${intent.z}`);
+  }
+  return spots;
+}
+
+test("a prop keeps the hide spot it picked while the path to it holds", async () => {
+  const spots = await hideSpots(false);
+  assert.equal(new Set(spots).size, 1);
+});
+
+test("a prop picks a new hide spot once its path is reported blocked", async () => {
+  const spots = await hideSpots(true);
+  assert.ok(new Set(spots).size > 1, `expected the prop to re-pick, got ${spots[0]} every time`);
+});
