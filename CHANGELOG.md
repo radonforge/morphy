@@ -8,6 +8,126 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-16
+
+The avatar is no longer picked from a grid: you click the pet on the stage and
+morph through the catalog in place, with the same burst a real disguise change
+fires. The menu is rebuilt as glass and reaches first paint at a quarter of the
+weight. A long frame or a shove no longer pushes the player through a wall, and
+the bots stop stalling — a failed path, a lost sighting, a cornered flight and
+a hide spot behind a wall each had their own way of parking one in place.
+
+### Added
+
+- The avatar is chosen by morphing through the catalog on the lobby stage.
+  Clicking the pet dollies the camera in, and the catalog steps with the arrow
+  keys, the wheel or the rail arrows; every step fires the materialize burst
+  and the morph cue the game already plays for a real disguise change. The
+  neighbours either side render as the actual GLBs under an additive override,
+  which doubles as the preload — so the next morph is warm, and a cold model
+  loads under cover of the beam instead of leaving a hole. The Identity pane
+  keeps the callsign, written once where the avatar changes often, and trades
+  its grid of twenty-one emoji for a Change avatar button. Clicking anywhere
+  outside the rail closes the picker, and the hint that says so sits in a
+  click-through dock, so neither it nor the gap around it forms a dead strip
+  above the backdrop.
+- The lobby panels are a glass surface. The old chamfer was a `clip-path`,
+  which clipped every shadow to the box and made elevation impossible; a
+  radius instead lets the surface carry a contact shadow, an ambient one and a
+  specular rim. Geometry now says what a thing does — round is passive glass,
+  chamfered is hardware you can actuate — so the map cards keep their chamfer
+  on a surface of their own. The glass takes a per-map tint because mars and
+  urban sit under bright skies: worst case, with full sky behind a panel and
+  the sheen hotspot on it, body text holds 6.5:1 on mars and 6.8:1 on urban,
+  against 11.4:1 on station.
+
+### Changed
+
+- The menu no longer loads the 3D stack before it can paint. The route split
+  deferred almost nothing, because the lobby stage imports three and
+  react-three eagerly and the entry chunk carried all of it: 419 kB gzip to
+  first paint, against 115 kB now that the stage loads lazily over the
+  background the menu CSS already draws.
+- The combat HUD sits on a flat surface instead of the glass. Glass is for
+  when the game is waiting on you, not for reading your health under fire.
+
+### Fixed
+
+- The frame the client integrates is bounded, so coming back to a backgrounded
+  tab no longer flings the player across the map. `requestAnimationFrame`
+  stops while a tab is hidden and the clock does not, so the first frame back
+  integrated the whole pause in one step, held input and all. Capping the
+  frame also caps one step's displacement, which is what keeps collision sound
+  when the integrator only tests where a step lands.
+- Collision puts the body back against the face it came in by, instead of the
+  side it ended up nearest. Judging by the landing point put a body on the far
+  side of anything it had overshot the midline of — reachable by a long frame,
+  and by the shove that separates two players, which no frame cap bounds. The
+  movement and collider code is now a pure module with tests that pin that
+  margin against the real maps, so a prop thin enough to slip through fails
+  the suite instead of the player walking through a wall.
+- Held keys are released when the window loses focus. A window that loses
+  focus never delivers the matching keyup, so a key held while switching away
+  stayed held on return and the player kept walking. Each action is now
+  derived from the set of held codes, which also fixes W and ArrowUp clearing
+  one another: releasing either used to drop the action while the other was
+  still down.
+- The weapon on screen is the one the server resolves hits with. The local
+  pick was React state seeded from the default, so any remount — a reconnect,
+  or coming back from the party screen — reset the viewmodel, the cooldown and
+  the shot audio to the pistol while the server kept firing the real weapon.
+- The morph burst plays around the player rather than at floor level. The
+  effect and the remote pose cache carried only x and z, so a disguise changed
+  mid-jump or on a crate fired the beam and its shards under the player.
+- A taunt pulse expires on time instead of waiting for the mesh that owns it.
+  The pulse stored the time it had left and was decremented by the player's
+  own mesh, so one interrupted by a leave or a death stayed positive with
+  nobody to consume it — and any positive value reads as motion, which pinned
+  the shadow map to a per-frame refresh for the rest of the session.
+- A refused pointer lock is handled where the scene asks for it. The browser
+  declines the lock routinely, and the refusal arrives as a promise rejection.
+- The avatar stays on stage when the picker opens, the camera damps onto its
+  new aim instead of cutting to it, and the wheel steps once per gesture on
+  whichever axis the gesture opens on — a sideways trackpad swipe never
+  reached the carousel at all, and inertia went on stepping after the gesture
+  ended. The stage's frame-rate boost is bounded to the frames that move.
+- A bot no longer reads a failed path plan as an arrival. A failed plan and a
+  fully walked one both leave the follower empty, so a goal behind a wall
+  settled on the first tick — and settling stopped the replan counter, so the
+  blocked-path signal never rose and the policy kept re-issuing the spot.
+- A bot's motor stays inside the bot's own senses. The reflex ran an intent
+  for a whole decision cycle against the room's live players, so a target that
+  broke line of sight was still pathed to by its true coordinates. The motor
+  now shares the observation's sight and hearing gate, and falls back to the
+  last position it was entitled to see.
+- A fleeing prop keeps running. Recomputing the escape point on every decision
+  let a cornered prop re-issue a goal that drifted past the arrival epsilon,
+  resetting the replan counter so the blocked path never latched — measured at
+  52 decisions per ten seconds against a cadence of fourteen, with the prop
+  glued in place. Holding the point exposed the other half: the reflex parks
+  on a goal it has arrived at and the policy kept re-issuing that same goal,
+  which the driver reads as no change, so a prop that reached its escape point
+  stood there for the rest of the round. Arrival now reaches the policy
+  through the observation, and a blocked escape swings to a new angle.
+- A prop caps how often it re-picks a hide spot it cannot reach. A blocked
+  path wakes the policy off-cycle, so clearing the plan on every blocked
+  decision let a bot sealed off from every nearby prop cycle at nearly seven
+  times the ordinary decision rate; after a bounded number of tries it hides
+  where it stands.
+- A motionless contact no longer sounds like a noise. A first sighting
+  recorded the moment it was seen as the moment it last moved, so any second
+  observation inside the recently-moved window reported a contact that had
+  never moved as audible — and event-driven decisions land well inside that
+  window. Samples and remembered positions are dropped when a player leaves
+  the room.
+- A hunter runs down a disguise it has seen fleeing instead of walking after
+  it. It is gated on a contact seen disguised and moving: a noise could be a
+  teammate, and sprinting at every one rebuilds the hunter pack.
+- A room's bot fill stops at the first bot it cannot seat. Every bot in a room
+  takes the same map, so one a driver rejects none will accept: the loop asked
+  forever, and being synchronous it pinned the event loop and took every other
+  room on the process down with it.
+
 ## [0.2.5] — 2026-09-11
 
 A public lobby now says what it is waiting for instead of going quiet until
