@@ -18,6 +18,7 @@ import {
   getVolume,
   isMusicEnabled,
   isMuted,
+  playMorph,
   playUiClick,
   playUiClose,
   playUiDeploy,
@@ -34,6 +35,8 @@ import {
 } from "../game/audio";
 import { isPerfHudEnabled, setPerfHudEnabled } from "../game/prefs";
 import { MAP_GLASS } from "../theme";
+import { stepAvatar } from "./avatarCarousel";
+import { MorphRail } from "./MorphRail";
 import { loadPrefs, savePrefs } from "./prefs";
 import { StatsPane } from "./StatsPane";
 import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
@@ -122,6 +125,10 @@ function avatarEmoji(avatar: string): string {
   return isAvatarId(avatar) ? AVATAR_EMOJI[avatar] : "❔";
 }
 
+function resolveAvatar(avatar: string): AvatarId {
+  return isAvatarId(avatar) ? avatar : DEFAULT_AVATAR_ID;
+}
+
 const NAV_ITEMS: NavItem[] = [
   { id: "identity", label: "Identity" },
   { id: "private", label: "Private" },
@@ -144,6 +151,9 @@ const PANE_TITLES: Record<PaneId, string> = {
 
 const VOLUME_SLIDER_MAX = 100;
 const SHEEN_PERCENT = 100;
+const STEP_BACK = -1;
+const STEP_FORWARD = 1;
+const MORPH_STEP_COOLDOWN_MS = 180;
 
 export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: LobbyProps) {
   const [name, setName] = useState(() => loadPrefs().name);
@@ -158,6 +168,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const [perfHud, setPerfHudState] = useState(() => isPerfHudEnabled());
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
+  const [morphMode, setMorphMode] = useState(false);
 
   const inParty = party !== null;
   const isHost = party !== null && party.selfId === party.hostId;
@@ -248,10 +259,16 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     [pane, closePane, commitProfile],
   );
 
-  const handleCustomize = useCallback(() => {
-    if (profileRef.current.pane === "identity") return;
+  const enterMorph = useCallback(() => {
+    if (profileRef.current.pane === "identity") commitProfile();
     playUiOpen();
-    setPane("identity");
+    setPane(null);
+    setMorphMode(true);
+  }, [commitProfile]);
+
+  const exitMorph = useCallback(() => {
+    playUiClose();
+    setMorphMode(false);
   }, []);
 
   const handleSubmit = useCallback(
@@ -281,14 +298,47 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     [party, activeMap],
   );
 
-  const handleAvatarPick = useCallback(
-    (avatar: AvatarId) => {
-      if (avatar !== selectedAvatar) playUiClick();
-      setSelectedAvatar(avatar);
-      party?.onSetProfile(name, avatar);
+  const handleMorphStep = useCallback(
+    (delta: number) => {
+      const next = stepAvatar(selectedAvatar, delta);
+      playMorph();
+      setSelectedAvatar(next);
+      party?.onSetProfile(name, next);
     },
     [party, name, selectedAvatar],
   );
+
+  const stepLock = useRef(0);
+  const takeStepSlot = useCallback(() => {
+    const now = performance.now();
+    if (now - stepLock.current < MORPH_STEP_COOLDOWN_MS) return false;
+    stepLock.current = now;
+    return true;
+  }, []);
+
+  const handleMorphWheel = useCallback(
+    (e: React.WheelEvent<HTMLElement>) => {
+      if (!takeStepSlot()) return;
+      handleMorphStep(e.deltaY > 0 ? STEP_FORWARD : STEP_BACK);
+    },
+    [handleMorphStep, takeStepSlot],
+  );
+
+  useEffect(() => {
+    if (!morphMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        exitMorph();
+        return;
+      }
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      if (e.repeat && !takeStepSlot()) return;
+      handleMorphStep(e.key === "ArrowLeft" ? STEP_BACK : STEP_FORWARD);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [morphMode, exitMorph, handleMorphStep, takeStepSlot]);
 
   const canCopy = typeof navigator !== "undefined" && navigator.clipboard !== undefined;
   const copyCode = useCallback(() => {
@@ -371,7 +421,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           .map((member) => ({
             id: member.id,
             name: member.name,
-            avatar: isAvatarId(member.avatar) ? member.avatar : DEFAULT_AVATAR_ID,
+            avatar: member.id === party.selfId ? selectedAvatar : resolveAvatar(member.avatar),
             isHost: member.id === party.hostId,
           }))
       : [{ id: "local", name: trimmedName || "Guest", avatar: selectedAvatar, isHost: false }];
@@ -388,41 +438,44 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           map={activeMap}
           actors={stageActors}
           inParty={inParty}
-          onCustomize={handleCustomize}
+          morphMode={morphMode}
+          onCustomize={enterMorph}
         />
       </Suspense>
       <div className="menu-vignette" />
 
-      <header className="menu-top">
-        <div className="menu-brand">
-          <div className="menu-wordmark">
-            <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
-            <span>MORPHY</span>
-          </div>
-          <span
-            className="menu-build"
-            title="Version and build of this client. A trailing + means the build is past that release."
-          >
-            {__MORPHY_VERSION__} · {__MORPHY_BUILD__}
-          </span>
-        </div>
-        <nav className="menu-tabs" aria-label="Menu">
-          {NAV_ITEMS.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              className={`menu-tab${pane === item.id ? " sel" : ""}`}
-              onClick={() => handleTabClick(item.id)}
-              onPointerEnter={playUiHover}
-              aria-pressed={pane === item.id}
+      {!morphMode && (
+        <header className="menu-top">
+          <div className="menu-brand">
+            <div className="menu-wordmark">
+              <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
+              <span>MORPHY</span>
+            </div>
+            <span
+              className="menu-build"
+              title="Version and build of this client. A trailing + means the build is past that release."
             >
-              {item.label}
-            </button>
-          ))}
-        </nav>
-      </header>
+              {__MORPHY_VERSION__} · {__MORPHY_BUILD__}
+            </span>
+          </div>
+          <nav className="menu-tabs" aria-label="Menu">
+            {NAV_ITEMS.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className={`menu-tab${pane === item.id ? " sel" : ""}`}
+                onClick={() => handleTabClick(item.id)}
+                onPointerEnter={playUiHover}
+                aria-pressed={pane === item.id}
+              >
+                {item.label}
+              </button>
+            ))}
+          </nav>
+        </header>
+      )}
 
-      {party && (
+      {!morphMode && party && (
         <aside className="menu-party panel">
           <span className="eyebrow">Party code</span>
           <div className="menu-party-code">
@@ -461,7 +514,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         </aside>
       )}
 
-      {stageActors.length === 1 && pane === null && (
+      {!morphMode && stageActors.length === 1 && pane === null && (
         <aside className="menu-maptitle" key={activeMap}>
           <span className="menu-maptitle-tag" style={{ color: MAP_ACCENT[activeMap] }}>
             {MAP_TAG[activeMap]} sector
@@ -471,69 +524,84 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         </aside>
       )}
 
-      <form className="menu-bottom" onSubmit={handleSubmit}>
-        <div className="menu-strip">
-          <span className="menu-strip-label">{inParty ? "Map" : "Preferred map"}</span>
-          <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
-            {MAP_CATALOG.map((info) => (
-              <button
-                type="button"
-                key={info.id}
-                className={`menu-mapcard${activeMap === info.id ? " sel" : ""}`}
-                style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
-                onClick={() => handleMapPick(info.id)}
-                onPointerEnter={playUiHover}
-                disabled={inParty && !isHost}
-                aria-pressed={activeMap === info.id}
-              >
-                <span className="menu-mapcard-glyph" aria-hidden="true">
-                  {MAP_GLYPH[info.id]}
-                </span>
-                <span className="menu-mapcard-text">
-                  <span className="menu-mapcard-tag">{MAP_TAG[info.id]}</span>
-                  <span className="menu-mapcard-name">{info.name}</span>
-                </span>
-              </button>
-            ))}
+      {morphMode && (
+        <>
+          <button
+            type="button"
+            className="morph-backdrop"
+            aria-label="Close the avatar picker"
+            onClick={exitMorph}
+            onWheel={handleMorphWheel}
+          />
+          <MorphRail avatar={selectedAvatar} onStep={handleMorphStep} onClose={exitMorph} />
+        </>
+      )}
+
+      {!morphMode && (
+        <form className="menu-bottom" onSubmit={handleSubmit}>
+          <div className="menu-strip">
+            <span className="menu-strip-label">{inParty ? "Map" : "Preferred map"}</span>
+            <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
+              {MAP_CATALOG.map((info) => (
+                <button
+                  type="button"
+                  key={info.id}
+                  className={`menu-mapcard${activeMap === info.id ? " sel" : ""}`}
+                  style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
+                  onClick={() => handleMapPick(info.id)}
+                  onPointerEnter={playUiHover}
+                  disabled={inParty && !isHost}
+                  aria-pressed={activeMap === info.id}
+                >
+                  <span className="menu-mapcard-glyph" aria-hidden="true">
+                    {MAP_GLYPH[info.id]}
+                  </span>
+                  <span className="menu-mapcard-text">
+                    <span className="menu-mapcard-tag">{MAP_TAG[info.id]}</span>
+                    <span className="menu-mapcard-name">{info.name}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="menu-dock">
-          {party ? (
-            isHost ? (
-              <button
-                type="button"
-                className="menu-deploy"
-                onClick={handleStart}
-                onPointerEnter={playUiHover}
-                disabled={party.members.length < MIN_PLAYERS_TO_START}
-              >
-                <span className="big">▶ Start match</span>
-                <span className="small">
-                  {party.members.length < MIN_PLAYERS_TO_START
-                    ? `Need at least ${MIN_PLAYERS_TO_START} players`
-                    : `Party of ${party.members.length}`}
-                </span>
-              </button>
+          <div className="menu-dock">
+            {party ? (
+              isHost ? (
+                <button
+                  type="button"
+                  className="menu-deploy"
+                  onClick={handleStart}
+                  onPointerEnter={playUiHover}
+                  disabled={party.members.length < MIN_PLAYERS_TO_START}
+                >
+                  <span className="big">▶ Start match</span>
+                  <span className="small">
+                    {party.members.length < MIN_PLAYERS_TO_START
+                      ? `Need at least ${MIN_PLAYERS_TO_START} players`
+                      : `Party of ${party.members.length}`}
+                  </span>
+                </button>
+              ) : (
+                <div className="menu-deploy menu-waiting">
+                  <span className="big">Waiting for host…</span>
+                  <span className="small">Only the host can start the match</span>
+                </div>
+              )
             ) : (
-              <div className="menu-deploy menu-waiting">
-                <span className="big">Waiting for host…</span>
-                <span className="small">Only the host can start the match</span>
-              </div>
-            )
-          ) : (
-            <button
-              type="submit"
-              className="menu-deploy"
-              onPointerEnter={playUiHover}
-              disabled={connecting}
-            >
-              <span className="big">▶ {connecting ? "Connecting…" : "Play"}</span>
-              <span className="small">Public match</span>
-            </button>
-          )}
-        </div>
-        {status.kind === "error" && <span className="menu-error">{status.message}</span>}
-      </form>
+              <button
+                type="submit"
+                className="menu-deploy"
+                onPointerEnter={playUiHover}
+                disabled={connecting}
+              >
+                <span className="big">▶ {connecting ? "Connecting…" : "Play"}</span>
+                <span className="small">Public match</span>
+              </button>
+            )}
+          </div>
+          {status.kind === "error" && <span className="menu-error">{status.message}</span>}
+        </form>
+      )}
 
       {pane !== null && (
         <section className="menu-panel panel">
@@ -569,22 +637,20 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
                   autoFocus
                 />
               </div>
-              <div className="menu-avatars">
-                {AVATAR_CATALOG.map((info) => (
-                  <button
-                    type="button"
-                    key={info.id}
-                    className={`menu-avatar${selectedAvatar === info.id ? " sel" : ""}`}
-                    onClick={() => handleAvatarPick(info.id)}
-                    onPointerEnter={playUiHover}
-                    aria-pressed={selectedAvatar === info.id}
-                  >
-                    <span className="menu-avatar-emoji" aria-hidden="true">
-                      {AVATAR_EMOJI[info.id]}
-                    </span>
-                    <span className="menu-avatar-name">{info.name}</span>
-                  </button>
-                ))}
+              <div className="menu-card menu-avatar-entry">
+                <span className="eyebrow">Avatar</span>
+                <b className="menu-avatar-entry-name">
+                  {AVATAR_CATALOG.find((info) => info.id === selectedAvatar)?.name}
+                </b>
+                <p>Step through every shape on the stage and morph into the one you want.</p>
+                <button
+                  type="button"
+                  className="menu-party-btn"
+                  onClick={enterMorph}
+                  onPointerEnter={playUiHover}
+                >
+                  Change avatar
+                </button>
               </div>
             </>
           )}

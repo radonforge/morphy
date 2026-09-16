@@ -885,51 +885,116 @@ canvas {
   color: var(--cyan);
 }
 
-.menu-avatars {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
-  gap: 10px;
+.morph-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  appearance: none;
+  border: 0;
+  cursor: default;
+  background: transparent;
 }
-.menu-avatar {
+
+.morph-rail {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(28px, 6vh, 64px);
+  z-index: 3;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  animation: morph-railin 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes morph-railin {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 34px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.morph-rail-arrow {
+  appearance: none;
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+.morph-rail-arrow:hover {
+  color: var(--cyan);
+  border-color: var(--border-strong);
+  background: rgba(53, 224, 255, 0.14);
+}
+.morph-rail-arrow:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.morph-rail-id {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 7px;
-  cursor: pointer;
-  padding: 14px 8px 11px;
-  background: linear-gradient(180deg, rgba(22, 33, 52, 0.7), rgba(12, 20, 34, 0.45));
-  border: 1px solid rgba(53, 224, 255, 0.32);
-  border-radius: 8px;
-  color: var(--text);
-  transition:
-    border-color 0.14s ease,
-    background 0.14s ease,
-    transform 0.12s ease;
+  gap: 2px;
+  min-width: 132px;
 }
-.menu-avatar:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-2px);
-}
-.menu-avatar-emoji {
-  font-size: 32px;
-  line-height: 1;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
-}
-.menu-avatar-name {
+.morph-rail-name {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.02em;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.morph-rail-count {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.16em;
   color: var(--muted);
-  text-align: center;
 }
-.menu-avatar.sel {
-  background: linear-gradient(180deg, rgba(53, 224, 255, 0.18), rgba(53, 224, 255, 0.03));
-  border-color: var(--cyan);
-  box-shadow:
-    0 0 0 1px var(--cyan),
-    0 10px 26px rgba(0, 0, 0, 0.4);
+
+.morph-rail-done {
+  appearance: none;
+  cursor: pointer;
+  margin-left: 4px;
+  padding: 0.5rem 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #04121c;
+  background: var(--cyan);
+  border: 0;
+  border-radius: 999px;
+  transition: filter 0.12s ease;
 }
-.menu-avatar.sel .menu-avatar-name {
+.morph-rail-done:hover {
+  filter: brightness(1.1);
+}
+.morph-rail-done:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+.menu-avatar-entry-name {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
   color: var(--cyan);
 }
 
@@ -1160,6 +1225,9 @@ canvas {
   .panel {
     --mx: 30%;
     --my: 0%;
+  }
+  .morph-rail {
+    animation: none;
   }
 }
 
