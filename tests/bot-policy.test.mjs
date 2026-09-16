@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MAX_HIDE_REPICKS, PANIC_RADIUS } from "../packages/bot/src/config.ts";
+import {
+  MAX_FLEE_DEFLECTIONS,
+  MAX_HIDE_REPICKS,
+  PANIC_RADIUS,
+} from "../packages/bot/src/config.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
 
 const DIFFICULTY = 0.6;
@@ -280,4 +284,59 @@ test("a prop stops re-picking hide spots it can never reach", async () => {
   }
   assert.equal(last.kind, "hideAs");
   assert.deepEqual({ x: last.x, z: last.z }, { x: 0, z: 0 }, "it hides where it stands");
+});
+
+/** A prop panicking at a hunter that keeps drifting sideways. */
+const fleeingObservation = (seq, pathBlocked, threatZ) => ({
+  seq,
+  visibility: "limited",
+  phase: "hunting",
+  pathBlocked,
+  self: {
+    role: "prop",
+    alive: true,
+    hp: 0,
+    x: 0,
+    z: 0,
+    rot: 0,
+    propType: "crate",
+    canShootNow: true,
+  },
+  entities: [character("hunter-b", PANIC_RADIUS - 3, { z: threatZ })],
+  map: { bounds: BOUNDS, doorways: [], nearbyProps: [{ type: "crate", x: 6, z: 6 }] },
+});
+
+test("a prop holds its escape point while the hunter drifts", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const spots = [];
+  for (let i = 0; i < DECISIONS; i++) {
+    const intent = await policy.decide(fleeingObservation(i + 1, false, i * 0.4));
+    assert.equal(intent.kind, "moveTo");
+    spots.push(`${intent.x},${intent.z}`);
+  }
+  assert.equal(
+    new Set(spots).size,
+    1,
+    "a drifting hunter must not re-aim the escape every decision",
+  );
+});
+
+test("a prop swings to a new escape angle when its path is blocked", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const first = await policy.decide(fleeingObservation(1, false, 0));
+  const second = await policy.decide(fleeingObservation(2, true, 0));
+  assert.notDeepEqual(
+    { x: first.x, z: first.z },
+    { x: second.x, z: second.z },
+    "a blocked escape must try a different direction",
+  );
+});
+
+test("a cornered prop stops running once every escape angle is blocked", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  let last = null;
+  for (let i = 0; i < MAX_FLEE_DEFLECTIONS + 2; i++) {
+    last = await policy.decide(fleeingObservation(i + 1, true, 0));
+  }
+  assert.deepEqual({ x: last.x, z: last.z }, { x: 0, z: 0 }, "it stands where it is");
 });

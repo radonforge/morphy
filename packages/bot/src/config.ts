@@ -18,6 +18,15 @@ export const MAX_REPLANS_BEFORE_BLOCKED = 2;
  * the policy off-cycle — measured at ~6.7x the ordinary decision rate.
  */
 export const MAX_HIDE_REPICKS = 4;
+/** How far each blocked escape rotates the away-vector before the prop tries again. */
+export const FLEE_DEFLECTION_RAD = (2 * Math.PI) / 5;
+/**
+ * Blocked escape angles a cornered prop tries before it gives up and stands
+ * still. A held escape point matters more than the angle: recomputing it every
+ * decision made the goal drift past ARRIVE_EPSILON, which reset the reflex's
+ * replan counter so a blocked path never latched.
+ */
+export const MAX_FLEE_DEFLECTIONS = 4;
 
 export const HIDE_OFFSET_MIN = 1.2;
 export const HIDE_OFFSET_MAX = 2.4;

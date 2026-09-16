@@ -2,10 +2,12 @@ import type { Intent, MapBounds, Observation, ObservedEntity, Phase, Role } from
 import {
   ENGAGE_RANGE_MAX,
   ENGAGE_RANGE_MIN,
+  FLEE_DEFLECTION_RAD,
   FREEZE_RADIUS,
   HIDE_OFFSET_MAX,
   HIDE_OFFSET_MIN,
   lerp,
+  MAX_FLEE_DEFLECTIONS,
   MAX_HIDE_REPICKS,
   PANIC_RADIUS,
   WAYPOINT_MARGIN,
@@ -67,6 +69,8 @@ export class ScriptedPolicy implements Policy {
 
   private hideSpot: Spot | null = null;
   private hideRepicks = 0;
+  private fleeSpot: Spot | null = null;
+  private fleeDeflections = 0;
   private prevPhase: Phase | null = null;
   private prevRole: Role | null = null;
 
@@ -144,14 +148,16 @@ export class ScriptedPolicy implements Policy {
       obs.visibility === "limited" ? this.nearestThreatLimited(obs) : this.nearestHunter(obs);
     if (threat) {
       if (threat.facingMe === true && threat.distance < FREEZE_RADIUS) {
+        this.clearFleePlan();
         return { kind: "idle", seq };
       }
       if (threat.distance < PANIC_RADIUS) {
         this.clearHidePlan();
-        const flee = this.fleeFrom(obs, threat);
+        const flee = this.ensureFleePlan(obs, threat);
         return { kind: "moveTo", x: flee.x, z: flee.z, run: true, seq };
       }
     }
+    this.clearFleePlan();
     return { kind: "hideAs", x: spot.x, z: spot.z, seq };
   }
 
@@ -167,16 +173,42 @@ export class ScriptedPolicy implements Policy {
     return nearest(obs.entities, (e) => e.role === "hunter" && e.alive === true);
   }
 
-  private fleeFrom(obs: Observation, threat: ObservedEntity): Spot {
+  /**
+   * The point the prop is running to, held until it is reached or the reflex
+   * reports the path blocked. Recomputing it every decision let a cornered prop
+   * re-issue a goal that drifted far enough to reset the reflex's replan
+   * counter, so the blocked path never latched and it re-planned several times
+   * per second without ever moving. Each blocked attempt swings the escape
+   * further off the straight away-vector; once they are spent the prop stops
+   * running, which is at least a reachable goal.
+   */
+  private ensureFleePlan(obs: Observation, threat: ObservedEntity): Spot {
+    if (this.fleeSpot && !obs.pathBlocked) return this.fleeSpot;
+    if (obs.pathBlocked) this.fleeDeflections += 1;
+    this.fleeSpot =
+      this.fleeDeflections > MAX_FLEE_DEFLECTIONS
+        ? { x: obs.self.x, z: obs.self.z }
+        : this.fleeFrom(obs, threat, this.fleeDeflections * FLEE_DEFLECTION_RAD);
+    return this.fleeSpot;
+  }
+
+  private clearFleePlan(): void {
+    this.fleeSpot = null;
+    this.fleeDeflections = 0;
+  }
+
+  private fleeFrom(obs: Observation, threat: ObservedEntity, deflection: number): Spot {
     const self = obs.self;
     let dx = self.x - threat.x;
     let dz = self.z - threat.z;
     const len = Math.hypot(dx, dz) || 1;
     dx /= len;
     dz /= len;
+    const cos = Math.cos(deflection);
+    const sin = Math.sin(deflection);
     return this.clampToBounds(obs.map.bounds, {
-      x: self.x + dx * PANIC_RADIUS,
-      z: self.z + dz * PANIC_RADIUS,
+      x: self.x + (dx * cos - dz * sin) * PANIC_RADIUS,
+      z: self.z + (dx * sin + dz * cos) * PANIC_RADIUS,
     });
   }
 
@@ -207,6 +239,7 @@ export class ScriptedPolicy implements Policy {
     if (obs.phase !== this.prevPhase) {
       if (obs.phase === "hiding") {
         this.clearHidePlan();
+        this.clearFleePlan();
         this.hideRepicks = 0;
       }
       this.prevPhase = obs.phase;
