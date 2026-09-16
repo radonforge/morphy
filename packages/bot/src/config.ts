@@ -11,6 +11,13 @@ export const ARRIVE_EPSILON = 0.45;
 export const STUCK_TICK_LIMIT = 6;
 export const STUCK_PROGRESS_FRACTION = 0.3;
 export const MAX_REPLANS_BEFORE_BLOCKED = 2;
+/**
+ * Consecutive blocked hide spots a prop will discard before giving up on the
+ * catalogue and hiding where it stands. Without a cap, a bot sealed off from
+ * every nearby prop re-picks on each blocked-path event, and that event wakes
+ * the policy off-cycle — measured at ~6.7x the ordinary decision rate.
+ */
+export const MAX_HIDE_REPICKS = 4;
 
 export const HIDE_OFFSET_MIN = 1.2;
 export const HIDE_OFFSET_MAX = 2.4;

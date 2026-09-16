@@ -6,6 +6,7 @@ import {
   HIDE_OFFSET_MAX,
   HIDE_OFFSET_MIN,
   lerp,
+  MAX_HIDE_REPICKS,
   PANIC_RADIUS,
   WAYPOINT_MARGIN,
 } from "../config";
@@ -65,6 +66,7 @@ export class ScriptedPolicy implements Policy {
   readonly name = "scripted";
 
   private hideSpot: Spot | null = null;
+  private hideRepicks = 0;
   private prevPhase: Phase | null = null;
   private prevRole: Role | null = null;
 
@@ -128,7 +130,12 @@ export class ScriptedPolicy implements Policy {
   private prop(obs: Observation): Intent {
     const seq = obs.seq;
     if (obs.phase !== "hiding" && obs.phase !== "hunting") return { kind: "idle", seq };
-    if (obs.pathBlocked) this.clearHidePlan();
+    if (obs.pathBlocked) {
+      this.hideSpot = null;
+      this.hideRepicks += 1;
+    } else {
+      this.hideRepicks = 0;
+    }
     this.ensureHidePlan(obs);
     const spot = this.hideSpot;
     if (!spot) return { kind: "idle", seq };
@@ -176,7 +183,7 @@ export class ScriptedPolicy implements Policy {
   private ensureHidePlan(obs: Observation): void {
     if (this.hideSpot) return;
     const props = obs.map.nearbyProps;
-    if (props.length > 0) {
+    if (props.length > 0 && this.hideRepicks < MAX_HIDE_REPICKS) {
       const pick = props[Math.floor(Math.random() * props.length)]!;
       const angle = Math.random() * Math.PI * 2;
       const offset = HIDE_OFFSET_MIN + Math.random() * (HIDE_OFFSET_MAX - HIDE_OFFSET_MIN);
@@ -198,7 +205,10 @@ export class ScriptedPolicy implements Policy {
 
   private syncRoundState(obs: Observation): void {
     if (obs.phase !== this.prevPhase) {
-      if (obs.phase === "hiding") this.clearHidePlan();
+      if (obs.phase === "hiding") {
+        this.clearHidePlan();
+        this.hideRepicks = 0;
+      }
       this.prevPhase = obs.phase;
     }
     if (obs.self.role !== this.prevRole) {
