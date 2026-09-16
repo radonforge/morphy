@@ -50,6 +50,7 @@ import {
   toggleMuted,
 } from "./audio";
 import { ControlsBar, ControlsDialog } from "./Controls";
+import { lockPointer } from "./pointerLock";
 import { isPerfHudEnabled } from "./prefs";
 import { GAME_DPR, GAME_FOV, Scene } from "./Scene";
 import type {
@@ -417,17 +418,6 @@ function RingTimer({ endsAt, total }: { endsAt: number; total: number }) {
   );
 }
 
-/**
- * Re-acquire pointer lock when the pause overlay closes. Tolerates both DOM
- * typings of `requestPointerLock` (void and Promise) and Chrome's refusal to
- * re-lock right after an Escape-driven unlock: the player's next click on the
- * canvas locks again through the same path the game already uses.
- */
-function relockPointer(canvas: HTMLCanvasElement | null): void {
-  const pending: unknown = canvas?.requestPointerLock();
-  if (pending instanceof Promise) pending.catch(() => undefined);
-}
-
 export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   const { room, sessionId } = connection;
   const playersRef = useRef<Map<string, RemotePlayerView>>(new Map());
@@ -472,7 +462,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   const onShoot = useCallback(() => setMuzzle(muzzleSeq.current++), []);
   const resume = useCallback(() => {
     setPaused(false);
-    relockPointer(canvasRef.current);
+    lockPointer(canvasRef.current);
   }, []);
   const weapon = meta[sessionId]?.weapon ?? DEFAULT_WEAPON;
 

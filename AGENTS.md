@@ -25,8 +25,8 @@ pnpm --filter @morphy/client build   # production client bundle
 CI (`.github/workflows/ci.yml`) runs `pnpm check:ci`, `pnpm typecheck`, `pnpm test` and a production
 client build on every pull request — run the same four locally after changes. The suite in
 `tests/` is plain `node:test` over the real modules (validators, map builders, geometry, storage,
-HTTP endpoints, bot scheduling, room lifecycle); there is no mocking framework and no browser
-test. Verification beyond that is manual play.
+HTTP endpoints, bot scheduling, room lifecycle, client movement and controls); there is no mocking
+framework and no browser test. Verification beyond that is manual play.
 
 Single-package typecheck: `pnpm --filter @morphy/server typecheck` (or `@morphy/client` / `@morphy/shared`).
 
@@ -75,12 +75,15 @@ The single source of truth for everything client and server must agree on. **Exp
 
 - `ui/App.tsx` — the shell owning connection state, swapping between menu and game (the game route is `lazy`-loaded behind a `Suspense`). `ui/Lobby.tsx` + `ui/LobbyStage.tsx` are the menu: map / avatar / weapon pickers, name, ready state, party codes, `StatsPane`. `net/connection.ts` wraps the Colyseus SDK `joinOrCreate` / `create` / `joinById` with a timeout.
 - `game/Game.tsx` — React HUD and the network event hub: registers all `room.onMessage` handlers and the schema `Callbacks` (player add/remove), drives chat/kill-feed/result/scoreboard overlays.
-- `game/Scene.tsx` — the entire 3D scene: map rendering (instanced tiles, fitted GLB props/avatars, scenery), the **local player movement + client-side collision** (walls, obstacles, player separation, gravity/jump), remote-player interpolation, the shooting raycast, and the prop-picker (`E` to morph). This is the largest and densest file.
+- `game/Scene.tsx` — the entire 3D scene: map rendering (instanced tiles, fitted GLB props/avatars, scenery), remote-player interpolation, the shooting raycast, pointer-lock mouse look, and the per-frame drive of the local player through `movement.ts`. Still the densest file in the client. **There is no prop picker**: a prop presses `R` to send `MSG_REROLL` and the *server* swaps in a random different prop from the map catalog, spending one of a bounded `rerollsLeft`. `Q`/`E` are prop-only and spin the disguise in place (`propRot` at `PROP_TURN_SPEED`), not the camera — aim is mouse-look alone. Do not re-add a picker believing one was lost.
+- `game/movement.ts` — the **client-side movement + collision core**, lifted out of `Scene.tsx` so it is testable without a browser: `advanceMovement` (accel/decel, air control, gravity, jump buffering), `resolveColliders` (walls, obstacles, step-up, player separation), `supportHeightAt`, `clampToBounds` and `cappedFrameSeconds`, which bounds the frame a backgrounded tab would otherwise integrate in one step.
+- `game/useControls.ts` — the key-code → action map plus `movementFromHeld`, which projects held codes onto actions so aliases (W / ArrowUp, either Shift) read as one, and releases everything when the window blurs. `game/Controls.tsx` renders the in-game legend and the controls dialog from the same key names, so a rebind that misses one of the two shows the player the wrong key.
+- `game/pointerLock.ts` — `lockPointer`, the only path to `requestPointerLock`. The browser refuses the lock routinely (too soon after an exit, no fresh gesture) and the refusal is a promise rejection, so both callers go through here rather than leaking an `Uncaught (in promise)`.
 - `game/audio.ts` — **hybrid audio**: weapon shots / hit impacts (Kenney Sci-fi Sounds, `public/sounds/sci-fi/`) and lobby UI cues (Kenney UI Audio, `public/sounds/ui/`) play cached OGG samples; the lobby loops a licensed theme (`public/sounds/music/lobby-theme.ogg`, own gain, fade in/out); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers all; volume / music / UI-sound prefs persist to localStorage (`morphy:*` keys).
 
 ### Two facts that span files
 
-**Authority split.** The server is authoritative for the things that matter competitively: phase/timers, roles, HP, alive/dead, and **hit resolution**. Movement is _not_ fully authoritative — the client computes its own position and collision and sends `position + rotation` ~20 Hz; the server only **clamps to map bounds**. Wall/furniture collision exists **only client-side** (`Scene.tsx`). This is an intentional LAN-pragmatic tradeoff, not a bug.
+**Authority split.** The server is authoritative for the things that matter competitively: phase/timers, roles, HP, alive/dead, and **hit resolution**. Movement is _not_ fully authoritative — the client computes its own position and collision and sends `position + rotation` ~20 Hz; the server only **clamps to map bounds**. Wall/furniture collision exists **only client-side** (`movement.ts`, driven from `Scene.tsx`). This is an intentional LAN-pragmatic tradeoff, not a bug.
 
 **The disguise is visual only, and that is accepted.** `PlayerState` broadcasts `role`, `propType`
 and `x`/`y`/`z` to every client as plain `@type` fields — there is no `@view`/`StateView` filtering
@@ -108,9 +111,11 @@ threat is real, not before. Do not re-file this as a bug.
 GLB models live in `packages/client/public/models/<kit>/`: `blaster` (weapon viewmodels), `pets`
 (player avatars), `space/modular` (floor/wall/gate tiles for the station and outpost floorplans),
 `space/station` (interior furniture props), `space/exterior` (Martian scenery), `urban` (buildings,
-roads, street props). `characters/` is staged but unwired — the planned humanoid avatar set, see
-`shared/avatars.ts`. Kenney kits reference an external `Textures/colormap.png` per kit — keep that
-file alongside the GLBs or models render untextured.
+roads, street props), `characters/` (the urban map's pedestrians — `urbanCatalog.ts` emits twelve of
+them as morphable props, so they are on the production allow-list). What is *not* wired is
+`characters/` as a **player avatar**: `shared/avatars.ts` ships `set: "pet"` only, and the humanoid
+set stays a plan. Kenney kits reference an external `Textures/colormap.png` per kit — keep that file
+alongside the GLBs or models render untextured.
 
 Only the GLBs on the allow-list in `packages/client/runtimeAssets.ts` reach `dist`: at build start
 `runtimeAssetsPlugin` resolves each allow-listed model plus the external buffer/image URIs declared
