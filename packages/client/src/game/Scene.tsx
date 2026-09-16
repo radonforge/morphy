@@ -562,7 +562,7 @@ export function Scene({
   const localAlive = localMeta?.alive ?? true;
   const morphsRef = useRef<MorphFx[]>([]);
   const seenPropTypes = useRef(new Map<string, string>());
-  const renderPosesRef = useRef(new Map<string, { x: number; z: number }>());
+  const renderPosesRef = useRef(new Map<string, { x: number; y: number; z: number }>());
 
   useEffect(() => {
     const seen = seenPropTypes.current;
@@ -582,6 +582,7 @@ export function Scene({
       if (!source) continue;
       morphsRef.current.push({
         x: source.x,
+        y: source.y,
         z: source.z,
         radius: bounds.radius,
         height: bounds.yMax,
@@ -957,6 +958,7 @@ function Tracers({ shotsRef }: { shotsRef: ShotsRef }) {
 
 interface MorphFx {
   x: number;
+  y: number;
   z: number;
   radius: number;
   height: number;
@@ -964,7 +966,7 @@ interface MorphFx {
 
 type MorphFxRef = { readonly current: MorphFx[] };
 
-type RenderPosesRef = { readonly current: Map<string, { x: number; z: number }> };
+type RenderPosesRef = { readonly current: Map<string, { x: number; y: number; z: number }> };
 
 interface MorphBurstState extends MorphFx {
   age: number;
@@ -1050,7 +1052,7 @@ function MorphEffects({ morphsRef }: { morphsRef: MorphFxRef }) {
       const growth = Math.min(1, t / MORPH_BEAM_GROW_FRACTION);
       const height = Math.max(burst.height, PLAYER_BODY_LENGTH) * MORPH_BEAM_HEIGHT_MULT * growth;
       const radius = burst.radius * MORPH_BEAM_RADIUS_MULT;
-      mesh.position.set(burst.x, height / 2, burst.z);
+      mesh.position.set(burst.x, burst.y + height / 2, burst.z);
       mesh.scale.set(radius, Math.max(height, MODEL_MIN_SIZE), radius);
       (mesh.material as THREE.MeshBasicMaterial).opacity = MORPH_BEAM_OPACITY * (1 - t);
       mesh.visible = true;
@@ -1067,7 +1069,8 @@ function MorphEffects({ morphsRef }: { morphsRef: MorphFxRef }) {
       const spawnHeight =
         Math.max(burst.height, PLAYER_BODY_LENGTH) * MORPH_SHARD_SPAWN_HEIGHT_MULT;
       for (const seed of seeds) {
-        const y = THREE.MathUtils.lerp(seed.yFrac * spawnHeight, burst.height / 2, convergence);
+        const y =
+          burst.y + THREE.MathUtils.lerp(seed.yFrac * spawnHeight, burst.height / 2, convergence);
         scratch.position.set(
           burst.x + Math.cos(seed.angle) * radial,
           y,
@@ -2167,9 +2170,14 @@ function RemotePlayer({
     const pose = renderPoses.current.get(view.id);
     if (pose) {
       pose.x = group.position.x;
+      pose.y = group.position.y;
       pose.z = group.position.z;
     } else {
-      renderPoses.current.set(view.id, { x: group.position.x, z: group.position.z });
+      renderPoses.current.set(view.id, {
+        x: group.position.x,
+        y: group.position.y,
+        z: group.position.z,
+      });
     }
 
     if (role === "hunter") {
