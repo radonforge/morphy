@@ -51,7 +51,7 @@ import {
 } from "./audio";
 import { ControlsBar, ControlsDialog } from "./Controls";
 import { isPerfHudEnabled } from "./prefs";
-import { GAME_DPR, GAME_FOV, Scene, TAUNT_PULSE_SECONDS } from "./Scene";
+import { GAME_DPR, GAME_FOV, Scene } from "./Scene";
 import type {
   BreaksRef,
   DecoyView,
@@ -540,6 +540,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
         for (const unsubscribe of playerMetaUnsubscribers.get(id) ?? []) unsubscribe();
         playerMetaUnsubscribers.delete(id);
         playersRef.current.delete(id);
+        tauntPulseRef.current.delete(id);
         setIds((prev) => prev.filter((existing) => existing !== id));
         syncPlayerMeta();
       }),
@@ -605,7 +606,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
         if (typeof message !== "object" || message === null) return;
         const m = message as Record<string, unknown>;
         if (typeof m.playerId !== "string" || !isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
-        tauntPulseRef.current.set(m.playerId, TAUNT_PULSE_SECONDS);
+        tauntPulseRef.current.set(m.playerId, performance.now());
         const local = playersRef.current.get(sessionId);
         const volume = local
           ? Math.max(0, 1 - Math.hypot(local.x - m.x, local.z - m.z) / TAUNT_MAX_DISTANCE)
