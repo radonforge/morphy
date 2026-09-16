@@ -16,6 +16,21 @@ interface Spot {
   z: number;
 }
 
+/**
+ * Whether a contact is a disguise *seen* to be on the move — the one suspect
+ * worth sprinting after, because it is the one a walking hunter can never catch:
+ * a panicking prop runs at `MOVE_SPEED * RUN_MULTIPLIER_PROP` and a walking
+ * approach closes at `MOVE_SPEED`, so the gap opens for as long as it keeps
+ * running.
+ *
+ * Every other suspect is approached at walking pace on purpose. A contact known
+ * only by sound carries no shape, so sprinting at one means sprinting at a
+ * teammate's footsteps — the hunter pack, back again and faster.
+ */
+function isFleeing(entity: ObservedEntity): boolean {
+  return entity.hasLineOfSight && entity.disguised === true && entity.movedRecently === true;
+}
+
 /** The closest sensed contact the caller cares about, or null if none qualifies. */
 function nearest(
   entities: readonly ObservedEntity[],
@@ -39,7 +54,7 @@ function nearest(
  *   explore to find props rather than read `role` off them. A hunter is never
  *   disguised, so a contact *seen* to wear no disguise is a teammate and is
  *   neither shot at nor walked up to; a disguise standing still is shot on
- *   sight, and one still moving is chased down (`inspect`) until it settles. A
+ *   sight, and one still moving is run down (`inspect`) until it settles. A
  *   contact known only by sound carries no shape at all and is investigated
  *   whoever it turns out to be — a player hearing footsteps knows no better.
  *
@@ -74,7 +89,7 @@ export class ScriptedPolicy implements Policy {
     const visible = candidates.find((e) => e.hasLineOfSight);
     if (visible) return { kind: "shootTarget", targetId: visible.id, seq };
     const nearest = candidates[0];
-    if (nearest) return { kind: "inspect", targetId: nearest.id, seq };
+    if (nearest) return { kind: "inspect", targetId: nearest.id, run: isFleeing(nearest), seq };
     return { kind: "patrol", seq };
   }
 
@@ -89,12 +104,12 @@ export class ScriptedPolicy implements Policy {
       .sort((a, b) => a.distance - b.distance);
     if (shootable[0]) return { kind: "shootTarget", targetId: shootable[0].id, seq };
     const suspect = this.nearestSuspect(obs);
-    if (suspect) return { kind: "inspect", targetId: suspect.id, seq };
+    if (suspect) return { kind: "inspect", targetId: suspect.id, run: isFleeing(suspect), seq };
     return { kind: "patrol", seq };
   }
 
   /**
-   * The nearest contact worth walking up to: a disguise that is out of range or
+   * The nearest contact worth going to look at: a disguise that is out of range or
    * still moving, or a contact whose shape is unknown because it was only heard.
    *
    * Only a contact *seen* to be undisguised is excluded, and that exclusion is

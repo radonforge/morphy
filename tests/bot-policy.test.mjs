@@ -125,6 +125,33 @@ test("a hunter chases a disguise it cannot shoot yet, however long it takes", as
 });
 
 /**
+ * A walking hunter loses 2.5 m/s to a panicking prop, and a prop on the move is
+ * never `shootable`, so the contact a hunter most needs to catch was the one it
+ * could only ever walk after.
+ */
+test("a hunter runs down a disguise it can see running", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = (await run(policy, 1, () => [mover("prop-a", 6)]))[0];
+  assert.equal(intent.kind, "inspect");
+  assert.equal(intent.run, true);
+});
+
+/**
+ * The gate that keeps the chase from becoming a sprint at everything. A contact
+ * known only by sound carries no shape, so it could be a teammate — running at
+ * every noise would rebuild the hunter pack, and faster than before.
+ */
+test("a hunter walks to a suspect it has not seen run", async () => {
+  const bySound = (await run(new ScriptedPolicy(DIFFICULTY), 1, () => [heard("noise", 6)]))[0];
+  assert.equal(bySound.kind, "inspect");
+  assert.equal(bySound.run, false, "a contact known only by sound is approached at walking pace");
+
+  const still = (await run(new ScriptedPolicy(DIFFICULTY), 1, () => [contact("prop-b", 40)]))[0];
+  assert.equal(still.kind, "inspect");
+  assert.equal(still.run, false, "a disguise standing still out of range is not run at");
+});
+
+/**
  * The fairness half of the shape signal: a player who only hears footsteps
  * cannot tell a teammate from a prop, so neither may a bot. A heard contact
  * carries no shape, and is investigated whoever it turns out to be.

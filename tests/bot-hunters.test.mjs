@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { BotDriver } from "../packages/bot/src/driver.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
+import { MOVE_SPEED, RUN_MULTIPLIER_PROP } from "../packages/shared/src/index.ts";
 
 const DIFFICULTY = 0.6;
 const TICK_MS = 50;
@@ -10,7 +11,28 @@ const TICKS = 400;
 const MIN_TRAVEL = 15;
 const MIN_DECISIONS = 10;
 
-const hunter = (id, spawn) => ({
+const CHASE_WARMUP_TICKS = 40;
+const CHASE_TICKS = 160;
+const CHASE_START_GAP = 8;
+const PROP_RUN_SPEED = MOVE_SPEED * RUN_MULTIPLIER_PROP;
+
+/**
+ * An open arena, long enough to hold a chase at a prop's top speed. The question
+ * is what pace the two sides move at, so nothing is put between them: a lost
+ * target here would be a geometry result, not a pace one.
+ */
+const ARENA = {
+  id: "arena",
+  bounds: { min: { x: -10, y: 0, z: -20 }, max: { x: 150, y: 10, z: 20 } },
+  spawnPoints: { props: [{ x: 0, y: 0, z: 0 }] },
+  colliders: [],
+  tiles: [],
+  scenery: [],
+  props: [],
+  propCatalog: [],
+};
+
+const body = (id, spawn, over = {}) => ({
   id,
   name: id,
   x: spawn.x,
@@ -24,7 +46,10 @@ const hunter = (id, spawn) => ({
   kills: 0,
   propType: "",
   ready: true,
+  ...over,
 });
+
+const hunter = (id, spawn) => body(id, spawn);
 
 /** The real policy, with every (observation, intent) pair kept for inspection. */
 function recordingPolicy(log) {
@@ -120,4 +145,65 @@ test("two hunter bots left alone never target each other on sight", async () => 
       `bot ${index + 1} kept moving (travelled ${distance.toFixed(1)}m, expected > ${MIN_TRAVEL}m)`,
     );
   }
+});
+
+/**
+ * A hunter closing on a disguise that runs. The two motions used to move at
+ * different speeds: `inspect` walked at `MOVE_SPEED` while a panicking prop ran
+ * at `MOVE_SPEED * RUN_MULTIPLIER_PROP`, so the gap opened at 2.5 m/s for as
+ * long as the prop kept going — and a fleeing prop is never `shootable`, so
+ * `inspect` is the only path a hunter has to it.
+ *
+ * The quarry is a bare body rather than a second policy because the claim under
+ * test is about a prop at *top* speed. A real prop slows to a walk the moment it
+ * breaks contact, which is the case that was never broken.
+ *
+ * Measured from the end of a warm-up rather than from the start: the hunter
+ * spends its first second on the bootstrap patrol and one shot at a contact it
+ * has not yet seen move, and losing ground before the chase begins is not what
+ * this is about.
+ */
+test("a hunter closes on a disguise running at a prop's top speed", async () => {
+  const log = [];
+  const driver = driverFor("Alpha", ARENA, log);
+  const self = body("bot:1", { x: 0, y: 0, z: 0 });
+  const quarry = body(
+    "bot:2",
+    { x: CHASE_START_GAP, y: 0, z: 0 },
+    {
+      role: "prop",
+      propType: "crate",
+    },
+  );
+
+  let now = 1_000;
+  const chase = async (ticks) => {
+    for (let tick = 0; tick < ticks; tick++) {
+      now += TICK_MS;
+      const world = { phase: "hunting", winner: "", self, others: [quarry], decoys: [] };
+      const action = driver.tick(world, now);
+      if (action.input) {
+        self.x = action.input.x;
+        self.z = action.input.z;
+        self.rot = action.input.rot;
+        self.aim = action.input.aim;
+      }
+      quarry.x += PROP_RUN_SPEED * (TICK_MS / 1000);
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    return Math.hypot(quarry.x - self.x, quarry.z - self.z);
+  };
+
+  const engaged = await chase(CHASE_WARMUP_TICKS);
+  const finished = await chase(CHASE_TICKS);
+
+  await driver.stop();
+
+  const running = log.filter(({ intent }) => intent.kind === "inspect" && intent.run === true);
+  assert.ok(running.length > 0, "the hunter decided to run the disguise down, not walk after it");
+
+  assert.ok(
+    finished < engaged,
+    `the hunter gained ground on a running prop (gap ${finished.toFixed(1)}m, was ${engaged.toFixed(1)}m)`,
+  );
 });
