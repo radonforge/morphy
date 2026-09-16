@@ -28,12 +28,15 @@ const HEADING_DAMP = 1e-8;
  * duration. Integrating it would fling the player across the map, held input
  * and all. Time past this bound is deliberately never simulated.
  *
- * Capping the frame also caps one step's displacement, which is what keeps
- * collision sound: the integrator tests the position it lands on rather than
- * the segment it crossed, so it would miss a collider narrower than a step.
- * `tests/client-movement.test.mjs` pins that margin against the real maps —
- * if a future prop is ever thin enough to slip through, that test fails rather
- * than the player quietly walking through a wall.
+ * Capping the frame also caps one step's displacement, which is what keeps a
+ * collider from being skipped entirely: the integrator tests the position it
+ * lands on rather than the segment it crossed, so a box narrower than a step
+ * could fall between two frames without ever being touched.
+ * `tests/client-movement.test.mjs` pins that margin against the real maps — if
+ * a future prop is ever thin enough to slip through, that test fails rather
+ * than the player quietly walking through a wall. Landing *inside* a box is a
+ * separate matter, and {@link resolveColliders} settles it by returning the
+ * body to the side it approached from.
  */
 const MAX_FRAME_SECONDS = 0.1;
 
@@ -147,14 +150,72 @@ function ceilingHeightAt(x: number, z: number, footY: number, colliders: ObbColl
   return best;
 }
 
+const SEGMENT_EPSILON = 1e-12;
+
+/**
+ * Which face of a box, in its own frame, a body travelling from (`fx`, `fz`) to
+ * (`x`, `z`) entered the material through, or null when the path never passes
+ * through it. A plain slab clip: the axis whose near edge is met last is the one
+ * the body came in by. Asking the path rather than the endpoint is what tells a
+ * body that walked *through* a wall from one that merely rounded its end.
+ */
+function entryFace(
+  fx: number,
+  fz: number,
+  x: number,
+  z: number,
+  hx: number,
+  hz: number,
+): "x" | "z" | null {
+  const dx = x - fx;
+  const dz = z - fz;
+  let near = 0;
+  let far = 1;
+  let face: "x" | "z" | null = null;
+  if (Math.abs(dx) < SEGMENT_EPSILON) {
+    if (Math.abs(fx) > hx) return null;
+  } else {
+    const lo = Math.min((-hx - fx) / dx, (hx - fx) / dx);
+    const hi = Math.max((-hx - fx) / dx, (hx - fx) / dx);
+    if (lo > near) {
+      near = lo;
+      face = "x";
+    }
+    if (hi < far) far = hi;
+    if (near > far) return null;
+  }
+  if (Math.abs(dz) < SEGMENT_EPSILON) {
+    if (Math.abs(fz) > hz) return null;
+  } else {
+    const lo = Math.min((-hz - fz) / dz, (hz - fz) / dz);
+    const hi = Math.max((-hz - fz) / dz, (hz - fz) / dz);
+    if (lo > near) {
+      near = lo;
+      face = "z";
+    }
+    if (hi < far) far = hi;
+    if (near > far) return null;
+  }
+  return face;
+}
+
 /**
  * Push the body's footprint circle out of every solid box overlapping its
  * vertical span. Boxes whose top is within a step of the feet are walkable
  * (handled by {@link supportHeightAt}); boxes above the head are ignored.
+ *
+ * `from` is where the body stood at the start of the frame, and the path it
+ * took from there decides which side of a box it is returned to. Judging by the
+ * landing position alone is what let a body cross a prop: one long frame, or a
+ * shove off a player standing almost on top of it, can carry the centre past a
+ * box's midline, and the nearest face is then the far one — so the body gets
+ * helpfully placed on the other side of the crate it just ran into. A body
+ * whose path went through a box is put back against the face it came in by.
  */
 export function resolveColliders(
   body: { x: number; y: number; z: number },
   colliders: ObbCollider[],
+  from: { x: number; z: number },
 ): void {
   for (const c of colliders) {
     if (c.yMax <= body.y + STEP_HEIGHT || c.yMin >= body.y + PLAYER_HEIGHT) continue;
@@ -167,24 +228,35 @@ export function resolveColliders(
     const ox = lx - nx;
     const oz = lz - nz;
     const distSq = ox * ox + oz * oz;
-    if (distSq >= PLAYER_RADIUS * PLAYER_RADIUS) continue;
+    const fdx = from.x - c.x;
+    const fdz = from.z - c.z;
+    const flx = fdx * c.cos - fdz * c.sin;
+    const flz = fdx * c.sin + fdz * c.cos;
+    const face = entryFace(flx, flz, lx, lz, c.hx, c.hz);
+    if (face === null && distSq >= PLAYER_RADIUS * PLAYER_RADIUS) continue;
     let pushX = 0;
     let pushZ = 0;
-    if (distSq > 1e-8) {
-      const dist = Math.sqrt(distSq);
-      const push = PLAYER_RADIUS - dist;
-      pushX = (ox / dist) * push;
-      pushZ = (oz / dist) * push;
+    if (face === "x") {
+      pushX = Math.sign(flx) * (c.hx + PLAYER_RADIUS) - lx;
+    } else if (face === "z") {
+      pushZ = Math.sign(flz) * (c.hz + PLAYER_RADIUS) - lz;
     } else {
-      const toMinX = lx + c.hx;
-      const toMaxX = c.hx - lx;
-      const toMinZ = lz + c.hz;
-      const toMaxZ = c.hz - lz;
-      const minPen = Math.min(toMinX, toMaxX, toMinZ, toMaxZ);
-      if (minPen === toMinX) pushX = -(toMinX + PLAYER_RADIUS);
-      else if (minPen === toMaxX) pushX = toMaxX + PLAYER_RADIUS;
-      else if (minPen === toMinZ) pushZ = -(toMinZ + PLAYER_RADIUS);
-      else pushZ = toMaxZ + PLAYER_RADIUS;
+      if (distSq > 1e-8) {
+        const dist = Math.sqrt(distSq);
+        const push = PLAYER_RADIUS - dist;
+        pushX = (ox / dist) * push;
+        pushZ = (oz / dist) * push;
+      } else {
+        const toMinX = lx + c.hx;
+        const toMaxX = c.hx - lx;
+        const toMinZ = lz + c.hz;
+        const toMaxZ = c.hz - lz;
+        const minPen = Math.min(toMinX, toMaxX, toMinZ, toMaxZ);
+        if (minPen === toMinX) pushX = -(toMinX + PLAYER_RADIUS);
+        else if (minPen === toMaxX) pushX = toMaxX + PLAYER_RADIUS;
+        else if (minPen === toMinZ) pushZ = -(toMinZ + PLAYER_RADIUS);
+        else pushZ = toMaxZ + PLAYER_RADIUS;
+      }
     }
     body.x += pushX * c.cos + pushZ * c.sin;
     body.z += -pushX * c.sin + pushZ * c.cos;

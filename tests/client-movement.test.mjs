@@ -6,6 +6,7 @@ import {
   MAX_BODY_SPEED,
   MAX_FRAME_DISPLACEMENT,
   PLAYER_RADIUS,
+  PLAYER_SEPARATION,
   resolveColliders,
   STEP_HEIGHT,
 } from "../packages/client/src/game/movement.ts";
@@ -55,13 +56,14 @@ const WALL = {
 
 /** One frame the way Scene.tsx spends it: integrate, then settle once. */
 function frame(state, input, scene, seconds) {
+  const cameFrom = { x: state.x, z: state.z };
   const result = advanceMovement(state, input, scene, seconds);
-  resolveColliders(state, scene.colliders);
+  resolveColliders(state, scene.colliders, cameFrom);
   clampToBounds(state, scene.bounds);
   return result;
 }
 
-test("no collider in any map is narrow enough for one frame to cross", () => {
+test("no collider in any map is narrow enough for one frame to skip untouched", () => {
   let thinnest = Infinity;
   let where = "";
   for (const mapId of MAP_IDS) {
@@ -172,4 +174,116 @@ test("the body is held inside the map bounds", () => {
   const scene = world();
   for (let i = 0; i < 600; i++) frame(state, running(), scene, 1 / 60);
   assert.ok(state.z >= BOUNDS.min.z + PLAYER_RADIUS - 1e-6, `escaped to z=${state.z}`);
+});
+
+/** The station's barrel, the sort of waist-high prop a map is littered with,
+ *  as the oriented box `Scene.buildColliders` would hand the resolver. */
+function barrel() {
+  const part = buildMap("station", 0).propCatalog.find((def) => def.id === "barrel").parts[0];
+  return {
+    x: 0,
+    z: 0,
+    cos: 1,
+    sin: 0,
+    hx: part.size.x / 2,
+    hz: part.size.z / 2,
+    yMin: part.position.y - part.size.y / 2,
+    yMax: part.position.y + part.size.y / 2,
+  };
+}
+
+/**
+ * Not skipping a prop is not the same as being stopped by it. One long frame
+ * carries the body 0.85 m, and a barrel only blocks 0.7 m from its near face to
+ * its midline — so the body lands *inside* the barrel, past its centre, and a
+ * resolver that picks the nearest face puts it down on the far side.
+ */
+test("a long frame cannot carry a body through a real map prop", () => {
+  const prop = barrel();
+  const start = prop.hz + PLAYER_RADIUS + 0.001;
+  const state = body({ z: start, vz: -MAX_BODY_SPEED });
+  frame(state, running(), world([prop]), 0.25);
+  assert.ok(
+    state.z >= prop.hz,
+    `expected the body to stay on the near side of the barrel, got z=${state.z}`,
+  );
+});
+
+/**
+ * The same crossing without a long frame: Scene.tsx separates overlapping
+ * players before it resolves the world, and that shove is bounded by
+ * `PLAYER_SEPARATION` rather than by the frame clock, so it reaches past a
+ * barrel's midline no matter how fast the machine renders.
+ */
+test("being shoved off another player cannot push a body through a prop", () => {
+  const prop = barrel();
+  const state = body({ z: prop.hz + PLAYER_RADIUS });
+  const cameFrom = { x: state.x, z: state.z };
+  const other = { x: 0, z: state.z + 0.05 };
+  const gap = state.z - other.z;
+  state.z += Math.sign(gap) * (PLAYER_SEPARATION - Math.abs(gap));
+  assert.ok(state.z < 0, "the shove must land the body past the barrel's midline");
+  resolveColliders(state, [prop], cameFrom);
+  assert.ok(
+    state.z >= prop.hz,
+    `expected the body to be pushed back out the side it came from, got z=${state.z}`,
+  );
+});
+
+/**
+ * Walking round the end of a wall reaches the far side legitimately, brushing
+ * the corner on the way. Reading that as a crossing would snatch the body back
+ * to where it set off from.
+ */
+test("rounding the end of a wall is not mistaken for crossing it", () => {
+  const state = body({ x: WALL.hx + 0.2, z: WALL_Z - 0.3 });
+  resolveColliders(state, [WALL], { x: WALL.hx + 0.2, z: WALL_Z + 0.3 });
+  assert.ok(
+    state.z < WALL_Z,
+    `expected the body to keep the far side it walked round to, got z=${state.z}`,
+  );
+});
+
+/**
+ * A charge at a corner rather than square at a face. The body enters the prop
+ * diagonally, so neither axis on its own shows it crossing anything: only the
+ * path it took through the material does.
+ */
+test("a diagonal charge cannot carry a body past a prop's corner", () => {
+  const prop = barrel();
+  const diagonal = Math.SQRT1_2;
+  const reach = diagonal * prop.hx + diagonal * prop.hz + PLAYER_RADIUS;
+  const state = body({
+    x: diagonal * reach,
+    z: diagonal * reach,
+    vx: -diagonal * MAX_BODY_SPEED,
+    vz: -diagonal * MAX_BODY_SPEED,
+  });
+  frame(state, running({ yaw: Math.PI / 4 }), world([prop]), 0.25);
+  assert.ok(
+    diagonal * state.x + diagonal * state.z > 0,
+    `expected the body to hold the side it charged from, got (${state.x}, ${state.z})`,
+  );
+});
+
+/**
+ * Sprinting into a prop and being shoved off a player in the same frame moves
+ * the body further than the prop is wide, so it lands clear on the far side
+ * touching nothing. Overlap alone cannot catch that one.
+ */
+test("a body that clears a prop entirely in one frame is still stopped by it", () => {
+  const prop = barrel();
+  const state = body({ z: prop.hz + PLAYER_RADIUS, vz: -MAX_BODY_SPEED });
+  const cameFrom = { x: state.x, z: state.z };
+  advanceMovement(state, running(), world([prop]), 0.25);
+  state.z -= PLAYER_SEPARATION - 0.05;
+  assert.ok(
+    state.z < -(prop.hz + PLAYER_RADIUS),
+    "the frame must land the body clear of the barrel on the far side",
+  );
+  resolveColliders(state, [prop], cameFrom);
+  assert.ok(
+    state.z >= prop.hz,
+    `expected the body to be put back against the face it came in by, got z=${state.z}`,
+  );
 });

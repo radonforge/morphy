@@ -1781,6 +1781,8 @@ function LocalPlayer({
 
     const { yaw, pitch } = look.current;
 
+    const cameFrom = { x: body.x, z: body.z };
+
     let support: number;
     let horizSpeed = 0;
     let sprinting = false;
@@ -1851,7 +1853,7 @@ function LocalPlayer({
           body.z += (dz / dist) * push;
         }
       }
-      resolveColliders(body, colliders);
+      resolveColliders(body, colliders, cameFrom);
       clampToBounds(body, map.bounds);
     }
 
