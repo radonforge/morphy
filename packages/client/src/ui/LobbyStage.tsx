@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { playUiHover } from "../game/audio";
 import { MAP_THEME_BASE } from "../theme";
 import { LOBBY_DIORAMAS, type SetPiece } from "./lobbyDioramas";
+import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
 
 const avatarModel = (id: AvatarId): string => `/models/pets/animal-${id}.glb`;
 
@@ -15,14 +16,11 @@ const AVATAR_YAW = 0.35;
 const MODEL_MIN_SIZE = 0.001;
 const CLIP_FADE_SECONDS = 0.3;
 
-const SQUAD_MAX = 3;
 const STAGE_FRONT_X = -0.7;
 const STAGE_FRONT_Z = 0.35;
 const STAGE_STEP_X = 1.2;
 const STAGE_STEP_Z = 0.8;
 const STAGE_YAW = 0.15;
-
-export const STAGE_MAX_ACTORS = 1 + SQUAD_MAX;
 
 const NAMEPLATE_Y = AVATAR_HEIGHT + 0.42;
 const NAMEPLATE_FONT_SIZE = 0.14;
@@ -32,13 +30,6 @@ const NAMEPLATE_OUTLINE_WIDTH = 0.015;
 
 const CHIP_Y = AVATAR_HEIGHT + 0.12;
 const CHIP_Z_INDEX = 2;
-
-export interface StageActor {
-  id: string;
-  name: string;
-  avatar: AvatarId;
-  isHost: boolean;
-}
 
 interface StageSlot {
   x: number;
