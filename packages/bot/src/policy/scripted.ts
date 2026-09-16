@@ -128,6 +128,7 @@ export class ScriptedPolicy implements Policy {
   private prop(obs: Observation): Intent {
     const seq = obs.seq;
     if (obs.phase !== "hiding" && obs.phase !== "hunting") return { kind: "idle", seq };
+    if (obs.pathBlocked) this.clearHidePlan();
     this.ensureHidePlan(obs);
     const spot = this.hideSpot;
     if (!spot) return { kind: "idle", seq };

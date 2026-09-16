@@ -112,6 +112,15 @@ export class PathFollower {
     return this.index < this.waypoints.length;
   }
 
+  /**
+   * True once every waypoint of a planned path has been retired. Distinct from
+   * `!hasPath`, which is also true when planning failed and left no path at
+   * all — the caller must not read a failure as an arrival.
+   */
+  get consumed(): boolean {
+    return this.waypoints.length > 0 && this.index >= this.waypoints.length;
+  }
+
   get goal(): Point2 | null {
     return this.waypoints.length > 0 ? this.waypoints[this.waypoints.length - 1]! : null;
   }

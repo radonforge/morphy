@@ -478,6 +478,12 @@ export class Reflex {
    * on a tight epsilon against the policy's exact coordinate — is what stops the
    * back-and-forth jitter when a hide spot lands on a cell centre or inside the
    * inflated furniture ring it can't quite touch.
+   *
+   * A goal that could not be planned at all leaves no path either, so settling
+   * is gated on a path having actually been walked. Treating a failed plan as
+   * an arrival parked the bot where it stood, and — since a settled bot stops
+   * calling `ensurePath` — froze the replan counter before it could ever reach
+   * `pathBlocked`, hiding the failure from the policy as well.
    */
   private runStatic(
     gx: number,
@@ -498,7 +504,7 @@ export class Reflex {
       this.steer(wp, run, role, dt);
       return;
     }
-    if (!this.pathBlocked) this.settle();
+    if (this.follower.consumed) this.settle();
   }
 
   private runPatrol(world: ReflexWorld, dt: number, now: number): void {
