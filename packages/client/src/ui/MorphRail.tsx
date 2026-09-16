@@ -5,6 +5,12 @@ import { AVATAR_COUNT, avatarIndex } from "./avatarCarousel";
 const STEP_BACK = -1;
 const STEP_FORWARD = 1;
 
+/**
+ * The avatar picker's controls. Every step commits immediately — to localStorage and, in a
+ * party, to the other members watching you morph on their own stage — so there is nothing to
+ * confirm on the way out and the button says "Close", not "Done". Giving it confirm wording
+ * would imply a cancel that does not exist: clicking away and Escape keep the choice too.
+ */
 export function MorphRail({
   avatar,
   onStep,
@@ -44,11 +50,11 @@ export function MorphRail({
       </button>
       <button
         type="button"
-        className="morph-rail-done"
+        className="morph-rail-close"
         onClick={onClose}
         onPointerEnter={playUiHover}
       >
-        Done
+        Close
       </button>
     </div>
   );

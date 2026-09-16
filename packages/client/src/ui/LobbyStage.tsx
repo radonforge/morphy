@@ -43,6 +43,7 @@ const GHOST_OFFSET_X = 1.5;
 const GHOST_OFFSET_Z = -1.2;
 const GHOST_HEIGHT = AVATAR_HEIGHT * 0.74;
 const GHOST_OPACITY = 0.28;
+const GHOST_FADE_S = 0.28;
 
 const MORPH_DURATION_S = 0.5;
 const MORPH_POP_DURATION_S = 0.35;
@@ -58,6 +59,24 @@ const MORPH_SHARD_SPAWN_RADIUS = 1.25;
 const MORPH_SHARD_SPAWN_HEIGHT_MULT = 1.5;
 const MORPH_SHARD_SPIN = 9;
 const POP_SETTLED = Number.POSITIVE_INFINITY;
+
+/**
+ * True for `STAGE_BOOST_MS` after every change of `beat`. The stage idles at 30 fps, which is
+ * plenty for a parallax drift but coarse for the morph dolly and the pop that follows a step,
+ * so those get `STAGE_BOOST_FPS` for as long as they are actually running and no longer.
+ */
+function useMotionBoost(beat: string): boolean {
+  const [boosted, setBoosted] = useState(false);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: beat is a trigger, not read in the body — each change restarts the boost window.
+  useEffect(() => {
+    setBoosted(true);
+    const id = setTimeout(() => setBoosted(false), STAGE_BOOST_MS);
+    return () => clearTimeout(id);
+  }, [beat]);
+
+  return boosted;
+}
 
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(() => window.matchMedia(REDUCED_MOTION_QUERY).matches);
@@ -113,6 +132,8 @@ function computeStageSlots(count: number, inParty: boolean): StageSlot[] {
 const CAMERA_FOV = 38;
 const CAMERA_BASE: [number, number, number] = [0, 1.5, 6];
 const STAGE_MAX_FPS = 30;
+const STAGE_BOOST_FPS = 60;
+const STAGE_BOOST_MS = 900;
 const STAGE_DPR: [number, number] = [1, 1.25];
 const CAMERA_LOOK_AT = new THREE.Vector3(0, 1.05, 0);
 const PARALLAX_X = 0.55;
@@ -181,6 +202,13 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
   },
 };
 
+/**
+ * One avatar on the stage. `materialize` is read **at mount only** — the caller keys this
+ * component by avatar id, so mounting while morph mode is on *is* the signal that a step
+ * produced this shape, and it pops in from nothing. Feeding the live prop to the scale
+ * instead would blank the avatar already standing there the moment the picker opens, since
+ * the pop clock has long since settled and would never grow it back.
+ */
 function AvatarActor({
   avatar,
   slot,
@@ -194,7 +222,8 @@ function AvatarActor({
 }) {
   const group = useRef<THREE.Group>(null);
   const pop = useRef<THREE.Group>(null);
-  const popAge = useRef(materialize ? 0 : POP_SETTLED);
+  const popIn = useRef(materialize).current;
+  const popAge = useRef(popIn ? 0 : POP_SETTLED);
   const { scene, animations } = useGLTF(avatarModel(avatar));
   const object = useMemo(() => scene.clone(true), [scene]);
   const { actions, mixer } = useAnimations(animations, group);
@@ -269,7 +298,7 @@ function AvatarActor({
         })
       }
     >
-      <group ref={pop} scale={materialize ? 0 : 1}>
+      <group ref={pop} scale={popIn ? 0 : 1}>
         <group
           ref={group}
           position={[fit.offset[0], fit.offset[1], fit.offset[2]]}
@@ -285,6 +314,10 @@ function AvatarActor({
 /**
  * A carousel neighbour: the real GLB under an additive cyan override, so it reads as matter
  * that has not formed yet. Rendering it is also what warms the cache for the next morph.
+ *
+ * The fade is clocked from mount, not from the material, and the opacity is rewritten every
+ * frame: stepping swaps in a new GLB (and so a new material) mid-carousel, and restarting the
+ * fade there would blink both neighbours out on every step.
  */
 function AvatarGhost({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
   const { scene } = useGLTF(avatarModel(avatar));
@@ -304,7 +337,14 @@ function AvatarGhost({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
     return { object, material, fit: fitToHeight(object, GHOST_HEIGHT) };
   }, [scene]);
 
+  const fadeAge = useRef(0);
+
   useEffect(() => () => ghost.material.dispose(), [ghost]);
+
+  useFrame((_, delta) => {
+    fadeAge.current = Math.min(GHOST_FADE_S, fadeAge.current + delta);
+    ghost.material.opacity = GHOST_OPACITY * (fadeAge.current / GHOST_FADE_S);
+  });
 
   return (
     <group position={[slot.x, 0, slot.z]} rotation-y={slot.yaw}>
@@ -553,10 +593,17 @@ function Atmosphere({ theme }: { theme: StageTheme }) {
   return null;
 }
 
+/**
+ * Drives the stage camera: pointer parallax in the menu, a dolly onto `focus` in morph mode.
+ * The aim point is damped alongside the position rather than set outright — snapping it the
+ * frame morph mode opens swings the camera ~13° in one step, which reads as a cut however
+ * smoothly the position travels.
+ */
 function ParallaxRig({ morphMode, focus }: { morphMode: boolean; focus: StageSlot }) {
   const camera = useThree((state) => state.camera);
   const reduced = useReducedMotion();
   const scratch = useMemo(() => ({ target: new THREE.Vector3(), look: new THREE.Vector3() }), []);
+  const aim = useMemo(() => CAMERA_LOOK_AT.clone(), []);
 
   useFrame((state, delta) => {
     if (morphMode) {
@@ -571,8 +618,10 @@ function ParallaxRig({ morphMode, focus }: { morphMode: boolean; focus: StageSlo
       scratch.look.copy(CAMERA_LOOK_AT);
     }
     const damp = morphMode ? MORPH_DOLLY_DAMP : PARALLAX_DAMP;
-    camera.position.lerp(scratch.target, reduced ? 1 : 1 - Math.exp(-damp * delta));
-    camera.lookAt(scratch.look);
+    const k = reduced ? 1 : 1 - Math.exp(-damp * delta);
+    camera.position.lerp(scratch.target, k);
+    aim.lerp(scratch.look, k);
+    camera.lookAt(aim);
   });
   return null;
 }
@@ -615,6 +664,7 @@ export function LobbyStage({
   const self = actors[0];
   const neighbors = self ? avatarNeighbors(self.avatar) : null;
   const animateMorph = morphMode && !reduced;
+  const boosted = useMotionBoost(`${morphMode}:${self?.avatar ?? ""}`);
   return (
     <div className="menu-canvas" aria-hidden="true">
       <Canvas
@@ -623,7 +673,7 @@ export function LobbyStage({
         dpr={STAGE_DPR}
         camera={{ fov: CAMERA_FOV, position: CAMERA_BASE }}
       >
-        <FrameLimiter fps={STAGE_MAX_FPS} />
+        <FrameLimiter fps={boosted ? STAGE_BOOST_FPS : STAGE_MAX_FPS} />
         <Atmosphere theme={theme} />
         <ParallaxRig morphMode={morphMode} focus={selfSlot} />
         {theme.sky === "stars" && (
