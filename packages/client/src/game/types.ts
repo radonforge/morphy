@@ -17,6 +17,7 @@ export interface RemotePlayerView {
   decoysLeft: number;
   ready: boolean;
   avatar: string;
+  weapon: WeaponId;
   ping: number;
   connected: boolean;
 }
@@ -32,20 +33,31 @@ export interface DecoyView {
   propType: string;
 }
 
-export interface PlayerMeta {
-  name: string;
-  role: Role;
-  alive: boolean;
-  hp: number;
-  kills: number;
-  propType: string;
-  rerollsLeft: number;
-  decoysLeft: number;
-  ready: boolean;
-  avatar: string;
-  ping: number;
-  connected: boolean;
-}
+/**
+ * The player fields lifted from the schema into React state. This list is the
+ * single source of truth: it drives the per-field subscriptions, the snapshot
+ * type and the equality check, so a field added here cannot be silently left
+ * out of one of the three.
+ */
+export const PLAYER_META_FIELDS = [
+  "name",
+  "role",
+  "alive",
+  "hp",
+  "kills",
+  "propType",
+  "rerollsLeft",
+  "decoysLeft",
+  "ready",
+  "avatar",
+  "weapon",
+  "ping",
+  "connected",
+] as const;
+
+export type PlayerMetaField = (typeof PLAYER_META_FIELDS)[number];
+
+export type PlayerMeta = Pick<RemotePlayerView, PlayerMetaField>;
 
 export type MetaMap = Record<string, PlayerMeta>;
 
