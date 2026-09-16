@@ -42,3 +42,6 @@ export const MAP_GLASS: Record<MapId, string> = {
   mars: "rgba(26, 15, 10, 0.76)",
   urban: "rgba(11, 19, 31, 0.82)",
 };
+
+/** Cyan of the materialize effect, shared by the in-game morph burst and the lobby carousel. */
+export const MORPH_COLOR = "#7de8ff";

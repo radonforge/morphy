@@ -32,7 +32,7 @@ import { Billboard, Sky, Text, useGLTF } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { MAP_THEME_BASE } from "../theme";
+import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
 import {
   advanceMovement,
@@ -110,7 +110,6 @@ const TAUNT_PULSE_MS = 500;
 const TAUNT_AMPLITUDE = 0.18;
 const TRACER_TTL = 0.12;
 const MAX_TRACERS = 16;
-const MORPH_COLOR = "#7de8ff";
 const MORPH_MAX_BURSTS = 6;
 const MORPH_DURATION_S = 0.5;
 const MORPH_BEAM_DURATION_S = 0.3;
