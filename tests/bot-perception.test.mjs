@@ -115,3 +115,65 @@ test("full visibility keeps ground truth even without line of sight", () => {
   assert.equal(seen.z, 1.9);
   assert.equal(seen.disguised, true, "the anchor reads shape through the wall too");
 });
+
+/** Far enough past the wall to clear both the sight line and the hearing radius. */
+const GONE = contact(16, 3);
+const IN_PLAIN_SIGHT = contact(3, 0);
+
+test("a contact lost from sight and earshot is tracked to where it was, not where it is", () => {
+  const reflex = ready("limited");
+  const seen = world(IN_PLAIN_SIGHT);
+  reflex.buildObservation(seen, 1, 1_000);
+  reflex.executeIntent(
+    { kind: "inspect", targetId: "target", run: false, seq: 1 },
+    seen,
+    0.05,
+    1_050,
+  );
+  assert.deepEqual(
+    reflex.pathGoal,
+    { x: 3, z: 0 },
+    "a contact in plain sight is approached directly",
+  );
+
+  const lost = world(GONE);
+  assert.equal(
+    reflex.buildObservation(lost, 2, 1_100).entities.length,
+    0,
+    "it is out of both senses",
+  );
+  reflex.executeIntent(
+    { kind: "inspect", targetId: "target", run: false, seq: 1 },
+    lost,
+    0.05,
+    1_150,
+  );
+
+  assert.deepEqual(
+    reflex.pathGoal,
+    { x: 3, z: 0 },
+    "the bot still searches the last place it saw it",
+  );
+});
+
+test("a hunter does not chase a target it has never sensed", () => {
+  const reflex = ready("limited");
+  const lost = world(GONE);
+  assert.equal(reflex.buildObservation(lost, 1, 1_000).entities.length, 0);
+  reflex.executeIntent({ kind: "shootTarget", targetId: "target", seq: 1 }, lost, 0.05, 1_050);
+
+  assert.equal(reflex.pathGoal, null, "nothing was ever perceived, so there is nowhere to go");
+});
+
+test("full visibility still paths to ground truth", () => {
+  const reflex = ready("full");
+  const lost = world(GONE);
+  reflex.executeIntent(
+    { kind: "inspect", targetId: "target", run: false, seq: 1 },
+    lost,
+    0.05,
+    1_050,
+  );
+
+  assert.deepEqual(reflex.pathGoal, { x: 16, z: 3 }, "the measuring anchor is untouched");
+});
