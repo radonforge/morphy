@@ -181,6 +181,13 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
   },
 };
 
+/**
+ * One avatar on the stage. `materialize` is read **at mount only** — the caller keys this
+ * component by avatar id, so mounting while morph mode is on *is* the signal that a step
+ * produced this shape, and it pops in from nothing. Feeding the live prop to the scale
+ * instead would blank the avatar already standing there the moment the picker opens, since
+ * the pop clock has long since settled and would never grow it back.
+ */
 function AvatarActor({
   avatar,
   slot,
@@ -194,7 +201,8 @@ function AvatarActor({
 }) {
   const group = useRef<THREE.Group>(null);
   const pop = useRef<THREE.Group>(null);
-  const popAge = useRef(materialize ? 0 : POP_SETTLED);
+  const popIn = useRef(materialize).current;
+  const popAge = useRef(popIn ? 0 : POP_SETTLED);
   const { scene, animations } = useGLTF(avatarModel(avatar));
   const object = useMemo(() => scene.clone(true), [scene]);
   const { actions, mixer } = useAnimations(animations, group);
@@ -269,7 +277,7 @@ function AvatarActor({
         })
       }
     >
-      <group ref={pop} scale={materialize ? 0 : 1}>
+      <group ref={pop} scale={popIn ? 0 : 1}>
         <group
           ref={group}
           position={[fit.offset[0], fit.offset[1], fit.offset[2]]}
