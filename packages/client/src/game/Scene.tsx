@@ -59,20 +59,18 @@ function wrapAngle(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
 
-function applyTauntPulse(
-  group: THREE.Group,
-  pulses: TauntPulseRef,
-  id: string,
-  delta: number,
-): void {
-  const remaining = pulses.current.get(id) ?? 0;
-  if (remaining <= 0) {
+function applyTauntPulse(group: THREE.Group, pulses: TauntPulseRef, id: string): void {
+  const startedAt = pulses.current.get(id);
+  if (startedAt === undefined) {
     group.scale.setScalar(1);
     return;
   }
-  const next = Math.max(0, remaining - delta);
-  pulses.current.set(id, next);
-  const progress = 1 - next / TAUNT_PULSE_SECONDS;
+  const progress = (performance.now() - startedAt) / TAUNT_PULSE_MS;
+  if (progress >= 1) {
+    pulses.current.delete(id);
+    group.scale.setScalar(1);
+    return;
+  }
   group.scale.setScalar(1 + TAUNT_AMPLITUDE * Math.sin(progress * Math.PI));
 }
 
@@ -107,7 +105,7 @@ const CAMERA_SLAB_EPSILON = 1e-4;
 const CAMERA_OCCLUDER_BASE_MAX = 0.5;
 const CAMERA_OCCLUDER_TOP_MIN = 2.5;
 const REMOTE_DAMP = 0.0009;
-export const TAUNT_PULSE_SECONDS = 0.5;
+const TAUNT_PULSE_MS = 500;
 const TAUNT_AMPLITUDE = 0.18;
 const TRACER_TTL = 0.12;
 const MAX_TRACERS = 16;
@@ -777,11 +775,10 @@ function ShadowRefresh({
       }
     }
 
-    for (const remaining of tauntPulseRef.current.values()) {
-      if (remaining > 0) {
-        sinceChange.current = 0;
-        break;
-      }
+    const now = performance.now();
+    for (const [id, startedAt] of tauntPulseRef.current) {
+      if (now - startedAt >= TAUNT_PULSE_MS) tauntPulseRef.current.delete(id);
+      else sinceChange.current = 0;
     }
 
     if (sinceChange.current <= SHADOW_SETTLE_S || sinceRender.current >= SHADOW_HEARTBEAT_S) {
@@ -2005,7 +2002,7 @@ function LocalPlayer({
     if (group) {
       group.position.set(pos.x, pos.y, pos.z);
       group.rotation.y = role === "prop" && propType ? propRot.current : heading.current;
-      applyTauntPulse(group, tauntPulseRef, id, delta);
+      applyTauntPulse(group, tauntPulseRef, id);
     }
 
     const motion = motionRef.current;
@@ -2165,7 +2162,7 @@ function RemotePlayer({
     group.position.y += (view.y - group.position.y) * t;
     group.position.z += (view.z - group.position.z) * t;
     group.rotation.y = role === "prop" && propType ? view.propRot : view.rot;
-    applyTauntPulse(group, tauntPulseRef, view.id, delta);
+    applyTauntPulse(group, tauntPulseRef, view.id);
 
     const pose = renderPoses.current.get(view.id);
     if (pose) {

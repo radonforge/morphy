@@ -63,6 +63,14 @@ export type MetaMap = Record<string, PlayerMeta>;
 
 export type TeleportRef = { current: { x: number; z: number } | null };
 
+/**
+ * Taunt start times, as `performance.now()` milliseconds keyed by player id.
+ *
+ * Storing the start rather than the time left is what keeps a pulse from
+ * outliving its player: a remaining-time counter only reaches zero if something
+ * still renders that player's mesh, so a taunt interrupted by a leave or a
+ * death stayed positive forever and held the scene permanently "animating".
+ */
 export type TauntPulseRef = { readonly current: Map<string, number> };
 
 export interface ShotFx {
