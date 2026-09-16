@@ -181,9 +181,18 @@ export class ScriptedPolicy implements Policy {
    * per second without ever moving. Each blocked attempt swings the escape
    * further off the straight away-vector; once they are spent the prop stops
    * running, which is at least a reachable goal.
+   *
+   * Arrival has to release the plan as well, or the prop runs to its first
+   * escape point and stands there for the rest of the round: the reflex parks
+   * on a goal it has reached and only an intent it reads as *different* wakes
+   * it, so re-issuing the spot it is already standing on leaves it settled.
+   * The deflection count deliberately survives an arrival — resetting it would
+   * let a cornered prop cycle back through fresh escapes forever, and once the
+   * deflections are spent the fallback re-derives the prop's own position, so
+   * the re-issued goal is unchanged and nothing churns.
    */
   private ensureFleePlan(obs: Observation, threat: ObservedEntity): Spot {
-    if (this.fleeSpot && !obs.pathBlocked) return this.fleeSpot;
+    if (this.fleeSpot && !obs.pathBlocked && !obs.arrived) return this.fleeSpot;
     if (obs.pathBlocked) this.fleeDeflections += 1;
     this.fleeSpot =
       this.fleeDeflections > MAX_FLEE_DEFLECTIONS

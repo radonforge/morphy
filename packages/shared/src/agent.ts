@@ -112,6 +112,12 @@ export interface Observation {
   phase: Phase;
   /** True when the reflex could not path to the current intent's target. */
   pathBlocked: boolean;
+  /**
+   * True once the reflex has reached the current intent's target and parked
+   * there. A policy that re-issues the same goal while this is set gets a bot
+   * that stands still, because an unchanged goal never resets the reflex.
+   */
+  arrived: boolean;
   self: ObservedSelf;
   entities: ObservedEntity[];
   map: ObservedMap;

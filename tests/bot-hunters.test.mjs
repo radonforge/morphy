@@ -16,6 +16,11 @@ const CHASE_TICKS = 160;
 const CHASE_START_GAP = 8;
 const PROP_RUN_SPEED = MOVE_SPEED * RUN_MULTIPLIER_PROP;
 
+const FLEE_TICKS = 200;
+const FLEE_SETTLE_TICKS = 40;
+const FLEE_GAP = 3;
+const MIN_FLEE_TRAVEL = 20;
+
 /**
  * An open arena, long enough to hold a chase at a prop's top speed. The question
  * is what pace the two sides move at, so nothing is put between them: a lost
@@ -205,5 +210,50 @@ test("a hunter closes on a disguise running at a prop's top speed", async () => 
   assert.ok(
     finished < engaged,
     `the hunter gained ground on a running prop (gap ${finished.toFixed(1)}m, was ${engaged.toFixed(1)}m)`,
+  );
+});
+
+/**
+ * A prop running from a hunter that keeps pace three metres behind. Driver-level
+ * rather than policy-level because the failure needs all three parts: the policy
+ * re-issues the escape point it already sent, the driver reads the repeat as no
+ * change and leaves the reflex alone, and the reflex is parked on a goal it has
+ * reached. Each part is defensible on its own; together they stopped the prop
+ * dead at its first escape point with the hunter still on it.
+ *
+ * The hunter looks sideways so the deliberate freeze branch — hold still when a
+ * hunter is looking straight at you — never fires and the prop has no reason to
+ * stand still other than the defect.
+ */
+test("a prop under chase keeps fleeing past its first escape point", async () => {
+  const driver = driverFor("Prey", ARENA, []);
+  const self = body("bot:1", ARENA.spawnPoints.props[0], { role: "prop", propType: "barrel" });
+  const chaser = body("hunter:1", ARENA.spawnPoints.props[0], { rot: Math.PI / 2 });
+
+  let now = 1_000;
+  let settledAt = null;
+  for (let tick = 0; tick < FLEE_TICKS; tick++) {
+    now += TICK_MS;
+    chaser.x = self.x - FLEE_GAP;
+    chaser.z = self.z;
+    const action = driver.tick(
+      { phase: "hunting", winner: "", self, others: [chaser], decoys: [] },
+      now,
+    );
+    if (action.input) {
+      self.x = action.input.x;
+      self.z = action.input.z;
+      self.rot = action.input.rot;
+    }
+    if (tick === FLEE_SETTLE_TICKS) settledAt = { x: self.x, z: self.z };
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  await driver.stop();
+
+  const after = Math.hypot(self.x - settledAt.x, self.z - settledAt.z);
+  assert.ok(
+    after > MIN_FLEE_TRAVEL,
+    `expected the prop to keep running after reaching its first escape point, ` +
+      `got ${after.toFixed(1)}m in the ${FLEE_TICKS - FLEE_SETTLE_TICKS} ticks that followed`,
   );
 });
