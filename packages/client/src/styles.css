@@ -308,6 +308,24 @@ canvas {
     linear-gradient(0deg, rgba(4, 7, 12, 0.72) 0%, transparent 28%);
 }
 
+/*
+ * The lobby chrome that gives way to the avatar picker. It stays mounted and fades instead of
+ * unmounting, so the camera dolly is not accompanied by half the screen vanishing on one frame.
+ * `animation: none` in the out state matters: the entry animations would otherwise outrank the
+ * opacity here, and re-arming them is what plays the chrome back in when the picker closes.
+ * It is written as a two-class selector to outweigh those per-element rules wherever they sit
+ * in this file — at equal specificity the later one wins, and the map title is one of them.
+ */
+.menu-chrome {
+  transition: opacity 0.26s ease;
+}
+
+.menu-chrome.menu-chrome-out {
+  animation: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .menu-top {
   position: absolute;
   top: 0;
@@ -411,7 +429,7 @@ canvas {
   gap: 10px;
   text-align: right;
   pointer-events: none;
-  animation: menu-titlein 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: menu-titlein 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 @keyframes menu-titlein {
   from {
@@ -469,7 +487,7 @@ canvas {
   align-items: end;
   gap: 10px 26px;
   padding: 0 clamp(18px, 3vw, 44px) clamp(16px, 2.6vh, 30px);
-  animation: menu-bottomin 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: menu-bottomin 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 @keyframes menu-bottomin {
   from {
@@ -1008,7 +1026,7 @@ canvas {
   flex-direction: column;
   gap: 14px;
   padding: 16px 18px;
-  animation: menu-partyin 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: menu-partyin 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 @keyframes menu-partyin {
   from {

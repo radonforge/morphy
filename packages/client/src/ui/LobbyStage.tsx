@@ -43,6 +43,7 @@ const GHOST_OFFSET_X = 1.5;
 const GHOST_OFFSET_Z = -1.2;
 const GHOST_HEIGHT = AVATAR_HEIGHT * 0.74;
 const GHOST_OPACITY = 0.28;
+const GHOST_FADE_S = 0.28;
 
 const MORPH_DURATION_S = 0.5;
 const MORPH_POP_DURATION_S = 0.35;
@@ -293,6 +294,10 @@ function AvatarActor({
 /**
  * A carousel neighbour: the real GLB under an additive cyan override, so it reads as matter
  * that has not formed yet. Rendering it is also what warms the cache for the next morph.
+ *
+ * The fade is clocked from mount, not from the material, and the opacity is rewritten every
+ * frame: stepping swaps in a new GLB (and so a new material) mid-carousel, and restarting the
+ * fade there would blink both neighbours out on every step.
  */
 function AvatarGhost({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
   const { scene } = useGLTF(avatarModel(avatar));
@@ -312,7 +317,14 @@ function AvatarGhost({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
     return { object, material, fit: fitToHeight(object, GHOST_HEIGHT) };
   }, [scene]);
 
+  const fadeAge = useRef(0);
+
   useEffect(() => () => ghost.material.dispose(), [ghost]);
+
+  useFrame((_, delta) => {
+    fadeAge.current = Math.min(GHOST_FADE_S, fadeAge.current + delta);
+    ghost.material.opacity = GHOST_OPACITY * (fadeAge.current / GHOST_FADE_S);
+  });
 
   return (
     <group position={[slot.x, 0, slot.z]} rotation-y={slot.yaw}>

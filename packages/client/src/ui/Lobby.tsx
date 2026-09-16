@@ -426,6 +426,8 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           }))
       : [{ id: "local", name: trimmedName || "Guest", avatar: selectedAvatar, isHost: false }];
 
+  const chromeClass = `menu-chrome${morphMode ? " menu-chrome-out" : ""}`;
+
   return (
     <div
       className="menu"
@@ -444,39 +446,37 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       </Suspense>
       <div className="menu-vignette" />
 
-      {!morphMode && (
-        <header className="menu-top">
-          <div className="menu-brand">
-            <div className="menu-wordmark">
-              <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
-              <span>MORPHY</span>
-            </div>
-            <span
-              className="menu-build"
-              title="Version and build of this client. A trailing + means the build is past that release."
-            >
-              {__MORPHY_VERSION__} · {__MORPHY_BUILD__}
-            </span>
+      <header className={`menu-top ${chromeClass}`} inert={morphMode}>
+        <div className="menu-brand">
+          <div className="menu-wordmark">
+            <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
+            <span>MORPHY</span>
           </div>
-          <nav className="menu-tabs" aria-label="Menu">
-            {NAV_ITEMS.map((item) => (
-              <button
-                type="button"
-                key={item.id}
-                className={`menu-tab${pane === item.id ? " sel" : ""}`}
-                onClick={() => handleTabClick(item.id)}
-                onPointerEnter={playUiHover}
-                aria-pressed={pane === item.id}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
-        </header>
-      )}
+          <span
+            className="menu-build"
+            title="Version and build of this client. A trailing + means the build is past that release."
+          >
+            {__MORPHY_VERSION__} · {__MORPHY_BUILD__}
+          </span>
+        </div>
+        <nav className="menu-tabs" aria-label="Menu">
+          {NAV_ITEMS.map((item) => (
+            <button
+              type="button"
+              key={item.id}
+              className={`menu-tab${pane === item.id ? " sel" : ""}`}
+              onClick={() => handleTabClick(item.id)}
+              onPointerEnter={playUiHover}
+              aria-pressed={pane === item.id}
+            >
+              {item.label}
+            </button>
+          ))}
+        </nav>
+      </header>
 
-      {!morphMode && party && (
-        <aside className="menu-party panel">
+      {party && (
+        <aside className={`menu-party panel ${chromeClass}`} inert={morphMode}>
           <span className="eyebrow">Party code</span>
           <div className="menu-party-code">
             <b>{party.code}</b>
@@ -514,8 +514,8 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         </aside>
       )}
 
-      {!morphMode && stageActors.length === 1 && pane === null && (
-        <aside className="menu-maptitle" key={activeMap}>
+      {stageActors.length === 1 && pane === null && (
+        <aside className={`menu-maptitle ${chromeClass}`} key={activeMap} inert={morphMode}>
           <span className="menu-maptitle-tag" style={{ color: MAP_ACCENT[activeMap] }}>
             {MAP_TAG[activeMap]} sector
           </span>
@@ -537,71 +537,69 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         </>
       )}
 
-      {!morphMode && (
-        <form className="menu-bottom" onSubmit={handleSubmit}>
-          <div className="menu-strip">
-            <span className="menu-strip-label">{inParty ? "Map" : "Preferred map"}</span>
-            <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
-              {MAP_CATALOG.map((info) => (
-                <button
-                  type="button"
-                  key={info.id}
-                  className={`menu-mapcard${activeMap === info.id ? " sel" : ""}`}
-                  style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
-                  onClick={() => handleMapPick(info.id)}
-                  onPointerEnter={playUiHover}
-                  disabled={inParty && !isHost}
-                  aria-pressed={activeMap === info.id}
-                >
-                  <span className="menu-mapcard-glyph" aria-hidden="true">
-                    {MAP_GLYPH[info.id]}
-                  </span>
-                  <span className="menu-mapcard-text">
-                    <span className="menu-mapcard-tag">{MAP_TAG[info.id]}</span>
-                    <span className="menu-mapcard-name">{info.name}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="menu-dock">
-            {party ? (
-              isHost ? (
-                <button
-                  type="button"
-                  className="menu-deploy"
-                  onClick={handleStart}
-                  onPointerEnter={playUiHover}
-                  disabled={party.members.length < MIN_PLAYERS_TO_START}
-                >
-                  <span className="big">▶ Start match</span>
-                  <span className="small">
-                    {party.members.length < MIN_PLAYERS_TO_START
-                      ? `Need at least ${MIN_PLAYERS_TO_START} players`
-                      : `Party of ${party.members.length}`}
-                  </span>
-                </button>
-              ) : (
-                <div className="menu-deploy menu-waiting">
-                  <span className="big">Waiting for host…</span>
-                  <span className="small">Only the host can start the match</span>
-                </div>
-              )
-            ) : (
+      <form className={`menu-bottom ${chromeClass}`} onSubmit={handleSubmit} inert={morphMode}>
+        <div className="menu-strip">
+          <span className="menu-strip-label">{inParty ? "Map" : "Preferred map"}</span>
+          <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
+            {MAP_CATALOG.map((info) => (
               <button
-                type="submit"
-                className="menu-deploy"
+                type="button"
+                key={info.id}
+                className={`menu-mapcard${activeMap === info.id ? " sel" : ""}`}
+                style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
+                onClick={() => handleMapPick(info.id)}
                 onPointerEnter={playUiHover}
-                disabled={connecting}
+                disabled={inParty && !isHost}
+                aria-pressed={activeMap === info.id}
               >
-                <span className="big">▶ {connecting ? "Connecting…" : "Play"}</span>
-                <span className="small">Public match</span>
+                <span className="menu-mapcard-glyph" aria-hidden="true">
+                  {MAP_GLYPH[info.id]}
+                </span>
+                <span className="menu-mapcard-text">
+                  <span className="menu-mapcard-tag">{MAP_TAG[info.id]}</span>
+                  <span className="menu-mapcard-name">{info.name}</span>
+                </span>
               </button>
-            )}
+            ))}
           </div>
-          {status.kind === "error" && <span className="menu-error">{status.message}</span>}
-        </form>
-      )}
+        </div>
+        <div className="menu-dock">
+          {party ? (
+            isHost ? (
+              <button
+                type="button"
+                className="menu-deploy"
+                onClick={handleStart}
+                onPointerEnter={playUiHover}
+                disabled={party.members.length < MIN_PLAYERS_TO_START}
+              >
+                <span className="big">▶ Start match</span>
+                <span className="small">
+                  {party.members.length < MIN_PLAYERS_TO_START
+                    ? `Need at least ${MIN_PLAYERS_TO_START} players`
+                    : `Party of ${party.members.length}`}
+                </span>
+              </button>
+            ) : (
+              <div className="menu-deploy menu-waiting">
+                <span className="big">Waiting for host…</span>
+                <span className="small">Only the host can start the match</span>
+              </div>
+            )
+          ) : (
+            <button
+              type="submit"
+              className="menu-deploy"
+              onPointerEnter={playUiHover}
+              disabled={connecting}
+            >
+              <span className="big">▶ {connecting ? "Connecting…" : "Play"}</span>
+              <span className="small">Public match</span>
+            </button>
+          )}
+        </div>
+        {status.kind === "error" && <span className="menu-error">{status.message}</span>}
+      </form>
 
       {pane !== null && (
         <section className="menu-panel panel">
