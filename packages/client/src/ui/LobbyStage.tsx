@@ -4,7 +4,8 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { playUiHover } from "../game/audio";
-import { MAP_THEME_BASE } from "../theme";
+import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
+import { avatarNeighbors } from "./avatarCarousel";
 import { LOBBY_DIORAMAS, type SetPiece } from "./lobbyDioramas";
 import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
 
@@ -30,6 +31,62 @@ const NAMEPLATE_OUTLINE_WIDTH = 0.015;
 
 const CHIP_Y = AVATAR_HEIGHT + 0.12;
 const CHIP_Z_INDEX = 2;
+
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+const MORPH_CAMERA_Y = 1.2;
+const MORPH_CAMERA_Z = 3.3;
+const MORPH_LOOK_Y = 0.92;
+const MORPH_DOLLY_DAMP = 4.2;
+
+const GHOST_OFFSET_X = 1.5;
+const GHOST_OFFSET_Z = -1.2;
+const GHOST_HEIGHT = AVATAR_HEIGHT * 0.74;
+const GHOST_OPACITY = 0.28;
+
+const MORPH_DURATION_S = 0.5;
+const MORPH_POP_DURATION_S = 0.35;
+const MORPH_BEAM_DURATION_S = 0.3;
+const MORPH_BEAM_GROW_FRACTION = 0.35;
+const MORPH_BEAM_OPACITY = 0.55;
+const MORPH_BEAM_SEGMENTS = 12;
+const MORPH_BEAM_RADIUS = 0.62;
+const MORPH_BEAM_HEIGHT_MULT = 1.6;
+const MORPH_SHARD_COUNT = 24;
+const MORPH_SHARD_SIZE = 0.13;
+const MORPH_SHARD_SPAWN_RADIUS = 1.25;
+const MORPH_SHARD_SPAWN_HEIGHT_MULT = 1.5;
+const MORPH_SHARD_SPIN = 9;
+const POP_SETTLED = Number.POSITIVE_INFINITY;
+
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() => window.matchMedia(REDUCED_MOTION_QUERY).matches);
+
+  useEffect(() => {
+    const query = window.matchMedia(REDUCED_MOTION_QUERY);
+    const onChange = () => setReduced(query.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
+  return reduced;
+}
+
+interface ModelFit {
+  scale: number;
+  offset: readonly [number, number, number];
+}
+
+function fitToHeight(object: THREE.Object3D, height: number): ModelFit {
+  const box = new THREE.Box3().setFromObject(object);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const scale = height / Math.max(size.y, MODEL_MIN_SIZE);
+  return {
+    scale,
+    offset: [-center.x * scale, -box.min.y * scale, -center.z * scale] as const,
+  };
+}
 
 interface StageSlot {
   x: number;
@@ -128,12 +185,16 @@ function AvatarActor({
   avatar,
   slot,
   onSelect,
+  materialize = false,
 }: {
   avatar: AvatarId;
   slot: StageSlot;
   onSelect?: () => void;
+  materialize?: boolean;
 }) {
   const group = useRef<THREE.Group>(null);
+  const pop = useRef<THREE.Group>(null);
+  const popAge = useRef(materialize ? 0 : POP_SETTLED);
   const { scene, animations } = useGLTF(avatarModel(avatar));
   const object = useMemo(() => scene.clone(true), [scene]);
   const { actions, mixer } = useAnimations(animations, group);
@@ -145,16 +206,14 @@ function AvatarActor({
     };
   }, [onSelect]);
 
-  const fit = useMemo(() => {
-    const box = new THREE.Box3().setFromObject(object);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const scale = AVATAR_HEIGHT / Math.max(size.y, MODEL_MIN_SIZE);
-    return {
-      scale,
-      offset: [-center.x * scale, -box.min.y * scale, -center.z * scale] as const,
-    };
-  }, [object]);
+  const fit = useMemo(() => fitToHeight(object, AVATAR_HEIGHT), [object]);
+
+  useFrame((_, delta) => {
+    const node = pop.current;
+    if (node === null || popAge.current >= MORPH_POP_DURATION_S) return;
+    popAge.current += delta;
+    node.scale.setScalar(Math.min(1, popAge.current / MORPH_POP_DURATION_S));
+  });
 
   useEffect(() => {
     const idle = actions.idle;
@@ -210,10 +269,170 @@ function AvatarActor({
         })
       }
     >
-      <group ref={group} position={[fit.offset[0], fit.offset[1], fit.offset[2]]} scale={fit.scale}>
-        <primitive object={object} />
+      <group ref={pop} scale={materialize ? 0 : 1}>
+        <group
+          ref={group}
+          position={[fit.offset[0], fit.offset[1], fit.offset[2]]}
+          scale={fit.scale}
+        >
+          <primitive object={object} />
+        </group>
       </group>
     </group>
+  );
+}
+
+/**
+ * A carousel neighbour: the real GLB under an additive cyan override, so it reads as matter
+ * that has not formed yet. Rendering it is also what warms the cache for the next morph.
+ */
+function AvatarGhost({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
+  const { scene } = useGLTF(avatarModel(avatar));
+  const ghost = useMemo(() => {
+    const material = new THREE.MeshBasicMaterial({
+      color: MORPH_COLOR,
+      transparent: true,
+      opacity: GHOST_OPACITY,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const object = scene.clone(true);
+    object.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (mesh.isMesh) mesh.material = material;
+    });
+    return { object, material, fit: fitToHeight(object, GHOST_HEIGHT) };
+  }, [scene]);
+
+  useEffect(() => () => ghost.material.dispose(), [ghost]);
+
+  return (
+    <group position={[slot.x, 0, slot.z]} rotation-y={slot.yaw}>
+      <group
+        position={[ghost.fit.offset[0], ghost.fit.offset[1], ghost.fit.offset[2]]}
+        scale={ghost.fit.scale}
+      >
+        <primitive object={ghost.object} />
+      </group>
+    </group>
+  );
+}
+
+/**
+ * The lobby's single materialize burst: a rising beam and one ring of shards that converge
+ * on the stage slot. Deliberately not the scene's pooled MorphEffects — only one avatar ever
+ * morphs here, and this has to keep playing outside the model's suspense boundary so a cold
+ * GLB loads under cover of the beam.
+ */
+function MorphBurst({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
+  const beam = useRef<THREE.Mesh>(null);
+  const shards = useRef<THREE.InstancedMesh>(null);
+  const age = useRef(POP_SETTLED);
+  const previous = useRef(avatar);
+
+  const seeds = useMemo(
+    () =>
+      Array.from({ length: MORPH_SHARD_COUNT }, (_, i) => ({
+        angle: (i / MORPH_SHARD_COUNT) * Math.PI * 2 + Math.random(),
+        yFrac: Math.random(),
+        spinX: (Math.random() - 0.5) * MORPH_SHARD_SPIN,
+        spinZ: (Math.random() - 0.5) * MORPH_SHARD_SPIN,
+      })),
+    [],
+  );
+  const scratch = useMemo(
+    () => ({
+      matrix: new THREE.Matrix4(),
+      position: new THREE.Vector3(),
+      quaternion: new THREE.Quaternion(),
+      euler: new THREE.Euler(),
+      scale: new THREE.Vector3(),
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    if (previous.current === avatar) return;
+    previous.current = avatar;
+    age.current = 0;
+  }, [avatar]);
+
+  useFrame((_, delta) => {
+    const beamMesh = beam.current;
+    const shardMesh = shards.current;
+    if (beamMesh === null || shardMesh === null) return;
+
+    const elapsed = age.current;
+    if (elapsed >= MORPH_DURATION_S) {
+      beamMesh.visible = false;
+      shardMesh.count = 0;
+      return;
+    }
+    age.current = elapsed + delta;
+
+    const beamT = elapsed / MORPH_BEAM_DURATION_S;
+    if (beamT < 1) {
+      const growth = Math.min(1, beamT / MORPH_BEAM_GROW_FRACTION);
+      const height = AVATAR_HEIGHT * MORPH_BEAM_HEIGHT_MULT * growth;
+      beamMesh.position.set(slot.x, height / 2, slot.z);
+      beamMesh.scale.set(MORPH_BEAM_RADIUS, Math.max(height, MODEL_MIN_SIZE), MORPH_BEAM_RADIUS);
+      (beamMesh.material as THREE.MeshBasicMaterial).opacity = MORPH_BEAM_OPACITY * (1 - beamT);
+      beamMesh.visible = true;
+    } else {
+      beamMesh.visible = false;
+    }
+
+    const t = Math.min(1, elapsed / MORPH_DURATION_S);
+    const convergence = t * t;
+    const radial = MORPH_SHARD_SPAWN_RADIUS * (1 - convergence);
+    const size = Math.max(MORPH_SHARD_SIZE * (1 - t), MODEL_MIN_SIZE);
+    const spawnHeight = AVATAR_HEIGHT * MORPH_SHARD_SPAWN_HEIGHT_MULT;
+    seeds.forEach((seed, i) => {
+      scratch.position.set(
+        slot.x + Math.cos(seed.angle) * radial,
+        THREE.MathUtils.lerp(seed.yFrac * spawnHeight, AVATAR_HEIGHT / 2, convergence),
+        slot.z + Math.sin(seed.angle) * radial,
+      );
+      scratch.euler.set(seed.spinX * elapsed, 0, seed.spinZ * elapsed);
+      scratch.quaternion.setFromEuler(scratch.euler);
+      scratch.scale.setScalar(size);
+      shardMesh.setMatrixAt(
+        i,
+        scratch.matrix.compose(scratch.position, scratch.quaternion, scratch.scale),
+      );
+    });
+    shardMesh.count = seeds.length;
+    shardMesh.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <>
+      <mesh ref={beam} visible={false} frustumCulled={false}>
+        <cylinderGeometry args={[1, 1, 1, MORPH_BEAM_SEGMENTS, 1, true]} />
+        <meshBasicMaterial
+          color={MORPH_COLOR}
+          transparent
+          opacity={0}
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      <instancedMesh
+        ref={shards}
+        args={[undefined, undefined, MORPH_SHARD_COUNT]}
+        count={0}
+        frustumCulled={false}
+      >
+        <boxGeometry />
+        <meshBasicMaterial
+          color={MORPH_COLOR}
+          transparent
+          blending={THREE.AdditiveBlending}
+          depthWrite={false}
+        />
+      </instancedMesh>
+    </>
   );
 }
 
@@ -334,13 +553,26 @@ function Atmosphere({ theme }: { theme: StageTheme }) {
   return null;
 }
 
-function ParallaxRig() {
+function ParallaxRig({ morphMode, focus }: { morphMode: boolean; focus: StageSlot }) {
   const camera = useThree((state) => state.camera);
+  const reduced = useReducedMotion();
+  const scratch = useMemo(() => ({ target: new THREE.Vector3(), look: new THREE.Vector3() }), []);
+
   useFrame((state, delta) => {
-    const k = 1 - Math.exp(-PARALLAX_DAMP * delta);
-    camera.position.x += (CAMERA_BASE[0] + state.pointer.x * PARALLAX_X - camera.position.x) * k;
-    camera.position.y += (CAMERA_BASE[1] + state.pointer.y * PARALLAX_Y - camera.position.y) * k;
-    camera.lookAt(CAMERA_LOOK_AT);
+    if (morphMode) {
+      scratch.target.set(focus.x, MORPH_CAMERA_Y, focus.z + MORPH_CAMERA_Z);
+      scratch.look.set(focus.x, MORPH_LOOK_Y, focus.z);
+    } else {
+      scratch.target.set(
+        CAMERA_BASE[0] + state.pointer.x * PARALLAX_X,
+        CAMERA_BASE[1] + state.pointer.y * PARALLAX_Y,
+        CAMERA_BASE[2],
+      );
+      scratch.look.copy(CAMERA_LOOK_AT);
+    }
+    const damp = morphMode ? MORPH_DOLLY_DAMP : PARALLAX_DAMP;
+    camera.position.lerp(scratch.target, reduced ? 1 : 1 - Math.exp(-damp * delta));
+    camera.lookAt(scratch.look);
   });
   return null;
 }
@@ -367,16 +599,22 @@ export function LobbyStage({
   map,
   actors,
   inParty,
+  morphMode,
   onCustomize,
 }: {
   map: MapId;
   actors: StageActor[];
   inParty: boolean;
+  morphMode: boolean;
   onCustomize: () => void;
 }) {
   const theme = STAGE_THEMES[map];
+  const reduced = useReducedMotion();
   const slots = computeStageSlots(actors.length, inParty);
   const selfSlot = slots[0] ?? SOLO_SLOT;
+  const self = actors[0];
+  const neighbors = self ? avatarNeighbors(self.avatar) : null;
+  const animateMorph = morphMode && !reduced;
   return (
     <div className="menu-canvas" aria-hidden="true">
       <Canvas
@@ -387,7 +625,7 @@ export function LobbyStage({
       >
         <FrameLimiter fps={STAGE_MAX_FPS} />
         <Atmosphere theme={theme} />
-        <ParallaxRig />
+        <ParallaxRig morphMode={morphMode} focus={selfSlot} />
         {theme.sky === "stars" && (
           <Stars radius={90} depth={40} count={1600} factor={3} fade speed={0.4} />
         )}
@@ -418,13 +656,39 @@ export function LobbyStage({
               key={`${actor.id}:${actor.avatar}`}
               avatar={actor.avatar}
               slot={slots[index] ?? SOLO_SLOT}
-              onSelect={index === 0 ? onCustomize : undefined}
+              onSelect={index === 0 && !morphMode ? onCustomize : undefined}
+              materialize={index === 0 && animateMorph}
             />
           ))}
           <ShadowKick
             signal={`actors:${map}:${inParty}:${actors.map((a) => `${a.id}:${a.avatar}`).join("|")}`}
           />
         </Suspense>
+        {morphMode && neighbors !== null && (
+          <>
+            <Suspense fallback={null}>
+              <AvatarGhost
+                avatar={neighbors.prev}
+                slot={{
+                  x: selfSlot.x - GHOST_OFFSET_X,
+                  z: selfSlot.z + GHOST_OFFSET_Z,
+                  yaw: selfSlot.yaw,
+                }}
+              />
+            </Suspense>
+            <Suspense fallback={null}>
+              <AvatarGhost
+                avatar={neighbors.next}
+                slot={{
+                  x: selfSlot.x + GHOST_OFFSET_X,
+                  z: selfSlot.z + GHOST_OFFSET_Z,
+                  yaw: selfSlot.yaw,
+                }}
+              />
+            </Suspense>
+          </>
+        )}
+        {animateMorph && self && <MorphBurst avatar={self.avatar} slot={selfSlot} />}
         {actors.map((actor, index) =>
           index > 0 ? (
             <ActorNameplate
@@ -434,22 +698,24 @@ export function LobbyStage({
             />
           ) : null,
         )}
-        <Html
-          position={[selfSlot.x, CHIP_Y, selfSlot.z]}
-          center
-          zIndexRange={[CHIP_Z_INDEX, CHIP_Z_INDEX]}
-          wrapperClass="stage-chip"
-        >
-          <button type="button" tabIndex={-1} onClick={onCustomize} onPointerEnter={playUiHover}>
-            <span className="stage-chip-name">
-              {actors[0]?.isHost ? "★ " : ""}
-              {actors[0]?.name ?? ""}
-            </span>
-            <span className="stage-chip-pencil" aria-hidden="true">
-              ✎
-            </span>
-          </button>
-        </Html>
+        {!morphMode && (
+          <Html
+            position={[selfSlot.x, CHIP_Y, selfSlot.z]}
+            center
+            zIndexRange={[CHIP_Z_INDEX, CHIP_Z_INDEX]}
+            wrapperClass="stage-chip"
+          >
+            <button type="button" tabIndex={-1} onClick={onCustomize} onPointerEnter={playUiHover}>
+              <span className="stage-chip-name">
+                {actors[0]?.isHost ? "★ " : ""}
+                {actors[0]?.name ?? ""}
+              </span>
+              <span className="stage-chip-pencil" aria-hidden="true">
+                ✎
+              </span>
+            </button>
+          </Html>
+        )}
       </Canvas>
     </div>
   );

@@ -388,6 +388,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           map={activeMap}
           actors={stageActors}
           inParty={inParty}
+          morphMode={false}
           onCustomize={handleCustomize}
         />
       </Suspense>
