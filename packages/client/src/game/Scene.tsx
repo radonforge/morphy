@@ -1,19 +1,11 @@
 import type { Room } from "@colyseus/sdk";
 import {
-  AIR_CONTROL,
   computePropBounds,
-  FALL_GRAVITY_MULT,
-  GRAVITY,
   INPUT_IDLE_EPSILON,
   INPUT_SEND_RATE_MS,
-  JUMP_BUFFER_MS,
-  JUMP_RELEASE_GRAVITY_MULT,
-  JUMP_SPEED,
   MAP_CATALOG,
   type MapBounds,
   type MapDefinition,
-  MOVE_ACCEL,
-  MOVE_DECEL,
   MOVE_SPEED,
   MSG_DECOY,
   MSG_INPUT,
@@ -42,6 +34,19 @@ import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "r
 import * as THREE from "three";
 import { MAP_THEME_BASE } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
+import {
+  advanceMovement,
+  cappedFrameSeconds,
+  clampToBounds,
+  GROUND_EPSILON,
+  type MovementBody,
+  type ObbCollider,
+  PLAYER_RADIUS,
+  PLAYER_SEPARATION,
+  resolveColliders,
+  STEP_DISTANCE,
+  supportHeightAt,
+} from "./movement";
 import type {
   BreaksRef,
   DecoyBreakFx,
@@ -74,10 +79,6 @@ function applyTauntPulse(group: THREE.Group, pulses: TauntPulseRef, id: string):
   group.scale.setScalar(1 + TAUNT_AMPLITUDE * Math.sin(progress * Math.PI));
 }
 
-const PLAYER_RADIUS = 0.4;
-const PLAYER_SEPARATION = PLAYER_RADIUS * 2;
-const STEP_HEIGHT = 0.35;
-const GROUND_EPSILON = 1e-3;
 const FURNITURE_MIN_RADIUS = 0.3;
 const PLAYER_BODY_LENGTH = 0.9;
 const PLAYER_BODY_Y = PLAYER_BODY_LENGTH / 2 + PLAYER_RADIUS;
@@ -141,7 +142,6 @@ const BREAK_FLASH_RADIUS_MULT = 1.25;
 const EASE_BACK_OVERSHOOT = 1.70158;
 const MORPH_SOUND_MAX_DISTANCE = 24;
 const MORPH_REMOTE_VOLUME = 0.8;
-const STEP_DISTANCE = 2.2;
 const REMOTE_STEP_MAX_DISTANCE = 24;
 const REMOTE_STEP_VOLUME = 0.8;
 const REMOTE_STEP_TELEPORT_SKIP = 2;
@@ -168,8 +168,6 @@ export const GAME_DPR: [number, number] = [1, 1.25];
 const SPRINT_FOV_ADD = 7;
 const FOV_DAMP = 0.02;
 const FOV_EPSILON = 0.05;
-const HEADING_MIN_SPEED = 0.4;
-const HEADING_DAMP = 1e-8;
 const RECOIL_MAX_PITCH = 0.045;
 const RECOIL_DAMP = 1e-8;
 const LAND_DIP_Y = 0.16;
@@ -256,23 +254,6 @@ function themeFor(mapId: string): ThemePreset {
 
 type Catalog = Map<string, PropDefinition>;
 
-/**
- * A solid box for movement collision: Y-rotated by the angle whose cos/sin are
- * precomputed, spanning [yMin, yMax] vertically. Map colliders are axis-aligned
- * (cos 1, sin 0); prop parts carry their instance rotation, so long furniture
- * blocks by its true oriented footprint instead of a bounding circle.
- */
-interface ObbCollider {
-  x: number;
-  z: number;
-  cos: number;
-  sin: number;
-  hx: number;
-  hz: number;
-  yMin: number;
-  yMax: number;
-}
-
 function pushPropPartColliders(
   colliders: ObbCollider[],
   def: PropDefinition,
@@ -329,87 +310,6 @@ function buildDecoyColliders(decoys: DecoyView[], catalog: Catalog): ObbCollider
     pushPropPartColliders(colliders, def, decoy, decoy.rot);
   }
   return colliders;
-}
-
-/**
- * Highest collider top the player's footprint circle overlaps that is no more
- * than a step above the feet — the surface the player stands on (base ground 0).
- */
-function supportHeightAt(x: number, z: number, footY: number, colliders: ObbCollider[]): number {
-  let best = 0;
-  for (const c of colliders) {
-    if (c.yMax <= best || c.yMax > footY + STEP_HEIGHT) continue;
-    const dx = x - c.x;
-    const dz = z - c.z;
-    const lx = dx * c.cos - dz * c.sin;
-    const lz = dx * c.sin + dz * c.cos;
-    const ox = lx - THREE.MathUtils.clamp(lx, -c.hx, c.hx);
-    const oz = lz - THREE.MathUtils.clamp(lz, -c.hz, c.hz);
-    if (ox * ox + oz * oz < PLAYER_RADIUS * PLAYER_RADIUS) best = c.yMax;
-  }
-  return best;
-}
-
-/**
- * Lowest collider bottom at or above the player's head over the footprint
- * circle — the ceiling that caps upward motion (Infinity under open sky).
- * Keeps a jump under an elevated deck from entering the deck box, where
- * {@link resolveColliders} would otherwise shove the player sideways.
- */
-function ceilingHeightAt(x: number, z: number, footY: number, colliders: ObbCollider[]): number {
-  let best = Infinity;
-  for (const c of colliders) {
-    if (c.yMin >= best || c.yMin < footY + PLAYER_HEIGHT) continue;
-    const dx = x - c.x;
-    const dz = z - c.z;
-    const lx = dx * c.cos - dz * c.sin;
-    const lz = dx * c.sin + dz * c.cos;
-    const ox = lx - THREE.MathUtils.clamp(lx, -c.hx, c.hx);
-    const oz = lz - THREE.MathUtils.clamp(lz, -c.hz, c.hz);
-    if (ox * ox + oz * oz < PLAYER_RADIUS * PLAYER_RADIUS) best = c.yMin;
-  }
-  return best;
-}
-
-/**
- * Push the player's footprint circle out of every solid box overlapping its
- * vertical span. Boxes whose top is within a step of the feet are walkable
- * (handled by {@link supportHeightAt}); boxes above the head are ignored.
- */
-function resolveColliders(pos: THREE.Vector3, colliders: ObbCollider[]): void {
-  for (const c of colliders) {
-    if (c.yMax <= pos.y + STEP_HEIGHT || c.yMin >= pos.y + PLAYER_HEIGHT) continue;
-    const dx = pos.x - c.x;
-    const dz = pos.z - c.z;
-    const lx = dx * c.cos - dz * c.sin;
-    const lz = dx * c.sin + dz * c.cos;
-    const nx = THREE.MathUtils.clamp(lx, -c.hx, c.hx);
-    const nz = THREE.MathUtils.clamp(lz, -c.hz, c.hz);
-    const ox = lx - nx;
-    const oz = lz - nz;
-    const distSq = ox * ox + oz * oz;
-    if (distSq >= PLAYER_RADIUS * PLAYER_RADIUS) continue;
-    let pushX = 0;
-    let pushZ = 0;
-    if (distSq > 1e-8) {
-      const dist = Math.sqrt(distSq);
-      const push = PLAYER_RADIUS - dist;
-      pushX = (ox / dist) * push;
-      pushZ = (oz / dist) * push;
-    } else {
-      const toMinX = lx + c.hx;
-      const toMaxX = c.hx - lx;
-      const toMinZ = lz + c.hz;
-      const toMaxZ = c.hz - lz;
-      const minPen = Math.min(toMinX, toMaxX, toMinZ, toMaxZ);
-      if (minPen === toMinX) pushX = -(toMinX + PLAYER_RADIUS);
-      else if (minPen === toMaxX) pushX = toMaxX + PLAYER_RADIUS;
-      else if (minPen === toMinZ) pushZ = -(toMinZ + PLAYER_RADIUS);
-      else pushZ = toMaxZ + PLAYER_RADIUS;
-    }
-    pos.x += pushX * c.cos + pushZ * c.sin;
-    pos.z += -pushX * c.sin + pushZ * c.cos;
-  }
 }
 
 interface Wall {
@@ -1819,12 +1719,22 @@ function LocalPlayer({
   const { camera } = useThree();
 
   const spawn = map.spawnPoints.props[0] ?? map.bounds.min;
-  const pos = useMemo(
-    () => new THREE.Vector3(spawn.x, spawn.y, spawn.z),
+  const body = useMemo<MovementBody>(
+    () => ({
+      x: spawn.x,
+      y: spawn.y,
+      z: spawn.z,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      heading: 0,
+      jumpBufferMs: 0,
+      jumpHeld: false,
+      stepDistance: 0,
+    }),
     [spawn.x, spawn.y, spawn.z],
   );
   const spawnApplied = useRef(false);
-  const heading = useRef(0);
   const sendAccumMs = useRef(0);
   const lastSentInput = useRef({
     x: Number.NaN,
@@ -1834,14 +1744,6 @@ function LocalPlayer({
     aim: Number.NaN,
     propRot: Number.NaN,
   });
-  const stepAccum = useRef(0);
-  const velocity = useMemo(() => new THREE.Vector3(), []);
-  const velocityY = useRef(0);
-  const jumpHeld = useRef(false);
-  const jumpBufferMs = useRef(0);
-  const forwardVec = useMemo(() => new THREE.Vector3(), []);
-  const rightVec = useMemo(() => new THREE.Vector3(), []);
-  const moveVec = useMemo(() => new THREE.Vector3(), []);
   const camDistRef = useRef(CAMERA_DISTANCE);
   const propRot = useRef(0);
   const turnHeldMs = useRef(0);
@@ -1849,113 +1751,71 @@ function LocalPlayer({
   const prevPropType = useRef("");
 
   const frozen = !alive || (role === "hunter" && phase === "hiding");
+  const runMultiplier = role === "hunter" ? RUN_MULTIPLIER_HUNTER : RUN_MULTIPLIER_PROP;
+  const world = useMemo(
+    () => ({ colliders, bounds: map.bounds, runMultiplier }),
+    [colliders, map.bounds, runMultiplier],
+  );
 
-  useFrame((_, delta) => {
+  useFrame((_, rawDelta) => {
+    const delta = cappedFrameSeconds(rawDelta);
     if (!spawnApplied.current) {
       const self = playersRef.current.get(id);
       if (self) {
-        pos.set(self.x, self.y, self.z);
-        heading.current = self.rot;
+        body.x = self.x;
+        body.y = self.y;
+        body.z = self.z;
+        body.heading = self.rot;
         spawnApplied.current = true;
       }
     }
 
     const teleport = teleportRef.current;
     if (teleport) {
-      pos.x = teleport.x;
-      pos.y = 0;
-      pos.z = teleport.z;
-      velocityY.current = 0;
+      body.x = teleport.x;
+      body.y = 0;
+      body.z = teleport.z;
+      body.vy = 0;
       teleportRef.current = null;
     }
 
     const { yaw, pitch } = look.current;
-    forwardVec.set(-Math.sin(yaw), 0, -Math.cos(yaw));
-    rightVec.crossVectors(forwardVec, UP);
 
-    let support = supportHeightAt(pos.x, pos.z, pos.y, colliders);
+    let support: number;
     let horizSpeed = 0;
     let sprinting = false;
 
-    if (!frozen) {
-      const k = keys.current;
-      const forwardInput = (k.forward ? 1 : 0) - (k.back ? 1 : 0);
-      const strafeInput = (k.right ? 1 : 0) - (k.left ? 1 : 0);
-      moveVec
-        .set(0, 0, 0)
-        .addScaledVector(forwardVec, forwardInput)
-        .addScaledVector(rightVec, strafeInput);
-      const hasInput = moveVec.lengthSq() > 0;
-      if (hasInput) moveVec.normalize();
-
-      const runMultiplier = role === "hunter" ? RUN_MULTIPLIER_HUNTER : RUN_MULTIPLIER_PROP;
-      const speed = k.run ? MOVE_SPEED * runMultiplier : MOVE_SPEED;
-      const grounded = pos.y <= support + GROUND_EPSILON;
-      const rate = (hasInput ? MOVE_ACCEL : MOVE_DECEL) * (grounded ? 1 : AIR_CONTROL) * delta;
-      const dvx = moveVec.x * speed - velocity.x;
-      const dvz = moveVec.z * speed - velocity.z;
-      const dvLen = Math.hypot(dvx, dvz);
-      const blend = dvLen > rate ? rate / dvLen : 1;
-      velocity.x += dvx * blend;
-      velocity.z += dvz * blend;
-      pos.x += velocity.x * delta;
-      pos.z += velocity.z * delta;
-
-      horizSpeed = Math.hypot(velocity.x, velocity.z);
-      sprinting = k.run && horizSpeed > MOVE_SPEED;
-      if (horizSpeed > HEADING_MIN_SPEED) {
-        const target = Math.atan2(velocity.x, velocity.z);
-        const turn = ((target - heading.current + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
-        heading.current += turn * (1 - HEADING_DAMP ** delta);
-        if (grounded) {
-          stepAccum.current += horizSpeed * delta;
-          if (stepAccum.current >= STEP_DISTANCE) {
-            stepAccum.current = 0;
-            playStep();
-          }
-        }
-      }
-
-      if (k.jump && !jumpHeld.current) jumpBufferMs.current = JUMP_BUFFER_MS;
-      if (jumpBufferMs.current > 0 && grounded && velocityY.current <= 0) {
-        jumpBufferMs.current = 0;
-        velocityY.current = JUMP_SPEED;
-        playJump();
-      } else {
-        jumpBufferMs.current = Math.max(0, jumpBufferMs.current - delta * 1000);
-      }
-      let gravity = GRAVITY;
-      if (velocityY.current > 0 && !k.jump) gravity *= JUMP_RELEASE_GRAVITY_MULT;
-      else if (velocityY.current < 0) gravity *= FALL_GRAVITY_MULT;
-      velocityY.current -= gravity * delta;
-      support = supportHeightAt(pos.x, pos.z, pos.y, colliders);
-      const airborne = pos.y > support + GROUND_EPSILON;
-      const ceiling = ceilingHeightAt(pos.x, pos.z, pos.y, colliders);
-      pos.y += velocityY.current * delta;
-      if (pos.y + PLAYER_HEIGHT > ceiling) {
-        pos.y = ceiling - PLAYER_HEIGHT - GROUND_EPSILON;
-        velocityY.current = Math.min(velocityY.current, 0);
-      }
-      if (velocityY.current <= 0 && pos.y <= support) {
-        if (airborne) {
-          const impact = Math.min(1, -velocityY.current / (JUMP_SPEED * 2));
-          motionRef.current.landing = Math.max(motionRef.current.landing, impact);
-          playLand(impact);
-        }
-        pos.y = support;
-        velocityY.current = 0;
-      }
-      jumpHeld.current = k.jump;
-
-      const { min, max } = map.bounds;
-      pos.x = THREE.MathUtils.clamp(pos.x, min.x + PLAYER_RADIUS, max.x - PLAYER_RADIUS);
-      pos.z = THREE.MathUtils.clamp(pos.z, min.z + PLAYER_RADIUS, max.z - PLAYER_RADIUS);
+    if (frozen) {
+      body.vx = 0;
+      body.vz = 0;
+      support = supportHeightAt(body.x, body.z, body.y, colliders);
     } else {
-      velocity.set(0, 0, 0);
+      const k = keys.current;
+      const moved = advanceMovement(
+        body,
+        {
+          forward: (k.forward ? 1 : 0) - (k.back ? 1 : 0),
+          strafe: (k.right ? 1 : 0) - (k.left ? 1 : 0),
+          yaw,
+          run: k.run,
+          jump: k.jump,
+        },
+        world,
+        delta,
+      );
+      support = moved.support;
+      horizSpeed = moved.speed;
+      sprinting = k.run && horizSpeed > MOVE_SPEED;
+      if (moved.footstep) playStep();
+      if (moved.jumped) playJump();
+      if (moved.landingImpact > 0) {
+        motionRef.current.landing = Math.max(motionRef.current.landing, moved.landingImpact);
+        playLand(moved.landingImpact);
+      }
     }
 
     if (propType && propType !== prevPropType.current) {
-      propRot.current = heading.current;
+      propRot.current = body.heading;
     }
     prevPropType.current = propType;
     if (role === "prop") {
@@ -1980,28 +1840,26 @@ function LocalPlayer({
     if (alive) {
       for (const [otherId, other] of playersRef.current) {
         if (otherId === id || !other.alive) continue;
-        if (Math.abs(pos.y - other.y) >= PLAYER_HEIGHT) continue;
-        const dx = pos.x - other.x;
-        const dz = pos.z - other.z;
+        if (Math.abs(body.y - other.y) >= PLAYER_HEIGHT) continue;
+        const dx = body.x - other.x;
+        const dz = body.z - other.z;
         const distSq = dx * dx + dz * dz;
         if (distSq > 1e-8 && distSq < PLAYER_SEPARATION * PLAYER_SEPARATION) {
           const dist = Math.sqrt(distSq);
           const push = PLAYER_SEPARATION - dist;
-          pos.x += (dx / dist) * push;
-          pos.z += (dz / dist) * push;
+          body.x += (dx / dist) * push;
+          body.z += (dz / dist) * push;
         }
       }
-      resolveColliders(pos, colliders);
-      const { min, max } = map.bounds;
-      pos.x = THREE.MathUtils.clamp(pos.x, min.x + PLAYER_RADIUS, max.x - PLAYER_RADIUS);
-      pos.z = THREE.MathUtils.clamp(pos.z, min.z + PLAYER_RADIUS, max.z - PLAYER_RADIUS);
+      resolveColliders(body, colliders);
+      clampToBounds(body, map.bounds);
     }
 
-    playerPos.current.set(pos.x, pos.y, pos.z);
+    playerPos.current.set(body.x, body.y, body.z);
     const group = groupRef.current;
     if (group) {
-      group.position.set(pos.x, pos.y, pos.z);
-      group.rotation.y = role === "prop" && propType ? propRot.current : heading.current;
+      group.position.set(body.x, body.y, body.z);
+      group.rotation.y = role === "prop" && propType ? propRot.current : body.heading;
       applyTauntPulse(group, tauntPulseRef, id);
     }
 
@@ -2010,7 +1868,7 @@ function LocalPlayer({
     motion.landing *= LAND_DAMP ** delta;
     motion.speed = horizSpeed;
     motion.sprinting = sprinting;
-    motion.grounded = pos.y <= support + GROUND_EPSILON;
+    motion.grounded = body.y <= support + GROUND_EPSILON;
     motion.yaw = yaw;
     motion.pitch = pitch;
 
@@ -2024,12 +1882,12 @@ function LocalPlayer({
     if (role === "hunter") {
       const aimPitch = pitch - motion.recoil * RECOIL_MAX_PITCH;
       const cosPitch = Math.cos(aimPitch);
-      const eyeY = pos.y + PLAYER_EYE_HEIGHT - motion.landing * LAND_DIP_Y;
-      camera.position.set(pos.x, eyeY, pos.z);
+      const eyeY = body.y + PLAYER_EYE_HEIGHT - motion.landing * LAND_DIP_Y;
+      camera.position.set(body.x, eyeY, body.z);
       camera.lookAt(
-        pos.x - Math.sin(yaw) * cosPitch,
+        body.x - Math.sin(yaw) * cosPitch,
         eyeY - Math.sin(aimPitch),
-        pos.z - Math.cos(yaw) * cosPitch,
+        body.z - Math.cos(yaw) * cosPitch,
       );
     } else {
       const localPitch = THREE.MathUtils.clamp(pitch, TP_PITCH_MIN, TP_PITCH_MAX);
@@ -2040,8 +1898,8 @@ function LocalPlayer({
 
       let desired = CAMERA_DISTANCE;
       const hitXZ = nearestWallDistanceXZ(
-        pos.x,
-        pos.z,
+        body.x,
+        body.z,
         Math.sin(yaw),
         Math.cos(yaw),
         CAMERA_DISTANCE * cosPitch,
@@ -2057,29 +1915,29 @@ function LocalPlayer({
         desired < current ? desired : current + (desired - current) * (1 - CAMERA_DAMP ** delta);
       const d = camDistRef.current;
 
-      const pivotY = pos.y + CAMERA_TARGET_Y;
-      camera.position.set(pos.x + dirX * d, pivotY + dirY * d, pos.z + dirZ * d);
-      camera.lookAt(pos.x, pivotY, pos.z);
+      const pivotY = body.y + CAMERA_TARGET_Y;
+      camera.position.set(body.x + dirX * d, pivotY + dirY * d, body.z + dirZ * d);
+      camera.lookAt(body.x, pivotY, body.z);
     }
 
     sendAccumMs.current += delta * 1000;
     if (sendAccumMs.current >= INPUT_SEND_RATE_MS) {
       sendAccumMs.current = 0;
-      const aim = Math.atan2(forwardVec.x, forwardVec.z);
+      const aim = Math.atan2(-Math.sin(yaw), -Math.cos(yaw));
       const last = lastSentInput.current;
       const moved =
-        !(Math.abs(pos.x - last.x) < INPUT_IDLE_EPSILON) ||
-        !(Math.abs(pos.y - last.y) < INPUT_IDLE_EPSILON) ||
-        !(Math.abs(pos.z - last.z) < INPUT_IDLE_EPSILON) ||
-        !(Math.abs(heading.current - last.rot) < INPUT_IDLE_EPSILON) ||
+        !(Math.abs(body.x - last.x) < INPUT_IDLE_EPSILON) ||
+        !(Math.abs(body.y - last.y) < INPUT_IDLE_EPSILON) ||
+        !(Math.abs(body.z - last.z) < INPUT_IDLE_EPSILON) ||
+        !(Math.abs(body.heading - last.rot) < INPUT_IDLE_EPSILON) ||
         !(Math.abs(aim - last.aim) < INPUT_IDLE_EPSILON) ||
         !(Math.abs(wrapAngle(propRot.current - last.propRot)) < INPUT_IDLE_EPSILON);
       if (moved) {
         const payload = {
-          x: pos.x,
-          y: pos.y,
-          z: pos.z,
-          rot: heading.current,
+          x: body.x,
+          y: body.y,
+          z: body.z,
+          rot: body.heading,
           aim,
           propRot: propRot.current,
         };
