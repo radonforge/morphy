@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { lockPointer } from "../packages/client/src/game/pointerLock.ts";
 import { movementFromHeld } from "../packages/client/src/game/useControls.ts";
 
 test("no held key drives no action", () => {
@@ -40,4 +41,28 @@ test("opposing keys are both reported, leaving the caller to cancel them", () =>
 test("unmapped keys drive nothing", () => {
   const keys = movementFromHeld(new Set(["KeyZ", "F5", "Tab"]));
   assert.equal(Object.values(keys).some(Boolean), false);
+});
+
+test("a refused pointer lock stays handled", async () => {
+  const rejections = [];
+  const capture = (reason) => rejections.push(reason);
+  process.on("unhandledRejection", capture);
+  lockPointer({ requestPointerLock: () => Promise.reject(new Error("SecurityError")) });
+  await new Promise((resolve) => setImmediate(resolve));
+  process.off("unhandledRejection", capture);
+  assert.deepEqual(rejections, []);
+});
+
+test("a void-returning pointer lock is still requested", () => {
+  let calls = 0;
+  lockPointer({
+    requestPointerLock: () => {
+      calls += 1;
+    },
+  });
+  assert.equal(calls, 1);
+});
+
+test("a missing canvas requests nothing", () => {
+  assert.doesNotThrow(() => lockPointer(null));
 });

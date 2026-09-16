@@ -47,6 +47,7 @@ import {
   STEP_DISTANCE,
   supportHeightAt,
 } from "./movement";
+import { lockPointer } from "./pointerLock";
 import type {
   BreaksRef,
   DecoyBreakFx,
@@ -1649,7 +1650,7 @@ function useMouseLook() {
     const el = gl.domElement;
     const requestLock = () => {
       if (document.pointerLockElement !== el) {
-        void el.requestPointerLock();
+        lockPointer(el);
       }
     };
     const onMove = (event: MouseEvent) => {
