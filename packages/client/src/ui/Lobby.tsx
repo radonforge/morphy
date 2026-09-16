@@ -11,7 +11,7 @@ import {
   normalizePartyCode,
   PARTY_CODE_LENGTH,
 } from "@morphy/shared";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   areUiSoundsEnabled,
   getMusicVolume,
@@ -33,9 +33,13 @@ import {
   unlockAudio,
 } from "../game/audio";
 import { isPerfHudEnabled, setPerfHudEnabled } from "../game/prefs";
-import { LobbyStage, STAGE_MAX_ACTORS, type StageActor } from "./LobbyStage";
 import { loadPrefs, savePrefs } from "./prefs";
 import { StatsPane } from "./StatsPane";
+import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
+
+const LobbyStage = lazy(() =>
+  import("./LobbyStage").then((module) => ({ default: module.LobbyStage })),
+);
 
 export type ConnectStatus =
   | { kind: "idle" }
@@ -348,12 +352,14 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
   return (
     <div className="menu">
-      <LobbyStage
-        map={activeMap}
-        actors={stageActors}
-        inParty={inParty}
-        onCustomize={handleCustomize}
-      />
+      <Suspense fallback={null}>
+        <LobbyStage
+          map={activeMap}
+          actors={stageActors}
+          inParty={inParty}
+          onCustomize={handleCustomize}
+        />
+      </Suspense>
       <div className="menu-vignette" />
 
       <header className="menu-top">

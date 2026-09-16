@@ -8,6 +8,27 @@ const buildInfo = resolveBuildInfo();
 
 export default defineConfig({
   plugins: [react(), runtimeAssetsPlugin()],
+  build: {
+    rolldownOptions: {
+      output: {
+        advancedChunks: {
+          /**
+           * Both groups are required, in this order. Dropping the react group,
+           * or listing it second, makes React land inside the three chunk
+           * instead of its own: the entry point then has a static dependency on
+           * that chunk, so the whole 3D stack returns to `modulepreload` and
+           * loads before first paint again. Measured, not inferred — the three
+           * chunk grows by exactly React's weight and reappears in index.html.
+           * The regression fails no build and no test, so check index.html.
+           */
+          groups: [
+            { name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            { name: "three", test: /node_modules[\\/](three|@react-three)[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
   define: {
     __MORPHY_VERSION__: JSON.stringify(buildInfo.version),
     __MORPHY_BUILD__: JSON.stringify(buildInfo.build),
