@@ -60,6 +60,24 @@ const MORPH_SHARD_SPAWN_HEIGHT_MULT = 1.5;
 const MORPH_SHARD_SPIN = 9;
 const POP_SETTLED = Number.POSITIVE_INFINITY;
 
+/**
+ * True for `STAGE_BOOST_MS` after every change of `beat`. The stage idles at 30 fps, which is
+ * plenty for a parallax drift but coarse for the morph dolly and the pop that follows a step,
+ * so those get `STAGE_BOOST_FPS` for as long as they are actually running and no longer.
+ */
+function useMotionBoost(beat: string): boolean {
+  const [boosted, setBoosted] = useState(false);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: beat is a trigger, not read in the body — each change restarts the boost window.
+  useEffect(() => {
+    setBoosted(true);
+    const id = setTimeout(() => setBoosted(false), STAGE_BOOST_MS);
+    return () => clearTimeout(id);
+  }, [beat]);
+
+  return boosted;
+}
+
 function useReducedMotion(): boolean {
   const [reduced, setReduced] = useState(() => window.matchMedia(REDUCED_MOTION_QUERY).matches);
 
@@ -114,6 +132,8 @@ function computeStageSlots(count: number, inParty: boolean): StageSlot[] {
 const CAMERA_FOV = 38;
 const CAMERA_BASE: [number, number, number] = [0, 1.5, 6];
 const STAGE_MAX_FPS = 30;
+const STAGE_BOOST_FPS = 60;
+const STAGE_BOOST_MS = 900;
 const STAGE_DPR: [number, number] = [1, 1.25];
 const CAMERA_LOOK_AT = new THREE.Vector3(0, 1.05, 0);
 const PARALLAX_X = 0.55;
@@ -644,6 +664,7 @@ export function LobbyStage({
   const self = actors[0];
   const neighbors = self ? avatarNeighbors(self.avatar) : null;
   const animateMorph = morphMode && !reduced;
+  const boosted = useMotionBoost(`${morphMode}:${self?.avatar ?? ""}`);
   return (
     <div className="menu-canvas" aria-hidden="true">
       <Canvas
@@ -652,7 +673,7 @@ export function LobbyStage({
         dpr={STAGE_DPR}
         camera={{ fov: CAMERA_FOV, position: CAMERA_BASE }}
       >
-        <FrameLimiter fps={STAGE_MAX_FPS} />
+        <FrameLimiter fps={boosted ? STAGE_BOOST_FPS : STAGE_MAX_FPS} />
         <Atmosphere theme={theme} />
         <ParallaxRig morphMode={morphMode} focus={selfSlot} />
         {theme.sky === "stars" && (
