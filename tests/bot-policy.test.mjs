@@ -48,6 +48,7 @@ const observation = (seq, entities, self = {}) => ({
   visibility: "limited",
   phase: "hunting",
   pathBlocked: false,
+  arrived: false,
   self: {
     role: "hunter",
     alive: true,
@@ -232,6 +233,7 @@ const hidingObservation = (seq, pathBlocked) => ({
   visibility: "limited",
   phase: "hiding",
   pathBlocked,
+  arrived: false,
   self: {
     role: "prop",
     alive: true,
@@ -286,25 +288,35 @@ test("a prop stops re-picking hide spots it can never reach", async () => {
   assert.deepEqual({ x: last.x, z: last.z }, { x: 0, z: 0 }, "it hides where it stands");
 });
 
-/** A prop panicking at a hunter that keeps drifting sideways. */
-const fleeingObservation = (seq, pathBlocked, threatZ) => ({
-  seq,
-  visibility: "limited",
-  phase: "hunting",
-  pathBlocked,
-  self: {
-    role: "prop",
-    alive: true,
-    hp: 0,
-    x: 0,
-    z: 0,
-    rot: 0,
-    propType: "crate",
-    canShootNow: true,
-  },
-  entities: [character("hunter-b", PANIC_RADIUS - 3, { z: threatZ })],
-  map: { bounds: BOUNDS, doorways: [], nearbyProps: [{ type: "crate", x: 6, z: 6 }] },
-});
+const THREAT_GAP = PANIC_RADIUS - 3;
+
+/**
+ * A prop panicking at a hunter that keeps drifting sideways. The hunter trails
+ * the prop at a fixed gap, so placing the prop somewhere else carries the threat
+ * along with it and the panic holds wherever the escape has got to.
+ */
+const fleeingObservation = (seq, pathBlocked, threatZ, over = {}) => {
+  const { arrived = false, x = 0, z = 0 } = over;
+  return {
+    seq,
+    visibility: "limited",
+    phase: "hunting",
+    pathBlocked,
+    arrived,
+    self: {
+      role: "prop",
+      alive: true,
+      hp: 0,
+      x,
+      z,
+      rot: 0,
+      propType: "crate",
+      canShootNow: true,
+    },
+    entities: [character("hunter-b", THREAT_GAP, { x: x + THREAT_GAP, z: z + threatZ })],
+    map: { bounds: BOUNDS, doorways: [], nearbyProps: [{ type: "crate", x: 6, z: 6 }] },
+  };
+};
 
 test("a prop holds its escape point while the hunter drifts", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
@@ -339,4 +351,35 @@ test("a cornered prop stops running once every escape angle is blocked", async (
     last = await policy.decide(fleeingObservation(i + 1, true, 0));
   }
   assert.deepEqual({ x: last.x, z: last.z }, { x: 0, z: 0 }, "it stands where it is");
+});
+
+/**
+ * Reaching the escape point must release it. The reflex parks on a goal it has
+ * arrived at and only wakes on an intent it reads as different, so a prop that
+ * re-issues the spot it is standing on stops dead with the hunter still on it.
+ */
+test("a prop picks a new escape point once it reaches the last one", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const first = await policy.decide(fleeingObservation(1, false, 0));
+  const second = await policy.decide(
+    fleeingObservation(2, false, 0, { arrived: true, x: first.x, z: first.z }),
+  );
+  assert.notDeepEqual(
+    { x: second.x, z: second.z },
+    { x: first.x, z: first.z },
+    "arriving must not re-issue the point the prop is already standing on",
+  );
+});
+
+test("a cornered prop that has spent its escapes stays put after arriving", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  for (let i = 0; i < MAX_FLEE_DEFLECTIONS + 2; i++) {
+    await policy.decide(fleeingObservation(i + 1, true, 0));
+  }
+  const arrived = await policy.decide(fleeingObservation(99, false, 0, { arrived: true }));
+  assert.deepEqual(
+    { x: arrived.x, z: arrived.z },
+    { x: 0, z: 0 },
+    "an arrival must not hand a cornered prop a fresh set of escape angles",
+  );
 });

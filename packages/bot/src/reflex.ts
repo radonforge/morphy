@@ -321,6 +321,7 @@ export class Reflex {
       visibility: this.visibility,
       phase: world.phase,
       pathBlocked: this.pathBlocked,
+      arrived: this.settled,
       self: selfObs,
       entities,
       map: this.buildObservedMap(),
