@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { MAX_REPLANS_BEFORE_BLOCKED } from "../packages/bot/src/config.ts";
 import { Reflex } from "../packages/bot/src/reflex.ts";
 
 const DIFFICULTY = 0.6;
@@ -75,10 +76,12 @@ test("a goal that cannot be planned raises pathBlocked for the policy", () => {
   const world = hidingWorld(-5, 0);
   const intent = { kind: "hideAs", seq: 1, x: 5, z: 0 };
 
-  reflex.executeIntent(intent, world, TICK_SECONDS, TICK_MS);
-  reflex.executeIntent(intent, world, TICK_SECONDS, TICK_MS * 2);
+  for (let attempt = 1; attempt <= MAX_REPLANS_BEFORE_BLOCKED; attempt++) {
+    reflex.executeIntent(intent, world, TICK_SECONDS, TICK_MS * attempt);
+  }
 
-  assert.equal(reflex.buildObservation(world, 1, TICK_MS * 2).pathBlocked, true);
+  const now = TICK_MS * MAX_REPLANS_BEFORE_BLOCKED;
+  assert.equal(reflex.buildObservation(world, 1, now).pathBlocked, true);
 });
 
 test("a reachable goal still settles once its path has been walked", () => {

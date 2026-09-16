@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { PANIC_RADIUS } from "../packages/bot/src/config.ts";
+import { MAX_HIDE_REPICKS, PANIC_RADIUS } from "../packages/bot/src/config.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
 
 const DIFFICULTY = 0.6;
@@ -270,4 +270,14 @@ test("a prop keeps the hide spot it picked while the path to it holds", async ()
 test("a prop picks a new hide spot once its path is reported blocked", async () => {
   const spots = await hideSpots(true);
   assert.ok(new Set(spots).size > 1, `expected the prop to re-pick, got ${spots[0]} every time`);
+});
+
+test("a prop stops re-picking hide spots it can never reach", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  let last = null;
+  for (let i = 0; i < MAX_HIDE_REPICKS + 2; i++) {
+    last = await policy.decide(hidingObservation(i + 1, true));
+  }
+  assert.equal(last.kind, "hideAs");
+  assert.deepEqual({ x: last.x, z: last.z }, { x: 0, z: 0 }, "it hides where it stands");
 });
