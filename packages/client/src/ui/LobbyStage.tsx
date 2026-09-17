@@ -1,14 +1,5 @@
 import type { AvatarId, MapId } from "@morphy/shared";
-import {
-  Billboard,
-  ContactShadows,
-  Html,
-  Sky,
-  Stars,
-  Text,
-  useAnimations,
-  useGLTF,
-} from "@react-three/drei";
+import { Billboard, Html, Sky, Stars, Text, useAnimations, useGLTF } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -165,27 +156,16 @@ const PARALLAX_DAMP = 3.2;
 
 const ATMOSPHERE_LERP = 2.4;
 const GROUND_RADIUS = 70;
+const SUN_POSITION: [number, number, number] = [14, 26, 10];
 const SHADOW_MAP_SIZE = 2048;
 const SHADOW_EXTENT = 28;
 /*
- * `shadows="variance"` (VSM) is the only genuinely soft shadow map three 0.184 still has: the
- * Canvas default asks for PCFSoft, which three deprecated and silently downgrades to hard PCF —
- * the console said so on every bake. VSM wants no negative bias, so the offset is `normalBias`
- * alone, and its blur comes from the light's `radius`.
+ * Named rather than left to the Canvas default, which asks for PCFSoft — deprecated in three
+ * 0.184 and silently downgraded to this same PCF, with a console warning on every bake. So this
+ * is what the stage was already rendering, minus the noise.
  */
-const SHADOW_TYPE = "variance" as const;
+const SHADOW_TYPE = "percentage" as const;
 const SHADOW_NORMAL_BIAS = 0.02;
-const SHADOW_RADIUS = 4;
-const SHADOW_BLUR_SAMPLES = 12;
-
-const CONTACT_SHADOW_POSITION: [number, number, number] = [0, 0.012, -8];
-const CONTACT_SHADOW_SCALE: [number, number] = [46, 32];
-const CONTACT_SHADOW_OPACITY = 0.45;
-const CONTACT_SHADOW_BLUR = 2.6;
-const CONTACT_SHADOW_FAR = 7;
-const CONTACT_SHADOW_RESOLUTION = 512;
-const CONTACT_SHADOW_COLOR = "#05070c";
-const CONTACT_SHADOW_FRAMES = 1;
 
 interface StageTheme {
   background: string;
@@ -198,12 +178,6 @@ interface StageTheme {
   hemiIntensity: number;
   ambient: number;
   dir: number;
-  /**
-   * Where the sun sits. Every map puts it opposite the picker camera rather than behind it, so
-   * cast shadows sweep toward the viewer instead of hiding behind their own casters — front
-   * lighting is what made the dioramas read as flat stickers.
-   */
-  sun: [number, number, number];
   sky: "stars" | "day" | "haze";
 }
 
@@ -219,7 +193,6 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
     hemiIntensity: 0.9,
     ambient: 0.55,
     dir: MAP_THEME_BASE.station.directional,
-    sun: [-16, 14, -6],
     sky: "stars",
   },
   mars: {
@@ -233,7 +206,6 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
     hemiIntensity: 1.25,
     ambient: 0.95,
     dir: MAP_THEME_BASE.mars.directional,
-    sun: [-20, 16, -10],
     sky: "haze",
   },
   urban: {
@@ -247,7 +219,6 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
     hemiIntensity: 1.0,
     ambient: 0.7,
     dir: MAP_THEME_BASE.urban.directional,
-    sun: [-16, 20, -8],
     sky: "day",
   },
 };
@@ -627,30 +598,16 @@ function FrameLimiter({ fps }: { fps: number }) {
  * grow-in still has every set piece at ~0 scale, and nothing ever kicks it again — so a map you
  * switched to kept the shadows of nothing. Shadows stay live until `settleMs` after `signal`
  * changes, then freeze with one final bake at full size.
- *
- * `children` are the passes that may only sample the scene once it has stopped growing, for the
- * same reason. They mount on the settled frame.
  */
-function ShadowStage({
-  signal,
-  settleMs,
-  children,
-}: {
-  signal: string;
-  settleMs: number;
-  children?: React.ReactNode;
-}) {
+function ShadowStage({ signal, settleMs }: { signal: string; settleMs: number }) {
   const gl = useThree((state) => state.gl);
-  const [settled, setSettled] = useState(false);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: signal is a trigger, not read in the body — new content restarts the settle window.
   useEffect(() => {
-    setSettled(false);
     gl.shadowMap.autoUpdate = true;
     const id = setTimeout(() => {
       gl.shadowMap.autoUpdate = false;
       gl.shadowMap.needsUpdate = true;
-      setSettled(true);
     }, settleMs);
     return () => {
       clearTimeout(id);
@@ -658,7 +615,7 @@ function ShadowStage({
     };
   }, [gl, signal, settleMs]);
 
-  return settled ? children : null;
+  return null;
 }
 
 function Atmosphere({ theme }: { theme: StageTheme }) {
@@ -798,11 +755,11 @@ export function LobbyStage({
         {theme.sky === "stars" && (
           <Stars radius={90} depth={40} count={1600} factor={3} fade speed={0.4} />
         )}
-        {theme.sky === "day" && <Sky sunPosition={theme.sun} turbidity={4} rayleigh={1.4} />}
+        {theme.sky === "day" && <Sky sunPosition={SUN_POSITION} turbidity={4} rayleigh={1.4} />}
         <hemisphereLight args={[theme.hemiSky, theme.hemiGround, theme.hemiIntensity]} />
         <ambientLight intensity={theme.ambient} />
         <directionalLight
-          position={theme.sun}
+          position={SUN_POSITION}
           intensity={theme.dir}
           castShadow
           shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
@@ -811,22 +768,9 @@ export function LobbyStage({
           shadow-camera-top={SHADOW_EXTENT}
           shadow-camera-bottom={-SHADOW_EXTENT}
           shadow-normalBias={SHADOW_NORMAL_BIAS}
-          shadow-radius={SHADOW_RADIUS}
-          shadow-blurSamples={SHADOW_BLUR_SAMPLES}
         />
         <Ground theme={theme} />
-        <ShadowStage signal={stageSignature} settleMs={DIORAMA_SETTLE_MS}>
-          <ContactShadows
-            position={CONTACT_SHADOW_POSITION}
-            scale={CONTACT_SHADOW_SCALE}
-            opacity={CONTACT_SHADOW_OPACITY}
-            blur={CONTACT_SHADOW_BLUR}
-            far={CONTACT_SHADOW_FAR}
-            resolution={CONTACT_SHADOW_RESOLUTION}
-            color={CONTACT_SHADOW_COLOR}
-            frames={CONTACT_SHADOW_FRAMES}
-          />
-        </ShadowStage>
+        <ShadowStage signal={stageSignature} settleMs={DIORAMA_SETTLE_MS} />
         <Suspense fallback={null} key={`diorama:${map}`}>
           {LOBBY_DIORAMAS[map].map((piece, index) => (
             <SetPieceModel
