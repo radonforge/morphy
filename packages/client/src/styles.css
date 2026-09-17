@@ -133,24 +133,6 @@ canvas {
   color: var(--cyan);
 }
 
-.lobby-card input,
-.lobby-overlay-card input {
-  font-family: var(--font-sans);
-  padding: 0.6rem 0.8rem;
-  background: rgba(0, 0, 0, 0.35);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  outline: none;
-}
-
-.lobby-card input:focus-visible {
-  border-color: var(--border-strong);
-  box-shadow: 0 0 0 2px rgba(53, 224, 255, 0.2);
-}
-
-.btn,
-.lobby-card button,
 .lobby-overlay-card button,
 .result-actions button,
 .pause-card button,
@@ -183,8 +165,6 @@ canvas {
     filter 0.12s ease;
 }
 
-.btn:hover,
-.lobby-card button:hover,
 .lobby-overlay-card button:hover,
 .result-actions button:hover,
 .pause-card button:hover,
@@ -198,18 +178,11 @@ canvas {
     0 20px 40px -16px rgba(53, 224, 255, 0.55);
 }
 
-.btn:active,
-.lobby-card button:active,
 .lobby-overlay-card button:active,
 .result-actions button:active,
 .pause-card button:active,
 .menu-deploy:active {
   transform: translateY(1px);
-}
-
-.lobby-card button:disabled {
-  opacity: 0.4;
-  cursor: default;
 }
 
 .lobby-overlay {
@@ -863,13 +836,6 @@ canvas {
   width: clamp(120px, 12vw, 170px);
   accent-color: var(--cyan);
 }
-.menu-locked {
-  opacity: 0.55;
-}
-.menu-locked .menu-mini {
-  margin-left: 8px;
-}
-
 .stage-chip {
   pointer-events: none;
 }
@@ -1241,8 +1207,6 @@ canvas {
     animation: none;
   }
   .panel,
-  .btn,
-  .lobby-card button,
   .lobby-overlay-card button,
   .result-actions button,
   .pause-card button,

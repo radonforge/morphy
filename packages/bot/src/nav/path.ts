@@ -121,10 +121,6 @@ export class PathFollower {
     return this.waypoints.length > 0 && this.index >= this.waypoints.length;
   }
 
-  get goal(): Point2 | null {
-    return this.waypoints.length > 0 ? this.waypoints[this.waypoints.length - 1]! : null;
-  }
-
   advance(x: number, z: number): Point2 | null {
     while (this.index < this.waypoints.length) {
       const wp = this.waypoints[this.index]!;
