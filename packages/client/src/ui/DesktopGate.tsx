@@ -3,8 +3,8 @@ import { type ReactNode, useSyncExternalStore } from "react";
 /**
  * Morphy needs a mouse: aiming locks the pointer, which no mobile browser
  * grants, and movement is on WASD. The gate is a capability test rather than a
- * width breakpoint — a desktop window dragged narrow is still playable, and a
- * tablet held wide is not — so it asks whether the *primary* pointing device is
+ * width breakpoint: a desktop window dragged narrow is still playable, and a
+ * tablet held wide is not, so it asks whether the *primary* pointing device is
  * fine. A phone, a tablet, and an iPad with a trackpad (no pointer lock in
  * iPadOS Safari) all fail it; every desktop and laptop passes.
  */

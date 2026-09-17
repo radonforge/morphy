@@ -102,7 +102,7 @@ export interface ShotResult {
 
 /**
  * Broadcast to all clients when a shot resolves. Everyone renders the tracers
- * (the shooter included — these are the authoritative pellet endpoints); only
+ * (the shooter included, since these are the authoritative pellet endpoints); only
  * non-shooters play the positional shot audio.
  */
 export interface ShotFiredEvent {

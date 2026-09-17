@@ -3,12 +3,12 @@ import type { Phase, Role } from "./protocol";
 
 /**
  * The two-level agent contract shared by the server and the bot. A policy emits
- * a declarative {@link Intent} — *what* to achieve — at low frequency; the
+ * a declarative {@link Intent} (*what* to achieve) at low frequency; the
  * bot's synchronous reflex decides *how/when* (pathfinding, aim, fire cooldown)
  * from a compact {@link Observation}.
  *
- * Types only. Both sides run in the same process — the server drives its
- * room-filling bots through `@morphy/bot/brain` — so an `Intent` is never
+ * Types only. Both sides run in the same process (the server drives its
+ * room-filling bots through `@morphy/bot/brain`), so an `Intent` is never
  * serialised and never crosses a trust boundary. The validators that used to
  * live here guarded output from an out-of-process policy; that policy does not
  * exist, and the game is multiplayer-first, so they were removed rather than
@@ -27,8 +27,8 @@ export interface IntentMeta {
 /**
  * A declarative goal produced by a {@link Policy}. The reflex executes the
  * current intent fluidly until the next one replaces it. The policy never
- * computes a firing direction — it names a target and the reflex aims, gates on
- * line-of-sight and respects the fire cooldown — so a slow or weak policy can
+ * computes a firing direction: it names a target and the reflex aims, gates on
+ * line-of-sight and respects the fire cooldown, so a slow or weak policy can
  * never waste HP.
  */
 export type Intent =
@@ -70,20 +70,20 @@ export interface ObservedEntity {
   alive?: boolean;
   propType?: string;
   /**
-   * Whether this contact is wearing a disguise at all, rather than which one —
+   * Whether this contact is wearing a disguise at all, rather than which one:
    * the shape a player reads off the screen. An undisguised contact renders as a
    * character carrying a weapon, so it can only be a hunter; a disguised one
    * renders as a scene object.
    *
    * **Absent when the contact is not in line of sight**, because footsteps
    * through a wall tell a player nothing about shape. A contact known only by
-   * sound is therefore "might be anyone", not "known teammate" — the difference
+   * sound is therefore "might be anyone", not "known teammate": the difference
    * between a bot that searches a noise and one that reads the room. `"full"`
    * visibility always reports it: that mode is ground truth by definition.
    */
   disguised?: boolean;
   movedRecently?: boolean;
-  /** This entity has line of sight to the bot and is aiming roughly at it — i.e. it is watching the bot right now. */
+  /** This entity has line of sight to the bot and is aiming roughly at it, i.e. it is watching the bot right now. */
   facingMe?: boolean;
 }
 

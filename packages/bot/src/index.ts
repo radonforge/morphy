@@ -212,7 +212,7 @@ async function main(): Promise<void> {
   }
 
   if (bots.length === 0) {
-    console.error("[bot] no bots connected — is the server running?");
+    console.error("[bot] no bots connected. Is the server running?");
     process.exit(1);
   }
 

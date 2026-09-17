@@ -8,7 +8,7 @@ import type { Intent, Observation } from "@morphy/shared";
  * `ScriptedPolicy` is the only implementation, and by decision it is the only
  * one planned: the game is multiplayer-first and bots exist to fill a thin
  * room, not to be played with. The seam stays because the reflex needs
- * something to ask — see the scope note in `AGENTS.md` before adding another.
+ * something to ask; see the scope note in `AGENTS.md` before adding another.
  */
 export interface Policy {
   readonly name: string;

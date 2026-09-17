@@ -15,7 +15,7 @@ export const MAX_REPLANS_BEFORE_BLOCKED = 2;
  * Consecutive blocked hide spots a prop will discard before giving up on the
  * catalogue and hiding where it stands. Without a cap, a bot sealed off from
  * every nearby prop re-picks on each blocked-path event, and that event wakes
- * the policy off-cycle — measured at ~6.7x the ordinary decision rate.
+ * the policy off-cycle, measured at ~6.7x the ordinary decision rate.
  */
 export const MAX_HIDE_REPICKS = 4;
 /** How far each blocked escape rotates the away-vector before the prop tries again. */
@@ -47,7 +47,7 @@ export const REACTION_MS_MIN = 180;
 /**
  * Combat aim is a bounded turn, not a snap: the bot may only rotate toward a
  * target this fast and can fire only once aligned within {@link AIM_TOLERANCE_RAD}.
- * Difficulty lerps the rate — a low-difficulty bot visibly swings its aim around
+ * Difficulty lerps the rate: a low-difficulty bot visibly swings its aim around
  * and a strafing player can stay ahead of it, instead of being instantly locked.
  */
 export const AIM_TURN_RATE_MIN = 1.6;

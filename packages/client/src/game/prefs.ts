@@ -1,7 +1,7 @@
 import { storageGet, storageSet } from "../safeStorage";
 
 /**
- * In-game HUD preferences, one localStorage key per flag — same pattern as the
+ * In-game HUD preferences, one localStorage key per flag, same pattern as the
  * audio flags in `game/audio.ts`. Lobby identity prefs (name, map, avatar)
  * live separately in `ui/prefs.ts`.
  */

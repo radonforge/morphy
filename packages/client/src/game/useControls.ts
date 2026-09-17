@@ -41,8 +41,8 @@ const NO_KEYS: MoveKeys = {
 /**
  * Project the set of physically held keys onto the actions they drive.
  *
- * Several codes share an action — W and ArrowUp both move forward, either Shift
- * runs — so an action is held while *any* of its codes is. Tracking the action
+ * Several codes share an action (W and ArrowUp both move forward, either Shift
+ * runs), so an action is held while *any* of its codes is. Tracking the action
  * as one boolean instead loses that: releasing W cleared `forward` while
  * ArrowUp was still down, and the player stopped with a key still pressed.
  */

@@ -195,7 +195,7 @@ function barrel() {
 /**
  * Not skipping a prop is not the same as being stopped by it. One long frame
  * carries the body 0.85 m, and a barrel only blocks 0.7 m from its near face to
- * its midline — so the body lands *inside* the barrel, past its centre, and a
+ * its midline, so the body lands *inside* the barrel, past its centre, and a
  * resolver that picks the nearest face puts it down on the far side.
  */
 test("a long frame cannot carry a body through a real map prop", () => {

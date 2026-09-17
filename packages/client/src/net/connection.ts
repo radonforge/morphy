@@ -40,7 +40,7 @@ function registerPingEcho(room: Room): void {
  * Take ownership of a freshly obtained room, whichever call produced it: echo
  * the latency probes, and turn off the SDK's own reconnection loop. That loop
  * re-enters the *same* room object, and the full state the server replies with
- * on a successful reconnect carries no removals — anyone who left during the
+ * on a successful reconnect carries no removals: anyone who left during the
  * outage would linger in the local state as a ghost. {@link reconnectToRoom}
  * builds a new room instead, whose state starts from the handshake.
  */
@@ -129,8 +129,8 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /**
- * Answers that settle the matter: the server replied, and its reply is no — an
- * unknown room, a seat it no longer holds, a room that refused the socket.
+ * Answers that settle the matter: the server replied, and its reply is no (an
+ * unknown room, a seat it no longer holds, a room that refused the socket).
  */
 const REFUSED_CODES: ReadonlySet<number> = new Set([
   ErrorCode.MATCHMAKE_NO_HANDLER,
@@ -145,7 +145,7 @@ const REFUSED_CODES: ReadonlySet<number> = new Set([
  * call rewraps every failure into a `MatchMakeError`, which keeps `code` (the
  * HTTP status, itself the Colyseus error code) and drops everything else, and
  * leaves it undefined when the request never reached the server at all.
- * Anything unrecognised — including `MAY_TRY_RECONNECT` — is worth one more
+ * Anything unrecognised, including `MAY_TRY_RECONNECT`, is worth one more
  * try; the window bounds the loop either way.
  */
 export function isRefusedReconnection(error: unknown): boolean {
@@ -158,7 +158,7 @@ export function isRefusedReconnection(error: unknown): boolean {
  * session id. Retries because a network blip is rarely over on the first try,
  * and stops at {@link RECONNECT_WINDOW_MS} because that is exactly how long the
  * server holds the seat: past it the token is gone and another attempt can only
- * fail. A refusal ends it sooner. Aborting the signal gives up early — the
+ * fail. A refusal ends it sooner. Aborting the signal gives up early: the
  * player asked to leave. The message it rejects with is player-facing copy, not
  * the transport's own words.
  */

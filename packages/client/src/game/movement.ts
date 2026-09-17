@@ -32,7 +32,7 @@ const HEADING_DAMP = 1e-8;
  * collider from being skipped entirely: the integrator tests the position it
  * lands on rather than the segment it crossed, so a box narrower than a step
  * could fall between two frames without ever being touched.
- * `tests/client-movement.test.mjs` pins that margin against the real maps — if
+ * `tests/client-movement.test.mjs` pins that margin against the real maps: if
  * a future prop is ever thin enough to slip through, that test fails rather
  * than the player quietly walking through a wall. Landing *inside* a box is a
  * separate matter, and {@link resolveColliders} settles it by returning the
@@ -107,7 +107,7 @@ function clamp(value: number, min: number, max: number): number {
 
 /**
  * Highest collider top the player's footprint circle overlaps that is no more
- * than a step above the feet — the surface the player stands on (base ground 0).
+ * than a step above the feet: the surface the player stands on (base ground 0).
  */
 export function supportHeightAt(
   x: number,
@@ -131,7 +131,7 @@ export function supportHeightAt(
 
 /**
  * Lowest collider bottom at or above the player's head over the footprint
- * circle — the ceiling that caps upward motion (Infinity under open sky).
+ * circle: the ceiling that caps upward motion (Infinity under open sky).
  * Keeps a jump under an elevated deck from entering the deck box, where
  * {@link resolveColliders} would otherwise shove the player sideways.
  */
@@ -208,7 +208,7 @@ function entryFace(
  * took from there decides which side of a box it is returned to. Judging by the
  * landing position alone is what let a body cross a prop: one long frame, or a
  * shove off a player standing almost on top of it, can carry the centre past a
- * box's midline, and the nearest face is then the far one — so the body gets
+ * box's midline, and the nearest face is then the far one, so the body gets
  * helpfully placed on the other side of the crate it just ran into. A body
  * whose path went through a box is put back against the face it came in by.
  */

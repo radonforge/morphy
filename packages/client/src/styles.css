@@ -339,7 +339,7 @@ canvas {
  * `animation: none` in the out state matters: the entry animations would otherwise outrank the
  * opacity here, and re-arming them is what plays the chrome back in when the picker closes.
  * It is written as a two-class selector to outweigh those per-element rules wherever they sit
- * in this file — at equal specificity the later one wins, and the map title is one of them.
+ * in this file; at equal specificity the later one wins, and the map title is one of them.
  */
 .menu-chrome {
   transition: opacity 0.26s ease;
@@ -949,7 +949,7 @@ canvas {
 
 /*
  * The dock is click-through and only the pill takes pointer events back, so the hint and the
- * gap around it fall through to the backdrop beneath — clicking the words does what they say
+ * gap around it fall through to the backdrop beneath, so clicking the words does what they say
  * instead of landing on a dead strip of layout.
  */
 .morph-rail {

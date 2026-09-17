@@ -252,7 +252,7 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
 
 /**
  * Samples the r3f frame loop and writes "N fps · M ms" straight into the
- * readout's DOM node — the text never passes through React state, same
+ * readout's DOM node; the text never passes through React state, same
  * discipline as the position interpolation.
  */
 function PerfProbe({

@@ -35,7 +35,7 @@ const ex = (name: string): string => `/models/space/exterior/${name}.glb`;
  * (2, 0, 1.5) local units, so a piece's visible mesh sits that far from its
  * instance origin (scaled, then rotated by `rotationY`). Solid colliders must
  * hug the rendered mesh, not the origin, so placement projects this offset to
- * world space — otherwise the box lands where the object only appears to be.
+ * world space; otherwise the box lands where the object only appears to be.
  * Symmetric pieces (craft, rockets, hangars) center exactly on this; organic
  * rocks deviate by a few cm and carry a refined per-model offset (see {@link SolidModel}).
  */
@@ -215,7 +215,7 @@ function clearOf(x: number, z: number, r: number, items: Obstacle[], gap: number
   return true;
 }
 
-/** Avamposto Ares — open Martian apron walled by rock, dressed with cover, around a small module. */
+/** Avamposto Ares: open Martian apron walled by rock, dressed with cover, around a small module. */
 export function buildMars(seed: number): MapDefinition {
   const rng = makeRng(seed);
   const grid: Grid = { gx: G, gz: G, halfW: HALF, halfD: HALF };

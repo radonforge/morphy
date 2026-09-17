@@ -621,7 +621,7 @@ function ShadowRefresh({
     };
   }, [gl]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: meta/ids are triggers, not read in the body — a roster/meta change must reset the shadow-settle timer.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: meta/ids are triggers, not read in the body; a roster/meta change must reset the shadow-settle timer.
   useEffect(() => {
     sinceChange.current = 0;
   }, [meta, ids]);
@@ -1195,7 +1195,7 @@ function PropPopIn({ popKey, children }: { popKey: string; children: ReactElemen
   const groupRef = useRef<THREE.Group>(null);
   const age = useRef(0);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: popKey is a trigger, not read in the body — a new prop type must restart the pop-in animation.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: popKey is a trigger, not read in the body; a new prop type must restart the pop-in animation.
   useEffect(() => {
     age.current = 0;
   }, [popKey]);

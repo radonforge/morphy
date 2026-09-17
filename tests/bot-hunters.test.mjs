@@ -84,14 +84,14 @@ function driverFor(name, map, log) {
 
 /**
  * Two hunter bots dropped on the same spot of a real map and run against each
- * other for twenty seconds, motor output fed back as the other's position —
+ * other for twenty seconds, motor output fed back as the other's position,
  * the same loop `MorphyRoom` runs, minus the transport.
  *
  * They start glued because that is the worst case: it used to be a permanent
  * state. Each read the other as the nearest contact that had not yet resolved
  * into a prop, so both spent the round walking into each other and staring.
  *
- * Hearing one another through a wall and going to look is *not* the defect —
+ * Hearing one another through a wall and going to look is *not* the defect:
  * a player does that too, and a bot that skipped a noise would be reading the
  * room, so the pair may legitimately walk the same corridor for a few seconds.
  * What must never happen is targeting a contact it can see is a teammate, and
@@ -156,7 +156,7 @@ test("two hunter bots left alone never target each other on sight", async () => 
  * A hunter closing on a disguise that runs. The two motions used to move at
  * different speeds: `inspect` walked at `MOVE_SPEED` while a panicking prop ran
  * at `MOVE_SPEED * RUN_MULTIPLIER_PROP`, so the gap opened at 2.5 m/s for as
- * long as the prop kept going — and a fleeing prop is never `shootable`, so
+ * long as the prop kept going, and a fleeing prop is never `shootable`, so
  * `inspect` is the only path a hunter has to it.
  *
  * The quarry is a bare body rather than a second policy because the claim under
@@ -221,8 +221,8 @@ test("a hunter closes on a disguise running at a prop's top speed", async () => 
  * reached. Each part is defensible on its own; together they stopped the prop
  * dead at its first escape point with the hunter still on it.
  *
- * The hunter looks sideways so the deliberate freeze branch — hold still when a
- * hunter is looking straight at you — never fires and the prop has no reason to
+ * The hunter looks sideways so the deliberate freeze branch (hold still when a
+ * hunter is looking straight at you) never fires and the prop has no reason to
  * stand still other than the defect.
  */
 test("a prop under chase keeps fleeing past its first escape point", async () => {

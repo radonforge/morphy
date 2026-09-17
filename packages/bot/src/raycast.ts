@@ -48,7 +48,7 @@ export function normalize3(v: Vec3): Vec3 | null {
 
 /**
  * Whether the straight segment from `origin` to `target` reaches it without a
- * wall in between — the bot's line-of-sight test for {@link buildObservation}.
+ * wall in between: the bot's line-of-sight test for {@link buildObservation}.
  * Uses the same wall colliders and slab test as shot resolution, so "I can see
  * it" and "I could hit it" share one geometry.
  */

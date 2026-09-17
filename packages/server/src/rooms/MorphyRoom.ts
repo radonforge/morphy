@@ -128,7 +128,7 @@ export class DecoyState extends Schema {
    * Deliberately not a `@type` field: a decoy exists to be mistaken for a real
    * prop, and broadcasting its owner tells every client which props are fake
    * and whose they are. The server needs it to expire a player's decoys, and
-   * the owner is told it placed one by `MSG_DECOY_PLACED` — sent to it alone,
+   * the owner is told it placed one by `MSG_DECOY_PLACED`, sent to it alone,
    * carrying nothing, because a self-feedback cue is all the client does with
    * it. Nobody else needs any of it.
    */
@@ -382,7 +382,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     }
     throw new ServerError(
       PARTY_CODE_EXHAUSTED_STATUS,
-      `could not allocate a party code after ${PARTY_CODE_MAX_ATTEMPTS} attempts — try again`,
+      `could not allocate a party code after ${PARTY_CODE_MAX_ATTEMPTS} attempts; try again`,
     );
   }
 
@@ -447,7 +447,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * {@link RECONNECT_WINDOW_MS} so a network blip does not cost a player the
    * round it is standing in: the player stays in `state.players`, keeps its
    * role and position, and rejoins on the same session id without passing
-   * through {@link onJoin} — so neither the in-progress guard there nor the
+   * through {@link onJoin}, so neither the in-progress guard there nor the
    * lock a running round takes can shut it out. Colyseus runs {@link onLeave}
    * itself once the window lapses, releasing the seat exactly as a deliberate
    * quit would. A lobby gets no window: there is nothing to come back to, and
@@ -778,7 +778,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * a {@link LOBBY_AUTOSTART_MS} clock, and `ready` only shortens it rather
    * than authorising the round, so one idle player can no longer hold a lobby
    * hostage. A non-zero `phaseEndsAt` is the armed clock, so a later joiner
-   * does not push the start further out. Private rooms are unaffected — their
+   * does not push the start further out. Private rooms are unaffected: their
    * host starts the round with {@link MSG_START}.
    */
   private maybeStartRound(): void {
@@ -908,7 +908,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * The human left holding the room now takes the win instead. Only a round
    * with roles already assigned counts: an abort during the start countdown has
    * no roster for this round yet, and a round in `round_end` was recorded by
-   * `endRound`. A round abandoned by its last human awards nobody — there is no
+   * `endRound`. A round abandoned by its last human awards nobody: there is no
    * survivor to reward, and a bot's record is not kept. A held seat is not a
    * survivor either: someone still inside their reconnect window has not
    * outlasted the round, they are simply absent from its end.
@@ -954,7 +954,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * Colyseus guards a room's clock callbacks and message handlers only when
    * this hook exists, and `index.ts` asks for no graceful shutdown, so there is
    * no process-level net underneath either. Without it a throw takes down the
-   * whole server process and every other room on it — measured both ways, for
+   * whole server process and every other room on it. Measured both ways: for
    * a phase timer, for the {@link PING_INTERVAL_MS} ping interval, and for a
    * message handler reached by a bad payload. Lifecycle methods (`onJoin`,
    * `onLeave`, …) still rethrow afterwards, so Colyseus's own handling of them
@@ -993,8 +993,8 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   }
 
   /**
-   * Players a round can actually be built from. Bots count — they exist to make
-   * the threshold reachable — but a player inside their reconnect window does
+   * Players a round can actually be built from. Bots count, since they exist to make
+   * the threshold reachable, but a player inside their reconnect window does
    * not: their seat is held, they are not there to play.
    */
   private presentCount(): number {
@@ -1059,7 +1059,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * one driver rejects no driver will accept: without the stop, a failing
    * {@link addBot} never grows `this.bots` and this loop spins forever. It is
    * synchronous, so that would pin the event loop and take down every other
-   * room on the process, and no exception handler would see it — nothing
+   * room on the process, and no exception handler would see it: nothing
    * throws, the method simply never returns.
    */
   private fillBots(): void {
@@ -1073,7 +1073,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
   /**
    * A room-filling bot plays with `"limited"` vision on purpose. The `"full"`
-   * mode reads ground truth — `role`, `alive`, `propType` — and exists as the
+   * mode reads ground truth (`role`, `alive`, `propType`) and exists as the
    * parity anchor for measuring policies, not as a way to play: a hunter given
    * it never has to *find* a prop, it targets the disguise straight through.
    * These bots are here to make a thin room playable for the humans in it, so
@@ -1084,7 +1084,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * than ask again for something that cannot succeed.
    *
    * Bot code runs inside a room `clock` callback, where a throw is contained by
-   * {@link onUncaughtException} — but contained means the whole callback dies,
+   * {@link onUncaughtException}, but contained means the whole callback dies,
    * so one failing brain would cost every bot behind it in that tick its turn,
    * and go on doing so every tick. A bot is an amenity: if its brain fails,
    * drop that bot and keep the match running.
@@ -1198,7 +1198,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * reconnect window is in `state.players` but not in the round: they take no
    * role slot, join no roster, and sit in the same state a dead player already
    * occupies, so nothing counts them as a live prop or a missing hunter. The
-   * role they had when they dropped is untouched — this only runs at the start
+   * role they had when they dropped is untouched: this only runs at the start
    * of a round, never during one.
    */
   private assignRoles(): void {

@@ -28,7 +28,7 @@ const ROAD_Y = -ROAD_RAW_SURFACE_Y * ROAD_SCALE_Y;
 
 /**
  * A building model with its GLB bbox size (`nx`/`ny`/`nz`) and, when the mesh
- * is not centered on its origin, the bbox-center offset (`cx`/`cz`) — the
+ * is not centered on its origin, the bbox-center offset (`cx`/`cz`); the
  * visual is shifted by the rotated offset so it lands on its collider.
  */
 interface BModel {
@@ -110,7 +110,7 @@ interface Obstacle {
   r: number;
 }
 
-/** Distretto Nord — a zoned street grid of solid building blocks; hide among the pedestrians. */
+/** Distretto Nord: a zoned street grid of solid building blocks; hide among the pedestrians. */
 export function buildUrban(seed: number): MapDefinition {
   const rng = makeRng(seed);
   const tiles: TileInstance[] = [];

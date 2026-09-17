@@ -59,10 +59,10 @@ export function wheelDeltaPx(event: {
  * the one thing inertia cannot fake: it decays. macOS keeps emitting wheel events for about a
  * second after the fingers leave the trackpad, each smaller than the last, so a magnitude that
  * climbs back above the running floor is the user pressing again. The floor is tracked only
- * while disarmed — letting the gesture's own ramp-up set it is what made an earlier attempt
+ * while disarmed; letting the gesture's own ramp-up set it is what made an earlier attempt
  * fire several times per swipe and need a cooldown to hide it.
  *
- * The axis is whichever one each gesture opens on, and is held for the rest of it — re-picked
+ * The axis is whichever one each gesture opens on, and is held for the rest of it, re-picked
  * whenever a gesture opens, not only after a step, or a swipe too small to move the carousel
  * would leave the axis pinned and swallow everything arriving on the other one. The rail's
  * arrows, the ghosts flanking the stage and the arrow keys all read left-to-right, so a
@@ -72,7 +72,7 @@ export function wheelDeltaPx(event: {
  *
  * Silence re-arms too, at a threshold that separates the devices rather than guessing at one:
  * inertia arrives every frame, while wheel notches are tens of milliseconds apart even when
- * rolled hard. Waiting for silence *alone* was the first mistake — browsing quickly lays the
+ * rolled hard. Waiting for silence *alone* was the first mistake: browsing quickly lays the
  * next swipe over the previous one's inertia, the gap never comes and the picker goes dead.
  *
  * Travel below `WHEEL_STEP_DELTA` survives a pause on the same axis, so nudges too small to

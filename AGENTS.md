@@ -4,26 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Morphy is a browser multiplayer prop-hunt game: low-poly 3D, LAN-first, server-authoritative. Hunters stalk players disguised as scene objects (props). The code is the source of truth.
 
-**Scope decision (2026-09-08): multiplayer-first.** The game is for humans playing each other; bots exist only to fill the gap when a room is thin, and they play by the same information rules a player has. Playing *with* agents as a feature — an LLM-driven policy, a UI to spawn agents into your room — is deliberately deferred (issues #7 and #8), so do not add machinery whose only purpose is that direction.
+**Scope decision (2026-09-08): multiplayer-first.** The game is for humans playing each other; bots exist only to fill the gap when a room is thin, and they play by the same information rules a player has. Playing *with* agents as a feature (an LLM-driven policy, a UI to spawn agents into your room) is deliberately deferred (issues #7 and #8), so do not add machinery whose only purpose is that direction.
 
 ## Commands
 
 ```bash
 pnpm install            # Node ≥ 24, pnpm 11 (the version is pinned in package.json)
 pnpm dev                # server (Colyseus :2567) + client (Vite :5173) in parallel
-pnpm dev:server         # tsx watch — server only
-pnpm dev:client         # vite — client only
-pnpm bot                # headless bots against a running server — see packages/bot/README.md
+pnpm dev:server         # tsx watch, server only
+pnpm dev:client         # vite, client only
+pnpm bot                # headless bots against a running server, see packages/bot/README.md
 pnpm typecheck          # tsc --noEmit across all packages
 pnpm check              # Biome lint + format (also: check:write, format, lint)
 pnpm test               # node:test suite under tests/
 pnpm check:ci           # the non-mutating Biome gate CI runs
-pnpm tunnel             # ngrok http 5173 — share a LAN/remote session
+pnpm tunnel             # ngrok http 5173, share a LAN/remote session
 pnpm --filter @morphy/client build   # production client bundle
 ```
 
 CI (`.github/workflows/ci.yml`) runs `pnpm check:ci`, `pnpm typecheck`, `pnpm test` and a production
-client build on every pull request — run the same four locally after changes. The suite in
+client build on every pull request; run the same four locally after changes. The suite in
 `tests/` is plain `node:test` over the real modules (validators, map builders, geometry, storage,
 HTTP endpoints, bot scheduling, room lifecycle, client movement and controls); there is no mocking
 framework and no browser test. Verification beyond that is manual play.
@@ -37,63 +37,63 @@ pnpm-workspace monorepo, four packages with a strict runtime dependency directio
 still never import each other at runtime).
 
 `server → bot` exists so the room-filling bots and the CLI bots run the *same* behaviour instead of
-two copies that drift. It is confined to the `@morphy/bot/brain` entry point — the package's
+two copies that drift. It is confined to the `@morphy/bot/brain` entry point: the package's
 `exports` map deliberately splits the transport-free half (`driver.ts`, `reflex.ts`, `view.ts`,
 `nav/`, `policy/`) from `bot.ts`, the only module that touches `@colyseus/sdk`. Import
 `@morphy/bot/brain` from the server, never `@morphy/bot`, or the SDK lands in the server's graph.
 
 The other deliberate exception is build-time: `packages/client/runtimeAssets.ts` imports the map
 builders and prop catalogs from `../server/src/…` so the production GLB allow-list is derived from
-the same data the server emits. Nothing of it reaches the browser — the Vite plugin consuming it is
+the same data the server emits. Nothing of it reaches the browser: the Vite plugin consuming it is
 `apply: "build"`.
 
-### `packages/shared` — the contract layer
+### `packages/shared`: the contract layer
 
-The single source of truth for everything client and server must agree on. **Exports raw TypeScript** (`"exports": { ".": "./src/index.ts" }`, no build step) — both sides consume the source directly via the `@morphy/shared` workspace alias.
+The single source of truth for everything client and server must agree on. **Exports raw TypeScript** (`"exports": { ".": "./src/index.ts" }`, no build step); both sides consume the source directly via the `@morphy/shared` workspace alias.
 
-- `constants.ts` — all gameplay tuning (durations, ratios, speeds, ranges, limits). No gameplay magic numbers live anywhere else.
-- `protocol.ts` — network message **name constants** (`MSG_INPUT`, `MSG_SHOOT`, …) plus the payload interfaces. Messages are individual Colyseus channels keyed by these string constants, **not** a single tagged union.
-- `map.ts` — the `MapDefinition` data model, `parseMapDefinition` (boundary validation, throws `MapValidationError`), and `computePropBounds` (derives a prop's bounding cylinder from its primitive parts — **shared by server hit detection and client mesh fitting**, so they always agree on hitboxes).
-- `maps.ts` — `MAP_CATALOG` (the three selectable maps and their lobby metadata: name, theme, `tag`, blurb), `MapId`, `isMapId`. The client renders the picker straight from it; the server keys `MAP_BUILDERS` on the same ids as a `Record<MapId, …>`, so a half-added map fails `typecheck`. Adding a map is one entry here plus four `Record<MapId, …>` the compiler then demands: the builder (`server/maps/index.ts`), `MAP_CHROME` and `MAP_GLASS` / `MAP_THEME_BASE` (`client/theme.ts`), `STAGE_THEMES` (`client/ui/LobbyStage.tsx`) and a lobby diorama (`client/ui/lobbyDioramas.ts`, ~20 hand-placed set pieces and the only part with no compiler to catch a bad job). Editorial copy belongs here; CSS accents and glyphs belong in `MAP_CHROME`, never in this package.
-- `weapons.ts`, `avatars.ts` — the selectable weapon and avatar catalogs, same catalog-plus-validator shape.
-- `party.ts` — private-room codes over a look-alike-free alphabet; the code **is** the Colyseus roomId, so joining a party is a plain `joinById(code)`.
-- `agent.ts` — the two-level `Intent` / `Observation` contract shared by server and bot. **Types only**: both sides run in one process, so nothing here is serialised and there are no validators. The `parseIntent` / `parseObservation` guards it used to carry existed for an out-of-process policy that was never built; they were removed, not kept warm (git history has them).
-- `geometry.ts` — `rayAabb` and friends, shared by server hit resolution and the bot's hit prediction.
-- `async.ts` — `withTimeout`, which forces callers to dispose a value that resolves after the timeout.
+- `constants.ts`: all gameplay tuning (durations, ratios, speeds, ranges, limits). No gameplay magic numbers live anywhere else.
+- `protocol.ts`: network message **name constants** (`MSG_INPUT`, `MSG_SHOOT`, …) plus the payload interfaces. Messages are individual Colyseus channels keyed by these string constants, **not** a single tagged union.
+- `map.ts`: the `MapDefinition` data model, `parseMapDefinition` (boundary validation, throws `MapValidationError`), and `computePropBounds` (derives a prop's bounding cylinder from its primitive parts, **shared by server hit detection and client mesh fitting**, so they always agree on hitboxes).
+- `maps.ts`: `MAP_CATALOG` (the three selectable maps and their lobby metadata: name, theme, `tag`, blurb), `MapId`, `isMapId`. The client renders the picker straight from it; the server keys `MAP_BUILDERS` on the same ids as a `Record<MapId, …>`, so a half-added map fails `typecheck`. Adding a map is one entry here plus four `Record<MapId, …>` the compiler then demands: the builder (`server/maps/index.ts`), `MAP_CHROME` and `MAP_GLASS` / `MAP_THEME_BASE` (`client/theme.ts`), `STAGE_THEMES` (`client/ui/LobbyStage.tsx`) and a lobby diorama (`client/ui/lobbyDioramas.ts`, ~20 hand-placed set pieces and the only part with no compiler to catch a bad job). Editorial copy belongs here; CSS accents and glyphs belong in `MAP_CHROME`, never in this package.
+- `weapons.ts`, `avatars.ts`: the selectable weapon and avatar catalogs, same catalog-plus-validator shape.
+- `party.ts`: private-room codes over a look-alike-free alphabet; the code **is** the Colyseus roomId, so joining a party is a plain `joinById(code)`.
+- `agent.ts`: the two-level `Intent` / `Observation` contract shared by server and bot. **Types only**: both sides run in one process, so nothing here is serialised and there are no validators. The `parseIntent` / `parseObservation` guards it used to carry existed for an out-of-process policy that was never built; they were removed, not kept warm (git history has them).
+- `geometry.ts`: `rayAabb` and friends, shared by server hit resolution and the bot's hit prediction.
+- `async.ts`: `withTimeout`, which forces callers to dispose a value that resolves after the timeout.
 
-### `packages/server` — authoritative Colyseus room
+### `packages/server`: authoritative Colyseus room
 
-- `index.ts` boots `defineServer` with `WebSocketTransport`. **Uses `@colyseus/core` + `@colyseus/ws-transport` directly, never the `colyseus` meta-package** — this is deliberate (see pnpm-workspace `allowBuilds` / `minimumReleaseAgeExclude`). Matchmaking is `filterBy(["map"]).sortBy({ clients: -1 })`: quick play joins the busiest room **on the map the player picked**, and opens one there when none exists, so a lobby pick is binding instead of a hint. The filter was deliberately absent until 2026-09-17, on the grounds that it splits a small pool three ways — reversed because `botFill.ts` now pads a thin public room to `BOT_FILL_TARGET` within `BOT_FILL_DELAY_MS`, so the empty-room outcome it guarded against no longer happens. Do not re-remove it without also removing bot fill. `map` is a required field of `PublicJoinOptions` and the CLI bot sends it too, which is load-bearing: a caller that omits it is filtered into its own partition of rooms whose stored `map` is `undefined`, and would never meet a player. Private rooms are unaffected — `create` / `joinById` bypass matchmaking entirely — and a public room's map never changes after `onCreate` (`handleSetMap` returns early unless `isPrivate`), so the value the filter stored cannot go stale.
-- `rooms/MorphyRoom.ts` — the whole game. Holds `RoomState`/`PlayerState` (`@colyseus/schema` classes; note `experimentalDecorators` + `useDefineForClassFields: false` in its tsconfig). Owns the round state machine (`lobby → starting → hiding → hunting → round_end`), role assignment, the patch loop, and **server-side hit resolution** (ray vs. prop bounding cylinders + wall AABBs). Every inbound WS payload is validated by a `parse*` helper that returns `null` on bad input (silently ignored, never trusted). Capture is **infection**: a hit prop becomes a hunter and stays in play, so the round ends when no prop is left.
-- Maps: **three hand-authored maps**, one builder each (`maps/station.ts`, `maps/mars.ts`, `maps/urban.ts`), registered in `maps/index.ts` as `MAP_BUILDERS` and chosen from the lobby picker. `buildMap(id, seed)` runs on `onCreate` and again when a party host switches map — **not** per round; a fresh seed only reshuffles the seeded variation (tile variants, furniture, scenery) inside the authored layout. `maps/lib.ts` holds the shared grid primitives (`TILE`, wall/floor variants, colliders), `furnish.ts` fills rooms from semantic **archetypes** (mess hall, quarters, control room, storage bay, lab), and `spaceCatalog.ts` / `marsCatalog.ts` / `urbanCatalog.ts` are the per-theme prop catalogs — the shapes players can morph into. Each builder also exports **every model path it can emit for any seed**, which is what the client's production asset allow-list is built from.
-- `rooms/roomErrors.ts` + `MorphyRoom.onUncaughtException` — Colyseus wraps a room's `clock` callbacks and `onMessage` handlers in a try/catch **only if the room defines `onUncaughtException`** (`Room.mjs` gates the wrapping on it), and `@colyseus/clock` has no guard of its own. `index.ts` also asks for no graceful shutdown, so Colyseus installs no process-level net underneath. Without the hook a throw takes down the whole Node process and every other room on it — measured both ways, for an interval or phase timer (`sendPings` runs every 2 s in every room) and for a message handler reached by a bad payload. Do not remove it. The formatter exists because these exception objects carry the input that caused them (`OnMessageException.payload` is the raw client message, `OnJoinException.options` holds the device id), so the log gets the method, message type, truncated session id and error only — never the payload.
-- `rooms/botFill.ts` + the bot block in `MorphyRoom.ts` — a quiet **public** room pads itself to `BOT_FILL_TARGET` presences with server-driven bots after `BOT_FILL_DELAY_MS`, and hands a bot's seat back the moment a human joins, so bots never take a slot a player wants nor make the room look fuller to the matchmaker. They hold a synthetic `bot:<n>` session id, are never added or removed mid-round, and their motor output goes through the same `handleInput` / `handleShoot` / `handleReady` entry points a real client's messages do — so a bot has no authority a player lacks. They also get no *information* a player lacks: `addBot` runs them with `visibility: "limited"`, so a bot hunter has to find a prop by line of sight, movement and shape instead of reading `role` off it. Shape is `ObservedEntity.disguised` — whether a contact wears a disguise at all, never which one — and it is deliberately in the limited view because a player reads it off the screen: an undisguised contact renders as a character with a weapon, so it can only be a hunter. Without it a hunter bot could not tell a teammate from a disguise that happened to be moving, and hunters pooled into a pack that stared at each other for the round (fixed 2026-09-09). **It is absent whenever the contact is out of line of sight**, because footsteps through a wall tell a player nothing about shape — a heard contact is "might be anyone", so a bot still searches a noise instead of writing it off as a teammate. Keep that gate: it is the whole reason the field is fair. `"full"` reads ground truth and is a measuring anchor, not a way to play — do not wire it into a live room. Those handlers take an `Actor` (just `sessionId` + `send`) rather than a Colyseus `Client` for exactly that reason. Private rooms are never filled.
-- `MorphyRoom.onDrop` / `onReconnect` — a dropped connection holds its seat for `RECONNECT_WINDOW_MS` instead of leaving the round: the player stays in `state.players` with `connected = false`, keeps role and position, and rejoins on the same session id **without passing through `onJoin`**, so neither the in-progress guard there nor a running round's `lock()` shuts them out. Colyseus runs `onLeave` itself when the window lapses, so every existing cleanup and award path still runs, just later. A lobby seat is handed straight back — there is nothing to come back to. Consequence to keep in mind: a held seat is *present in the room but not in the game*, hence `presentCount()` for start thresholds, `firstPresentHumanId()` for the abort award, and `assignRoles` dealing absent players out of the round.
-- `stats/repository.ts` — lifetime player stats in SQLite (`node:sqlite`), keyed by an opaque device id the client mints in localStorage and sends both as a join option and as the `x-device-id` header of `GET /stats` (`http.ts`). `config.ts` reads `MORPHY_DB_PATH`, which production sets outside the deploy directory so a redeploy never wipes accumulated stats.
+- `index.ts` boots `defineServer` with `WebSocketTransport`. **Uses `@colyseus/core` + `@colyseus/ws-transport` directly, never the `colyseus` meta-package**: this is deliberate (see pnpm-workspace `allowBuilds` / `minimumReleaseAgeExclude`). Matchmaking is `filterBy(["map"]).sortBy({ clients: -1 })`: quick play joins the busiest room **on the map the player picked**, and opens one there when none exists, so a lobby pick is binding instead of a hint. The filter was deliberately absent until 2026-09-17, on the grounds that it splits a small pool three ways, reversed because `botFill.ts` now pads a thin public room to `BOT_FILL_TARGET` within `BOT_FILL_DELAY_MS`, so the empty-room outcome it guarded against no longer happens. Do not re-remove it without also removing bot fill. `map` is a required field of `PublicJoinOptions` and the CLI bot sends it too, which is load-bearing: a caller that omits it is filtered into its own partition of rooms whose stored `map` is `undefined`, and would never meet a player. Private rooms are unaffected (`create` / `joinById` bypass matchmaking entirely), and a public room's map never changes after `onCreate` (`handleSetMap` returns early unless `isPrivate`), so the value the filter stored cannot go stale.
+- `rooms/MorphyRoom.ts`: the whole game. Holds `RoomState`/`PlayerState` (`@colyseus/schema` classes; note `experimentalDecorators` + `useDefineForClassFields: false` in its tsconfig). Owns the round state machine (`lobby → starting → hiding → hunting → round_end`), role assignment, the patch loop, and **server-side hit resolution** (ray vs. prop bounding cylinders + wall AABBs). Every inbound WS payload is validated by a `parse*` helper that returns `null` on bad input (silently ignored, never trusted). Capture is **infection**: a hit prop becomes a hunter and stays in play, so the round ends when no prop is left.
+- Maps: **three hand-authored maps**, one builder each (`maps/station.ts`, `maps/mars.ts`, `maps/urban.ts`), registered in `maps/index.ts` as `MAP_BUILDERS` and chosen from the lobby picker. `buildMap(id, seed)` runs on `onCreate` and again when a party host switches map, **not** per round; a fresh seed only reshuffles the seeded variation (tile variants, furniture, scenery) inside the authored layout. `maps/lib.ts` holds the shared grid primitives (`TILE`, wall/floor variants, colliders), `furnish.ts` fills rooms from semantic **archetypes** (mess hall, quarters, control room, storage bay, lab), and `spaceCatalog.ts` / `marsCatalog.ts` / `urbanCatalog.ts` are the per-theme prop catalogs: the shapes players can morph into. Each builder also exports **every model path it can emit for any seed**, which is what the client's production asset allow-list is built from.
+- `rooms/roomErrors.ts` + `MorphyRoom.onUncaughtException`: Colyseus wraps a room's `clock` callbacks and `onMessage` handlers in a try/catch **only if the room defines `onUncaughtException`** (`Room.mjs` gates the wrapping on it), and `@colyseus/clock` has no guard of its own. `index.ts` also asks for no graceful shutdown, so Colyseus installs no process-level net underneath. Without the hook a throw takes down the whole Node process and every other room on it, measured both ways, for an interval or phase timer (`sendPings` runs every 2 s in every room) and for a message handler reached by a bad payload. Do not remove it. The formatter exists because these exception objects carry the input that caused them (`OnMessageException.payload` is the raw client message, `OnJoinException.options` holds the device id), so the log gets the method, message type, truncated session id and error only, never the payload.
+- `rooms/botFill.ts` + the bot block in `MorphyRoom.ts`: a quiet **public** room pads itself to `BOT_FILL_TARGET` presences with server-driven bots after `BOT_FILL_DELAY_MS`, and hands a bot's seat back the moment a human joins, so bots never take a slot a player wants nor make the room look fuller to the matchmaker. They hold a synthetic `bot:<n>` session id, are never added or removed mid-round, and their motor output goes through the same `handleInput` / `handleShoot` / `handleReady` entry points a real client's messages do, so a bot has no authority a player lacks. They also get no *information* a player lacks: `addBot` runs them with `visibility: "limited"`, so a bot hunter has to find a prop by line of sight, movement and shape instead of reading `role` off it. Shape is `ObservedEntity.disguised` (whether a contact wears a disguise at all, never which one), and it is deliberately in the limited view because a player reads it off the screen: an undisguised contact renders as a character with a weapon, so it can only be a hunter. Without it a hunter bot could not tell a teammate from a disguise that happened to be moving, and hunters pooled into a pack that stared at each other for the round (fixed 2026-09-09). **It is absent whenever the contact is out of line of sight**, because footsteps through a wall tell a player nothing about shape: a heard contact is "might be anyone", so a bot still searches a noise instead of writing it off as a teammate. Keep that gate: it is the whole reason the field is fair. `"full"` reads ground truth and is a measuring anchor, not a way to play; do not wire it into a live room. Those handlers take an `Actor` (just `sessionId` + `send`) rather than a Colyseus `Client` for exactly that reason. Private rooms are never filled.
+- `MorphyRoom.onDrop` / `onReconnect`: a dropped connection holds its seat for `RECONNECT_WINDOW_MS` instead of leaving the round: the player stays in `state.players` with `connected = false`, keeps role and position, and rejoins on the same session id **without passing through `onJoin`**, so neither the in-progress guard there nor a running round's `lock()` shuts them out. Colyseus runs `onLeave` itself when the window lapses, so every existing cleanup and award path still runs, just later. A lobby seat is handed straight back: there is nothing to come back to. Consequence to keep in mind: a held seat is *present in the room but not in the game*, hence `presentCount()` for start thresholds, `firstPresentHumanId()` for the abort award, and `assignRoles` dealing absent players out of the round.
+- `stats/repository.ts`: lifetime player stats in SQLite (`node:sqlite`), keyed by an opaque device id the client mints in localStorage and sends both as a join option and as the `x-device-id` header of `GET /stats` (`http.ts`). `config.ts` reads `MORPHY_DB_PATH`, which production sets outside the deploy directory so a redeploy never wipes accumulated stats.
 
-### `packages/client` — Vite + React + react-three-fiber
+### `packages/client`: Vite + React + react-three-fiber
 
-- `ui/App.tsx` — the shell owning connection state, swapping between menu and game (the game route is `lazy`-loaded behind a `Suspense`). `ui/Lobby.tsx` + `ui/LobbyStage.tsx` are the menu: name, ready state, party codes, `StatsPane`, and **two carousels on the stage itself** — the avatar is chosen by morphing through the catalog, and the map by morphing the whole diorama around it, neither from a grid or a strip. Both run off one set of parts (`ui/CarouselRail.tsx`, `ui/carousel.ts`, `ui/carouselWheel.ts`, `ui/useCarouselInput.ts`) and are a single `PickerId` apart, so the cost of either picker is flat in catalog size — the strip of one card per map it replaced hid its own overflow past about five maps. `carouselWheel.ts` is where the reasoning about trackpad inertia lives, and it is a pure fold under test; do not reinline it into a component. The weapon picker is in-game, not here (`game/Game.tsx`). `net/connection.ts` wraps the Colyseus SDK `joinOrCreate` / `create` / `joinById` with a timeout.
-- `game/Game.tsx` — React HUD and the network event hub: registers all `room.onMessage` handlers and the schema `Callbacks` (player add/remove), drives chat/kill-feed/result/scoreboard overlays.
-- `game/Scene.tsx` — the entire 3D scene: map rendering (instanced tiles, fitted GLB props/avatars, scenery), remote-player interpolation, the shooting raycast, pointer-lock mouse look, and the per-frame drive of the local player through `movement.ts`. Still the densest file in the client. **There is no prop picker**: a prop presses `R` to send `MSG_REROLL` and the *server* swaps in a random different prop from the map catalog, spending one of a bounded `rerollsLeft`. `Q`/`E` are prop-only and spin the disguise in place (`propRot` at `PROP_TURN_SPEED`), not the camera — aim is mouse-look alone. Do not re-add a picker believing one was lost.
-- `game/movement.ts` — the **client-side movement + collision core**, lifted out of `Scene.tsx` so it is testable without a browser: `advanceMovement` (accel/decel, air control, gravity, jump buffering), `resolveColliders` (walls, obstacles, step-up, player separation), `supportHeightAt`, `clampToBounds` and `cappedFrameSeconds`, which bounds the frame a backgrounded tab would otherwise integrate in one step.
-- `game/useControls.ts` — the key-code → action map plus `movementFromHeld`, which projects held codes onto actions so aliases (W / ArrowUp, either Shift) read as one, and releases everything when the window blurs. `game/Controls.tsx` renders the in-game legend and the controls dialog from the same key names, so a rebind that misses one of the two shows the player the wrong key.
-- `game/pointerLock.ts` — `lockPointer`, the only path to `requestPointerLock`. The browser refuses the lock routinely (too soon after an exit, no fresh gesture) and the refusal is a promise rejection, so both callers go through here rather than leaking an `Uncaught (in promise)`.
-- `game/audio.ts` — **hybrid audio**: weapon shots / hit impacts (Kenney Sci-fi Sounds, `public/sounds/sci-fi/`) and lobby UI cues (Kenney UI Audio, `public/sounds/ui/`) play cached OGG samples; the lobby loops a licensed theme (`public/sounds/music/lobby-theme.ogg`, own gain, fade in/out); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers all; volume / music / UI-sound prefs persist to localStorage (`morphy:*` keys).
+- `ui/App.tsx`: the shell owning connection state, swapping between menu and game (the game route is `lazy`-loaded behind a `Suspense`). `ui/Lobby.tsx` + `ui/LobbyStage.tsx` are the menu: name, ready state, party codes, `StatsPane`, and **two carousels on the stage itself**: the avatar is chosen by morphing through the catalog, and the map by morphing the whole diorama around it, neither from a grid or a strip. Both run off one set of parts (`ui/CarouselRail.tsx`, `ui/carousel.ts`, `ui/carouselWheel.ts`, `ui/useCarouselInput.ts`) and are a single `PickerId` apart, so the cost of either picker is flat in catalog size; the strip of one card per map it replaced hid its own overflow past about five maps. `carouselWheel.ts` is where the reasoning about trackpad inertia lives, and it is a pure fold under test; do not reinline it into a component. The weapon picker is in-game, not here (`game/Game.tsx`). `net/connection.ts` wraps the Colyseus SDK `joinOrCreate` / `create` / `joinById` with a timeout.
+- `game/Game.tsx`: React HUD and the network event hub: registers all `room.onMessage` handlers and the schema `Callbacks` (player add/remove), drives chat/kill-feed/result/scoreboard overlays.
+- `game/Scene.tsx`: the entire 3D scene: map rendering (instanced tiles, fitted GLB props/avatars, scenery), remote-player interpolation, the shooting raycast, pointer-lock mouse look, and the per-frame drive of the local player through `movement.ts`. Still the densest file in the client. **There is no prop picker**: a prop presses `R` to send `MSG_REROLL` and the *server* swaps in a random different prop from the map catalog, spending one of a bounded `rerollsLeft`. `Q`/`E` are prop-only and spin the disguise in place (`propRot` at `PROP_TURN_SPEED`), not the camera; aim is mouse-look alone. Do not re-add a picker believing one was lost.
+- `game/movement.ts`: the **client-side movement + collision core**, lifted out of `Scene.tsx` so it is testable without a browser: `advanceMovement` (accel/decel, air control, gravity, jump buffering), `resolveColliders` (walls, obstacles, step-up, player separation), `supportHeightAt`, `clampToBounds` and `cappedFrameSeconds`, which bounds the frame a backgrounded tab would otherwise integrate in one step.
+- `game/useControls.ts`: the key-code → action map plus `movementFromHeld`, which projects held codes onto actions so aliases (W / ArrowUp, either Shift) read as one, and releases everything when the window blurs. `game/Controls.tsx` renders the in-game legend and the controls dialog from the same key names, so a rebind that misses one of the two shows the player the wrong key.
+- `game/pointerLock.ts`: `lockPointer`, the only path to `requestPointerLock`. The browser refuses the lock routinely (too soon after an exit, no fresh gesture) and the refusal is a promise rejection, so both callers go through here rather than leaking an `Uncaught (in promise)`.
+- `game/audio.ts`: **hybrid audio**: weapon shots / hit impacts (Kenney Sci-fi Sounds, `public/sounds/sci-fi/`) and lobby UI cues (Kenney UI Audio, `public/sounds/ui/`) play cached OGG samples; the lobby loops a licensed theme (`public/sounds/music/lobby-theme.ogg`, own gain, fade in/out); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers all; volume / music / UI-sound prefs persist to localStorage (`morphy:*` keys).
 
 ### Two facts that span files
 
-**Authority split.** The server is authoritative for the things that matter competitively: phase/timers, roles, HP, alive/dead, and **hit resolution**. Movement is _not_ fully authoritative — the client computes its own position and collision and sends `position + rotation` ~20 Hz; the server only **clamps to map bounds**. Wall/furniture collision exists **only client-side** (`movement.ts`, driven from `Scene.tsx`). This is an intentional LAN-pragmatic tradeoff, not a bug.
+**Authority split.** The server is authoritative for the things that matter competitively: phase/timers, roles, HP, alive/dead, and **hit resolution**. Movement is _not_ fully authoritative: the client computes its own position and collision and sends `position + rotation` ~20 Hz; the server only **clamps to map bounds**. Wall/furniture collision exists **only client-side** (`movement.ts`, driven from `Scene.tsx`). This is an intentional LAN-pragmatic tradeoff, not a bug.
 
 **The disguise is visual only, and that is accepted.** `PlayerState` broadcasts `role`, `propType`
-and `x`/`y`/`z` to every client as plain `@type` fields — there is no `@view`/`StateView` filtering
-anywhere — so anyone with devtools open can read which scene object is a player and where. Roles are
+and `x`/`y`/`z` to every client as plain `@type` fields, and there is no `@view`/`StateView` filtering
+anywhere, so anyone with devtools open can read which scene object is a player and where. Roles are
 public by design already (`StandingsTable` renders a Role column, and `Tab` opens the scoreboard
 mid-round); the part that leaks is *which crate is whom*.
 
 Hiding it properly means interest management: adding and removing props from each hunter's
 `StateView` as line of sight changes, so the position never reaches a client that should not have it.
-`@colyseus/schema` ships `view()` and `StateView`, so no dependency is missing — what stops it is the
+`@colyseus/schema` ships `view()` and `StateView`, so no dependency is missing; what stops it is the
 cost. It is a design pass over `Scene.tsx`, the densest file in the client, and its failure mode is
 **popping**: a crate materialising as you round a corner, visible to every honest player. Trading felt
 gameplay against a devtools cheat nobody has run is the wrong trade at this player count, so the
@@ -103,18 +103,18 @@ threat is real, not before. Do not re-file this as a bug.
 **State propagation has three distinct paths**, all in `Game.tsx`/`Scene.tsx`:
 
 1. `Callbacks.get(room).onAdd/onRemove("players", …)` maintains the live `playersRef` map and the `ids` list.
-2. `callbacks.listen(…)` on the room fields (phase, timer, winner…) and on each player's `PLAYER_META_FIELDS` (name, role, alive, hp, kills, propType…) lifts them into React state — schema-driven, not polled, and gated by equality checks to avoid re-renders. The only interval left is a 250 ms local clock tick that re-renders the countdown.
-3. `useFrame` reads player positions **directly from `playersRef`** every frame to interpolate meshes — positions never go through React state.
+2. `callbacks.listen(…)` on the room fields (phase, timer, winner…) and on each player's `PLAYER_META_FIELDS` (name, role, alive, hp, kills, propType…) lifts them into React state, schema-driven, not polled, and gated by equality checks to avoid re-renders. The only interval left is a 250 ms local clock tick that re-renders the countdown.
+3. `useFrame` reads player positions **directly from `playersRef`** every frame to interpolate meshes; positions never go through React state.
 
 ### Assets
 
 GLB models live in `packages/client/public/models/<kit>/`: `blaster` (weapon viewmodels), `pets`
 (player avatars), `space/modular` (floor/wall/gate tiles for the station and outpost floorplans),
 `space/station` (interior furniture props), `space/exterior` (Martian scenery), `urban` (buildings,
-roads, street props), `characters/` (the urban map's pedestrians — `urbanCatalog.ts` emits twelve of
+roads, street props), `characters/` (the urban map's pedestrians; `urbanCatalog.ts` emits twelve of
 them as morphable props, so they are on the production allow-list). What is *not* wired is
 `characters/` as a **player avatar**: `shared/avatars.ts` ships `set: "pet"` only, and the humanoid
-set stays a plan. Kenney kits reference an external `Textures/colormap.png` per kit — keep that file
+set stays a plan. Kenney kits reference an external `Textures/colormap.png` per kit; keep that file
 alongside the GLBs or models render untextured.
 
 Only the GLBs on the allow-list in `packages/client/runtimeAssets.ts` reach `dist`: at build start
@@ -122,13 +122,13 @@ Only the GLBs on the allow-list in `packages/client/runtimeAssets.ts` reach `dis
 inside it and **throws if one is missing**, then prunes every other GLB from the output. A broken
 model reference fails the build instead of 404-ing in a match.
 
-Audio samples in active use ship from `packages/client/public/sounds/` (`sci-fi/` combat, `ui/` menu cues, `music/` lobby theme — see `music/CREDITS.txt` for the alkakrab license). Unwired candidates are staged in `assets/audio/` (per-directory READMEs and licenses) — copy into `public/sounds/` only when a sound is actually used, so the client bundle stays lean.
+Audio samples in active use ship from `packages/client/public/sounds/` (`sci-fi/` combat, `ui/` menu cues, `music/` lobby theme; see `music/CREDITS.txt` for the alkakrab license). Unwired candidates are staged in `assets/audio/` (per-directory READMEs and licenses). Copy into `public/sounds/` only when a sound is actually used, so the client bundle stays lean.
 
 ## Deploy
 
-Work on a branch and open a pull request. `master` has **no branch protection** — the org is on
+Work on a branch and open a pull request. `master` has **no branch protection**: the org is on
 GitHub's free plan, which gates that feature (and CODEOWNERS) behind a paid plan for private
-repositories — so the PR flow is convention, not enforcement. CI runs on every pull request and on
+repositories, so the PR flow is convention, not enforcement. CI runs on every pull request and on
 every push to `master`.
 
 Production ships on a **version tag**, never on a push to a branch:
@@ -139,13 +139,13 @@ git tag v0.2.0 && git push origin v0.2.0
 
 That fires two workflows. `release.yml` cuts a GitHub release from the matching `CHANGELOG.md`
 section (and fails if the section is missing). `deploy-prod.yml` runs CI, then `deploy.yml` builds
-`ghcr.io/${{ github.repository }}:<sha>` — the tagged **commit** sha, so the deployed image is
-immutable and independent of the tag — joins the deploy host's tailnet, rsyncs `compose.yml` and
+`ghcr.io/${{ github.repository }}:<sha>` (the tagged **commit** sha, so the deployed image
+is immutable and independent of the tag), joins the deploy host's tailnet, rsyncs `compose.yml` and
 the built client, and runs `docker compose pull && up -d`. `deploy-prod.yml` also accepts a manual
 `workflow_dispatch`, for a redeploy without a new tag. The server runs in Docker behind nginx; the
 client is static files nginx serves directly.
 
-`deploy/nginx.conf` is a **reference copy that CI does not deploy** — the workflow only ships
+`deploy/nginx.conf` is a **reference copy that CI does not deploy**: the workflow only ships
 `compose.yml` and `dist/`. Changing it means applying it on the host by hand
 (`nginx -t && systemctl reload nginx`), so the two drift silently if you forget.
 

@@ -74,7 +74,7 @@ export function App() {
    * Own the current room's lifecycle, from subscribing to its close signals to
    * ending exactly once. A room that died between being handed to
    * `setConnection` and this effect subscribing fired those signals into
-   * nobody, so a closed socket found at subscription time counts as a close —
+   * nobody, so a closed socket found at subscription time counts as a close,
    * but the socket's own event may still be a queued task, so every ending
    * goes through `ended` and the first one wins. Otherwise a late real drop
    * would start a reconnect for a match the player has already left.

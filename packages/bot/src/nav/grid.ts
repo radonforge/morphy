@@ -6,7 +6,7 @@ import { BOT_BODY_RADIUS, NAV_CELL_SIZE, NAV_INFLATION_EPS } from "../config";
  * A uniform occupancy grid over the map interior. A cell is blocked when its
  * inflated centre would clip a wall or furniture circle, so the same geometry
  * the physics resolves against (the `Wall[]`/`Obstacle[]` from
- * {@link buildWalls}/{@link buildObstacles}) drives navigability — no second
+ * {@link buildWalls}/{@link buildObstacles}) drives navigability: no second
  * source of truth that could drift and re-introduce wall snags.
  */
 export interface NavGrid {
@@ -38,7 +38,7 @@ function distToWallSq(cx: number, cz: number, wall: Wall): number {
 
 /**
  * Build the occupancy grid for the interior {@link MapBounds}. Walls are
- * inflated by `BOT_BODY_RADIUS + ε`; furniture by `BOT_BODY_RADIUS + radius` —
+ * inflated by `BOT_BODY_RADIUS + ε`; furniture by `BOT_BODY_RADIUS + radius`,
  * matching {@link resolveCollisions} so a path the grid calls clear is one the
  * physics will let the body traverse. A 4-unit doorway leaves ~3 passable cells
  * at {@link NAV_CELL_SIZE} 1.0 after inflation.

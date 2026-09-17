@@ -5,9 +5,9 @@ const SESSION_ID_LOG_PREFIX = 6;
 /**
  * A one-line, safe description of a room exception.
  *
- * Colyseus hangs the triggering input off these errors — `OnMessageException`
+ * Colyseus hangs the triggering input off these errors: `OnMessageException`
  * carries the raw client payload, `OnJoinException` the join options (which
- * include the device id lifetime stats are keyed on) — so logging the exception
+ * include the device id lifetime stats are keyed on), so logging the exception
  * object itself would put untrusted payloads and a player identity into the
  * log. This reports what failed, where, and a truncated session id, never the
  * input. The message type is a protocol constant and safe to name.
