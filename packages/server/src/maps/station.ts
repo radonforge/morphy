@@ -19,7 +19,6 @@ const GZ = 18;
 
 interface Room {
   id: string;
-  name: string;
   i0: number;
   i1: number;
   j0: number;
@@ -35,12 +34,12 @@ const CORR = "corr";
  * Stiva↔Alloggi side door adds a flanking route.
  */
 const ROOMS: Room[] = [
-  { id: "comando", name: "Comando", i0: 0, i1: 10, j0: 0, j1: 8, archetype: ARCHETYPE.CONTROL },
-  { id: "lab", name: "Laboratorio", i0: 12, i1: 22, j0: 0, j1: 4, archetype: ARCHETYPE.LAB },
-  { id: "mensa", name: "Mensa", i0: 12, i1: 22, j0: 4, j1: 8, archetype: ARCHETYPE.MESS },
-  { id: "stiva", name: "Stiva", i0: 0, i1: 6, j0: 10, j1: 18, archetype: ARCHETYPE.STORAGE },
-  { id: "alloggi", name: "Alloggi", i0: 6, i1: 10, j0: 10, j1: 18, archetype: ARCHETYPE.QUARTERS },
-  { id: "hangar", name: "Hangar", i0: 12, i1: 22, j0: 10, j1: 18, archetype: ARCHETYPE.STORAGE },
+  { id: "comando", i0: 0, i1: 10, j0: 0, j1: 8, archetype: ARCHETYPE.CONTROL },
+  { id: "lab", i0: 12, i1: 22, j0: 0, j1: 4, archetype: ARCHETYPE.LAB },
+  { id: "mensa", i0: 12, i1: 22, j0: 4, j1: 8, archetype: ARCHETYPE.MESS },
+  { id: "stiva", i0: 0, i1: 6, j0: 10, j1: 18, archetype: ARCHETYPE.STORAGE },
+  { id: "alloggi", i0: 6, i1: 10, j0: 10, j1: 18, archetype: ARCHETYPE.QUARTERS },
+  { id: "hangar", i0: 12, i1: 22, j0: 10, j1: 18, archetype: ARCHETYPE.STORAGE },
 ];
 
 const DOORS: FloorplanDoor[] = [
