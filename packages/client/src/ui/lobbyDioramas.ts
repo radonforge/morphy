@@ -45,6 +45,13 @@ export const LOBBY_DIORAMAS: Record<MapId, SetPiece[]> = {
     { url: sta("container-tall"), position: [9.8, 0, -5.8], rotationY: -0.4, scale: 2.4 },
     { url: sta("container-flat"), position: [11.4, 0, -7.6], rotationY: 0.2, scale: 2.4 },
     { url: sta("structure-barrier"), position: [13.4, 0, -9.2], rotationY: -0.15, scale: 2.4 },
+    { url: mod("template-wall"), position: [18, 0, -8], rotationY: 1.57 },
+    { url: mod("template-wall"), position: [18, 0, -4], rotationY: 1.57 },
+    { url: mod("template-corner"), position: [-8.6, 0, -1.2], rotationY: 1.57 },
+    { url: sta("container-tall"), position: [-6.8, 0, -2], rotationY: 0.4, scale: 2.4 },
+    { url: sta("wall-pillar"), position: [-8.2, 0, -3.4], rotationY: 0.2, scale: 2.4 },
+    { url: sta("structure"), position: [12.4, 0, -2.6], rotationY: -0.3, scale: 2.4 },
+    { url: sta("pipe-bend"), position: [11.2, 0, -1.2], rotationY: 1.2, scale: 2.4 },
   ],
   mars: [
     { url: ext("hangar_smallA"), position: [8.5, 0, -17], rotationY: -0.5, scale: 3.5 },
@@ -76,6 +83,11 @@ export const LOBBY_DIORAMAS: Record<MapId, SetPiece[]> = {
     { url: ext("satelliteDish"), position: [-11.4, 0, -13.2], rotationY: 0.25, scale: 2 },
     { url: ext("chimney_detailed"), position: [14.6, 0, -13.4], scale: 2.2 },
     { url: ext("hangar_roundA"), position: [-15.5, 0, -16.5], rotationY: 0.5, scale: 3 },
+    { url: ext("rock_largeB"), position: [-7.5, 0, -1.2], rotationY: 0.6, scale: 3.5 },
+    { url: ext("meteor_detailed"), position: [-8.8, 0, -2.8], rotationY: 1.1, scale: 2.6 },
+    { url: ext("rocks_smallA"), position: [-9.8, 0, -0.6], rotationY: 0.3, scale: 3 },
+    { url: ext("rock_largeA"), position: [12.5, 0, -2.2], rotationY: -0.5, scale: 3 },
+    { url: ext("crater"), position: [14, 0, -5], rotationY: 0.9, scale: 3 },
   ],
   urban: [
     { url: urb("roads/road-straight"), position: [-8, -0.05, -1], scale: 4 },
@@ -95,6 +107,16 @@ export const LOBBY_DIORAMAS: Record<MapId, SetPiece[]> = {
     { url: urb("planter"), position: [2.5, 0, -4.4], rotationY: -0.2, scale: 6 },
     { url: urb("roads/construction-cone"), position: [-4.6, 0, -2.2], scale: 6 },
     { url: urb("roads/construction-cone"), position: [-5.3, 0, -2.7], scale: 6 },
+    { url: urb("commercial/building-skyscraper-b"), position: [-9, 0, -20], scale: 6 },
+    {
+      url: urb("commercial/building-skyscraper-a"),
+      position: [-17, 0, -17],
+      rotationY: 0.2,
+      scale: 6,
+    },
+    { url: urb("commercial/building-f"), position: [4, 0, -19], scale: 6 },
+    { url: urb("commercial/building-e"), position: [13, 0, -18], rotationY: -0.15, scale: 6 },
+    { url: urb("tree-large"), position: [8.2, 0, -0.5], rotationY: 0.5, scale: 6 },
   ],
 };
 
