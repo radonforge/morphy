@@ -576,11 +576,15 @@ canvas {
   height: 1px;
   background: linear-gradient(90deg, var(--border), transparent);
 }
+/*
+ * `flex: none` and an explicit width, not a flex basis: the strip around this is a column, so a
+ * basis would size the card's height and leave a 250px-tall square.
+ */
 .menu-mapcard {
   position: relative;
   align-self: start;
-  flex: 0 1 250px;
-  min-width: 185px;
+  flex: none;
+  width: min(280px, 100%);
   margin-top: 6px;
   cursor: pointer;
   text-align: left;
