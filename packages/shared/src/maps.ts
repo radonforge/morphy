@@ -37,8 +37,8 @@ export const MAP_CATALOG = [
     id: "urban",
     name: "North District",
     theme: "urban",
-    tag: "Crowd",
-    blurb: "Blocks and streets: blend in with the neighborhood's pedestrians.",
+    tag: "Streets",
+    blurb: "City blocks and sidewalks: blend in among planters, trees and roadworks.",
   },
 ] as const satisfies readonly MapInfo[];
 

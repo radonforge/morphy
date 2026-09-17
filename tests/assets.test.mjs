@@ -30,3 +30,15 @@ test("every allow-listed runtime model and its declared dependencies exist", asy
   const assets = await runtimePublicAssetPaths(publicDir);
   assert.ok(assets.length > RUNTIME_MODEL_PATHS.length);
 });
+
+test("no allow-listed runtime model is skinned", async () => {
+  for (const model of RUNTIME_MODEL_PATHS) {
+    const bytes = await readFile(new URL(`../packages/client/public${model}`, import.meta.url));
+    const json = glbJson(bytes, model);
+    assert.equal(
+      json.skins?.length ?? 0,
+      0,
+      `${model}: skinned GLB. FittedModel clones with scene.clone(true), and SkinnedMesh.copy shares the source skeleton by reference, so the clone renders nowhere. Switch FittedModel to SkeletonUtils.clone() before shipping a skinned kit.`,
+    );
+  }
+});
