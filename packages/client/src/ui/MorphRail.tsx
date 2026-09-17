@@ -7,18 +7,16 @@ const STEP_FORWARD = 1;
 
 /**
  * The avatar picker's controls. Every step commits immediately — to localStorage and, in a
- * party, to the other members watching you morph on their own stage — so there is nothing to
- * confirm on the way out and the button says "Close", not "Done". Giving it confirm wording
- * would imply a cancel that does not exist: clicking away and Escape keep the choice too.
+ * party, to the other members watching you morph on their own stage — so the rail carries
+ * neither a confirm nor a cancel: it only steps. Dismissing is the backdrop or Escape, and the
+ * hint below says so; a Close button beside the arrows implied a decision still pending.
  */
 export function MorphRail({
   avatar,
   onStep,
-  onClose,
 }: {
   avatar: AvatarId;
   onStep: (delta: number) => void;
-  onClose: () => void;
 }) {
   const info = AVATAR_CATALOG.find((entry) => entry.id === avatar);
 
@@ -49,16 +47,8 @@ export function MorphRail({
         >
           ▶
         </button>
-        <button
-          type="button"
-          className="morph-rail-close"
-          onClick={onClose}
-          onPointerEnter={playUiHover}
-        >
-          Close
-        </button>
       </div>
-      <p className="morph-rail-hint">Click anywhere to close</p>
+      <p className="dismiss-hint">Click anywhere to close</p>
     </div>
   );
 }

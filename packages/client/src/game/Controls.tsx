@@ -154,9 +154,9 @@ export function ControlsDialog({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
-        <button type="button" className="controls-dialog-close" onClick={onClose}>
-          Close <Kbd>Esc</Kbd>
-        </button>
+        <p className="dismiss-hint">
+          Click anywhere or <Kbd>Esc</Kbd> to close
+        </p>
       </div>
     </div>
   );

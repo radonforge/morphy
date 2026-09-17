@@ -634,7 +634,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             onClick={exitMorph}
             onWheel={handleMorphWheel}
           />
-          <MorphRail avatar={selectedAvatar} onStep={handleMorphStep} onClose={exitMorph} />
+          <MorphRail avatar={selectedAvatar} onStep={handleMorphStep} />
         </>
       )}
 
@@ -646,7 +646,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               <button
                 type="button"
                 key={info.id}
-                className={`menu-mapcard${activeMap === info.id ? " sel" : ""}`}
+                className={`menu-mapcard panel${activeMap === info.id ? " sel" : ""}`}
                 style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
                 onClick={() => handleMapPick(info.id)}
                 onPointerEnter={playUiHover}
@@ -674,7 +674,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
                 onPointerEnter={playUiHover}
                 disabled={party.members.length < MIN_PLAYERS_TO_START}
               >
-                <span className="big">▶ Start match</span>
+                <span className="big">Start match</span>
                 <span className="small">
                   {party.members.length < MIN_PLAYERS_TO_START
                     ? `Need at least ${MIN_PLAYERS_TO_START} players`
@@ -694,7 +694,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               onPointerEnter={playUiHover}
               disabled={connecting}
             >
-              <span className="big">▶ {connecting ? "Connecting…" : "Play"}</span>
+              <span className="big">{connecting ? "Connecting…" : "Play"}</span>
               <span className="small">Public match</span>
             </button>
           )}
