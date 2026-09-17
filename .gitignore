@@ -40,3 +40,4 @@ data/
 # Local-only design/review docs (kept out of the repo for now)
 docs/CODEBASE_REVIEW.md
 docs/SPEC.md
+docs/codebase-review-*.md
