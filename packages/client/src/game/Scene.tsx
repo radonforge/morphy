@@ -161,7 +161,6 @@ const SHADOW_HEARTBEAT_S = 2;
 const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 const noRaycast = () => {};
-const LOCAL_AVATAR_KEY = "localAvatar";
 
 export const GAME_FOV = 55;
 export const GAME_DPR: [number, number] = [1, 1.25];
@@ -1534,7 +1533,6 @@ const MapView = memo(function MapView({
             key={`prop-${index}`}
             position={[instance.position.x, instance.position.y, instance.position.z]}
             rotation-y={instance.rotation}
-            userData={{ propType: instance.type }}
           >
             <PropMesh def={def} />
           </group>
@@ -1950,7 +1948,7 @@ function LocalPlayer({
   });
 
   return (
-    <group ref={groupRef} userData={{ [LOCAL_AVATAR_KEY]: true }}>
+    <group ref={groupRef}>
       {alive && role !== "hunter" && (
         <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
       )}
