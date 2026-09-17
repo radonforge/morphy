@@ -31,7 +31,7 @@ export function StatsPane() {
     return <div className="menu-card menu-mini">Loading…</div>;
   }
   if (state.kind === "error") {
-    return <div className="menu-card menu-mini">Couldn't load your stats — try again later.</div>;
+    return <div className="menu-card menu-mini">Couldn't load your stats. Try again later.</div>;
   }
 
   const stats = state.stats;

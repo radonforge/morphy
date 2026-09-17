@@ -87,7 +87,7 @@ export async function createPartyRoom(
 /** Server matchmaker error strings for `joinById`, translated to player-facing copy. */
 function translatePartyJoinError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
-  if (message.includes("not found")) return new Error("Room not found — check the code");
+  if (message.includes("not found")) return new Error("Room not found. Check the code");
   if (message.includes("is locked")) return new Error("That room is full");
   return error instanceof Error ? error : new Error(message);
 }

@@ -12,7 +12,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - The lobby credits the studio: a `© Radon Forge` link to radonforge.com sits
   under the version stamp in the menu header. Nothing in the client pointed at
-  the studio before — the only copyright notice lived in `LICENSE`, which no
+  the studio before: the only copyright notice lived in `LICENSE`, which no
   player ever opens.
 - The README opens on the showcase banner and closes on the license.
 
@@ -20,8 +20,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - A shared link previews as the key art instead of a favicon: `og:image` is the
   1600×800 showcase banner and `twitter:card` is `summary_large_image`, where
-  before the card was a small square of the maskable app icon — the variant
-  padded for Android icon masking, and the wrong one to hand a scraper. The
+  before the card was a small square of the maskable app icon, the variant
+  padded for Android icon masking and the wrong one to hand a scraper. The
   card also carries `og:url`, `og:site_name`, the image dimensions and alt
   text, so a crawler can lay it out without fetching the image first.
 

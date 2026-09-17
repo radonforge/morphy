@@ -133,15 +133,15 @@ function publicLobbyStatus(
   fillAt: number,
 ): LobbyStatus {
   if (phaseEndsAt > 0) {
-    return { label: `Ready ${ready}/${seats} — auto-start`, endsAt: phaseEndsAt };
+    return { label: `Ready ${ready}/${seats} · auto-start`, endsAt: phaseEndsAt };
   }
   if (fillAt > 0) {
-    return { label: "Searching for players — bots join", endsAt: fillAt };
+    return { label: "Searching for players · bots join", endsAt: fillAt };
   }
   if (present < MIN_PLAYERS_TO_START) {
     return { label: `Need at least ${MIN_PLAYERS_TO_START} players`, endsAt: 0 };
   }
-  return { label: `Ready ${ready}/${seats} — everyone ready starts it now`, endsAt: 0 };
+  return { label: `Ready ${ready}/${seats} · everyone ready starts it now`, endsAt: 0 };
 }
 
 interface ChatLine {
@@ -242,7 +242,7 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
                   : "Alive"
                 : "Eliminated"}
           </span>
-          <span>{player.role === "hunter" ? player.kills : "—"}</span>
+          <span>{player.role === "hunter" ? player.kills : "-"}</span>
           <span>{player.ping} ms</span>
         </div>
       ))}
@@ -1143,7 +1143,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
             <button type="button" className="btn-ghost" onClick={onLeaveMatch}>
               Leave match
             </button>
-            <span className="pause-hint">The round keeps running — click the game to resume</span>
+            <span className="pause-hint">The round keeps running. Click the game to resume</span>
           </div>
         </div>
       )}
