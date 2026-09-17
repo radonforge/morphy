@@ -125,6 +125,9 @@ const NAV_ITEMS: NavItem[] = [
   { id: "options", label: "Options" },
 ];
 
+const STUDIO_NAME = "Radon Forge";
+const STUDIO_URL = "https://radonforge.com";
+
 const PANE_TITLES: Record<PaneId, string> = {
   identity: "Identity",
   private: "Private room",
@@ -423,6 +426,9 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           >
             {__MORPHY_VERSION__} · {__MORPHY_BUILD__}
           </span>
+          <a className="menu-legal" href={STUDIO_URL} target="_blank" rel="noreferrer">
+            © {STUDIO_NAME}
+          </a>
         </div>
         <nav className="menu-tabs" aria-label="Menu">
           {NAV_ITEMS.map((item) => (

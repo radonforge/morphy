@@ -8,6 +8,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- The lobby credits the studio: a `© Radon Forge` link to radonforge.com sits
+  under the version stamp in the menu header. Nothing in the client pointed at
+  the studio before — the only copyright notice lived in `LICENSE`, which no
+  player ever opens.
+
 ### Changed
 
 - A shared link previews as the key art instead of a favicon: `og:image` is the

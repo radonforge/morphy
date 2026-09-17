@@ -380,6 +380,29 @@ canvas {
   user-select: text;
 }
 
+.menu-legal {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: rgba(219, 231, 242, 0.3);
+  text-underline-offset: 3px;
+  text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
+  transition:
+    color 0.18s ease,
+    text-decoration-color 0.18s ease;
+}
+.menu-legal:hover,
+.menu-legal:focus-visible {
+  color: var(--cyan);
+  text-decoration-color: var(--cyan);
+}
+.menu-legal:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 .menu-wordmark {
   justify-self: start;
   display: flex;
