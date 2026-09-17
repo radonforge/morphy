@@ -547,6 +547,14 @@ function ActorNameplate({ label, slot }: { label: string; slot: StageSlot }) {
  * One diorama set piece. Its scale is not its own business: the transition fold answers where
  * every piece of both the leaving and the arriving world is on its ramp this instant, which is
  * what lets one sweep dissolve while the other forms instead of the two taking turns.
+ *
+ * A piece is anchored by its own footprint, not by the origin its GLB happens to carry. Every
+ * `space/exterior` model centres its geometry 2 units right and 1.5 forward of that origin, so
+ * anchoring on the origin displaced each Mars piece by `(2, 1.5) * scale`: a per-piece offset,
+ * since the scales run 1.5 to 3.5, which is what pulled hand-placed neighbours into each other.
+ * Re-centring makes `position` mean where the piece stands, the same promise `FittedModel` keeps
+ * in a match, so a layout can be authored by reading the numbers. Height is left alone: these
+ * models already sit on y=0, and the rocket stacks on its own parts.
  */
 function SetPieceModel({
   piece,
@@ -574,6 +582,10 @@ function SetPieceModel({
     });
     return clone;
   }, [scene]);
+  const anchor = useMemo(() => {
+    const center = new THREE.Box3().setFromObject(object).getCenter(new THREE.Vector3());
+    return [-center.x, 0, -center.z] as const;
+  }, [object]);
 
   useFrame(() => {
     const node = pop.current;
@@ -584,7 +596,9 @@ function SetPieceModel({
   return (
     <group position={piece.position} rotation-y={piece.rotationY ?? 0} scale={piece.scale ?? 1}>
       <group ref={pop} scale={0}>
-        <primitive object={object} />
+        <group position={[anchor[0], anchor[1], anchor[2]]}>
+          <primitive object={object} />
+        </group>
       </group>
     </group>
   );
