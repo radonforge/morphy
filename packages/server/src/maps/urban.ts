@@ -96,8 +96,7 @@ const STREET_INSET = 2.2;
 const PLAZA_CLEAR = 7;
 const PROP_GAP = 0.6;
 
-const PEDESTRIANS = URBAN_CATALOG.filter((d) => d.id.startsWith("character")).map((d) => d.id);
-const FURNITURE = URBAN_CATALOG.filter((d) => !d.id.startsWith("character")).map((d) => d.id);
+const PROP_IDS = URBAN_CATALOG.map((d) => d.id);
 
 const cellCenter = (i: number): number => -HALF + (i + 0.5) * CELL;
 const isRoad = (i: number): boolean => ROADS.has(i);
@@ -110,7 +109,7 @@ interface Obstacle {
   r: number;
 }
 
-/** North District: a zoned street grid of solid building blocks; hide among the pedestrians. */
+/** North District: a zoned street grid of solid building blocks; hide among the street furniture. */
 export function buildUrban(seed: number): MapDefinition {
   const rng = makeRng(seed);
   const tiles: TileInstance[] = [];
@@ -204,8 +203,7 @@ export function buildUrban(seed: number): MapDefinition {
       for (let n = 0; n < count; n++) {
         const x = cx + randRange(rng, -CELL / 2 + STREET_INSET, CELL / 2 - STREET_INSET);
         const z = cz + randRange(rng, -CELL / 2 + STREET_INSET, CELL / 2 - STREET_INSET);
-        const pool = onStreet ? (rng() < 0.7 ? PEDESTRIANS : FURNITURE) : FURNITURE;
-        placeProp(x, z, pick(pool, rng));
+        placeProp(x, z, pick(PROP_IDS, rng));
       }
     }
   }

@@ -111,11 +111,17 @@ threat is real, not before. Do not re-file this as a bug.
 GLB models live in `packages/client/public/models/<kit>/`: `blaster` (weapon viewmodels), `pets`
 (player avatars), `space/modular` (floor/wall/gate tiles for the station and outpost floorplans),
 `space/station` (interior furniture props), `space/exterior` (Martian scenery), `urban` (buildings,
-roads, street props), `characters/` (the urban map's pedestrians; `urbanCatalog.ts` emits twelve of
-them as morphable props, so they are on the production allow-list). What is *not* wired is
-`characters/` as a **player avatar**: `shared/avatars.ts` ships `set: "pet"` only, and the humanoid
-set stays a plan. Kenney kits reference an external `Textures/colormap.png` per kit; keep that file
-alongside the GLBs or models render untextured.
+roads, street props). Kenney kits reference an external `Textures/colormap.png` per kit; keep that
+file alongside the GLBs or models render untextured.
+
+**Every shipped GLB is static, and `FittedModel` (`client/game/Scene.tsx`) depends on it**: it
+clones with `scene.clone(true)`, which `SkinnedMesh.copy` implements by copying `skeleton` *by
+reference*, so a cloned skinned mesh stays bound to the cached template's bones and renders
+nowhere. The Kenney `characters/` kit was the one skinned kit in the tree and shipped twelve
+pedestrians as North District's dominant prop; none of them were ever visible, and a reroll into
+one (12 of 19 catalog entries) left the player invisible. The kit was deleted on 2026-09-17 rather
+than fixed, because a prop hunt wants scenery for a disguise, not a person. Adding a skinned kit
+means switching `FittedModel` to `SkeletonUtils.clone()` first.
 
 Only the GLBs on the allow-list in `packages/client/runtimeAssets.ts` reach `dist`: at build start
 `runtimeAssetsPlugin` resolves each allow-listed model plus the external buffer/image URIs declared
