@@ -6,7 +6,7 @@ const CURRENT_PREFIX = "morphy:";
 /**
  * One-time rebrand migration: rename any leftover `webhunt:*` localStorage keys
  * to the `morphy:*` namespace so returning players keep their name, avatar, and
- * audio prefs after the webhunt.lol → morphy.lol rename. Idempotent — once the
+ * audio prefs after the webhunt.lol → morphy.lol rename. Idempotent: once the
  * legacy keys are gone it is a no-op.
  *
  * Runs as a side effect at import time and must be imported before any module

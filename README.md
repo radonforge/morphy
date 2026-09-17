@@ -1,5 +1,7 @@
 # Morphy
 
+![A fox morphing into a barrel while an armed hunter closes in on a space station](packages/client/public/banner.jpg)
+
 Browser multiplayer prop hunt. Low-poly 3D, LAN-first.
 
 ## Requirements
@@ -41,7 +43,7 @@ pnpm check:ci    # the non-mutating Biome gate used in CI
 ## LAN play
 
 1. The host runs `pnpm dev`. Vite serves on the local network (`host: true`) and proxies
-   `/colyseus` — WebSocket included — to the game server on `:2567`.
+   `/colyseus` (WebSocket included) to the game server on `:2567`.
 2. Teammates open `http://<host-ip>:5173` (e.g. `http://192.168.1.42:5173`); the client reaches
    the server through the proxy, with no extra configuration.
 3. To point at a separate/standalone server instead, set `VITE_SERVER_URL`
@@ -63,3 +65,8 @@ name and ready state; full round state machine
 (`lobby → starting → hiding → hunting → round_end`); server-authoritative roles, HP, shooting
 (infection capture), decoys and win conditions; client-side movement + collision; prop disguises;
 chat, standings, kill feed and persistent lifetime stats; runtime-synthesized audio.
+
+## License
+
+Proprietary. © [Radon Forge](https://radonforge.com), all rights reserved; see `LICENSE`.
+Third-party model and audio kits keep their own licenses.

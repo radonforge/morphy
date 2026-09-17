@@ -1,7 +1,7 @@
 {
   "name": "Morphy",
   "short_name": "Morphy",
-  "description": "Browser multiplayer prop hunt — morph into objects, then hunt or hide.",
+  "description": "Browser multiplayer prop hunt: morph into objects, then hunt or hide.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#070b14",

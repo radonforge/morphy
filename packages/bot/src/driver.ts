@@ -27,7 +27,7 @@ const BOOTSTRAP_INTENT: Intent = { kind: "patrol", seq: 0 };
  * Whether two intents differ in what the reflex should *do*, ignoring `seq`. A
  * new decision with the same behaviour (e.g. the same `hideAs` spot re-issued
  * every ~700ms) must NOT reset the reflex's path, or the bot re-plans and
- * micro-steps each cycle — the back-and-forth jitter while "parked".
+ * micro-steps each cycle, the back-and-forth jitter while "parked".
  */
 function behaviorChanged(prev: Intent, next: Intent): boolean {
   if (prev.kind !== next.kind) return true;
@@ -67,7 +67,7 @@ const IDLE: DriverAction = { ready: false, input: null, shoot: null, say: null }
  * The transport-free half of a bot: the reflex, the intent lifecycle and the
  * single-flight decision scheduler. Every tick runs the synchronous reflex
  * against the current intent (never awaits); an abortable `decide` runs in the
- * background at ~1.4 Hz or on events and swaps the intent in when it lands —
+ * background at ~1.4 Hz or on events and swaps the intent in when it lands;
  * stale results (a slow decide that resolved after a newer one started) are
  * dropped by sequence number, so the bot keeps moving fluidly on its last good
  * intent no matter how slow or flaky the policy is.
@@ -188,7 +188,7 @@ export class BotDriver {
   }
 
   /** Cheap per-tick triggers that wake the policy early. Reads the bot's *own*
-   * state — phase, role, hp — which an observation always carries in full. */
+   * state (phase, role, hp), which an observation always carries in full. */
   private detectEvent(world: ReflexWorld): boolean {
     const self = world.self;
     let event = false;
@@ -280,6 +280,6 @@ export class BotDriver {
     if (this.decideErrored) return;
     this.decideErrored = true;
     const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    console.error(`[bot ${this.options.name}] decide failed, holding last intent — ${detail}`);
+    console.error(`[bot ${this.options.name}] decide failed, holding last intent: ${detail}`);
   }
 }

@@ -21,7 +21,7 @@ export interface Point2 {
 
 /**
  * Solid footprints for ground-level bot navigation. Boxes fully above player
- * height (elevated decks, catwalks) are skipped — bots walk under them; stair
+ * height (elevated decks, catwalks) are skipped: bots walk under them; stair
  * steps keep their footprint so bots path around instead of climbing.
  */
 export function buildWalls(map: MapDefinition): Wall[] {
@@ -62,7 +62,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-/** Push a point out of furniture circles and wall boxes, then clamp to map bounds — the same resolution the client applies locally. */
+/** Push a point out of furniture circles and wall boxes, then clamp to map bounds, the same resolution the client applies locally. */
 export function resolveCollisions(
   point: Point2,
   walls: Wall[],

@@ -111,7 +111,7 @@ function pinHunterOnABot(room) {
 /**
  * Stand in for Colyseus's seat holding, which needs a real transport. The
  * returned array records every seat the room asked to hold; the promise never
- * settles, so the window stays open until a test runs `onLeave` itself — which
+ * settles, so the window stays open until a test runs `onLeave` itself, which
  * is what Colyseus does once the window lapses.
  */
 function trackReconnections(room) {

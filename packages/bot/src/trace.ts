@@ -9,7 +9,7 @@ interface KillFields {
 
 /**
  * Opt-in JSONL recorder, one file per bot (no interleaving). Writes one line per
- * *applied* decision — `{t,botName,policy,seq,phase,visibility,obs,intent}` —
+ * *applied* decision (`{t,botName,policy,seq,phase,visibility,obs,intent}`),
  * plus terminal `kill`/`round_end` events. Together they form the
  * `(observation, intent, return)` episodes the future training pipeline needs;
  * Fase 1 only captures the data. The stream is append-mode and closed on
@@ -26,7 +26,7 @@ export class Trace {
     this.stream = createWriteStream(path, { flags: "a", encoding: "utf8" });
     this.stream.on("error", (error) => {
       this.closed = true;
-      console.error(`[trace ${this.botName}] write error, tracing stopped — ${error.message}`);
+      console.error(`[trace ${this.botName}] write error, tracing stopped: ${error.message}`);
     });
   }
 

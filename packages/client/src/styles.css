@@ -339,7 +339,7 @@ canvas {
  * `animation: none` in the out state matters: the entry animations would otherwise outrank the
  * opacity here, and re-arming them is what plays the chrome back in when the picker closes.
  * It is written as a two-class selector to outweigh those per-element rules wherever they sit
- * in this file — at equal specificity the later one wins, and the map title is one of them.
+ * in this file; at equal specificity the later one wins, and the map title is one of them.
  */
 .menu-chrome {
   transition: opacity 0.26s ease;
@@ -378,6 +378,29 @@ canvas {
   color: var(--muted);
   text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
   user-select: text;
+}
+
+.menu-legal {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-color: rgba(219, 231, 242, 0.3);
+  text-underline-offset: 3px;
+  text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
+  transition:
+    color 0.18s ease,
+    text-decoration-color 0.18s ease;
+}
+.menu-legal:hover,
+.menu-legal:focus-visible {
+  color: var(--cyan);
+  text-decoration-color: var(--cyan);
+}
+.menu-legal:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
 }
 
 .menu-wordmark {
@@ -926,7 +949,7 @@ canvas {
 
 /*
  * The dock is click-through and only the pill takes pointer events back, so the hint and the
- * gap around it fall through to the backdrop beneath — clicking the words does what they say
+ * gap around it fall through to the backdrop beneath, so clicking the words does what they say
  * instead of landing on a dead strip of layout.
  */
 .morph-rail {

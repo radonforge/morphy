@@ -2,8 +2,8 @@ import { playUiHover } from "../game/audio";
 import { STEP_BACK, STEP_FORWARD } from "./carousel";
 
 /**
- * The controls shared by the lobby's carousels. Every step commits immediately — to
- * localStorage and, in a party, to the other members watching on their own stage — so the rail
+ * The controls shared by the lobby's carousels. Every step commits immediately, to
+ * localStorage and, in a party, to the other members watching on their own stage, so the rail
  * carries neither a confirm nor a cancel: it only steps. Dismissing is the backdrop or Escape,
  * and the hint below says so; a Close button beside the arrows implied a decision still pending.
  */

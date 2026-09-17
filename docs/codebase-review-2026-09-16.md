@@ -1,4 +1,4 @@
-# Review della codebase — qualità, residui e ottimizzazioni
+# Review della codebase: qualità, residui e ottimizzazioni
 
 Data: 16 settembre 2026. Revisione: `58e954bfe62d35f9ff7b16ebca6a84346ffa72fd` (v0.2.5 + fix bot fill).
 Ambito: client React 19 / R3F / Three.js, server Colyseus, shared, bot, mappe, asset pipeline, test, CI e deploy.
@@ -42,7 +42,7 @@ Non sono stati eseguiti la suite completa, la build di produzione, un browser pl
 
 ## Rilievi prioritari
 
-### R1 — P1 · L'arma locale non segue quella autorevole
+### R1 · P1 · L'arma locale non segue quella autorevole
 
 **Evidenza statica.** [Game.tsx:491](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/game/Game.tsx:491) inizializza sempre `weapon` a `DEFAULT_WEAPON`. Il campo non compare nei metadati sottoscritti né in [RemotePlayerView](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/game/types.ts:3). Il server conserva invece `PlayerState.weapon` durante la riconnessione e [handleSetWeapon](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/server/src/rooms/MorphyRoom.ts:624) rifiuta i cambi quando il giocatore è morto. [App.tsx:111](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/ui/App.tsx:111) rimonta Game dopo il reconnect.
 
@@ -52,7 +52,7 @@ Non sono stati eseguiti la suite completa, la build di produzione, un browser pl
 
 **Verifica:** selezionare rifle, interrompere e ristabilire la connessione; ripetere tornando al party e cambiando arma da eliminati. Controllare arma mostrata, cadenza e `MSG_SHOT_FIRED.weapon`.
 
-### R2 — P1 · Un obiettivo irraggiungibile viene considerato raggiunto
+### R2 · P1 · Un obiettivo irraggiungibile viene considerato raggiunto
 
 **Riprodotto.** In [Reflex.runStatic:482](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/bot/src/reflex.ts:482), dopo `ensurePath`, l'assenza di waypoint porta a `settle()` se `pathBlocked` è false. Ma [failPath:674](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/bot/src/reflex.ts:674) al primo fallimento incrementa solo `replanCount`; imposta `pathBlocked` dopo due tentativi.
 
@@ -70,7 +70,7 @@ Il bot smette di tentare prima di poter raggiungere la soglia di fallimento. La 
 
 **Verifica:** obiettivo in componente disconnessa, fallimento temporaneo e arrivo ordinario; verificare retry limitati e assenza di falsi eventi di arrivo.
 
-### R3 — P1 · Il motore dei bot usa posizioni aggiornate di bersagli non percepiti
+### R3 · P1 · Il motore dei bot usa posizioni aggiornate di bersagli non percepiti
 
 **Riprodotto a livello di motore.** [runShoot:534](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/bot/src/reflex.ts:534) recupera il bersaglio da `world.others`. Se non può colpirlo, [riga 579](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/bot/src/reflex.ts:579) pianifica verso le sue coordinate vere. [runApproach:516](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/bot/src/reflex.ts:516) quantizza la posizione nascosta, ma non verifica che il bersaglio sia ancora udibile.
 
@@ -91,7 +91,7 @@ Il test isola un intento preesistente; non dimostra che la policy scelga da zero
 
 Questo è distinto dal compromesso accettato della visibilità dello schema ai client: riguarda le regole informative dei bot, esplicitamente richieste dal progetto.
 
-### R4 — P2 · Un contatto immobile può generare un falso rumore
+### R4 · P2 · Un contatto immobile può generare un falso rumore
 
 **Riprodotto.** [trackMovement:346](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/bot/src/reflex.ts:346) inizializza `lastMovedAt = now` al primo avvistamento, pur restituendo false. Una seconda osservazione entro `MOVED_RECENTLY_MS` restituisce true anche senza spostamento.
 
@@ -109,7 +109,7 @@ La cadenza ordinaria di decisione è 700 ms e la finestra movimento 600 ms: il c
 
 **Verifica:** contatto fermo e contatto in movimento dietro un muro, con intervalli inferiori e superiori a 600 ms.
 
-### R5 — P2 · Il movimento client integra un delta non limitato
+### R5 · P2 · Il movimento client integra un delta non limitato
 
 **Evidenza statica.** [LocalPlayer:1853](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/game/Scene.tsx:1853) usa direttamente `delta` per accelerazione, posizione e gravità. Le collisioni verificano la posizione finale, non il segmento percorso. Il bot, invece, limita già il passo in [driver.ts:121](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/bot/src/driver.ts:121).
 
@@ -119,7 +119,7 @@ Un frame lento può saltare completamente un collider sottile: a velocità hunte
 
 **Verifica:** stessa traiettoria a 30/60/144 Hz e con spike da 100–500 ms; salto sotto un soffitto, contro una parete, vicino a uno spigolo. Non cambia l'autorità del movimento.
 
-### R6 — P2 · Un taunt rimasto senza mesh può tenere attive le ombre
+### R6 · P2 · Un taunt rimasto senza mesh può tenere attive le ombre
 
 **Evidenza statica.** [Game.tsx:632](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/game/Game.tsx:632) inserisce il timer in `tauntPulseRef`. Il valore viene decrementato da [applyTauntPulse](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/game/Scene.tsx:65), eseguito dalle mesh dei giocatori. [onRemove:562](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/game/Game.tsx:562) non elimina l'entry. Se un giocatore esce durante il pulse, il valore positivo può restare senza un consumatore.
 
@@ -129,7 +129,7 @@ Un frame lento può saltare completamente un collider sottile: a velocità hunte
 
 **Verifica:** taunt seguito immediatamente dall'uscita del giocatore; a scena ferma il refresh deve tornare alla cadenza di quiete. Impatto GPU da misurare.
 
-### R7 — P2 · La rimozione di un bot guasto non rivaluta la fine del round
+### R7 · P2 · La rimozione di un bot guasto non rivaluta la fine del round
 
 **Evidenza statica.** [tickBots:1155](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/server/src/rooms/MorphyRoom.ts:1155) cattura un errore e chiama `removeBot`, ma [removeBot:1128](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/server/src/rooms/MorphyRoom.ts:1128) non esegue le verifiche di continuazione/fine round presenti in `onLeave`.
 
@@ -139,7 +139,7 @@ Se il bot guasto è l'ultimo hunter o l'ultimo prop, il round può continuare fi
 
 **Verifica:** errore dell'ultimo hunter e dell'ultimo prop durante hunting; controllare vincitore, timer e una sola registrazione delle statistiche.
 
-### R8 — P2 · La CLI accetta quantità e difficoltà non finite
+### R8 · P2 · La CLI accetta quantità e difficoltà non finite
 
 **Evidenza statica.** [parseArgs:61](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/bot/src/index.ts:61) applica `Number`, `Math.floor`, `Math.max` e clamp senza controllare `Number.isFinite`.
 
@@ -152,7 +152,7 @@ Se il bot guasto è l'ultimo hunter o l'ultimo prop, il round può continuare fi
 
 **Verifica:** parser puro con input validi, NaN, Infinity, negativi, decimali, valore mancante e flag sconosciuto. Nessuna connessione necessaria.
 
-### R9 — P2 · Effetti collaterali negli updater React
+### R9 · P2 · Effetti collaterali negli updater React
 
 **Evidenza statica.** [App.disconnect:64](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/ui/App.tsx:64) esegue `room.leave()` dentro `setConnection(prev => ...)`. [Lobby.toggleAudio:283](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/ui/Lobby.tsx:283) modifica storage e audio dentro l'updater dello stato.
 
@@ -162,7 +162,7 @@ Gli updater React devono essere puri; possono essere rivalutati. [Documentazione
 
 **Verifica:** uscita volontaria, errore di connessione e rimontaggio; una sola chiusura per room e assenza di effetti collaterali durante il render.
 
-### R10 — P2 · Il deploy elimina i chunk che una lobby già aperta può ancora chiedere
+### R10 · P2 · Il deploy elimina i chunk che una lobby già aperta può ancora chiedere
 
 **Evidenza statica; condizione operativa da riprodurre.** [App.tsx:23](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/ui/App.tsx:23) carica Game con import dinamico. [deploy.yml:97](/Users/davide/orca/workspaces/morphy.lol/bonnethead/.github/workflows/deploy.yml:97) pubblica con `rsync --delete` nella directory servita, eliminando i vecchi asset hashati. Una pagina aperta prima del deploy che non abbia ancora caricato Game può chiedere un chunk ormai eliminato. Non c'è un error boundary per il lazy import fallito.
 
@@ -170,7 +170,7 @@ Gli updater React devono essere puri; possono essere rivalutati. [Documentazione
 
 **Verifica:** aprire lobby della release A, pubblicare B con un chunk Game diverso, premere Play nella pagina A. Uno switch atomico da solo non risolve la retention degli asset della pagina già aperta.
 
-### R11 — P3 · Gli effetti morph perdono la quota Y
+### R11 · P3 · Gli effetti morph perdono la quota Y
 
 **Evidenza statica.** [MorphFx:958](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/game/Scene.tsx:958) e `renderPosesRef` conservano solo x/z. [MorphEffects:1053](/Users/davide/orca/workspaces/morphy.lol/bonnethead/packages/client/src/game/Scene.tsx:1053) posiziona fascio e frammenti rispetto al suolo, mentre i giocatori possono saltare o stare sopra gli oggetti. Il percorso dei decoy break conserva già y.
 
@@ -439,8 +439,8 @@ l'etichetta a non seguirlo.
 - **R3** è circoscritto a un ciclo di decisione. La policy è priva di stato e legge solo
   `obs.entities`, quindi torna a `patrol` non appena il contatto esce dall'osservazione: la finestra
   di inseguimento su posizione esatta è ≤ `DECIDE_INTERVAL_MS` (700 ms), non un wallhack persistente.
-  Resta una deviazione reale dal contratto informativo — `runShoot:579` pianifica sulle coordinate
-  vere senza alcun gate di vista, mentre `runApproach` almeno quantizza — ma sotto R1 e R2.
+  Resta una deviazione reale dal contratto informativo (`runShoot:579` pianifica sulle coordinate
+  vere senza alcun gate di vista, mentre `runApproach` almeno quantizza), ma sotto R1 e R2.
 - **R9** è latente. Senza StrictMode gli updater non vengono rivalutati: è igiene, non un difetto
   osservabile oggi.
 

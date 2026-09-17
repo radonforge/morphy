@@ -31,8 +31,8 @@ const character = (id, distance, over = {}) => contact(id, distance, { disguised
 const mover = (id, distance, over = {}) => contact(id, distance, { movedRecently: true, ...over });
 
 /**
- * A contact known only by sound: moving, out of sight, and — like the footsteps
- * a player hears through a wall — carrying no shape at all. The reflex omits
+ * A contact known only by sound: moving, out of sight, and (like the footsteps
+ * a player hears through a wall) carrying no shape at all. The reflex omits
  * `disguised` for these, so the fixture must too.
  */
 const heard = (id, distance) => {
@@ -84,7 +84,7 @@ const kinds = (intents) => [...new Set(intents.map((intent) => intent.kind))];
  *
  * The moving case is the one that mattered: a teammate standing still was
  * already distinguishable from the two signals perception used to carry, and a
- * teammate on the move was not — which is why the hunter that got followed
+ * teammate on the move was not, which is why the hunter that got followed
  * around the map was the one walking about.
  */
 test("a hunter never walks up to a contact wearing no disguise", async () => {
@@ -143,7 +143,7 @@ test("a hunter runs down a disguise it can see running", async () => {
 
 /**
  * The gate that keeps the chase from becoming a sprint at everything. A contact
- * known only by sound carries no shape, so it could be a teammate — running at
+ * known only by sound carries no shape, so it could be a teammate: running at
  * every noise would rebuild the hunter pack, and faster than before.
  */
 test("a hunter walks to a suspect it has not seen run", async () => {
@@ -211,7 +211,7 @@ test("a prop freezes instead of running when the hunter is already watching", as
   assert.equal(intent.kind, "idle");
 });
 
-/** A fellow prop is not a threat, whatever it is doing — it cannot shoot. */
+/** A fellow prop is not a threat, whatever it is doing: it cannot shoot. */
 test("a prop holds its hiding plan next to another disguise", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
   const intents = await run(policy, DECISIONS, () => [mover("prop-b", 1)], asProp);

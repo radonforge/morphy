@@ -143,8 +143,8 @@ test("a chat line decided before the bot died is dropped, not saved for later", 
 
 /**
  * The room-filling bots run with `"limited"` vision (`MorphyRoom.addBot`). The
- * two modes differ in exactly one thing — whether a contact carries ground
- * truth — and that is what makes a filler bot fair to the humans it pads out.
+ * two modes differ in exactly one thing, whether a contact carries ground
+ * truth, and that is what makes a filler bot fair to the humans it pads out.
  */
 function worldWithOneContact(selfRole, contactRole, contactPropType) {
   const body = (id, role, propType) => ({
@@ -248,7 +248,7 @@ test("the full-vision anchor still reads ground truth", async () => {
 
 /**
  * The wake-up detector used to filter on `other.role`, so a bot slept through a
- * teammate and woke the instant an enemy appeared — a reaction time no player
+ * teammate and woke the instant an enemy appeared: a reaction time no player
  * has, decided before the policy had been shown anything.
  */
 test("a bot wakes its policy for any contact that comes into view, not just enemies", async () => {
@@ -309,7 +309,7 @@ test("a bot wakes its policy for any contact that comes into view, not just enem
     assert.ok(baseline > 0, "the first kick fires on the phase change");
 
     // 1 ms later the decide interval is nowhere near due, so anything that
-    // fires now fires because a contact was noticed — and the contact is a
+    // fires now fires because a contact was noticed, and the contact is a
     // fellow hunter, which the old role filter skipped.
     bot.maybeKickDecide(
       { phase: "hunting", self, others: [body("mate", "hunter", 3)], decoys: [] },

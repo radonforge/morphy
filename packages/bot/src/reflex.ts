@@ -111,7 +111,7 @@ const HOLD = (x: number, z: number, rot: number): MotorOutput => ({
  * fire cooldown), the navigation grid, and path following, and exposes exactly
  * two operations: {@link buildObservation} (perception → the policy's input) and
  * {@link executeIntent} (the current intent → motor output, run every 20 Hz
- * tick). It never blocks and never decides *what* to do — only *how/when*.
+ * tick). It never blocks and never decides *what* to do, only *how/when*.
  */
 export class Reflex {
   private map: MapDefinition | null = null;
@@ -162,7 +162,7 @@ export class Reflex {
   }
 
   /** Whether the bot has clear line of sight to a world point (eye height to eye
-   * height) — the scheduler's cheap per-tick "new contact?" probe. */
+   * height): the scheduler's cheap per-tick "new contact?" probe. */
   canSee(x: number, y: number, z: number): boolean {
     return this.canSeePoint(x, y + BOT_EYE_HEIGHT, z);
   }
@@ -374,7 +374,7 @@ export class Reflex {
   /**
    * Drop what the bot remembers about players who have left the room. Both maps
    * are keyed by session id and were only ever cleared with the map, so a long
-   * session accumulated an entry per player who ever appeared — and a returning
+   * session accumulated an entry per player who ever appeared, and a returning
    * id would be measured against a sample from its previous life.
    */
   private forgetDeparted(others: readonly BotPlayer[]): void {
@@ -394,7 +394,7 @@ export class Reflex {
    * has never been sensed.
    *
    * The motor runs on an intent for as long as a decision cycle, so without this
-   * it kept reading `world.others` — a target that broke line of sight was still
+   * it kept reading `world.others`: a target that broke line of sight was still
    * pathed to by its live coordinates, letting a bot follow someone through a
    * wall that a player would have lost.
    */
@@ -476,7 +476,7 @@ export class Reflex {
 
   /**
    * Nudge out of any overlapping player body and re-resolve against the static
-   * world. Runs every tick — including while settled or frozen — because nothing
+   * world. Runs every tick, including while settled or frozen, because nothing
    * else separates one bot from another: the client only pushes the *local*
    * player apart and the server merely clamps. Mirrors the client's own
    * player-vs-player resolution so stacked disguises drift apart instead of
@@ -530,15 +530,15 @@ export class Reflex {
   /**
    * Move toward a fixed goal, then *stay put*. Once the planned path is consumed
    * (or the exact goal is reached), the goal is "settled": the bot holds still and
-   * stops re-planning until the intent changes. Settling on path-exhaustion — not
-   * on a tight epsilon against the policy's exact coordinate — is what stops the
+   * stops re-planning until the intent changes. Settling on path-exhaustion, not
+   * on a tight epsilon against the policy's exact coordinate, is what stops the
    * back-and-forth jitter when a hide spot lands on a cell centre or inside the
    * inflated furniture ring it can't quite touch.
    *
    * A goal that could not be planned at all leaves no path either, so settling
    * is gated on a path having actually been walked. Treating a failed plan as
-   * an arrival parked the bot where it stood, and — since a settled bot stops
-   * calling `ensurePath` — froze the replan counter before it could ever reach
+   * an arrival parked the bot where it stood and (since a settled bot stops
+   * calling `ensurePath`) froze the replan counter before it could ever reach
    * `pathBlocked`, hiding the failure from the policy as well.
    */
   private runStatic(

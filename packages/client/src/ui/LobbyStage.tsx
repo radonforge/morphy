@@ -82,7 +82,7 @@ const UNSCALED = 1;
 function useMotionBoost(beat: string): boolean {
   const [boosted, setBoosted] = useState(false);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: beat is a trigger, not read in the body — each change restarts the boost window.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: beat is a trigger, not read in the body; each change restarts the boost window.
   useEffect(() => {
     setBoosted(true);
     const id = setTimeout(() => setBoosted(false), STAGE_BOOST_MS);
@@ -160,7 +160,7 @@ const SUN_POSITION: [number, number, number] = [14, 26, 10];
 const SHADOW_MAP_SIZE = 2048;
 const SHADOW_EXTENT = 28;
 /*
- * Named rather than left to the Canvas default, which asks for PCFSoft — deprecated in three
+ * Named rather than left to the Canvas default, which asks for PCFSoft, deprecated in three
  * 0.184 and silently downgraded to this same PCF, with a console warning on every bake. So this
  * is what the stage was already rendering, minus the noise.
  */
@@ -224,7 +224,7 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
 };
 
 /**
- * One avatar on the stage. `materialize` is read **at mount only** — the caller keys this
+ * One avatar on the stage. `materialize` is read **at mount only**: the caller keys this
  * component by avatar id, so mounting while morph mode is on *is* the signal that a step
  * produced this shape, and it pops in from nothing. Feeding the live prop to the scale
  * instead would blank the avatar already standing there the moment the picker opens, since
@@ -293,7 +293,7 @@ function AvatarActor({
   }, [actions, mixer]);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: r3f scene-graph node, not a DOM element — keyboard path is the Identity tab
+    // biome-ignore lint/a11y/noStaticElementInteractions: r3f scene-graph node, not a DOM element; keyboard path is the Identity tab
     <group
       position={[slot.x, 0, slot.z]}
       rotation-y={slot.yaw}
@@ -382,7 +382,7 @@ function AvatarGhost({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
 /**
  * The lobby's materialize burst: a rising beam and one ring of shards that converge on the
  * stage slot, replayed whenever `signal` changes. Deliberately not the scene's pooled
- * MorphEffects — only one thing ever morphs here at a time, and this has to keep playing
+ * MorphEffects: only one thing ever morphs here at a time, and this has to keep playing
  * outside the model's suspense boundary so a cold GLB loads under cover of the beam.
  *
  * `scale` sizes the whole effect: the avatar carousel bursts around one pet, the world
@@ -595,14 +595,14 @@ function FrameLimiter({ fps }: { fps: number }) {
 /**
  * The only owner of `shadowMap.autoUpdate`, and the reason it is one component: the stage wants
  * a frozen shadow map, but freezing it the frame new content mounts bakes the diorama while the
- * grow-in still has every set piece at ~0 scale, and nothing ever kicks it again — so a map you
+ * grow-in still has every set piece at ~0 scale, and nothing ever kicks it again, so a map you
  * switched to kept the shadows of nothing. Shadows stay live until `settleMs` after `signal`
  * changes, then freeze with one final bake at full size.
  */
 function ShadowStage({ signal, settleMs }: { signal: string; settleMs: number }) {
   const gl = useThree((state) => state.gl);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: signal is a trigger, not read in the body — new content restarts the settle window.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: signal is a trigger, not read in the body; new content restarts the settle window.
   useEffect(() => {
     gl.shadowMap.autoUpdate = true;
     const id = setTimeout(() => {
@@ -657,7 +657,7 @@ function Atmosphere({ theme }: { theme: StageTheme }) {
  * picker, and a pull back and up for the world picker, which frames the diorama the player is
  * choosing rather than the pet standing in front of it.
  *
- * The aim point is damped alongside the position rather than set outright — snapping it the
+ * The aim point is damped alongside the position rather than set outright: snapping it the
  * frame a picker opens swings the camera ~13° in one step, which reads as a cut however
  * smoothly the position travels.
  */

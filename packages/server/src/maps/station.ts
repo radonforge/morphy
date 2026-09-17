@@ -86,7 +86,7 @@ function roomSpawns(rect: RoomRect, doorways: Doorway[]): Vec3[] {
   return scored.map((s) => ({ x: s.c.x, y: 0, z: s.c.z }));
 }
 
-/** Stazione Kepler-9 — hand-authored deck of themed compartments around a central spine. */
+/** Kepler-9 Station: hand-authored deck of themed compartments around a central spine. */
 export function buildStation(seed: number): MapDefinition {
   const rng = makeRng(seed);
   const grid: Grid = { gx: GX, gz: GZ, halfW: (GX * TILE) / 2, halfD: (GZ * TILE) / 2 };

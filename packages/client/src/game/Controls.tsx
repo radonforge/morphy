@@ -74,7 +74,7 @@ interface BarState {
 }
 
 function mainControls(s: BarState): { note?: string; items: ControlSpec[] } {
-  if (!s.alive) return { note: "Eliminated — spectating", items: [] };
+  if (!s.alive) return { note: "Eliminated, spectating", items: [] };
   if (s.canShoot) {
     return {
       items: [

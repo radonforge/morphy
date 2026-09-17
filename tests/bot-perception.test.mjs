@@ -81,8 +81,8 @@ test("a contact in line of sight keeps its exact position", () => {
 
 /**
  * Shape is a sighting, not a sense. Footsteps through a wall tell a player
- * nothing about what is making them, so a heard contact carries no `disguised`
- * — otherwise a bot would know a noise was a teammate's and walk away from it.
+ * nothing about what is making them, so a heard contact carries no `disguised`;
+ * otherwise a bot would know a noise was a teammate's and walk away from it.
  */
 test("a contact known only by sound reports no shape", () => {
   const obs = observeMoving(ready("limited"), contact(5.0, 1.0), contact(5.9, 1.9));

@@ -20,7 +20,7 @@ interface Spot {
 }
 
 /**
- * Whether a contact is a disguise *seen* to be on the move — the one suspect
+ * Whether a contact is a disguise *seen* to be on the move: the one suspect
  * worth sprinting after, because it is the one a walking hunter can never catch:
  * a panicking prop runs at `MOVE_SPEED * RUN_MULTIPLIER_PROP` and a walking
  * approach closes at `MOVE_SPEED`, so the gap opens for as long as it keeps
@@ -28,7 +28,7 @@ interface Spot {
  *
  * Every other suspect is approached at walking pace on purpose. A contact known
  * only by sound carries no shape, so sprinting at one means sprinting at a
- * teammate's footsteps — the hunter pack, back again and faster.
+ * teammate's footsteps: the hunter pack, back again and faster.
  */
 function isFleeing(entity: ObservedEntity): boolean {
   return entity.hasLineOfSight && entity.disguised === true && entity.movedRecently === true;
@@ -50,7 +50,7 @@ function nearest(
 /**
  * The baseline brain, playable in both visibility modes:
  *
- * - `"full"` reads ground truth (role/alive/propType) — the parity anchor against
+ * - `"full"` reads ground truth (role/alive/propType), the parity anchor against
  *   which limited-vision LLM policies are measured (the former `HunterBrain`/`PropBrain`).
  * - `"limited"` reasons only from sensed signals (line of sight, distance,
  *   `disguised`, `movedRecently`), so the hunter is no longer omniscient: it must
@@ -59,7 +59,7 @@ function nearest(
  *   neither shot at nor walked up to; a disguise standing still is shot on
  *   sight, and one still moving is run down (`inspect`) until it settles. A
  *   contact known only by sound carries no shape at all and is investigated
- *   whoever it turns out to be — a player hearing footsteps knows no better.
+ *   whoever it turns out to be; a player hearing footsteps knows no better.
  *
  * It picks *what* to do; the reflex still owns aim, the line-of-sight gate and the
  * fire cooldown, and difficulty still tunes trigger latency inside the reflex.
@@ -122,7 +122,7 @@ export class ScriptedPolicy implements Policy {
    * the whole reason a pack of hunters no longer forms. A hunter renders as a
    * character with a weapon and can never come to look like a prop, so treating
    * it as a suspect meant two hunters picked each other, met, and stared at each
-   * other for the rest of the round — and chased any human hunter who walked
+   * other for the rest of the round, and chased any human hunter who walked
    * past, forever, since a contact that keeps its distance never runs out of
    * patience to spend. A noise stays worth investigating precisely because a
    * player cannot tell a teammate's footsteps from a prop's.
@@ -186,7 +186,7 @@ export class ScriptedPolicy implements Policy {
    * escape point and stands there for the rest of the round: the reflex parks
    * on a goal it has reached and only an intent it reads as *different* wakes
    * it, so re-issuing the spot it is already standing on leaves it settled.
-   * The deflection count deliberately survives an arrival — resetting it would
+   * The deflection count deliberately survives an arrival: resetting it would
    * let a cornered prop cycle back through fresh escapes forever, and once the
    * deflections are spent the fallback re-derives the prop's own position, so
    * the re-issued goal is unchanged and nothing churns.

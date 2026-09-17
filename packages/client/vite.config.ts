@@ -17,7 +17,7 @@ export default defineConfig({
            * or listing it second, makes React land inside the three chunk
            * instead of its own: the entry point then has a static dependency on
            * that chunk, so the whole 3D stack returns to `modulepreload` and
-           * loads before first paint again. Measured, not inferred — the three
+           * loads before first paint again. Measured, not inferred: the three
            * chunk grows by exactly React's weight and reappears in index.html.
            * The regression fails no build and no test, so check index.html.
            */

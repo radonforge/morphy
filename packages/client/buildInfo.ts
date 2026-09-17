@@ -56,7 +56,7 @@ function readBuildSha(): string {
  * A tagged build reads its version from the tag, which makes the tag
  * authoritative: a tag pushed without the matching manifest bump stamps the
  * release it claims to be instead of the stale one on disk. Every other build
- * — a `workflow_dispatch` redeploy, CI, a local `pnpm build` — sits *past* a
+ * (a `workflow_dispatch` redeploy, CI, a local `pnpm build`) sits *past* a
  * release rather than being it, so it reports the root manifest's version
  * marked with `+`. A flat version there would claim to be the release.
  *
