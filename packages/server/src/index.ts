@@ -12,7 +12,7 @@ const server = defineServer({
   transport: new WebSocketTransport(),
   gracefullyShutdown: false,
   rooms: {
-    [ROOM_NAME]: defineRoom(MorphyRoom).sortBy({ clients: -1 }),
+    [ROOM_NAME]: defineRoom(MorphyRoom).filterBy(["map"]).sortBy({ clients: -1 }),
   },
   express: (app) => {
     app.use(cors());

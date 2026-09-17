@@ -640,7 +640,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
       <form className={`menu-bottom ${chromeClass}`} onSubmit={handleSubmit} inert={morphMode}>
         <div className="menu-strip">
-          <span className="menu-strip-label">{inParty ? "Map" : "Preferred map"}</span>
+          <span className="menu-strip-label">Map</span>
           <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
             {MAP_CATALOG.map((info) => (
               <button
