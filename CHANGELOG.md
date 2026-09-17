@@ -14,6 +14,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   under the version stamp in the menu header. Nothing in the client pointed at
   the studio before — the only copyright notice lived in `LICENSE`, which no
   player ever opens.
+- The README opens on the showcase banner and closes on the license.
 
 ### Changed
 

@@ -1,5 +1,7 @@
 # Morphy
 
+![A fox morphing into a barrel while an armed hunter closes in on a space station](packages/client/public/banner.jpg)
+
 Browser multiplayer prop hunt. Low-poly 3D, LAN-first.
 
 ## Requirements
@@ -63,3 +65,8 @@ name and ready state; full round state machine
 (`lobby → starting → hiding → hunting → round_end`); server-authoritative roles, HP, shooting
 (infection capture), decoys and win conditions; client-side movement + collision; prop disguises;
 chat, standings, kill feed and persistent lifetime stats; runtime-synthesized audio.
+
+## License
+
+Proprietary. © [Radon Forge](https://radonforge.com) — all rights reserved; see `LICENSE`.
+Third-party model and audio kits keep their own licenses.
