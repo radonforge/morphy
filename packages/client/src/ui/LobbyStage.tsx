@@ -1,11 +1,25 @@
 import type { AvatarId, MapId } from "@morphy/shared";
 import { Billboard, Html, Sky, Stars, Text, useAnimations, useGLTF } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { playUiHover } from "../game/audio";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { avatarNeighbors, mapNeighbors } from "./carousel";
+import {
+  beginTransition,
+  DIORAMA_TRANSITION_S,
+  type DioramaTransition,
+  isVeiled,
+  liveMaps,
+  pieceScale,
+  ready,
+  retarget,
+  sameStageRender,
+  stageMap,
+  tick,
+  veilOpacity,
+} from "./dioramaTransition";
 import { LOBBY_DIORAMAS, type SetPiece } from "./lobbyDioramas";
 import { type PickerId, STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
 
@@ -65,14 +79,17 @@ const MORPH_SHARD_SPIN = 9;
 const POP_SETTLED = Number.POSITIVE_INFINITY;
 
 /*
- * The grow-in is spread across a fixed window rather than a fixed step per piece, so a denser
- * diorama sweeps faster instead of running longer: the whole thing has to finish inside
- * `STAGE_BOOST_MS`, which is the only stretch running at `STAGE_BOOST_FPS`.
+ * The one budget the world swap is spent from. The stage runs at `STAGE_BOOST_FPS` and keeps its
+ * shadow map live for exactly as long as a cross takes, so both are derived from the fold that
+ * owns the timeline rather than tuned next to it, where they used to drift.
  */
-const DIORAMA_POP_WINDOW_S = 0.45;
-const DIORAMA_SETTLE_MS = (DIORAMA_POP_WINDOW_S + MORPH_POP_DURATION_S) * 1000;
-const NO_DELAY = 0;
+const DIORAMA_SETTLE_MS = DIORAMA_TRANSITION_S * 1000;
 const UNSCALED = 1;
+
+const VEIL_RADIUS = 80;
+const VEIL_SEGMENTS_W = 24;
+const VEIL_SEGMENTS_H = 16;
+const VEIL_RENDER_ORDER = 1;
 
 /**
  * True for `STAGE_BOOST_MS` after every change of `beat`. The stage idles at 30 fps, which is
@@ -147,7 +164,7 @@ const CAMERA_FOV = 38;
 const CAMERA_BASE: [number, number, number] = [0, 1.5, 6];
 const STAGE_MAX_FPS = 30;
 const STAGE_BOOST_FPS = 60;
-const STAGE_BOOST_MS = 900;
+const STAGE_BOOST_MS = DIORAMA_SETTLE_MS;
 const STAGE_DPR: [number, number] = [1, 1.25];
 const CAMERA_LOOK_AT = new THREE.Vector3(0, 1.05, 0);
 const PARALLAX_X = 0.55;
@@ -527,23 +544,25 @@ function ActorNameplate({ label, slot }: { label: string; slot: StageSlot }) {
 }
 
 /**
- * One diorama set piece. `delay` staggers the grow-in across the diorama so a map arrives as a
- * sweep of matter forming rather than one block of geometry appearing whole; the pop is clocked
- * from mount, and the caller keys these by map, so switching worlds replays it.
+ * One diorama set piece. Its scale is not its own business: the transition fold answers where
+ * every piece of both the leaving and the arriving world is on its ramp this instant, which is
+ * what lets one sweep dissolve while the other forms instead of the two taking turns.
  */
 function SetPieceModel({
   piece,
-  delay = NO_DELAY,
-  materialize = false,
+  map,
+  index,
+  count,
+  transition,
 }: {
   piece: SetPiece;
-  delay?: number;
-  materialize?: boolean;
+  map: MapId;
+  index: number;
+  count: number;
+  transition: RefObject<DioramaTransition>;
 }) {
   const { scene } = useGLTF(piece.url);
   const pop = useRef<THREE.Group>(null);
-  const popIn = useRef(materialize).current;
-  const popAge = useRef(popIn ? -delay : POP_SETTLED);
   const object = useMemo(() => {
     const clone = scene.clone(true);
     clone.traverse((child) => {
@@ -556,19 +575,111 @@ function SetPieceModel({
     return clone;
   }, [scene]);
 
-  useFrame((_, frameDelta) => {
+  useFrame(() => {
     const node = pop.current;
-    if (node === null || popAge.current >= MORPH_POP_DURATION_S) return;
-    popAge.current += frameDelta;
-    node.scale.setScalar(Math.max(0, Math.min(1, popAge.current / MORPH_POP_DURATION_S)));
+    if (node === null) return;
+    node.scale.setScalar(pieceScale(transition.current, map, index, count));
   });
 
   return (
     <group position={piece.position} rotation-y={piece.rotationY ?? 0} scale={piece.scale ?? 1}>
-      <group ref={pop} scale={popIn ? 0 : 1}>
+      <group ref={pop} scale={0}>
         <primitive object={object} />
       </group>
     </group>
+  );
+}
+
+/**
+ * The arriving world's own report that it is loaded. A Suspense boundary commits all of its
+ * children at once, so an effect on a sibling of the set pieces fires exactly when the last of
+ * their models has resolved: no polling, no second loader, nothing added to the `useGLTF` cache.
+ */
+function DioramaReady({ onReady }: { onReady: () => void }) {
+  useEffect(() => {
+    onReady();
+  }, [onReady]);
+  return null;
+}
+
+/**
+ * One whole world, mounted inside its own boundary so an uncached map suspends alone. The world
+ * already on stage is in a boundary of its own and keeps rendering throughout, which is what
+ * closed the hole a cold map used to leave.
+ */
+function Diorama({
+  map,
+  arriving,
+  transition,
+  onReady,
+}: {
+  map: MapId;
+  arriving: boolean;
+  transition: RefObject<DioramaTransition>;
+  onReady: () => void;
+}) {
+  const pieces = LOBBY_DIORAMAS[map];
+  return (
+    <Suspense fallback={null}>
+      {pieces.map((piece, index) => (
+        <SetPieceModel
+          key={`${piece.url}:${piece.position.join(",")}`}
+          piece={piece}
+          map={map}
+          index={index}
+          count={pieces.length}
+          transition={transition}
+        />
+      ))}
+      {arriving && <DioramaReady onReady={onReady} />}
+    </Suspense>
+  );
+}
+
+/**
+ * Advances the transition clock. Mounted ahead of the dioramas so the pieces read a clock that
+ * has already moved this frame, and the only `useFrame` allowed to write the fold.
+ */
+function DioramaDriver({
+  transition,
+  onAdvance,
+}: {
+  transition: RefObject<DioramaTransition>;
+  onAdvance: (state: DioramaTransition) => void;
+}) {
+  useFrame((_, delta) => {
+    onAdvance(tick(transition.current, delta));
+  });
+  return null;
+}
+
+/**
+ * An inward-facing shell between the ground disc and the stars, which closes over the sky while
+ * the theme swaps underneath it and opens again. It sits past every theme's fog far plane, so it
+ * draws in pure fog colour, and that is the colour `Atmosphere` is already lerping between
+ * themes: opacity is the only value left to animate. It renders after the stars, which blend
+ * additively and would otherwise shine straight through it.
+ */
+function SkyVeil({ transition }: { transition: RefObject<DioramaTransition> }) {
+  const material = useRef<THREE.MeshBasicMaterial>(null);
+
+  useFrame(() => {
+    const node = material.current;
+    if (node === null) return;
+    node.opacity = veilOpacity(transition.current);
+  });
+
+  return (
+    <mesh renderOrder={VEIL_RENDER_ORDER}>
+      <sphereGeometry args={[VEIL_RADIUS, VEIL_SEGMENTS_W, VEIL_SEGMENTS_H]} />
+      <meshBasicMaterial
+        ref={material}
+        side={THREE.BackSide}
+        transparent
+        opacity={0}
+        depthWrite={false}
+      />
+    </mesh>
   );
 }
 
@@ -722,8 +833,10 @@ export function LobbyStage({
   picker: PickerId | null;
   onCustomize: () => void;
 }) {
-  const theme = STAGE_THEMES[map];
   const reduced = useReducedMotion();
+  const [stage, setStage] = useState<DioramaTransition>(() => beginTransition(map));
+  const transition = useRef(stage);
+  const theme = STAGE_THEMES[stageMap(stage)];
   const slots = computeStageSlots(actors.length, inParty);
   const selfSlot = slots[0] ?? SOLO_SLOT;
   const self = actors[0];
@@ -732,7 +845,22 @@ export function LobbyStage({
   const animateMorph = picker === "avatar" && !reduced;
   const animateWorld = inWorldPicker && !reduced;
   const stageSignature = `${map}:${inParty}:${actors.map((a) => `${a.id}:${a.avatar}`).join("|")}`;
-  const boosted = useMotionBoost(`${picker}:${stageSignature}`);
+  const boosted = useMotionBoost(`${picker}:${stageSignature}:${stage.bake}`);
+
+  const apply = useCallback((next: DioramaTransition) => {
+    const previous = transition.current;
+    if (next === previous) return;
+    transition.current = next;
+    if (!sameStageRender(previous, next)) setStage(next);
+  }, []);
+  const handleReady = useCallback(
+    () => apply(ready(transition.current, reduced)),
+    [apply, reduced],
+  );
+
+  useEffect(() => {
+    apply(retarget(transition.current, map));
+  }, [apply, map]);
 
   useEffect(() => {
     if (!inWorldPicker) return;
@@ -770,17 +898,18 @@ export function LobbyStage({
           shadow-normalBias={SHADOW_NORMAL_BIAS}
         />
         <Ground theme={theme} />
-        <ShadowStage signal={stageSignature} settleMs={DIORAMA_SETTLE_MS} />
-        <Suspense fallback={null} key={`diorama:${map}`}>
-          {LOBBY_DIORAMAS[map].map((piece, index) => (
-            <SetPieceModel
-              key={`${piece.url}:${piece.position.join(",")}`}
-              piece={piece}
-              delay={(index / LOBBY_DIORAMAS[map].length) * DIORAMA_POP_WINDOW_S}
-              materialize={!reduced}
-            />
-          ))}
-        </Suspense>
+        <ShadowStage signal={`${stageSignature}:${stage.bake}`} settleMs={DIORAMA_SETTLE_MS} />
+        <DioramaDriver transition={transition} onAdvance={apply} />
+        {liveMaps(stage).map((id) => (
+          <Diorama
+            key={`diorama:${id}`}
+            map={id}
+            arriving={id === stage.next}
+            transition={transition}
+            onReady={handleReady}
+          />
+        ))}
+        {isVeiled(stage) && <SkyVeil transition={transition} />}
         <Suspense fallback={null}>
           {actors.map((actor, index) => (
             <AvatarActor
@@ -818,7 +947,11 @@ export function LobbyStage({
         )}
         {animateMorph && self && <MorphBurst signal={self.avatar} slot={selfSlot} />}
         {animateWorld && (
-          <MorphBurst signal={map} slot={WORLD_BURST_SLOT} scale={WORLD_BURST_SCALE} />
+          <MorphBurst
+            signal={`world:${stage.bake}`}
+            slot={WORLD_BURST_SLOT}
+            scale={WORLD_BURST_SCALE}
+          />
         )}
         {actors.map((actor, index) =>
           index > 0 ? (
