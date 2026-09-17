@@ -6,6 +6,8 @@ export interface MapInfo {
   name: string;
   /** Theme key driving optional per-map lighting/sky presets on the client. */
   theme: string;
+  /** Two-or-three-word shape of the fight, shown above the name in the picker. */
+  tag: string;
   /** One-line pitch for the lobby card. */
   blurb: string;
 }
@@ -21,18 +23,21 @@ export const MAP_CATALOG = [
     id: "station",
     name: "Kepler-9 Station",
     theme: "station",
+    tag: "Indoor",
     blurb: "Pressurized modules and tight corridors: blend in among furniture and containers.",
   },
   {
     id: "mars",
     name: "Ares Outpost",
     theme: "mars",
+    tag: "Open",
     blurb: "Open-air Martian apron around a small base: little cover, long sightlines.",
   },
   {
     id: "urban",
     name: "North District",
     theme: "urban",
+    tag: "Crowd",
     blurb: "Blocks and streets: blend in with the neighborhood's pedestrians.",
   },
 ] as const satisfies readonly MapInfo[];

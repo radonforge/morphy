@@ -43,5 +43,17 @@ export const MAP_GLASS: Record<MapId, string> = {
   urban: "rgba(11, 19, 31, 0.82)",
 };
 
+/** Per-map lobby chrome: the accent every picker surface tints itself with, and its map glyph. */
+export interface MapChrome {
+  accent: string;
+  glyph: string;
+}
+
+export const MAP_CHROME: Record<MapId, MapChrome> = {
+  station: { accent: "var(--cyan)", glyph: "▣" },
+  mars: { accent: "var(--rust)", glyph: "◭" },
+  urban: { accent: "var(--steel)", glyph: "▦" },
+};
+
 /** Cyan of the materialize effect, shared by the in-game morph burst and the lobby carousel. */
 export const MORPH_COLOR = "#7de8ff";
