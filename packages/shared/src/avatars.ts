@@ -4,8 +4,6 @@ export interface AvatarInfo {
   id: string;
   /** Display name shown in the lobby picker. */
   name: string;
-  /** Avatar set; pets ship today, humanoid characters are a planned second set. */
-  set: "pet";
 }
 
 /**
@@ -15,27 +13,27 @@ export interface AvatarInfo {
  * the curated roster.
  */
 export const AVATAR_CATALOG = [
-  { id: "fox", name: "Fox", set: "pet" },
-  { id: "cat", name: "Cat", set: "pet" },
-  { id: "dog", name: "Dog", set: "pet" },
-  { id: "panda", name: "Panda", set: "pet" },
-  { id: "tiger", name: "Tiger", set: "pet" },
-  { id: "lion", name: "Lion", set: "pet" },
-  { id: "bunny", name: "Bunny", set: "pet" },
-  { id: "deer", name: "Deer", set: "pet" },
-  { id: "koala", name: "Koala", set: "pet" },
-  { id: "penguin", name: "Penguin", set: "pet" },
-  { id: "parrot", name: "Parrot", set: "pet" },
-  { id: "monkey", name: "Monkey", set: "pet" },
-  { id: "elephant", name: "Elephant", set: "pet" },
-  { id: "giraffe", name: "Giraffe", set: "pet" },
-  { id: "cow", name: "Cow", set: "pet" },
-  { id: "pig", name: "Pig", set: "pet" },
-  { id: "hog", name: "Boar", set: "pet" },
-  { id: "polar", name: "Polar Bear", set: "pet" },
-  { id: "beaver", name: "Beaver", set: "pet" },
-  { id: "chick", name: "Chick", set: "pet" },
-  { id: "crab", name: "Crab", set: "pet" },
+  { id: "fox", name: "Fox" },
+  { id: "cat", name: "Cat" },
+  { id: "dog", name: "Dog" },
+  { id: "panda", name: "Panda" },
+  { id: "tiger", name: "Tiger" },
+  { id: "lion", name: "Lion" },
+  { id: "bunny", name: "Bunny" },
+  { id: "deer", name: "Deer" },
+  { id: "koala", name: "Koala" },
+  { id: "penguin", name: "Penguin" },
+  { id: "parrot", name: "Parrot" },
+  { id: "monkey", name: "Monkey" },
+  { id: "elephant", name: "Elephant" },
+  { id: "giraffe", name: "Giraffe" },
+  { id: "cow", name: "Cow" },
+  { id: "pig", name: "Pig" },
+  { id: "hog", name: "Boar" },
+  { id: "polar", name: "Polar Bear" },
+  { id: "beaver", name: "Beaver" },
+  { id: "chick", name: "Chick" },
+  { id: "crab", name: "Crab" },
 ] as const satisfies readonly AvatarInfo[];
 
 export type AvatarId = (typeof AVATAR_CATALOG)[number]["id"];
