@@ -14,6 +14,12 @@ export const DIORAMA_TRANSITION_S = ENTER_OFFSET_S + STAGGER_WINDOW_S + ENTER_DU
 
 const EXIT_TOTAL_S = STAGGER_WINDOW_S + EXIT_DURATION_S;
 const VEIL_PEAK_S = EXIT_TOTAL_S / 2;
+/**
+ * Where the arriving world overtakes the leaving one. Summed across the pieces of a 29 piece
+ * diorama the two are level here, so this is the point past which holding the departure costs
+ * more than it saves: it is nearly gone, and what would be dropped instead is most of a world.
+ */
+const HANDOVER_S = DIORAMA_TRANSITION_S / 2;
 
 interface Settled {
   phase: "settled";
@@ -69,12 +75,13 @@ export function beginTransition(map: MapId): DioramaTransition {
  * Aim the stage at `map`.
  *
  * Two dioramas is the ceiling, so stepping mid-cross has to drop one of them, and which one is
- * the whole question: whatever is dropped leaves in a single frame. Until the world on screen
- * has finished dissolving it stays, frozen where its ramp had reached, and the half-formed
- * arrival is the one dropped, which early in a cross is still at nothing. Only once the leaving
- * world is actually gone does the arrival take the stage, because dropping it there would be
- * dropping everything. Stepping faster than the timeline therefore degrades to near-instant
- * swaps, and never to an empty stage or a third mounted diorama.
+ * the whole question: whatever is dropped leaves in a single frame. While the world on screen is
+ * still the one carrying it, that world stays, frozen where its ramp had reached, and the
+ * half-formed arrival is dropped, which early in a cross is still at nothing. Past the handover
+ * the arrival is the one carrying the stage, so it takes it outright, at full size. Holding on
+ * any longer would cut a world most of the way built and leave a bare stage behind it, which is
+ * the whole defect this exists to fix. Stepping faster than the timeline therefore degrades to
+ * near-instant swaps, and never to an empty stage or a third mounted diorama.
  *
  * Stepping back to the world still on screen is not a swap at all: the pending one is dropped and
  * the dissolve it had started is undone.
@@ -92,7 +99,7 @@ export function retarget(state: DioramaTransition, map: MapId): DioramaTransitio
       bake: state.bake,
     };
   }
-  const holding = state.exit < EXIT_TOTAL_S;
+  const holding = state.exit < HANDOVER_S;
   if (holding && state.current === map) {
     return { phase: "settled", current: map, next: null, exit: 0, enter: 0, bake: state.bake };
   }

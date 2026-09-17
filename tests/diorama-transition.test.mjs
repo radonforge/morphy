@@ -24,16 +24,6 @@ const settled = (map) => tick(ready(beginTransition(map), false), DIORAMA_TRANSI
 const scales = (state, map) =>
   Array.from({ length: PIECES }, (_, index) => pieceScale(state, map, index, PIECES));
 
-/** Ticks a frame at a time until every piece of `map` has dissolved, which bounds the exit ramp. */
-const untilGone = (state, map) => {
-  let current = state;
-  for (let frame = 0; frame * FRAME_S <= DIORAMA_TRANSITION_S; frame++) {
-    if (scales(current, map).every((scale) => scale === 0)) return current;
-    current = tick(current, FRAME_S);
-  }
-  assert.fail(`${map} never finished leaving`);
-};
-
 test("a retarget while settled holds the world on screen and animates nothing", () => {
   const loading = retarget(settled(FIRST), SECOND);
 
@@ -89,14 +79,27 @@ test("stepping mid-cross leaves the world on screen exactly where it stands", ()
   assert.deepEqual(scales(ready(interrupted, false), FIRST), leaving);
 });
 
-test("stepping after the old world has gone hands the stage to the arriving one", () => {
+test("stepping past the handover gives the stage to the arriving world, whole", () => {
   const crossing = ready(retarget(settled(FIRST), SECOND), false);
-  const gone = untilGone(crossing, FIRST);
+  const late = tick(crossing, DIORAMA_TRANSITION_S / 2 + FRAME_S);
 
-  const interrupted = retarget(gone, THIRD);
+  const interrupted = retarget(late, THIRD);
   assert.deepEqual(liveMaps(interrupted), [SECOND, THIRD]);
   assert.deepEqual(scales(interrupted, SECOND), Array(PIECES).fill(1));
   assert.equal(stageMap(interrupted), SECOND);
+});
+
+test("the world held through a step is always one the stage can still be seen by", () => {
+  const crossing = ready(retarget(settled(FIRST), SECOND), false);
+
+  for (let frame = 0; frame * FRAME_S < DIORAMA_TRANSITION_S; frame++) {
+    const interrupted = retarget(tick(crossing, frame * FRAME_S), THIRD);
+    const held = scales(interrupted, interrupted.current);
+    assert.ok(
+      held.some((scale) => scale > 0.5),
+      `a step at ${(frame * FRAME_S).toFixed(2)}s left the stage at ${Math.max(...held).toFixed(2)}`,
+    );
+  }
 });
 
 test("stepping faster than the timeline never leaves more than two worlds mounted", () => {
