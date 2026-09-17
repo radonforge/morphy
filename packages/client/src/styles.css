@@ -1008,30 +1008,6 @@ canvas {
   color: var(--muted);
 }
 
-.morph-rail-close {
-  appearance: none;
-  cursor: pointer;
-  margin-left: 4px;
-  padding: 0.5rem 1.1rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #04121c;
-  background: var(--cyan);
-  border: 0;
-  border-radius: 999px;
-  transition: filter 0.12s ease;
-}
-.morph-rail-close:hover {
-  filter: brightness(1.1);
-}
-.morph-rail-close:focus-visible {
-  outline: 2px solid var(--text);
-  outline-offset: 2px;
-}
-
 .menu-avatar-entry-name {
   font-family: var(--font-mono);
   font-size: 1.05rem;

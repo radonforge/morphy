@@ -634,7 +634,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             onClick={exitMorph}
             onWheel={handleMorphWheel}
           />
-          <MorphRail avatar={selectedAvatar} onStep={handleMorphStep} onClose={exitMorph} />
+          <MorphRail avatar={selectedAvatar} onStep={handleMorphStep} />
         </>
       )}
 
