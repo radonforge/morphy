@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { playUiHover } from "../game/audio";
 import { STEP_BACK, STEP_FORWARD } from "./carousel";
 
@@ -6,6 +7,9 @@ import { STEP_BACK, STEP_FORWARD } from "./carousel";
  * localStorage and, in a party, to the other members watching on their own stage, so the rail
  * carries neither a confirm nor a cancel: it only steps. Dismissing is the backdrop or Escape,
  * and the hint below says so; a Close button beside the arrows implied a decision still pending.
+ *
+ * `children` sit above the pill, for the one carousel that decides more than its own catalog:
+ * the avatar picker also holds the callsign, so both halves of who you are are on one screen.
  */
 export function CarouselRail({
   noun,
@@ -13,15 +17,18 @@ export function CarouselRail({
   position,
   total,
   onStep,
+  children,
 }: {
   noun: string;
   name: string;
   position: number;
   total: number;
   onStep: (delta: number) => void;
+  children?: ReactNode;
 }) {
   return (
     <div className="morph-rail-dock">
+      {children}
       <div className="morph-rail panel">
         <button
           type="button"

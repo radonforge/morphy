@@ -310,7 +310,7 @@ function AvatarActor({
   }, [actions, mixer]);
 
   return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: r3f scene-graph node, not a DOM element; keyboard path is the Identity tab
+    // biome-ignore lint/a11y/noStaticElementInteractions: r3f scene-graph node, not a DOM element; keyboard path is the stage chip
     <group
       position={[slot.x, 0, slot.z]}
       rotation-y={slot.yaw}
@@ -839,15 +839,23 @@ export function LobbyStage({
   actors,
   inParty,
   picker,
+  chipHost,
   onCustomize,
 }: {
   map: MapId;
   actors: StageActor[];
   inParty: boolean;
   picker: PickerId | null;
+  chipHost: HTMLElement | null;
   onCustomize: () => void;
 }) {
   const reduced = useReducedMotion();
+  /**
+   * The chip is the only part of the stage a player operates, so it is portalled into a host
+   * outside the canvas: everything under `.menu-canvas` is `aria-hidden`, and a focusable button
+   * buried in a hidden subtree is reachable by Tab but invisible to a screen reader.
+   */
+  const chipPortal = useMemo(() => (chipHost === null ? null : { current: chipHost }), [chipHost]);
   const [stage, setStage] = useState<DioramaTransition>(() => beginTransition(map));
   const transition = useRef(stage);
   const theme = STAGE_THEMES[stageMap(stage)];
@@ -976,14 +984,20 @@ export function LobbyStage({
             />
           ) : null,
         )}
-        {picker === null && (
+        {picker === null && chipPortal !== null && (
           <Html
+            portal={chipPortal}
             position={[selfSlot.x, CHIP_Y, selfSlot.z]}
             center
             zIndexRange={[CHIP_Z_INDEX, CHIP_Z_INDEX]}
             wrapperClass="stage-chip"
           >
-            <button type="button" tabIndex={-1} onClick={onCustomize} onPointerEnter={playUiHover}>
+            <button
+              type="button"
+              onClick={onCustomize}
+              onPointerEnter={playUiHover}
+              aria-label={`${self?.name ?? ""}: change your callsign and avatar`}
+            >
               <span className="stage-chip-name">
                 {actors[0]?.isHost ? "★ " : ""}
                 {actors[0]?.name ?? ""}

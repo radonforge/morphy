@@ -5,6 +5,10 @@ import { feedWheel, initialWheelGesture, wheelDeltaPx } from "./carouselWheel";
 
 const STEP_COOLDOWN_MS = 180;
 
+function isTypingTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement;
+}
+
 export interface CarouselInput {
   onWheel: (event: React.WheelEvent<HTMLElement>) => void;
 }
@@ -16,6 +20,9 @@ export interface CarouselInput {
  *
  * Held arrow keys are rate-limited but the first press of each is not: the cooldown applies
  * only to `repeat` events, so a deliberate press always lands however fast they come.
+ *
+ * Arrows land on the carousel only while nothing is being typed: the avatar picker carries the
+ * callsign field, where the same keys have to move the caret instead.
  */
 export function useCarouselInput(
   active: boolean,
@@ -46,6 +53,7 @@ export function useCarouselInput(
         return;
       }
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (isTypingTarget(event.target)) return;
       event.preventDefault();
       const now = performance.now();
       if (event.repeat && now - lastStepAt.current < STEP_COOLDOWN_MS) return;

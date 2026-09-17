@@ -2,6 +2,7 @@ import {
   AVATAR_CATALOG,
   type AvatarId,
   DEFAULT_AVATAR_ID,
+  DEFAULT_PLAYER_NAME,
   isAvatarId,
   isPartyCode,
   MAP_CATALOG,
@@ -77,7 +78,7 @@ interface LobbyProps {
   onJoinParty: (code: string, name: string, avatar: AvatarId) => void;
 }
 
-type PaneId = "identity" | "private" | "stats" | "options";
+type PaneId = "private" | "stats" | "options";
 
 interface NavItem {
   id: PaneId;
@@ -119,7 +120,6 @@ function resolveAvatar(avatar: string): AvatarId {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "identity", label: "Identity" },
   { id: "private", label: "Private" },
   { id: "stats", label: "Stats" },
   { id: "options", label: "Options" },
@@ -129,7 +129,6 @@ const STUDIO_NAME = "Radon Forge";
 const STUDIO_URL = "https://radonforge.com";
 
 const PANE_TITLES: Record<PaneId, string> = {
-  identity: "Identity",
   private: "Private room",
   stats: "Your stats",
   options: "Options",
@@ -152,6 +151,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [picker, setPicker] = useState<PickerId | null>(null);
+  const [chipHost, setChipHost] = useState<HTMLDivElement | null>(null);
 
   const inParty = party !== null;
   const isHost = party !== null && party.selfId === party.hostId;
@@ -204,8 +204,8 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     [],
   );
 
-  const profileRef = useRef({ party, name, avatar: selectedAvatar, pane });
-  profileRef.current = { party, name, avatar: selectedAvatar, pane };
+  const profileRef = useRef({ party, name, avatar: selectedAvatar });
+  profileRef.current = { party, name, avatar: selectedAvatar };
 
   const commitProfile = useCallback(() => {
     const { party: p, name: n, avatar } = profileRef.current;
@@ -213,12 +213,9 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   }, []);
 
   const closePane = useCallback(() => {
-    const current = profileRef.current.pane;
-    if (current === null) return;
-    if (current === "identity") commitProfile();
     playUiClose();
     setPane(null);
-  }, [commitProfile]);
+  }, []);
 
   useEffect(() => {
     if (pane === null) return;
@@ -235,22 +232,17 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         closePane();
         return;
       }
-      if (pane === "identity") commitProfile();
       playUiOpen();
       setPane(id);
     },
-    [pane, closePane, commitProfile],
+    [pane, closePane],
   );
 
-  const openPicker = useCallback(
-    (id: PickerId) => {
-      if (profileRef.current.pane === "identity") commitProfile();
-      playUiOpen();
-      setPane(null);
-      setPicker(id);
-    },
-    [commitProfile],
-  );
+  const openPicker = useCallback((id: PickerId) => {
+    playUiOpen();
+    setPane(null);
+    setPicker(id);
+  }, []);
 
   const openAvatarPicker = useCallback(() => openPicker("avatar"), [openPicker]);
   const openWorldPicker = useCallback(() => {
@@ -259,9 +251,10 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   }, [openPicker, activeMap]);
 
   const closePicker = useCallback(() => {
+    if (picker === "avatar") commitProfile();
     playUiClose();
     setPicker(null);
-  }, []);
+  }, [picker, commitProfile]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -392,7 +385,14 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             avatar: member.id === party.selfId ? selectedAvatar : resolveAvatar(member.avatar),
             isHost: member.id === party.hostId,
           }))
-      : [{ id: "local", name: trimmedName || "Guest", avatar: selectedAvatar, isHost: false }];
+      : [
+          {
+            id: "local",
+            name: trimmedName || DEFAULT_PLAYER_NAME,
+            avatar: selectedAvatar,
+            isHost: false,
+          },
+        ];
 
   const chromeClass = `menu-chrome${picker !== null ? " menu-chrome-out" : ""}`;
 
@@ -409,9 +409,11 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           actors={stageActors}
           inParty={inParty}
           picker={picker}
+          chipHost={chipHost}
           onCustomize={openAvatarPicker}
         />
       </Suspense>
+      <div className="stage-overlay" ref={setChipHost} />
       <div className="menu-vignette" />
 
       <header className={`menu-top ${chromeClass}`} inert={picker !== null}>
@@ -511,7 +513,24 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               position={avatarIndex(selectedAvatar) + 1}
               total={AVATAR_COUNT}
               onStep={handleAvatarStep}
-            />
+            >
+              <div className="morph-callsign panel">
+                <label htmlFor="player-name" className="eyebrow">
+                  Callsign
+                </label>
+                <input
+                  id="player-name"
+                  value={name}
+                  maxLength={MAX_NAME_LENGTH}
+                  placeholder={DEFAULT_PLAYER_NAME}
+                  onChange={(e) => setName(e.target.value)}
+                  onBlur={commitProfile}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                />
+              </div>
+            </CarouselRail>
           ) : (
             <CarouselRail
               noun="map"
@@ -603,41 +622,6 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               ✕
             </button>
           </header>
-
-          {pane === "identity" && (
-            <>
-              <div className="menu-card menu-callsign">
-                <label htmlFor="player-name" className="eyebrow">
-                  Callsign
-                </label>
-                <input
-                  id="player-name"
-                  value={name}
-                  maxLength={MAX_NAME_LENGTH}
-                  placeholder="Your name"
-                  onChange={(e) => setName(e.target.value)}
-                  onBlur={commitProfile}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") e.currentTarget.blur();
-                  }}
-                  autoFocus
-                />
-              </div>
-              <div className="menu-card menu-avatar-entry">
-                <span className="eyebrow">Avatar</span>
-                <b className="menu-avatar-entry-name">{avatarInfo?.name}</b>
-                <p>Step through every shape on the stage and morph into the one you want.</p>
-                <button
-                  type="button"
-                  className="menu-party-btn"
-                  onClick={openAvatarPicker}
-                  onPointerEnter={playUiHover}
-                >
-                  Change avatar
-                </button>
-              </div>
-            </>
-          )}
 
           {pane === "private" && party && (
             <div className="menu-card menu-party-sheet">
