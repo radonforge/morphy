@@ -34,7 +34,7 @@ import {
   unlockAudio,
 } from "../game/audio";
 import { isPerfHudEnabled, setPerfHudEnabled } from "../game/prefs";
-import { MAP_GLASS } from "../theme";
+import { MAP_CHROME, MAP_GLASS } from "../theme";
 import { stepAvatar } from "./avatarCarousel";
 import { MorphRail } from "./MorphRail";
 import { loadPrefs, savePrefs } from "./prefs";
@@ -85,18 +85,6 @@ interface NavItem {
 
 const COPY_FLASH_MS = 1600;
 
-const MAP_ACCENT: Record<MapId, string> = {
-  station: "var(--cyan)",
-  mars: "var(--rust)",
-  urban: "var(--steel)",
-};
-
-const MAP_TAG: Record<MapId, string> = {
-  station: "Indoor",
-  mars: "Open",
-  urban: "Crowd",
-};
-
 const AVATAR_EMOJI: Record<AvatarId, string> = {
   fox: "🦊",
   cat: "🐱",
@@ -135,12 +123,6 @@ const NAV_ITEMS: NavItem[] = [
   { id: "stats", label: "Stats" },
   { id: "options", label: "Options" },
 ];
-
-const MAP_GLYPH: Record<MapId, string> = {
-  station: "▣",
-  mars: "◭",
-  urban: "▦",
-};
 
 const PANE_TITLES: Record<PaneId, string> = {
   identity: "Identity",
@@ -617,8 +599,8 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
       {stageActors.length === 1 && pane === null && (
         <aside className={`menu-maptitle ${chromeClass}`} key={activeMap} inert={morphMode}>
-          <span className="menu-maptitle-tag" style={{ color: MAP_ACCENT[activeMap] }}>
-            {MAP_TAG[activeMap]} sector
+          <span className="menu-maptitle-tag" style={{ color: MAP_CHROME[activeMap].accent }}>
+            {mapInfo.tag} sector
           </span>
           <h2>{mapInfo.name}</h2>
           <p>{mapInfo.blurb}</p>
@@ -647,17 +629,17 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
                 type="button"
                 key={info.id}
                 className={`menu-mapcard panel${activeMap === info.id ? " sel" : ""}`}
-                style={{ "--accent": MAP_ACCENT[info.id] } as React.CSSProperties}
+                style={{ "--accent": MAP_CHROME[info.id].accent } as React.CSSProperties}
                 onClick={() => handleMapPick(info.id)}
                 onPointerEnter={playUiHover}
                 disabled={inParty && !isHost}
                 aria-pressed={activeMap === info.id}
               >
                 <span className="menu-mapcard-glyph" aria-hidden="true">
-                  {MAP_GLYPH[info.id]}
+                  {MAP_CHROME[info.id].glyph}
                 </span>
                 <span className="menu-mapcard-text">
-                  <span className="menu-mapcard-tag">{MAP_TAG[info.id]}</span>
+                  <span className="menu-mapcard-tag">{info.tag}</span>
                   <span className="menu-mapcard-name">{info.name}</span>
                 </span>
               </button>
