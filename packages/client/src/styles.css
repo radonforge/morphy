@@ -12,7 +12,6 @@
   --success: #4ce8a0;
   --text: #dbe7f2;
   --muted: rgba(219, 231, 242, 0.55);
-  --chamfer: 11px;
   --r-surface: 28px;
   --r-control: 14px;
   --glass-tint: rgba(11, 18, 31, 0.55);
@@ -23,6 +22,10 @@
   --glass-sheen: rgba(255, 255, 255, 0.12);
   --glass-shadow-contact: rgba(2, 5, 12, 0.45);
   --glass-shadow-ambient: rgba(2, 5, 12, 0.38);
+  --accent-fill: rgba(53, 224, 255, 0.82);
+  --accent-ink: #04121c;
+  --control-tint: rgba(18, 28, 46, 0.5);
+  --control-rim: rgba(255, 255, 255, 0.16);
   --mx: 30%;
   --my: 0%;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, monospace;
@@ -149,27 +152,58 @@ canvas {
 .lobby-card button,
 .lobby-overlay-card button,
 .result-actions button,
-.pause-card button {
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  padding: 0.65rem 0.9rem;
-  color: #04121c;
-  background: var(--cyan);
-  border: none;
-  border-radius: 4px;
+.pause-card button,
+.menu-deploy {
+  appearance: none;
   cursor: pointer;
-  transition: filter 0.12s ease;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.68rem 1.25rem;
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--accent-ink);
+  background:
+    radial-gradient(130% 170% at var(--mx) var(--my), rgba(255, 255, 255, 0.42), transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 64%),
+    var(--accent-fill);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(3, 16, 26, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 2px 8px -3px var(--glass-shadow-contact),
+    0 16px 34px -16px rgba(53, 224, 255, 0.5);
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.16s ease,
+    filter 0.12s ease;
 }
 
 .btn:hover,
 .lobby-card button:hover,
 .lobby-overlay-card button:hover,
 .result-actions button:hover,
-.pause-card button:hover {
-  filter: brightness(1.12);
+.pause-card button:hover,
+.menu-deploy:hover {
+  filter: brightness(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(3, 16, 26, 0.24),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.26),
+    0 3px 10px -3px var(--glass-shadow-contact),
+    0 20px 40px -16px rgba(53, 224, 255, 0.55);
+}
+
+.btn:active,
+.lobby-card button:active,
+.lobby-overlay-card button:active,
+.result-actions button:active,
+.pause-card button:active,
+.menu-deploy:active {
+  transform: translateY(1px);
 }
 
 .lobby-card button:disabled {
@@ -246,16 +280,22 @@ canvas {
 .lobby-overlay-card .btn-ghost,
 .result-actions .btn-ghost,
 .pause-card .btn-ghost {
-  background: transparent;
-  color: var(--cyan);
-  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text);
+  background: var(--control-tint);
+  box-shadow:
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 0 0 0 1px var(--control-rim),
+    0 2px 8px -4px var(--glass-shadow-contact);
 }
 
 .lobby-overlay-card .btn-ghost:hover,
 .result-actions .btn-ghost:hover,
 .pause-card .btn-ghost:hover {
   filter: none;
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+  box-shadow:
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+    0 3px 10px -4px var(--glass-shadow-contact);
 }
 
 .lobby-overlay-meta {
@@ -556,21 +596,8 @@ canvas {
   align-items: center;
   gap: 12px;
   padding: 12px 16px 14px;
-  color: var(--text);
-  background: var(--panel);
-  -webkit-backdrop-filter: blur(12px) saturate(1.1);
-  backdrop-filter: blur(12px) saturate(1.1);
-  clip-path: polygon(
-    var(--chamfer) 0,
-    100% 0,
-    100% calc(100% - var(--chamfer)),
-    calc(100% - var(--chamfer)) 100%,
-    0 100%,
-    0 var(--chamfer)
-  );
-  box-shadow:
-    inset 0 0 0 1px var(--border),
-    inset 0 0 24px rgba(53, 224, 255, 0.06);
+  border: 0;
+  border-radius: var(--r-control);
   transition:
     transform 0.16s ease,
     box-shadow 0.16s ease,
@@ -594,21 +621,14 @@ canvas {
   gap: 4px;
   min-width: 0;
 }
-.menu-mapcard::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: var(--chamfer);
-  right: 0;
-  height: 2px;
-  opacity: 0.7;
-  background: linear-gradient(90deg, var(--accent), transparent);
-}
 .menu-mapcard:hover {
   transform: translateY(-3px);
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent),
-    inset 0 0 24px color-mix(in srgb, var(--accent) 8%, transparent);
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 0 -1px 0 var(--glass-rim-bottom),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--glass-rim-edge)),
+    0 4px 12px -4px var(--glass-shadow-contact),
+    0 26px 54px -18px var(--glass-shadow-ambient);
 }
 .menu-mapcard:focus-visible,
 .menu-mapcard.sel:focus-visible {
@@ -616,7 +636,8 @@ canvas {
   box-shadow:
     inset 0 0 0 2px var(--text),
     inset 0 0 0 4px var(--accent),
-    inset 0 0 24px color-mix(in srgb, var(--accent) 12%, transparent);
+    0 2px 8px -2px var(--glass-shadow-contact),
+    0 22px 48px -16px var(--glass-shadow-ambient);
 }
 .menu-mapcard-tag {
   font-family: var(--font-mono);
@@ -627,25 +648,22 @@ canvas {
   color: var(--accent);
 }
 .menu-mapcard-name {
-  font-family: var(--font-mono);
-  font-size: 0.95rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   white-space: nowrap;
 }
 .menu-mapcard.sel {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 18%, var(--panel)),
-    var(--panel)
-  );
+  background:
+    radial-gradient(130% 105% at var(--mx) var(--my), var(--glass-sheen), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 20%, transparent), transparent 72%),
+    var(--glass-tint);
   box-shadow:
-    inset 0 0 0 1px var(--accent),
-    inset 0 0 30px color-mix(in srgb, var(--accent) 16%, transparent);
-}
-.menu-mapcard.sel::before {
-  height: 3px;
-  opacity: 1;
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 0 -1px 0 var(--glass-rim-bottom),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent),
+    0 2px 8px -2px var(--glass-shadow-contact),
+    0 22px 48px -16px var(--glass-shadow-ambient);
 }
 .menu-mapcard.sel .menu-mapcard-name {
   color: var(--accent);
@@ -676,41 +694,14 @@ canvas {
   box-shadow: 0 0 0 3px rgba(53, 224, 255, 0.18);
 }
 .menu-deploy {
-  appearance: none;
-  border: 0;
-  cursor: pointer;
   align-self: stretch;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
+  gap: 4px;
   min-width: clamp(180px, 19vw, 280px);
-  padding: 0.9rem 2.2rem;
-  font-family: var(--font-mono);
-  font-weight: 800;
-  color: #04121c;
-  background: var(--cyan);
-  clip-path: polygon(
-    12px 0,
-    100% 0,
-    100% calc(100% - 12px),
-    calc(100% - 12px) 100%,
-    0 100%,
-    0 12px
-  );
-  box-shadow:
-    0 0 0 1px rgba(53, 224, 255, 0.5),
-    0 12px 32px rgba(53, 224, 255, 0.28);
-  transition:
-    filter 0.12s ease,
-    transform 0.08s ease;
-}
-.menu-deploy:hover {
-  filter: brightness(1.1);
-}
-.menu-deploy:active {
-  transform: translateY(1px);
+  padding: 0.95rem 2.2rem;
 }
 .menu-deploy:disabled {
   cursor: default;
@@ -718,18 +709,12 @@ canvas {
   filter: none;
 }
 .menu-deploy .big {
-  font-size: 1.3rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  font-size: 1.26rem;
 }
 .menu-deploy .small {
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  color: rgba(4, 18, 28, 0.72);
+  color: rgba(4, 18, 28, 0.66);
 }
 .menu-error {
   grid-column: 1 / -1;
@@ -1116,9 +1101,12 @@ canvas {
 }
 .menu-waiting {
   cursor: default;
-  background: rgba(12, 20, 34, 0.8);
-  color: var(--muted);
-  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text);
+  background: var(--control-tint);
+  box-shadow:
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 0 0 0 1px var(--control-rim),
+    0 2px 8px -4px var(--glass-shadow-contact);
 }
 .menu-waiting .small {
   color: var(--muted);
@@ -1145,22 +1133,30 @@ canvas {
 .menu-party-btn {
   align-self: flex-start;
   cursor: pointer;
-  padding: 11px 22px;
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  background: rgba(53, 224, 255, 0.12);
-  color: var(--cyan);
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--control-tint);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  backdrop-filter: blur(12px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 0 0 0 1px var(--control-rim),
+    0 2px 8px -4px var(--glass-shadow-contact);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   transition:
     background 0.14s ease,
-    border-color 0.14s ease;
+    box-shadow 0.14s ease;
 }
 .menu-party-btn:hover {
-  background: rgba(53, 224, 255, 0.22);
+  box-shadow:
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.3),
+    0 3px 10px -4px var(--glass-shadow-contact);
 }
 .menu-party-btn:disabled {
   cursor: default;
@@ -1241,7 +1237,13 @@ canvas {
   .menu-panel {
     animation: none;
   }
-  .panel {
+  .panel,
+  .btn,
+  .lobby-card button,
+  .lobby-overlay-card button,
+  .result-actions button,
+  .pause-card button,
+  .menu-deploy {
     --mx: 30%;
     --my: 0%;
   }
