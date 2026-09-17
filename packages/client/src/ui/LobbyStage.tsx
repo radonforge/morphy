@@ -48,10 +48,32 @@ const MORPH_CAMERA_Z = 3.3;
 const MORPH_LOOK_Y = 0.92;
 const MORPH_DOLLY_DAMP = 4.2;
 
-const WORLD_CAMERA: [number, number, number] = [0, 5, 13];
-const WORLD_LOOK_AT: [number, number, number] = [0, 1.4, -7];
 const WORLD_BURST_SLOT: StageSlot = { x: 0, z: -6, yaw: 0 };
 const WORLD_BURST_SCALE = 6;
+
+const WORLD_DRIFT_X = 0.9;
+const WORLD_DRIFT_Y = 0.35;
+const WORLD_DRIFT_RATE_X = 0.18;
+const WORLD_DRIFT_RATE_Y = 0.13;
+const WORLD_FOV_DAMP = 4.2;
+
+/**
+ * How the world picker frames each map. One camera cannot serve all three: a dead-on lens at 38°
+ * from 20 units renders the back of a diorama at 48-65% of the front, which is too mild to read
+ * as depth — the scene looks like a shelf. Each map is framed closer and wider, from three
+ * quarters rather than head-on, so near and far silhouettes overlap.
+ */
+interface WorldView {
+  camera: [number, number, number];
+  lookAt: [number, number, number];
+  fov: number;
+}
+
+const WORLD_VIEWS: Record<MapId, WorldView> = {
+  station: { camera: [-5.5, 4, 8], lookAt: [1, 1.5, -7], fov: 50 },
+  mars: { camera: [-6, 5.2, 9], lookAt: [1.5, 1.8, -9], fov: 48 },
+  urban: { camera: [5, 4.6, 8.5], lookAt: [-1.5, 2.2, -8], fov: 50 },
+};
 const GHOST_OFFSET_X = 1.5;
 const GHOST_OFFSET_Z = -1.2;
 const GHOST_HEIGHT = AVATAR_HEIGHT * 0.74;
@@ -162,6 +184,7 @@ const CAMERA_LOOK_AT = new THREE.Vector3(0, 1.05, 0);
 const PARALLAX_X = 0.55;
 const PARALLAX_Y = 0.25;
 const PARALLAX_DAMP = 3.2;
+const FOV_SETTLE_EPSILON = 0.01;
 
 const ATMOSPHERE_LERP = 2.4;
 const GROUND_RADIUS = 70;
@@ -704,19 +727,34 @@ function Atmosphere({ theme }: { theme: StageTheme }) {
  * frame a picker opens swings the camera ~13° in one step, which reads as a cut however
  * smoothly the position travels.
  */
-function ParallaxRig({ picker, focus }: { picker: PickerId | null; focus: StageSlot }) {
+function ParallaxRig({
+  picker,
+  focus,
+  view,
+}: {
+  picker: PickerId | null;
+  focus: StageSlot;
+  view: WorldView;
+}) {
   const camera = useThree((state) => state.camera);
   const reduced = useReducedMotion();
   const scratch = useMemo(() => ({ target: new THREE.Vector3(), look: new THREE.Vector3() }), []);
   const aim = useMemo(() => CAMERA_LOOK_AT.clone(), []);
 
   useFrame((state, delta) => {
+    let fov = CAMERA_FOV;
     if (picker === "avatar") {
       scratch.target.set(focus.x, MORPH_CAMERA_Y, focus.z + MORPH_CAMERA_Z);
       scratch.look.set(focus.x, MORPH_LOOK_Y, focus.z);
     } else if (picker === "world") {
-      scratch.target.set(...WORLD_CAMERA);
-      scratch.look.set(...WORLD_LOOK_AT);
+      fov = view.fov;
+      const t = reduced ? 0 : state.clock.elapsedTime;
+      scratch.target.set(
+        view.camera[0] + Math.sin(t * WORLD_DRIFT_RATE_X) * WORLD_DRIFT_X,
+        view.camera[1] + Math.sin(t * WORLD_DRIFT_RATE_Y) * WORLD_DRIFT_Y,
+        view.camera[2],
+      );
+      scratch.look.set(...view.lookAt);
     } else {
       scratch.target.set(
         CAMERA_BASE[0] + state.pointer.x * PARALLAX_X,
@@ -730,6 +768,14 @@ function ParallaxRig({ picker, focus }: { picker: PickerId | null; focus: StageS
     camera.position.lerp(scratch.target, k);
     aim.lerp(scratch.look, k);
     camera.lookAt(aim);
+
+    const lens = camera as THREE.PerspectiveCamera;
+    if (!lens.isPerspectiveCamera) return;
+    const fovK = reduced ? 1 : 1 - Math.exp(-WORLD_FOV_DAMP * delta);
+    const next = THREE.MathUtils.lerp(lens.fov, fov, fovK);
+    if (Math.abs(next - lens.fov) < FOV_SETTLE_EPSILON) return;
+    lens.fov = next;
+    lens.updateProjectionMatrix();
   });
   return null;
 }
@@ -766,6 +812,7 @@ export function LobbyStage({
   onCustomize: () => void;
 }) {
   const theme = STAGE_THEMES[map];
+  const view = WORLD_VIEWS[map];
   const reduced = useReducedMotion();
   const slots = computeStageSlots(actors.length, inParty);
   const selfSlot = slots[0] ?? SOLO_SLOT;
@@ -794,7 +841,7 @@ export function LobbyStage({
       >
         <FrameLimiter fps={boosted ? STAGE_BOOST_FPS : STAGE_MAX_FPS} />
         <Atmosphere theme={theme} />
-        <ParallaxRig picker={picker} focus={selfSlot} />
+        <ParallaxRig picker={picker} focus={selfSlot} view={view} />
         {theme.sky === "stars" && (
           <Stars radius={90} depth={40} count={1600} factor={3} fade speed={0.4} />
         )}
