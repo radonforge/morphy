@@ -322,6 +322,18 @@ canvas {
   z-index: 0;
 }
 
+/*
+ * The stage chip lives here rather than under `.menu-canvas`, which is `aria-hidden` for the
+ * 3D scene it holds. Same box and same stacking level as the canvas, so the chip keeps its
+ * place under the vignette and over the scene; only the chip itself takes pointer events.
+ */
+.stage-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .menu-vignette {
   position: absolute;
   inset: 0;
@@ -695,12 +707,7 @@ canvas {
   gap: 14px;
   align-items: stretch;
 }
-.menu-callsign {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.menu-callsign input,
+.morph-callsign input,
 .menu-party-joinrow input {
   border: 0;
   border-radius: var(--r-control);
@@ -712,14 +719,14 @@ canvas {
     inset 0 0 0 1px var(--control-rim);
   transition: box-shadow 0.14s ease;
 }
-.menu-callsign input:focus-visible,
+.morph-callsign input:focus-visible,
 .menu-party-joinrow input:focus-visible {
   box-shadow:
     inset 0 1px 2px rgba(2, 5, 12, 0.5),
     inset 0 0 0 1px color-mix(in srgb, var(--cyan) 55%, transparent),
     0 0 0 3px rgba(53, 224, 255, 0.18);
 }
-.menu-callsign input {
+.morph-callsign input {
   font-family: var(--font-sans);
   font-size: 0.98rem;
   padding: 0.75rem 1rem;
@@ -909,6 +916,10 @@ canvas {
   border-color: var(--border-strong);
   background: rgba(8, 13, 22, 0.9);
 }
+.stage-chip button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
 .stage-chip-name {
   font-family: var(--font-sans);
   font-size: 0.88rem;
@@ -971,6 +982,20 @@ canvas {
   }
 }
 
+/* Stretched to the dock, so the field sits exactly under the rail instead of beside its width. */
+.morph-callsign {
+  pointer-events: auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+}
+.morph-callsign input {
+  flex: 1;
+  width: 0;
+}
+
 .morph-rail-arrow {
   appearance: none;
   cursor: pointer;
@@ -1017,13 +1042,6 @@ canvas {
   font-size: 0.66rem;
   letter-spacing: 0.16em;
   color: var(--muted);
-}
-
-.menu-avatar-entry-name {
-  font-family: var(--font-mono);
-  font-size: 1.05rem;
-  letter-spacing: 0.04em;
-  color: var(--cyan);
 }
 
 .menu-party {
