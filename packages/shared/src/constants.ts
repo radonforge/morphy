@@ -54,6 +54,8 @@ export const INPUT_IDLE_EPSILON = 0.001;
 export const MAX_CLIENT_MESSAGES_PER_SECOND = 60;
 
 export const MAX_NAME_LENGTH = 16;
+/** Stands in for a player who never named themselves, on the stage and in the room alike. */
+export const DEFAULT_PLAYER_NAME = "Player";
 export const MAX_CHAT_LENGTH = 200;
 
 export const PARTY_CODE_LENGTH = 5;

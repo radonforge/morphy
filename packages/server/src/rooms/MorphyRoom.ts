@@ -16,6 +16,7 @@ import {
   DECOY_BUDGET,
   DECOY_COOLDOWN_MS,
   DEFAULT_MAP_ID,
+  DEFAULT_PLAYER_NAME,
   DEFAULT_WEAPON,
   type DecoyBreakEvent,
   generatePartyCode,
@@ -88,7 +89,6 @@ import { playerStats, type RoundOutcome } from "../stats/repository";
 import { botName, botSessionId, desiredBotCount, isBotSessionId } from "./botFill";
 import { describeRoomException } from "./roomErrors";
 
-const FALLBACK_NAME = "Player";
 const SPAWN_CLEARANCE = 1.5;
 const PARTY_CODE_MAX_ATTEMPTS = 16;
 const PARTY_CODE_EXHAUSTED_STATUS = 503;
@@ -225,9 +225,9 @@ function parseChatText(payload: unknown): string | null {
 }
 
 function sanitizeName(raw: unknown): string {
-  if (typeof raw !== "string") return FALLBACK_NAME;
+  if (typeof raw !== "string") return DEFAULT_PLAYER_NAME;
   const trimmed = raw.trim().slice(0, MAX_NAME_LENGTH);
-  return trimmed.length > 0 ? trimmed : FALLBACK_NAME;
+  return trimmed.length > 0 ? trimmed : DEFAULT_PLAYER_NAME;
 }
 
 function parseSetMap(payload: unknown): MapId | null {
