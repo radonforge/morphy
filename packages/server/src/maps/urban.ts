@@ -110,7 +110,7 @@ interface Obstacle {
   r: number;
 }
 
-/** Distretto Nord: a zoned street grid of solid building blocks; hide among the pedestrians. */
+/** North District: a zoned street grid of solid building blocks; hide among the pedestrians. */
 export function buildUrban(seed: number): MapDefinition {
   const rng = makeRng(seed);
   const tiles: TileInstance[] = [];

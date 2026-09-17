@@ -215,7 +215,7 @@ function clearOf(x: number, z: number, r: number, items: Obstacle[], gap: number
   return true;
 }
 
-/** Avamposto Ares: open Martian apron walled by rock, dressed with cover, around a small module. */
+/** Ares Outpost: open Martian apron walled by rock, dressed with cover, around a small module. */
 export function buildMars(seed: number): MapDefinition {
   const rng = makeRng(seed);
   const grid: Grid = { gx: G, gz: G, halfW: HALF, halfD: HALF };
