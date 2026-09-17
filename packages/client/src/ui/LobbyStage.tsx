@@ -10,6 +10,7 @@ import {
   beginTransition,
   DIORAMA_TRANSITION_S,
   type DioramaTransition,
+  isVeiled,
   liveMaps,
   pieceScale,
   ready,
@@ -908,7 +909,7 @@ export function LobbyStage({
             onReady={handleReady}
           />
         ))}
-        {stage.phase === "crossing" && <SkyVeil transition={transition} />}
+        {isVeiled(stage) && <SkyVeil transition={transition} />}
         <Suspense fallback={null}>
           {actors.map((actor, index) => (
             <AvatarActor
