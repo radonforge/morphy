@@ -5,9 +5,9 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { playUiHover } from "../game/audio";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
-import { avatarNeighbors } from "./avatarCarousel";
+import { avatarNeighbors, mapNeighbors } from "./carousel";
 import { LOBBY_DIORAMAS, type SetPiece } from "./lobbyDioramas";
-import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
+import { type PickerId, STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
 
 const avatarModel = (id: AvatarId): string => `/models/pets/animal-${id}.glb`;
 
@@ -39,6 +39,12 @@ const MORPH_CAMERA_Z = 3.3;
 const MORPH_LOOK_Y = 0.92;
 const MORPH_DOLLY_DAMP = 4.2;
 
+const WORLD_CAMERA: [number, number, number] = [0, 5, 13];
+const WORLD_LOOK_AT: [number, number, number] = [0, 1.4, -7];
+const WORLD_BURST_SLOT: StageSlot = { x: 0, z: -6, yaw: 0 };
+const WORLD_BURST_SCALE = 6;
+const DIORAMA_POP_STAGGER_S = 0.03;
+
 const GHOST_OFFSET_X = 1.5;
 const GHOST_OFFSET_Z = -1.2;
 const GHOST_HEIGHT = AVATAR_HEIGHT * 0.74;
@@ -59,6 +65,8 @@ const MORPH_SHARD_SPAWN_RADIUS = 1.25;
 const MORPH_SHARD_SPAWN_HEIGHT_MULT = 1.5;
 const MORPH_SHARD_SPIN = 9;
 const POP_SETTLED = Number.POSITIVE_INFINITY;
+const NO_DELAY = 0;
+const UNSCALED = 1;
 
 /**
  * True for `STAGE_BOOST_MS` after every change of `beat`. The stage idles at 30 fps, which is
@@ -359,16 +367,27 @@ function AvatarGhost({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
 }
 
 /**
- * The lobby's single materialize burst: a rising beam and one ring of shards that converge
- * on the stage slot. Deliberately not the scene's pooled MorphEffects — only one avatar ever
- * morphs here, and this has to keep playing outside the model's suspense boundary so a cold
- * GLB loads under cover of the beam.
+ * The lobby's materialize burst: a rising beam and one ring of shards that converge on the
+ * stage slot, replayed whenever `signal` changes. Deliberately not the scene's pooled
+ * MorphEffects — only one thing ever morphs here at a time, and this has to keep playing
+ * outside the model's suspense boundary so a cold GLB loads under cover of the beam.
+ *
+ * `scale` sizes the whole effect: the avatar carousel bursts around one pet, the world
+ * carousel around a whole diorama, off the same geometry.
  */
-function MorphBurst({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
+function MorphBurst({
+  signal,
+  slot,
+  scale = UNSCALED,
+}: {
+  signal: string;
+  slot: StageSlot;
+  scale?: number;
+}) {
   const beam = useRef<THREE.Mesh>(null);
   const shards = useRef<THREE.InstancedMesh>(null);
   const age = useRef(POP_SETTLED);
-  const previous = useRef(avatar);
+  const previous = useRef(signal);
 
   const seeds = useMemo(
     () =>
@@ -392,10 +411,10 @@ function MorphBurst({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
   );
 
   useEffect(() => {
-    if (previous.current === avatar) return;
-    previous.current = avatar;
+    if (previous.current === signal) return;
+    previous.current = signal;
     age.current = 0;
-  }, [avatar]);
+  }, [signal]);
 
   useFrame((_, delta) => {
     const beamMesh = beam.current;
@@ -413,9 +432,10 @@ function MorphBurst({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
     const beamT = elapsed / MORPH_BEAM_DURATION_S;
     if (beamT < 1) {
       const growth = Math.min(1, beamT / MORPH_BEAM_GROW_FRACTION);
-      const height = AVATAR_HEIGHT * MORPH_BEAM_HEIGHT_MULT * growth;
+      const height = AVATAR_HEIGHT * MORPH_BEAM_HEIGHT_MULT * growth * scale;
+      const radius = MORPH_BEAM_RADIUS * scale;
       beamMesh.position.set(slot.x, height / 2, slot.z);
-      beamMesh.scale.set(MORPH_BEAM_RADIUS, Math.max(height, MODEL_MIN_SIZE), MORPH_BEAM_RADIUS);
+      beamMesh.scale.set(radius, Math.max(height, MODEL_MIN_SIZE), radius);
       (beamMesh.material as THREE.MeshBasicMaterial).opacity = MORPH_BEAM_OPACITY * (1 - beamT);
       beamMesh.visible = true;
     } else {
@@ -424,13 +444,13 @@ function MorphBurst({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
 
     const t = Math.min(1, elapsed / MORPH_DURATION_S);
     const convergence = t * t;
-    const radial = MORPH_SHARD_SPAWN_RADIUS * (1 - convergence);
-    const size = Math.max(MORPH_SHARD_SIZE * (1 - t), MODEL_MIN_SIZE);
-    const spawnHeight = AVATAR_HEIGHT * MORPH_SHARD_SPAWN_HEIGHT_MULT;
+    const radial = MORPH_SHARD_SPAWN_RADIUS * scale * (1 - convergence);
+    const size = Math.max(MORPH_SHARD_SIZE * scale * (1 - t), MODEL_MIN_SIZE);
+    const spawnHeight = AVATAR_HEIGHT * MORPH_SHARD_SPAWN_HEIGHT_MULT * scale;
     seeds.forEach((seed, i) => {
       scratch.position.set(
         slot.x + Math.cos(seed.angle) * radial,
-        THREE.MathUtils.lerp(seed.yFrac * spawnHeight, AVATAR_HEIGHT / 2, convergence),
+        THREE.MathUtils.lerp(seed.yFrac * spawnHeight, (AVATAR_HEIGHT * scale) / 2, convergence),
         slot.z + Math.sin(seed.angle) * radial,
       );
       scratch.euler.set(seed.spinX * elapsed, 0, seed.spinZ * elapsed);
@@ -493,8 +513,24 @@ function ActorNameplate({ label, slot }: { label: string; slot: StageSlot }) {
   );
 }
 
-function SetPieceModel({ piece }: { piece: SetPiece }) {
+/**
+ * One diorama set piece. `delay` staggers the grow-in across the diorama so a map arrives as a
+ * sweep of matter forming rather than one block of geometry appearing whole; the pop is clocked
+ * from mount, and the caller keys these by map, so switching worlds replays it.
+ */
+function SetPieceModel({
+  piece,
+  delay = NO_DELAY,
+  materialize = false,
+}: {
+  piece: SetPiece;
+  delay?: number;
+  materialize?: boolean;
+}) {
   const { scene } = useGLTF(piece.url);
+  const pop = useRef<THREE.Group>(null);
+  const popIn = useRef(materialize).current;
+  const popAge = useRef(popIn ? -delay : POP_SETTLED);
   const object = useMemo(() => {
     const clone = scene.clone(true);
     clone.traverse((child) => {
@@ -506,9 +542,19 @@ function SetPieceModel({ piece }: { piece: SetPiece }) {
     });
     return clone;
   }, [scene]);
+
+  useFrame((_, frameDelta) => {
+    const node = pop.current;
+    if (node === null || popAge.current >= MORPH_POP_DURATION_S) return;
+    popAge.current += frameDelta;
+    node.scale.setScalar(Math.max(0, Math.min(1, popAge.current / MORPH_POP_DURATION_S)));
+  });
+
   return (
     <group position={piece.position} rotation-y={piece.rotationY ?? 0} scale={piece.scale ?? 1}>
-      <primitive object={object} />
+      <group ref={pop} scale={popIn ? 0 : 1}>
+        <primitive object={object} />
+      </group>
     </group>
   );
 }
@@ -594,21 +640,27 @@ function Atmosphere({ theme }: { theme: StageTheme }) {
 }
 
 /**
- * Drives the stage camera: pointer parallax in the menu, a dolly onto `focus` in morph mode.
+ * Drives the stage camera: pointer parallax in the menu, a dolly onto `focus` for the avatar
+ * picker, and a pull back and up for the world picker, which frames the diorama the player is
+ * choosing rather than the pet standing in front of it.
+ *
  * The aim point is damped alongside the position rather than set outright — snapping it the
- * frame morph mode opens swings the camera ~13° in one step, which reads as a cut however
+ * frame a picker opens swings the camera ~13° in one step, which reads as a cut however
  * smoothly the position travels.
  */
-function ParallaxRig({ morphMode, focus }: { morphMode: boolean; focus: StageSlot }) {
+function ParallaxRig({ picker, focus }: { picker: PickerId | null; focus: StageSlot }) {
   const camera = useThree((state) => state.camera);
   const reduced = useReducedMotion();
   const scratch = useMemo(() => ({ target: new THREE.Vector3(), look: new THREE.Vector3() }), []);
   const aim = useMemo(() => CAMERA_LOOK_AT.clone(), []);
 
   useFrame((state, delta) => {
-    if (morphMode) {
+    if (picker === "avatar") {
       scratch.target.set(focus.x, MORPH_CAMERA_Y, focus.z + MORPH_CAMERA_Z);
       scratch.look.set(focus.x, MORPH_LOOK_Y, focus.z);
+    } else if (picker === "world") {
+      scratch.target.set(...WORLD_CAMERA);
+      scratch.look.set(...WORLD_LOOK_AT);
     } else {
       scratch.target.set(
         CAMERA_BASE[0] + state.pointer.x * PARALLAX_X,
@@ -617,7 +669,7 @@ function ParallaxRig({ morphMode, focus }: { morphMode: boolean; focus: StageSlo
       );
       scratch.look.copy(CAMERA_LOOK_AT);
     }
-    const damp = morphMode ? MORPH_DOLLY_DAMP : PARALLAX_DAMP;
+    const damp = picker === null ? PARALLAX_DAMP : MORPH_DOLLY_DAMP;
     const k = reduced ? 1 : 1 - Math.exp(-damp * delta);
     camera.position.lerp(scratch.target, k);
     aim.lerp(scratch.look, k);
@@ -648,13 +700,13 @@ export function LobbyStage({
   map,
   actors,
   inParty,
-  morphMode,
+  picker,
   onCustomize,
 }: {
   map: MapId;
   actors: StageActor[];
   inParty: boolean;
-  morphMode: boolean;
+  picker: PickerId | null;
   onCustomize: () => void;
 }) {
   const theme = STAGE_THEMES[map];
@@ -663,8 +715,18 @@ export function LobbyStage({
   const selfSlot = slots[0] ?? SOLO_SLOT;
   const self = actors[0];
   const neighbors = self ? avatarNeighbors(self.avatar) : null;
-  const animateMorph = morphMode && !reduced;
-  const boosted = useMotionBoost(`${morphMode}:${self?.avatar ?? ""}`);
+  const inWorldPicker = picker === "world";
+  const animateMorph = picker === "avatar" && !reduced;
+  const animateWorld = inWorldPicker && !reduced;
+  const boosted = useMotionBoost(`${picker}:${map}:${self?.avatar ?? ""}`);
+
+  useEffect(() => {
+    if (!inWorldPicker) return;
+    const { prev, next } = mapNeighbors(map);
+    for (const id of [prev, next]) {
+      for (const piece of LOBBY_DIORAMAS[id]) useGLTF.preload(piece.url);
+    }
+  }, [inWorldPicker, map]);
   return (
     <div className="menu-canvas" aria-hidden="true">
       <Canvas
@@ -675,7 +737,7 @@ export function LobbyStage({
       >
         <FrameLimiter fps={boosted ? STAGE_BOOST_FPS : STAGE_MAX_FPS} />
         <Atmosphere theme={theme} />
-        <ParallaxRig morphMode={morphMode} focus={selfSlot} />
+        <ParallaxRig picker={picker} focus={selfSlot} />
         {theme.sky === "stars" && (
           <Stars radius={90} depth={40} count={1600} factor={3} fade speed={0.4} />
         )}
@@ -694,9 +756,14 @@ export function LobbyStage({
         />
         <Ground theme={theme} />
         <StaticShadows />
-        <Suspense fallback={null}>
-          {LOBBY_DIORAMAS[map].map((piece) => (
-            <SetPieceModel key={`${piece.url}:${piece.position.join(",")}`} piece={piece} />
+        <Suspense fallback={null} key={`diorama:${map}`}>
+          {LOBBY_DIORAMAS[map].map((piece, index) => (
+            <SetPieceModel
+              key={`${piece.url}:${piece.position.join(",")}`}
+              piece={piece}
+              delay={index * DIORAMA_POP_STAGGER_S}
+              materialize={!reduced}
+            />
           ))}
           <ShadowKick signal={`diorama:${map}`} />
         </Suspense>
@@ -706,7 +773,7 @@ export function LobbyStage({
               key={`${actor.id}:${actor.avatar}`}
               avatar={actor.avatar}
               slot={slots[index] ?? SOLO_SLOT}
-              onSelect={index === 0 && !morphMode ? onCustomize : undefined}
+              onSelect={index === 0 && picker === null ? onCustomize : undefined}
               materialize={index === 0 && animateMorph}
             />
           ))}
@@ -714,7 +781,7 @@ export function LobbyStage({
             signal={`actors:${map}:${inParty}:${actors.map((a) => `${a.id}:${a.avatar}`).join("|")}`}
           />
         </Suspense>
-        {morphMode && neighbors !== null && (
+        {picker === "avatar" && neighbors !== null && (
           <>
             <Suspense fallback={null}>
               <AvatarGhost
@@ -738,7 +805,10 @@ export function LobbyStage({
             </Suspense>
           </>
         )}
-        {animateMorph && self && <MorphBurst avatar={self.avatar} slot={selfSlot} />}
+        {animateMorph && self && <MorphBurst signal={self.avatar} slot={selfSlot} />}
+        {animateWorld && (
+          <MorphBurst signal={map} slot={WORLD_BURST_SLOT} scale={WORLD_BURST_SCALE} />
+        )}
         {actors.map((actor, index) =>
           index > 0 ? (
             <ActorNameplate
@@ -748,7 +818,7 @@ export function LobbyStage({
             />
           ) : null,
         )}
-        {!morphMode && (
+        {picker === null && (
           <Html
             position={[selfSlot.x, CHIP_Y, selfSlot.z]}
             center

@@ -35,11 +35,12 @@ import {
 } from "../game/audio";
 import { isPerfHudEnabled, setPerfHudEnabled } from "../game/prefs";
 import { MAP_CHROME, MAP_GLASS } from "../theme";
-import { stepAvatar } from "./avatarCarousel";
-import { MorphRail } from "./MorphRail";
+import { CarouselRail } from "./CarouselRail";
+import { AVATAR_COUNT, avatarIndex, MAP_COUNT, mapIndex, stepAvatar, stepMap } from "./carousel";
 import { loadPrefs, savePrefs } from "./prefs";
 import { StatsPane } from "./StatsPane";
-import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
+import { type PickerId, STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
+import { useCarouselInput } from "./useCarouselInput";
 
 const LobbyStage = lazy(() =>
   import("./LobbyStage").then((module) => ({ default: module.LobbyStage })),
@@ -133,36 +134,6 @@ const PANE_TITLES: Record<PaneId, string> = {
 
 const VOLUME_SLIDER_MAX = 100;
 const SHEEN_PERCENT = 100;
-const STEP_BACK = -1;
-const STEP_FORWARD = 1;
-const MORPH_STEP_COOLDOWN_MS = 180;
-const WHEEL_STEP_DELTA = 90;
-const WHEEL_GESTURE_GAP_MS = 40;
-const WHEEL_RISE_FACTOR = 3;
-const WHEEL_LINE_PX = 40;
-const WHEEL_PAGE_PX = 400;
-
-type WheelAxis = "x" | "y";
-
-interface WheelDelta {
-  x: number;
-  y: number;
-}
-
-/**
- * Wheel travel in pixels on both axes, whatever unit the device reports it in. A mouse notch
- * lands around 100 px while a trackpad reports single digits per event, so reading the sign of
- * one event alone makes a notch and a twitch of a finger mean the same thing.
- */
-function wheelDeltaPx(e: React.WheelEvent<HTMLElement>): WheelDelta {
-  const scale =
-    e.deltaMode === WheelEvent.DOM_DELTA_LINE
-      ? WHEEL_LINE_PX
-      : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
-        ? WHEEL_PAGE_PX
-        : 1;
-  return { x: e.deltaX * scale, y: e.deltaY * scale };
-}
 
 export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: LobbyProps) {
   const [name, setName] = useState(() => loadPrefs().name);
@@ -177,7 +148,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const [perfHud, setPerfHudState] = useState(() => isPerfHudEnabled());
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
-  const [morphMode, setMorphMode] = useState(false);
+  const [picker, setPicker] = useState<PickerId | null>(null);
 
   const inParty = party !== null;
   const isHost = party !== null && party.selfId === party.hostId;
@@ -268,26 +239,25 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     [pane, closePane, commitProfile],
   );
 
-  const wheelTravel = useRef(0);
-  const wheelArmed = useRef(true);
-  const wheelAxis = useRef<WheelAxis | null>(null);
-  const wheelFloor = useRef(Number.POSITIVE_INFINITY);
-  const lastWheelAt = useRef(0);
+  const openPicker = useCallback(
+    (id: PickerId) => {
+      if (profileRef.current.pane === "identity") commitProfile();
+      playUiOpen();
+      setPane(null);
+      setPicker(id);
+    },
+    [commitProfile],
+  );
 
-  const enterMorph = useCallback(() => {
-    if (profileRef.current.pane === "identity") commitProfile();
-    playUiOpen();
-    wheelTravel.current = 0;
-    wheelArmed.current = true;
-    wheelAxis.current = null;
-    wheelFloor.current = Number.POSITIVE_INFINITY;
-    setPane(null);
-    setMorphMode(true);
-  }, [commitProfile]);
+  const openAvatarPicker = useCallback(() => openPicker("avatar"), [openPicker]);
+  const openWorldPicker = useCallback(() => {
+    setSelectedMap(activeMap);
+    openPicker("world");
+  }, [openPicker, activeMap]);
 
-  const exitMorph = useCallback(() => {
+  const closePicker = useCallback(() => {
     playUiClose();
-    setMorphMode(false);
+    setPicker(null);
   }, []);
 
   const handleSubmit = useCallback(
@@ -305,19 +275,23 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     party?.onStart();
   }, [party]);
 
-  const handleMapPick = useCallback(
-    (map: MapId) => {
-      if (party) {
-        if (party.selfId !== party.hostId) return;
-        party.onSetMap(map);
-      }
-      if (map !== activeMap) playUiClick();
-      setSelectedMap(map);
+  /**
+   * The world carousel steps from `selectedMap`, not from `activeMap`: in a party the map on
+   * screen is the server's, so two quick presses would both compute from the same pre-round-trip
+   * value and advance one map instead of two. `openPicker` aligns the two before the first step.
+   */
+  const handleWorldStep = useCallback(
+    (delta: number) => {
+      if (party !== null && party.selfId !== party.hostId) return;
+      const next = stepMap(selectedMap, delta);
+      playMorph();
+      setSelectedMap(next);
+      party?.onSetMap(next);
     },
-    [party, activeMap],
+    [party, selectedMap],
   );
 
-  const handleMorphStep = useCallback(
+  const handleAvatarStep = useCallback(
     (delta: number) => {
       const next = stepAvatar(selectedAvatar, delta);
       playMorph();
@@ -327,101 +301,8 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     [party, name, selectedAvatar],
   );
 
-  const stepLock = useRef(0);
-  const takeStepSlot = useCallback(() => {
-    const now = performance.now();
-    if (now - stepLock.current < MORPH_STEP_COOLDOWN_MS) return false;
-    stepLock.current = now;
-    return true;
-  }, []);
-
-  /**
-   * At most one step per gesture. A step disarms the wheel and only a fresh push re-arms it, off
-   * the one thing inertia cannot fake: it decays. macOS keeps emitting wheel events for about a
-   * second after the fingers leave the trackpad, each smaller than the last, so a magnitude that
-   * climbs back above the running floor is the user pressing again. The floor is tracked only
-   * while disarmed — letting the gesture's own ramp-up set it is what made an earlier attempt
-   * fire several times per swipe and need a cooldown to hide it.
-   *
-   * The axis is whichever one each gesture opens on, and is held for the rest of it — re-picked
-   * whenever a gesture opens, not only after a step, or a swipe too small to move the carousel
-   * would leave the axis pinned and swallow everything arriving on the other one. The rail's
-   * arrows, the ghosts flanking the stage and the arrow keys all read left-to-right, so a
-   * sideways swipe is the gesture that matches what is on screen; a plain mouse wheel has no
-   * horizontal axis at all, so both are taken. Choosing per event instead would let a crooked
-   * swipe flip axis halfway and cancel itself out.
-   *
-   * Silence re-arms too, at a threshold that separates the devices rather than guessing at one:
-   * inertia arrives every frame, while wheel notches are tens of milliseconds apart even when
-   * rolled hard. Waiting for silence *alone* was the first mistake — browsing quickly lays the
-   * next swipe over the previous one's inertia, the gap never comes and the picker goes dead.
-   *
-   * Travel below `WHEEL_STEP_DELTA` survives a pause on the same axis, so nudges too small to
-   * move the carousel add up across gestures instead of being thrown away. Clearing it on every
-   * pause reads as the tidier rule but measures far worse: a run of gentle swipes then never
-   * reaches the threshold at all and the picker answers none of them.
-   */
-  const handleMorphWheel = useCallback(
-    (e: React.WheelEvent<HTMLElement>) => {
-      const { x, y } = wheelDeltaPx(e);
-      if (x === 0 && y === 0) return;
-
-      const dominant: WheelAxis = Math.abs(x) > Math.abs(y) ? "x" : "y";
-      const sample = Math.abs(dominant === "x" ? x : y);
-
-      const now = performance.now();
-      const quiet = now - lastWheelAt.current >= WHEEL_GESTURE_GAP_MS;
-      lastWheelAt.current = now;
-
-      const opens =
-        quiet || (!wheelArmed.current && sample > wheelFloor.current * WHEEL_RISE_FACTOR);
-      if (opens) {
-        wheelArmed.current = true;
-        if (wheelAxis.current !== dominant) {
-          wheelAxis.current = dominant;
-          wheelTravel.current = 0;
-        }
-      }
-      if (!wheelArmed.current) {
-        wheelFloor.current = Math.min(wheelFloor.current, sample);
-        return;
-      }
-
-      const axis = wheelAxis.current ?? dominant;
-      wheelAxis.current = axis;
-
-      const delta = axis === "x" ? x : y;
-      if (delta === 0) return;
-
-      if (delta > 0 !== wheelTravel.current > 0) wheelTravel.current = 0;
-      wheelTravel.current += delta;
-      if (Math.abs(wheelTravel.current) < WHEEL_STEP_DELTA) return;
-
-      const direction = wheelTravel.current > 0 ? STEP_FORWARD : STEP_BACK;
-      wheelTravel.current = 0;
-      wheelArmed.current = false;
-      wheelAxis.current = null;
-      wheelFloor.current = Math.abs(delta);
-      handleMorphStep(direction);
-    },
-    [handleMorphStep],
-  );
-
-  useEffect(() => {
-    if (!morphMode) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        exitMorph();
-        return;
-      }
-      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-      e.preventDefault();
-      if (e.repeat && !takeStepSlot()) return;
-      handleMorphStep(e.key === "ArrowLeft" ? STEP_BACK : STEP_FORWARD);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [morphMode, exitMorph, handleMorphStep, takeStepSlot]);
+  const avatarInput = useCarouselInput(picker === "avatar", handleAvatarStep, closePicker);
+  const worldInput = useCarouselInput(picker === "world", handleWorldStep, closePicker);
 
   const canCopy = typeof navigator !== "undefined" && navigator.clipboard !== undefined;
   const copyCode = useCallback(() => {
@@ -493,6 +374,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const connecting = status.kind === "connecting";
   const trimmedName = name.trim();
   const mapInfo = MAP_CATALOG.find((info) => info.id === activeMap) ?? MAP_CATALOG[0];
+  const avatarInfo = AVATAR_CATALOG.find((info) => info.id === selectedAvatar);
 
   const stageActors: StageActor[] =
     party && party.members.length > 0
@@ -509,7 +391,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           }))
       : [{ id: "local", name: trimmedName || "Guest", avatar: selectedAvatar, isHost: false }];
 
-  const chromeClass = `menu-chrome${morphMode ? " menu-chrome-out" : ""}`;
+  const chromeClass = `menu-chrome${picker !== null ? " menu-chrome-out" : ""}`;
 
   return (
     <div
@@ -523,13 +405,13 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           map={activeMap}
           actors={stageActors}
           inParty={inParty}
-          morphMode={morphMode}
-          onCustomize={enterMorph}
+          picker={picker}
+          onCustomize={openAvatarPicker}
         />
       </Suspense>
       <div className="menu-vignette" />
 
-      <header className={`menu-top ${chromeClass}`} inert={morphMode}>
+      <header className={`menu-top ${chromeClass}`} inert={picker !== null}>
         <div className="menu-brand">
           <div className="menu-wordmark">
             <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
@@ -559,7 +441,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       </header>
 
       {party && (
-        <aside className={`menu-party panel ${chromeClass}`} inert={morphMode}>
+        <aside className={`menu-party panel ${chromeClass}`} inert={picker !== null}>
           <span className="eyebrow">Party code</span>
           <div className="menu-party-code">
             <b>{party.code}</b>
@@ -598,7 +480,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       )}
 
       {stageActors.length === 1 && pane === null && (
-        <aside className={`menu-maptitle ${chromeClass}`} key={activeMap} inert={morphMode}>
+        <aside className={`menu-maptitle ${chromeClass}`} key={activeMap} inert={picker !== null}>
           <span className="menu-maptitle-tag" style={{ color: MAP_CHROME[activeMap].accent }}>
             {mapInfo.tag} sector
           </span>
@@ -607,44 +489,61 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         </aside>
       )}
 
-      {morphMode && (
+      {picker !== null && (
         <>
           <button
             type="button"
             className="morph-backdrop"
-            aria-label="Close the avatar picker"
-            onClick={exitMorph}
-            onWheel={handleMorphWheel}
+            aria-label={`Close the ${picker === "avatar" ? "avatar" : "map"} picker`}
+            onClick={closePicker}
+            onWheel={picker === "avatar" ? avatarInput.onWheel : worldInput.onWheel}
           />
-          <MorphRail avatar={selectedAvatar} onStep={handleMorphStep} />
+          {picker === "avatar" ? (
+            <CarouselRail
+              noun="avatar"
+              name={avatarInfo?.name ?? selectedAvatar}
+              position={avatarIndex(selectedAvatar) + 1}
+              total={AVATAR_COUNT}
+              onStep={handleAvatarStep}
+            />
+          ) : (
+            <CarouselRail
+              noun="map"
+              name={mapInfo.name}
+              position={mapIndex(activeMap) + 1}
+              total={MAP_COUNT}
+              onStep={handleWorldStep}
+            />
+          )}
         </>
       )}
 
-      <form className={`menu-bottom ${chromeClass}`} onSubmit={handleSubmit} inert={morphMode}>
+      <form
+        className={`menu-bottom ${chromeClass}`}
+        onSubmit={handleSubmit}
+        inert={picker !== null}
+      >
         <div className="menu-strip">
           <span className="menu-strip-label">Map</span>
-          <div className="menu-mapstrip" role="radiogroup" aria-label="Map">
-            {MAP_CATALOG.map((info) => (
-              <button
-                type="button"
-                key={info.id}
-                className={`menu-mapcard panel${activeMap === info.id ? " sel" : ""}`}
-                style={{ "--accent": MAP_CHROME[info.id].accent } as React.CSSProperties}
-                onClick={() => handleMapPick(info.id)}
-                onPointerEnter={playUiHover}
-                disabled={inParty && !isHost}
-                aria-pressed={activeMap === info.id}
-              >
-                <span className="menu-mapcard-glyph" aria-hidden="true">
-                  {MAP_CHROME[info.id].glyph}
-                </span>
-                <span className="menu-mapcard-text">
-                  <span className="menu-mapcard-tag">{info.tag}</span>
-                  <span className="menu-mapcard-name">{info.name}</span>
-                </span>
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            className="menu-mapcard panel sel"
+            style={{ "--accent": MAP_CHROME[activeMap].accent } as React.CSSProperties}
+            onClick={openWorldPicker}
+            onPointerEnter={playUiHover}
+            disabled={inParty && !isHost}
+          >
+            <span className="menu-mapcard-glyph" aria-hidden="true">
+              {MAP_CHROME[activeMap].glyph}
+            </span>
+            <span className="menu-mapcard-text">
+              <span className="menu-mapcard-tag">{mapInfo.tag}</span>
+              <span className="menu-mapcard-name">{mapInfo.name}</span>
+            </span>
+            <span className="menu-mapcard-swap" aria-hidden="true">
+              {inParty && !isHost ? "" : "\u21c4"}
+            </span>
+          </button>
         </div>
         <div className="menu-dock">
           {party ? (
@@ -720,14 +619,12 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               </div>
               <div className="menu-card menu-avatar-entry">
                 <span className="eyebrow">Avatar</span>
-                <b className="menu-avatar-entry-name">
-                  {AVATAR_CATALOG.find((info) => info.id === selectedAvatar)?.name}
-                </b>
+                <b className="menu-avatar-entry-name">{avatarInfo?.name}</b>
                 <p>Step through every shape on the stage and morph into the one you want.</p>
                 <button
                   type="button"
                   className="menu-party-btn"
-                  onClick={enterMorph}
+                  onClick={openAvatarPicker}
                   onPointerEnter={playUiHover}
                 >
                   Change avatar
