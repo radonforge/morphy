@@ -86,6 +86,17 @@ canvas {
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
+/* Shared by every surface whose only way out is the backdrop or Escape. */
+.dismiss-hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  align-self: center;
+  font-size: 0.74rem;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+}
+
 /* ---------- Landing & lobby ---------- */
 
 .lobby {
@@ -938,15 +949,6 @@ canvas {
   align-items: center;
   gap: 14px;
   padding: 12px 16px;
-}
-
-.morph-rail-hint {
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
 @keyframes morph-railin {
@@ -2065,26 +2067,6 @@ canvas {
 
 .controls-row .control-label {
   color: var(--text);
-}
-
-.controls-dialog-close {
-  align-self: flex-end;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.controls-dialog-close:hover {
-  border-color: var(--border-strong);
 }
 
 @media (max-width: 520px) {

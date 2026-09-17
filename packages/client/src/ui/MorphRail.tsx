@@ -48,7 +48,7 @@ export function MorphRail({
           ▶
         </button>
       </div>
-      <p className="morph-rail-hint">Click anywhere to close</p>
+      <p className="dismiss-hint">Click anywhere to close</p>
     </div>
   );
 }
