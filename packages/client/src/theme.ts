@@ -17,13 +17,6 @@ export const MAP_THEME_BASE: Record<MapId, MapThemeBase> = {
     hemiGround: "#42474f",
     directional: 1.15,
   },
-  mars: {
-    ground: "#9c5a40",
-    background: "#c89a78",
-    hemiSky: "#e8b48f",
-    hemiGround: "#5a3a2c",
-    directional: 1.5,
-  },
   urban: {
     ground: "#5b5f66",
     background: "#acc6e0",
@@ -34,12 +27,11 @@ export const MAP_THEME_BASE: Record<MapId, MapThemeBase> = {
 };
 
 /**
- * Per-map tint for the lobby glass. Mars and urban are bright skies: a neutral tint over
- * them leaves panel text short of contrast, so each map carries its own density.
+ * Per-map tint for the lobby glass. Urban is a bright sky: a neutral tint over
+ * it leaves panel text short of contrast, so each map carries its own density.
  */
 export const MAP_GLASS: Record<MapId, string> = {
   station: "rgba(11, 18, 31, 0.55)",
-  mars: "rgba(26, 15, 10, 0.76)",
   urban: "rgba(11, 19, 31, 0.82)",
 };
 
@@ -51,7 +43,6 @@ export interface MapChrome {
 
 export const MAP_CHROME: Record<MapId, MapChrome> = {
   station: { accent: "var(--cyan)", glyph: "▣" },
-  mars: { accent: "var(--rust)", glyph: "◭" },
   urban: { accent: "var(--steel)", glyph: "▦" },
 };
 

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { buildMap } from "../packages/server/src/maps/index.ts";
 import { computePropBounds, parseMapDefinition } from "../packages/shared/src/index.ts";
 
-const MAP_IDS = ["station", "mars", "urban"];
+const MAP_IDS = ["station", "urban"];
 
 test("all map builders remain deterministic and valid across 1,000 seeds", () => {
   for (const mapId of MAP_IDS) {
@@ -31,53 +31,6 @@ test("urban straight roads run along their street (road-straight.glb runs along 
       assert.notEqual(alongZ, rowZs.has(tile.position.z), `seed ${seed}: tile on no single street`);
       const sin = Math.abs(Math.sin(tile.rotationY));
       assert.ok(Math.abs(sin - (alongZ ? 1 : 0)) < 1e-9, `seed ${seed}: road tile turned across`);
-    }
-  }
-});
-
-const MARS_BARRIER_FACE = 52.5;
-const MARS_BARRIER_ROCKS_PER_SIDE = 12;
-
-test("mars barrier rocks stand on the barrier's inner face, not in front of or behind it", () => {
-  for (let seed = 0; seed < 25; seed++) {
-    const map = buildMap("mars", seed);
-    const rocks = map.colliders.filter((box) => Math.max(box.size.x, box.size.z) < 5);
-    const straddles = (center, half) =>
-      Math.abs(center) - half <= MARS_BARRIER_FACE && Math.abs(center) + half >= MARS_BARRIER_FACE;
-    const sides = [
-      rocks.filter((box) => box.position.z < 0 && straddles(box.position.z, box.size.z / 2)),
-      rocks.filter((box) => box.position.z > 0 && straddles(box.position.z, box.size.z / 2)),
-      rocks.filter((box) => box.position.x < 0 && straddles(box.position.x, box.size.x / 2)),
-      rocks.filter((box) => box.position.x > 0 && straddles(box.position.x, box.size.x / 2)),
-    ];
-    for (const side of sides) {
-      assert.ok(side.length >= MARS_BARRIER_ROCKS_PER_SIDE, `seed ${seed}: ${side.length} rocks`);
-    }
-  }
-});
-
-const MARS_KIT_OFFSET = { x: 2, z: 1.5 };
-const MARS_FLAT_DECOR = /\/(crater|craterLarge|rocks_smallA|rocks_smallB)\.glb$/;
-
-test("mars flat decor never renders on the module floor", () => {
-  for (let seed = 0; seed < 100; seed++) {
-    const map = buildMap("mars", seed);
-    const floor = {
-      minX: Math.min(...map.tiles.map((tile) => tile.position.x)),
-      maxX: Math.max(...map.tiles.map((tile) => tile.position.x)),
-      minZ: Math.min(...map.tiles.map((tile) => tile.position.z)),
-      maxZ: Math.max(...map.tiles.map((tile) => tile.position.z)),
-    };
-    for (const inst of map.scenery.filter((item) => MARS_FLAT_DECOR.test(item.model))) {
-      const scale = inst.scale ?? 1;
-      const cos = Math.cos(inst.rotationY);
-      const sin = Math.sin(inst.rotationY);
-      const ox = scale * MARS_KIT_OFFSET.x;
-      const oz = scale * MARS_KIT_OFFSET.z;
-      const x = inst.position.x + ox * cos + oz * sin;
-      const z = inst.position.z - ox * sin + oz * cos;
-      const onFloor = x >= floor.minX && x <= floor.maxX && z >= floor.minZ && z <= floor.maxZ;
-      assert.ok(!onFloor, `seed ${seed}: ${inst.model} renders at (${x}, ${z})`);
     }
   }
 });

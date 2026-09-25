@@ -4,6 +4,7 @@ import {
   DEFAULT_MAP_ID,
   isMapId,
   isPartyCode,
+  MAP_CATALOG,
   MAX_NAME_LENGTH,
   type MapId,
   normalizePartyCode,
@@ -44,7 +45,9 @@ function parsePolicy(value: string): PolicyKind {
 
 function parseMap(value: string): MapId {
   if (isMapId(value)) return value;
-  throw new Error(`unknown --map '${value}' (supported: station, mars, urban)`);
+  throw new Error(
+    `unknown --map '${value}' (supported: ${MAP_CATALOG.map((m) => m.id).join(", ")})`,
+  );
 }
 
 function parseCode(value: string): string {

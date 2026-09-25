@@ -24,7 +24,7 @@ Flags (after `--` when invoked through the root script):
 | `--name` | built-in pool | name prefix, e.g. `--name Drone` → `Drone1`… |
 | `--ready-at` | `count + 1` | players present before bots ready up |
 | `--code` | no default | join a private party room by code instead of matchmaking |
-| `--map`, `-m` | `station` | map of a *newly created* room (`station`, `mars`, `urban`) |
+| `--map`, `-m` | `urban` | map of a *newly created* room (`urban`, `station`) |
 | `--policy` | `scripted` | which policy drives the bots |
 | `--visibility` | `full` | `full` \| `limited`: what the bot is allowed to sense |
 | `--trace` | no default | base path for per-bot JSONL traces of every applied decision |
