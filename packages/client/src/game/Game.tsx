@@ -80,6 +80,7 @@ const HP_LOW_THRESHOLD = 40;
 const RING_RADIUS = 19;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const PERF_SAMPLE_WINDOW_S = 0.5;
+const RENDER_GATE_PRIORITY = 1;
 /**
  * Named rather than left to the Canvas default, which asks for PCFSoft. three 0.184 downgrades
  * that to PCF on the next shadow render, and the Canvas re-applies its config on every React
@@ -282,6 +283,20 @@ function PerfProbe({
     const ping = playersRef.current.get(localId)?.ping ?? 0;
     if (nodeRef.current) nodeRef.current.textContent = `${fps} fps · ${ping} ms`;
   });
+  return null;
+}
+
+/**
+ * Owns the frame's render call so it can skip it: a hunter spends the hiding phase
+ * behind an opaque blindout, and drawing the whole map under it for 20 s is pure
+ * waste on a weak GPU. Taking the render over, rather than pausing the frame loop,
+ * keeps every `useFrame` running, so interpolation, audio and the input pipeline
+ * carry on unchanged underneath.
+ */
+function RenderGate({ skip }: { skip: boolean }) {
+  useFrame(({ gl, scene, camera }) => {
+    if (!skip) gl.render(scene, camera);
+  }, RENDER_GATE_PRIORITY);
   return null;
 }
 
@@ -871,6 +886,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
     localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
   const showCrosshair = (canTransform || canShoot) && !inputBlocked;
+  const blinded = localRole === "hunter" && phase === "hiding";
 
   const closeChat = () => {
     setChatOpen(false);
@@ -926,6 +942,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
           inputBlocked={inputBlocked}
           onShoot={onShoot}
         />
+        <RenderGate skip={blinded} />
         {perfHud && <PerfProbe playersRef={playersRef} localId={sessionId} nodeRef={perfNodeRef} />}
       </Canvas>
 
@@ -1012,7 +1029,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
 
       {shotFx?.kind === "miss" && <div className="vignette" />}
 
-      {localRole === "hunter" && phase === "hiding" && (
+      {blinded && (
         <div className="blindout">
           <div className="blindout-title">The props are hiding</div>
           <div className="blindout-timer">
