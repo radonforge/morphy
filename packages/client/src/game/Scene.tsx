@@ -4,7 +4,6 @@ import {
   INPUT_IDLE_EPSILON,
   INPUT_SEND_RATE_MS,
   MAP_CATALOG,
-  type MapBounds,
   type MapDefinition,
   MOVE_SPEED,
   MSG_DECOY,
@@ -50,6 +49,7 @@ import {
 } from "./movement";
 import { lockPointer } from "./pointerLock";
 import { useSharedGLTF } from "./sharedTextures";
+import { snapToTexels, sunBasis } from "./sunShadow";
 import type {
   BreaksRef,
   DecoyBreakFx,
@@ -155,8 +155,16 @@ const TP_PITCH_MIN = -0.15;
 const TP_PITCH_MAX = 1.2;
 const DEFAULT_PITCH = 0.5;
 const SUN_POSITION: [number, number, number] = [14, 26, 10];
-const SHADOW_MAP_SIZE = 2048;
+const SHADOW_MAP_SIZE = 1024;
 const SHADOW_MARGIN = 4;
+const SHADOW_FOLLOW_RADIUS = 25;
+const SHADOW_LEAD = 10;
+const SHADOW_TEXEL = (2 * SHADOW_FOLLOW_RADIUS) / SHADOW_MAP_SIZE;
+const SHADOW_FAR =
+  Math.hypot(SUN_POSITION[0], SUN_POSITION[1], SUN_POSITION[2]) +
+  SHADOW_FOLLOW_RADIUS +
+  SHADOW_MARGIN;
+const SUN_BASIS = sunBasis({ x: SUN_POSITION[0], y: SUN_POSITION[1], z: SUN_POSITION[2] });
 const SHADOW_NORMAL_BIAS_TEXELS = 2;
 const SHADOW_UPDATE_INTERVAL_S = 1 / 30;
 const SHADOW_SETTLE_S = 0.4;
@@ -524,7 +532,7 @@ export function Scene({
         ids={ids}
         tauntPulseRef={tauntPulseRef}
       />
-      <SunLight intensity={theme.dir} bounds={map.bounds} />
+      <SunLight intensity={theme.dir} playerPos={localGroundRef} motionRef={motionRef} />
       <MapView map={map} groundColor={theme.ground} />
       <PropActions room={room} enabled={canTransform} motionRef={motionRef} />
       <Decoys decoys={decoys} catalog={catalog} />
@@ -692,40 +700,64 @@ function ShadowRefresh({
   return null;
 }
 
-function SunLight({ intensity, bounds }: { intensity: number; bounds: MapBounds }) {
-  const frustum = useMemo(() => {
-    const cx = (bounds.min.x + bounds.max.x) / 2;
-    const cz = (bounds.min.z + bounds.max.z) / 2;
-    const radius =
-      Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z) / 2 + SHADOW_MARGIN;
-    const far =
-      Math.hypot(SUN_POSITION[0], SUN_POSITION[1], SUN_POSITION[2]) + radius + SHADOW_MARGIN;
-    const normalBias = ((2 * radius) / SHADOW_MAP_SIZE) * SHADOW_NORMAL_BIAS_TEXELS;
-    return { cx, cz, radius, far, normalBias };
-  }, [bounds]);
-  const target = useMemo(() => {
-    const object = new THREE.Object3D();
-    object.position.set(frustum.cx, 0, frustum.cz);
-    object.updateMatrixWorld();
-    return object;
-  }, [frustum]);
+/**
+ * The shadowed sun, with its shadow camera kept on the local player rather than
+ * stretched over the whole map: three culls casters against that camera, so most
+ * of the map drops out of the shadow pass. The centre leads the view direction,
+ * where the player is looking, and snaps to the texel grid so edges do not shimmer.
+ */
+function SunLight({
+  intensity,
+  playerPos,
+  motionRef,
+}: {
+  intensity: number;
+  playerPos: PlayerPosRef;
+  motionRef: LocalMotionRef;
+}) {
+  const lightRef = useRef<THREE.DirectionalLight>(null);
+  const target = useMemo(() => new THREE.Object3D(), []);
+  const centre = useRef({ x: Number.NaN, y: 0, z: Number.NaN });
+  const normalBias = SHADOW_TEXEL * SHADOW_NORMAL_BIAS_TEXELS;
+
+  useFrame(() => {
+    const light = lightRef.current;
+    if (!light) return;
+    const pos = playerPos.current;
+    const yaw = motionRef.current.yaw;
+    const next = snapToTexels(
+      { x: pos.x - Math.sin(yaw) * SHADOW_LEAD, y: 0, z: pos.z - Math.cos(yaw) * SHADOW_LEAD },
+      SUN_BASIS,
+      SHADOW_TEXEL,
+    );
+    const prev = centre.current;
+    if (next.x === prev.x && next.y === prev.y && next.z === prev.z) return;
+    centre.current = next;
+    target.position.set(next.x, next.y, next.z);
+    target.updateMatrixWorld();
+    light.position.set(
+      next.x + SUN_POSITION[0],
+      next.y + SUN_POSITION[1],
+      next.z + SUN_POSITION[2],
+    );
+  });
 
   return (
     <>
       <directionalLight
-        position={[frustum.cx + SUN_POSITION[0], SUN_POSITION[1], frustum.cz + SUN_POSITION[2]]}
+        ref={lightRef}
         target={target}
         intensity={intensity}
         castShadow
         shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
         shadow-camera-near={1}
-        shadow-camera-far={frustum.far}
-        shadow-camera-left={-frustum.radius}
-        shadow-camera-right={frustum.radius}
-        shadow-camera-top={frustum.radius}
-        shadow-camera-bottom={-frustum.radius}
+        shadow-camera-far={SHADOW_FAR}
+        shadow-camera-left={-SHADOW_FOLLOW_RADIUS}
+        shadow-camera-right={SHADOW_FOLLOW_RADIUS}
+        shadow-camera-top={SHADOW_FOLLOW_RADIUS}
+        shadow-camera-bottom={-SHADOW_FOLLOW_RADIUS}
         shadow-bias={-0.0004}
-        shadow-normalBias={frustum.normalBias}
+        shadow-normalBias={normalBias}
       />
       <primitive object={target} />
     </>
