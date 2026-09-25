@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   autoTier,
+  GRAPHICS_PREFERENCES,
+  isGraphicsPreference,
   nextRoundTier,
   STEP_DOWN_FPS,
   STEP_DOWN_MIN_FRAMES,
@@ -41,4 +43,11 @@ test("a slow round steps down one tier and Low stays Low", () => {
 test("a fast round, or one too short to judge, keeps the tier", () => {
   assert.equal(nextRoundTier("high", round(STEP_DOWN_FPS + 5)), "high");
   assert.equal(nextRoundTier("high", round(10, STEP_DOWN_MIN_FRAMES - 1)), "high");
+});
+
+test("a stored graphics preference is accepted only when it names a known option", () => {
+  for (const pref of GRAPHICS_PREFERENCES) assert.equal(isGraphicsPreference(pref), true);
+  for (const bad of [null, "", "ultra", "Auto", " high"]) {
+    assert.equal(isGraphicsPreference(bad), false);
+  }
 });
