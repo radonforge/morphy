@@ -82,6 +82,16 @@ test("mars flat decor never renders on the module floor", () => {
   }
 });
 
+test("every urban prop shape stands in every seed, so each disguise has look-alikes", () => {
+  for (let seed = 0; seed < 1_000; seed++) {
+    const map = buildMap("urban", seed);
+    const placed = new Set(map.props.map((prop) => prop.type));
+    for (const definition of map.propCatalog) {
+      assert.ok(placed.has(definition.id), `seed ${seed} places no ${definition.id}`);
+    }
+  }
+});
+
 test("urban spawns stay clear of every static prop", () => {
   for (let seed = 0; seed < 1_000; seed++) {
     const map = buildMap("urban", seed);
