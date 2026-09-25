@@ -160,10 +160,25 @@ test("a hunter never probes the same object twice", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
   const room = [contact("crate-far", 12), contact("crate-near", 5)];
   await policy.decide(observation(1, room, { canProbeNow: true }));
-  await policy.decide(observation(2, room, { canProbeNow: false }));
-  const next = await policy.decide(observation(3, room, { canProbeNow: true }));
+  await policy.decide(observation(2, room, { canProbeNow: false, lastShotTargetId: "crate-near" }));
+  const next = await policy.decide(
+    observation(3, room, { canProbeNow: true, lastShotTargetId: "crate-near" }),
+  );
   assert.equal(next.kind, "shootTarget");
   assert.equal(next.targetId, "crate-far", "the one that survived a shot is furniture");
+});
+
+test("a probe cut short by a shot at a suspect is still owed", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const room = [contact("crate-far", 12), contact("crate-near", 5)];
+  await policy.decide(observation(1, room, { canProbeNow: true }));
+  await policy.decide(observation(2, [...room, suspect("prop-a", 8)], { canProbeNow: true }));
+  await policy.decide(observation(3, room, { canProbeNow: false, lastShotTargetId: "prop-a" }));
+  const next = await policy.decide(
+    observation(4, room, { canProbeNow: true, lastShotTargetId: "prop-a" }),
+  );
+  assert.equal(next.kind, "shootTarget");
+  assert.equal(next.targetId, "crate-near", "the crate it never shot is not written off");
 });
 
 test("a hunter probes nothing out of reach", async () => {

@@ -463,4 +463,5 @@ test("a hunter's probe falls due only a probe interval after its last shot", () 
   assert.equal(reflex.buildObservation(scene, 2, firedAt + 1).self.canProbeNow, false);
   const due = reflex.buildObservation(scene, 3, firedAt + BOT_PROBE_INTERVAL_MAX_MS);
   assert.equal(due.self.canProbeNow, true);
+  assert.equal(due.self.lastShotTargetId, handle, "and it knows what it fired at");
 });

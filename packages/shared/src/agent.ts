@@ -70,6 +70,12 @@ export interface ObservedSelf {
    * at, never faster, because every such shot that misses costs HP.
    */
   canProbeNow: boolean;
+  /**
+   * The contact the bot last fired at, by the id its observation named it with,
+   * or null before its first shot: what lets a policy tell the object it meant
+   * to test from one it shot for another reason.
+   */
+  lastShotTargetId: string | null;
 }
 
 /**

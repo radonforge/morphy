@@ -187,9 +187,14 @@ export class ScriptedPolicy implements Policy {
     return intent;
   }
 
-  /** Once the bot has fired, the object it was testing counts as tested. */
+  /**
+   * Once the bot has fired at the object it was testing, that object counts as
+   * tested. A shot at anything else, a suspect that turned up first, leaves the
+   * test pending: it spent the cadence, not the answer.
+   */
   private settleProbe(obs: Observation): void {
-    if (obs.self.canProbeNow || this.probeTarget === null) return;
+    if (this.probeTarget === null || obs.self.lastShotTargetId !== this.probeTarget) return;
+    if (obs.self.canProbeNow) return;
     this.probed.add(this.probeTarget);
     this.probeTarget = null;
   }

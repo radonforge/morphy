@@ -180,6 +180,7 @@ export class Reflex {
   private posZ = 0;
   private rot = 0;
   private lastShotAt = 0;
+  private lastShotTargetId: string | null = null;
 
   private readonly follower = new PathFollower();
   private pathGoal: Point2 | null = null;
@@ -278,6 +279,7 @@ export class Reflex {
     this.resetMotion();
     this.forgetContacts();
     this.lastShotAt = 0;
+    this.lastShotTargetId = null;
   }
 
   /**
@@ -411,6 +413,7 @@ export class Reflex {
       canTauntNow: this.sincePressed("taunt", now) >= TAUNT_COOLDOWN_MS,
       canSonarNow: this.sincePressed("sonar", now) >= SONAR_COOLDOWN_MS,
       canProbeNow: now - this.lastShotAt >= probeInterval,
+      lastShotTargetId: this.lastShotTargetId,
     };
     this.forgetDeparted(world.others, world.decoys);
     const blind =
@@ -967,6 +970,7 @@ export class Reflex {
       const ready = now - this.aimAcquiredAt >= reactionMs;
       if (ready && now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS) {
         this.lastShotAt = now;
+        this.lastShotTargetId = targetId;
         return { dir };
       }
       return null;
