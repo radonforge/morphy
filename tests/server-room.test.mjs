@@ -12,10 +12,12 @@ import {
   HIDE_DURATION_MS,
   HUNTER_CAPTURE_HEAL,
   HUNTER_MAX_HP,
+  HUNTER_RESPAWN_MS,
   LOBBY_AUTOSTART_MS,
   MSG_SHOT_FIRED,
   MSG_SONAR_PING,
   MSG_TAUNT,
+  MSG_TELEPORT,
   RECONNECT_WINDOW_MS,
   ROUND_END_MS,
   SONAR_RADIUS,
@@ -689,6 +691,73 @@ test("a capture pays back more than the guesses it usually takes", () => {
     shooter.hp - HUNTER_MAX_HP / 2 >= (WEAPONS[shooter.weapon].missDamage * CHEAP_GUESSES) / 2,
     "a find refunds at least half a dozen misses",
   );
+});
+
+/** A lone hunter one miss from empty, in a room with a clock and two spawn points. */
+function lastLegs() {
+  const { room, shooter, target } = lineOfFire();
+  room.clock = fakeClock();
+  room.map.spawnPoints = {
+    props: [
+      { x: 1, y: 0, z: 1 },
+      { x: 40, y: 0, z: 40 },
+    ],
+  };
+  target.x = 30;
+  shooter.hp = WEAPONS[shooter.weapon].missDamage;
+  return { room, shooter };
+}
+
+test("a hunter out of HP does not hand the props the round", () => {
+  const { room, shooter } = lastLegs();
+  shootAhead(room, shooter);
+  assert.equal(shooter.alive, false);
+  assert.equal(room.state.phase, "hunting", "props win on the clock, not on a hunter's misses");
+});
+
+test("a hunter out of HP is back in the hunt after a short wait, at reduced health", () => {
+  const { room, shooter } = lastLegs();
+  shootAhead(room, shooter);
+  const respawn = timersOf(room, HUNTER_RESPAWN_MS).at(-1);
+  assert.ok(respawn, "expected a respawn timer");
+  respawn.fn();
+  assert.equal(shooter.alive, true);
+  assert.equal(shooter.hp, CONVERTED_HUNTER_HP);
+});
+
+test("a respawned hunter is put back where no prop is, and told so", () => {
+  const { room, shooter } = lastLegs();
+  const sent = [];
+  room.clients.push({
+    sessionId: shooter.id,
+    send: (type, message) => sent.push({ type, message }),
+  });
+  shootAhead(room, shooter);
+  timersOf(room, HUNTER_RESPAWN_MS).at(-1).fn();
+  assert.deepEqual(
+    { x: shooter.x, z: shooter.z },
+    { x: 40, z: 40 },
+    "the spot furthest from props",
+  );
+  assert.deepEqual(sent.at(-1), { type: MSG_TELEPORT, message: { x: 40, z: 40 } });
+});
+
+test("a respawn still pending when the round ends never fires", () => {
+  const { room, shooter } = lastLegs();
+  shootAhead(room, shooter);
+  const respawn = timersOf(room, HUNTER_RESPAWN_MS).at(-1);
+  room.state.phase = "round_end";
+  respawn.fn();
+  assert.equal(shooter.alive, false);
+});
+
+test("the props win at once when every hunter has walked out", () => {
+  const { room, shooter } = lineOfFire();
+  room.endRound = function endRoundForTest() {
+    this.state.phase = "round_end";
+  };
+  room.onLeave({ sessionId: shooter.id });
+  assert.equal(room.state.winner, "props");
 });
 
 /** Replace a room-filling bot's brain with one that presses a single key once. */

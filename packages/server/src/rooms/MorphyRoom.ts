@@ -27,6 +27,7 @@ import {
   HUNTER_CAPTURE_HEAL,
   HUNTER_MAX_HP,
   HUNTER_RATIO,
+  HUNTER_RESPAWN_MS,
   INPUT_SEND_RATE_MS,
   type InputMessage,
   isAvatarId,
@@ -336,6 +337,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private propBounds = new Map<string, PropBounds>();
   private phaseTimer?: ClearableTimer;
   private tauntTimer?: ClearableTimer;
+  private respawnTimers = new Map<string, ClearableTimer>();
   private nextShotAt = new Map<string, number>();
   private nextDecoyAt = new Map<string, number>();
   private nextTauntAt = new Map<string, number>();
@@ -451,6 +453,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   onLeave(client: Client): void {
     this.removeDecoysOf(client.sessionId);
     this.state.players.delete(client.sessionId);
+    this.cancelRespawn(client.sessionId);
     this.nextShotAt.delete(client.sessionId);
     this.nextDecoyAt.delete(client.sessionId);
     this.forgetSoundTimersOf(client.sessionId);
@@ -884,6 +887,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
           victimName: player.name,
           reason: "self",
         } satisfies KillEvent);
+        this.scheduleRespawn(player.id);
       }
     }
     client.send(MSG_SHOT_RESULT, { hit: captured.size > 0 });
@@ -1112,6 +1116,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private clearRound(): void {
     this.tauntTimer?.clear();
     this.tauntTimer = undefined;
+    this.cancelRespawns();
     this.state.winner = "";
     this.state.players.forEach((player) => {
       player.ready = false;
@@ -1318,6 +1323,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.stopDriver(bot);
     this.removeDecoysOf(sessionId);
     this.state.players.delete(sessionId);
+    this.cancelRespawn(sessionId);
     this.nextShotAt.delete(sessionId);
     this.nextDecoyAt.delete(sessionId);
     this.forgetSoundTimersOf(sessionId);
@@ -1382,22 +1388,90 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     }
   }
 
+  /**
+   * Hunters win when no prop is left; props win on the clock. A hunter out of
+   * HP is waiting on a respawn, not out of the round, so hunters running dry
+   * no longer hands the props the win. Only a round left with no hunter in it
+   * at all, because every one of them walked out, ends early for the props.
+   */
   private checkRoundEnd(): void {
     if (this.state.phase !== "hunting") return;
     let aliveProps = 0;
-    let aliveHunters = 0;
+    let hunters = 0;
     this.state.players.forEach((player) => {
-      if (!player.alive) return;
-      if (player.role === "prop") aliveProps++;
-      else aliveHunters++;
+      if (player.role === "hunter") hunters++;
+      else if (player.alive) aliveProps++;
     });
     if (aliveProps === 0) {
       this.state.winner = "hunters";
       this.endRound();
-    } else if (aliveHunters === 0) {
+    } else if (hunters === 0) {
       this.state.winner = "props";
       this.endRound();
     }
+  }
+
+  /** Bring a hunter who ran out of HP back after {@link HUNTER_RESPAWN_MS}. */
+  private scheduleRespawn(sessionId: string): void {
+    this.cancelRespawn(sessionId);
+    this.respawnTimers.set(
+      sessionId,
+      this.clock.setTimeout(() => this.respawnHunter(sessionId), HUNTER_RESPAWN_MS),
+    );
+  }
+
+  private cancelRespawn(sessionId: string): void {
+    this.respawnTimers.get(sessionId)?.clear();
+    this.respawnTimers.delete(sessionId);
+  }
+
+  private cancelRespawns(): void {
+    for (const timer of this.respawnTimers.values()) timer.clear();
+    this.respawnTimers.clear();
+  }
+
+  private respawnHunter(sessionId: string): void {
+    this.respawnTimers.delete(sessionId);
+    if (this.state.phase !== "hunting") return;
+    const player = this.state.players.get(sessionId);
+    if (player?.role !== "hunter" || player.alive) return;
+    player.alive = true;
+    player.hp = CONVERTED_HUNTER_HP;
+    this.teleport(player, this.hunterSpawns(1)[0] ?? this.map.bounds.min);
+  }
+
+  /**
+   * The `count` spawn points furthest from every live prop, best first: where
+   * a hunter joins the hunt without landing on top of someone hiding.
+   */
+  private hunterSpawns(count: number): Vec3[] {
+    const props: PlayerState[] = [];
+    this.state.players.forEach((player) => {
+      if (player.role === "prop" && player.alive) props.push(player);
+    });
+    const clearance = (spot: Vec3): number => {
+      let nearest = Number.POSITIVE_INFINITY;
+      for (const prop of props) {
+        nearest = Math.min(nearest, Math.hypot(prop.x - spot.x, prop.z - spot.z));
+      }
+      return nearest;
+    };
+    return [...this.map.spawnPoints.props]
+      .sort((a, b) => clearance(b) - clearance(a))
+      .slice(0, count);
+  }
+
+  /** Move a player to a spot and tell whoever drives it, a client or a room-filling bot. */
+  private teleport(player: PlayerState, spot: Vec3): void {
+    player.x = spot.x;
+    player.y = spot.y;
+    player.z = spot.z;
+    const bot = this.bots.get(player.id);
+    if (bot) {
+      bot.driver.syncPosition(spot.x, spot.z);
+      return;
+    }
+    this.clients.getById(player.id)?.send(MSG_TELEPORT, { x: spot.x, z: spot.z });
   }
 
   /**

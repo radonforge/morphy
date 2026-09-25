@@ -44,6 +44,12 @@ export const CONVERTED_HUNTER_HP = 60;
  * a health bar, so a find pays for the wrong guesses that led to it.
  */
 export const HUNTER_CAPTURE_HEAL = 50;
+/**
+ * How long a hunter who ran out of HP waits before rejoining the hunt, at
+ * {@link CONVERTED_HUNTER_HP}: long enough to sting, never long enough to
+ * spectate a round away.
+ */
+export const HUNTER_RESPAWN_MS = 6_000;
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 

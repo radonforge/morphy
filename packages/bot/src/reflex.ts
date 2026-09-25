@@ -349,10 +349,12 @@ export class Reflex {
     }));
   }
 
+  /** Adopt an authoritative position; a path planned from anywhere else is dropped with it. */
   syncPosition(x: number, z: number, rot?: number): void {
     this.posX = x;
     this.posZ = z;
     if (rot !== undefined) this.rot = rot;
+    this.resetMotion();
   }
 
   /** Called when the scheduler swaps in a new intent: drop the stale path so the

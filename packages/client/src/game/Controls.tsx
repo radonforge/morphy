@@ -105,7 +105,7 @@ function useNowUntil(until: number): number {
 }
 
 function mainControls(s: BarState, now: number): { note?: string; items: ControlSpec[] } {
-  if (!s.alive) return { note: "Eliminated, spectating", items: [] };
+  if (!s.alive) return { note: "Out of HP, back in the hunt in a moment", items: [] };
   if (s.canShoot) {
     return {
       items: [
