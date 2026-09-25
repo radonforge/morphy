@@ -962,7 +962,22 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.setPhase("hiding", HIDE_DURATION_MS, () => this.beginHunting());
   }
 
+  /**
+   * Hunters are released onto the map's hunter spawns furthest from the props,
+   * one spot each while there are enough: they waited out the hide where the
+   * round dealt them, which is where everyone stood, and a new prop caught
+   * seconds into the hunt by the hunter that spawned beside it never got to play.
+   */
   private beginHunting(): void {
+    const hunters: PlayerState[] = [];
+    this.state.players.forEach((player) => {
+      if (player.role === "hunter" && player.alive) hunters.push(player);
+    });
+    const spots = this.hunterSpawns(hunters.length);
+    hunters.forEach((hunter, index) => {
+      const spot = spots[index % spots.length];
+      if (spot) this.teleport(hunter, spot);
+    });
     this.startTauntClocks();
     this.tauntTimer?.clear();
     this.tauntTimer = this.clock.setInterval(() => this.sweepForcedTaunts(), TAUNT_CHECK_MS);
@@ -1441,7 +1456,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   }
 
   /**
-   * The `count` spawn points furthest from every live prop, best first: where
+   * The `count` hunter spawns furthest from every live prop, best first: where
    * a hunter joins the hunt without landing on top of someone hiding.
    */
   private hunterSpawns(count: number): Vec3[] {
@@ -1456,7 +1471,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       }
       return nearest;
     };
-    return [...this.map.spawnPoints.props]
+    return [...this.map.spawnPoints.hunters]
       .sort((a, b) => clearance(b) - clearance(a))
       .slice(0, count);
   }

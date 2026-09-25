@@ -698,7 +698,8 @@ function lastLegs() {
   const { room, shooter, target } = lineOfFire();
   room.clock = fakeClock();
   room.map.spawnPoints = {
-    props: [
+    props: [{ x: 0, y: 0, z: 0 }],
+    hunters: [
       { x: 1, y: 0, z: 1 },
       { x: 40, y: 0, z: 40 },
     ],
@@ -758,6 +759,31 @@ test("the props win at once when every hunter has walked out", () => {
   };
   room.onLeave({ sessionId: shooter.id });
   assert.equal(room.state.winner, "props");
+});
+
+test("hunters are released on the hunter spawns furthest from the props", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  room.startCountdown();
+  timersOf(room, START_COUNTDOWN_MS).at(-1).fn();
+  const hunters = [];
+  const props = [];
+  room.state.players.forEach((player) => {
+    (player.role === "hunter" ? hunters : props).push(player);
+  });
+  const nearestProp = (spot) =>
+    Math.min(...props.map((prop) => Math.hypot(prop.x - spot.x, prop.z - spot.z)));
+  const best = Math.max(...room.map.spawnPoints.hunters.map(nearestProp));
+  timersOf(room, HIDE_DURATION_MS).at(-1).fn();
+  assert.equal(room.state.phase, "hunting");
+  for (const hunter of hunters) {
+    assert.ok(
+      room.map.spawnPoints.hunters.some((spot) => spot.x === hunter.x && spot.z === hunter.z),
+      "on a hunter spawn",
+    );
+    assert.equal(nearestProp(hunter), best, "the one furthest from every prop");
+  }
 });
 
 /** Replace a room-filling bot's brain with one that presses a single key once. */

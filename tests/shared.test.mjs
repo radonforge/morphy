@@ -13,7 +13,7 @@ function validMap() {
   return {
     id: "test",
     bounds: { min: { x: -10, y: 0, z: -10 }, max: { x: 10, y: 10, z: 10 } },
-    spawnPoints: { props: [{ x: 0, y: 0, z: 0 }] },
+    spawnPoints: { props: [{ x: 0, y: 0, z: 0 }], hunters: [{ x: 1, y: 0, z: 1 }] },
     colliders: [],
     tiles: [],
     scenery: [],
@@ -53,6 +53,16 @@ test("map validation rejects non-finite values, empty spawns and duplicate ids",
   const duplicate = validMap();
   duplicate.propCatalog.push(structuredClone(duplicate.propCatalog[0]));
   assert.throws(() => parseMapDefinition(duplicate), /duplicate id/);
+});
+
+test("map validation requires somewhere to release the hunters", () => {
+  const none = validMap();
+  none.spawnPoints.hunters = [];
+  assert.throws(() => parseMapDefinition(none), /spawnPoints.hunters' must not be empty/);
+
+  const outside = validMap();
+  outside.spawnPoints.hunters = [{ x: 999, y: 0, z: 0 }];
+  assert.throws(() => parseMapDefinition(outside), /outside map bounds/);
 });
 
 test("timeout rejects and disposes values that resolve late", async () => {

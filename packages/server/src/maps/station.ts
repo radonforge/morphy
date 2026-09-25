@@ -60,6 +60,12 @@ const SPAWN_INSET = 2.6;
 const SPAWN_DOOR_CLEAR = 4;
 const SPAWNS_PER_ROOM = 3;
 
+/** Grid lines the `+` spine is centred on, and the cells along it hunters are released in. */
+const SPINE_LINE_I = 11;
+const SPINE_LINE_J = 9;
+const SPINE_STOPS_I = [0, 5, 16, 21];
+const SPINE_STOPS_J = [0, 4, 13, 17];
+
 function paint(region: Cell[][], id: string, r: Pick<Room, "i0" | "i1" | "j0" | "j1">): void {
   for (let i = r.i0; i < r.i1; i++) {
     for (let j = r.j0; j < r.j1; j++) region[i]![j] = id;
@@ -84,6 +90,21 @@ function roomSpawns(rect: RoomRect, doorways: Doorway[]): Vec3[] {
     .sort((a, b) => b.nearest - a.nearest)
     .slice(0, SPAWNS_PER_ROOM);
   return scored.map((s) => ({ x: s.c.x, y: 0, z: s.c.z }));
+}
+
+/**
+ * Hunter release points along the corridor spine, which no furniture is ever
+ * placed in: its crossing, its four ends and a stop halfway down each arm, so
+ * one of them is always far from wherever the props went.
+ */
+function spineSpawns(grid: Grid): Vec3[] {
+  const x = lineX(grid, SPINE_LINE_I);
+  const z = lineZ(grid, SPINE_LINE_J);
+  return [
+    { x, y: 0, z },
+    ...SPINE_STOPS_J.map((j) => ({ x, y: 0, z: lineZ(grid, j) + TILE / 2 })),
+    ...SPINE_STOPS_I.map((i) => ({ x: lineX(grid, i) + TILE / 2, y: 0, z })),
+  ];
 }
 
 /** Kepler-9 Station: hand-authored deck of themed compartments around a central spine. */
@@ -144,7 +165,7 @@ export function buildStation(seed: number): MapDefinition {
       min: { x: -grid.halfW, y: 0, z: -grid.halfD },
       max: { x: grid.halfW, y: WALL_HEIGHT, z: grid.halfD },
     },
-    spawnPoints: { props: propSpawns },
+    spawnPoints: { props: propSpawns, hunters: spineSpawns(grid) },
     colliders,
     tiles,
     scenery: [],
