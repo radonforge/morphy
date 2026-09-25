@@ -28,7 +28,7 @@ import {
   WEAPONS,
   type WeaponId,
 } from "@morphy/shared";
-import { Billboard, Sky, Text, useGLTF } from "@react-three/drei";
+import { Billboard, Sky, Text } from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
@@ -49,6 +49,7 @@ import {
   supportHeightAt,
 } from "./movement";
 import { lockPointer } from "./pointerLock";
+import { useSharedGLTF } from "./sharedTextures";
 import type {
   BreaksRef,
   DecoyBreakFx,
@@ -1260,7 +1261,7 @@ function FittedModel({
   baseY: number;
   scaleMul?: number;
 }) {
-  const { scene } = useGLTF(url);
+  const { scene } = useSharedGLTF(url);
   const object = useMemo(() => {
     const clone = scene.clone(true);
     enableShadows(clone);
@@ -1318,7 +1319,7 @@ function tileHeight(geometry: THREE.BufferGeometry, tiles: TileInstance[]): numb
 }
 
 function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) {
-  const { scene } = useGLTF(url);
+  const { scene } = useSharedGLTF(url);
   const { geometry, material } = useMemo(() => {
     const mesh = firstMesh(scene);
     return { geometry: mesh.geometry, material: mesh.material };
@@ -1359,7 +1360,7 @@ function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) 
 }
 
 function SceneryModel({ inst }: { inst: SceneryInstance }) {
-  const { scene } = useGLTF(inst.model);
+  const { scene } = useSharedGLTF(inst.model);
   const object = useMemo(() => {
     const clone = scene.clone(true);
     enableShadows(clone);
@@ -1395,7 +1396,7 @@ function PropMesh({ def }: { def: PropDefinition }) {
 }
 
 function WeaponModel({ url, scale }: { url: string; scale: number }) {
-  const { scene } = useGLTF(url);
+  const { scene } = useSharedGLTF(url);
   const object = useMemo(() => {
     const clone = scene.clone(true);
     clone.traverse((child) => {
