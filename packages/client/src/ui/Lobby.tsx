@@ -34,7 +34,18 @@ import {
   stopLobbyMusic,
   unlockAudio,
 } from "../game/audio";
-import { isPerfHudEnabled, setPerfHudEnabled } from "../game/prefs";
+import {
+  GRAPHICS_LABEL,
+  GRAPHICS_PREFERENCES,
+  type GraphicsPreference,
+  isGraphicsPreference,
+} from "../game/graphicsTier";
+import {
+  graphicsPreference,
+  isPerfHudEnabled,
+  setGraphicsPreference,
+  setPerfHudEnabled,
+} from "../game/prefs";
 import { MAP_CHROME, MAP_GLASS } from "../theme";
 import { CarouselRail } from "./CarouselRail";
 import { AVATAR_COUNT, avatarIndex, MAP_COUNT, mapIndex, stepAvatar, stepMap } from "./carousel";
@@ -148,6 +159,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const [musicOn, setMusicOnState] = useState(() => isMusicEnabled());
   const [musicVol, setMusicVolState] = useState(() => getMusicVolume());
   const [perfHud, setPerfHudState] = useState(() => isPerfHudEnabled());
+  const [graphics, setGraphicsState] = useState<GraphicsPreference>(() => graphicsPreference());
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [picker, setPicker] = useState<PickerId | null>(null);
@@ -334,6 +346,13 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     setUiSoundsEnabled(next);
     setUiSoundsState(next);
     if (next) playUiClick();
+  }, []);
+
+  const changeGraphics = useCallback((value: string) => {
+    if (!isGraphicsPreference(value)) return;
+    setGraphicsPreference(value);
+    setGraphicsState(value);
+    playUiClick();
   }, []);
 
   const togglePerfHud = useCallback(() => {
@@ -769,6 +788,24 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
                   aria-pressed={uiSounds}
                   aria-label={uiSounds ? "Disable interface sounds" : "Enable interface sounds"}
                 />
+              </div>
+              <div className="menu-opt-row">
+                <span className="l">
+                  <b>Graphics quality</b>
+                  <span>Auto reads your GPU and steps down after a slow round</span>
+                </span>
+                <select
+                  className="menu-select"
+                  value={graphics}
+                  onChange={(e) => changeGraphics(e.target.value)}
+                  aria-label="Graphics quality"
+                >
+                  {GRAPHICS_PREFERENCES.map((pref) => (
+                    <option key={pref} value={pref}>
+                      {GRAPHICS_LABEL[pref]}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="menu-opt-row">
                 <span className="l">

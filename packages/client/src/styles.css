@@ -890,6 +890,18 @@ canvas {
   width: clamp(120px, 12vw, 170px);
   accent-color: var(--cyan);
 }
+.menu-select {
+  width: clamp(120px, 12vw, 170px);
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.5);
+  border: 0;
+  border-radius: var(--r-control);
+  box-shadow: inset 0 0 0 1px var(--border);
+  cursor: pointer;
+}
 .stage-chip {
   pointer-events: none;
 }
@@ -2170,4 +2182,19 @@ canvas {
   font-family: var(--font-mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* The Low graphics tier: no live blur over a canvas that repaints every frame. */
+body.gfx-low {
+  --glass-tint: rgba(11, 18, 31, 0.9);
+}
+body.gfx-low .panel,
+body.gfx-low .hud-surface,
+body.gfx-low .lobby-overlay-card button,
+body.gfx-low .result-actions button,
+body.gfx-low .pause-card button,
+body.gfx-low .killfeed-line,
+body.gfx-low .controls-dialog-backdrop {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }

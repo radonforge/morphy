@@ -50,6 +50,7 @@ export interface DiagnosticsReport {
   map: string;
   phase: string;
   players: number;
+  graphics: string;
 }
 
 export function createFrameRing(size: number = FRAME_RING_SIZE): FrameRing {
@@ -104,6 +105,7 @@ export function formatDiagnostics(r: DiagnosticsReport): string {
     `JS heap: ${r.heapMb === null ? "?" : `${fixed(r.heapMb)} MB`}`,
     `Long tasks: ${r.longTasks}, longest ${fixed(r.longestTaskMs, 0)} ms`,
     `WebGL context losses: ${r.contextLosses}`,
+    `Graphics: ${r.graphics}`,
     `Map: ${r.map}, phase: ${r.phase}, players: ${r.players}`,
     `Browser: ${r.userAgent}`,
   ].join("\n");

@@ -32,6 +32,7 @@ import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "r
 import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
+import type { ShadowSettings } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
 import { fitModel, MODEL_MIN_SIZE } from "./modelFit";
 import { enableShadows } from "./modelShading";
@@ -56,6 +57,7 @@ import type {
   BreaksRef,
   DecoyBreakFx,
   DecoyView,
+  LookRef,
   PlayersRef,
   RemotePlayerView,
   SceneMetaMap,
@@ -154,19 +156,15 @@ const PITCH_MIN = -1.4;
 const PITCH_MAX = 1.4;
 const TP_PITCH_MIN = -0.15;
 const TP_PITCH_MAX = 1.2;
-const DEFAULT_PITCH = 0.5;
+export const DEFAULT_PITCH = 0.5;
 const SUN_POSITION: [number, number, number] = [14, 26, 10];
-const SHADOW_MAP_SIZE = 1024;
 const SHADOW_MARGIN = 4;
-const SHADOW_FOLLOW_RADIUS = 25;
 const SHADOW_LEAD = 10;
-const SHADOW_TEXEL = (2 * SHADOW_FOLLOW_RADIUS) / SHADOW_MAP_SIZE;
 const SHADOW_LIGHT_DISTANCE = 60;
-const SHADOW_FAR = SHADOW_LIGHT_DISTANCE + SHADOW_FOLLOW_RADIUS + SHADOW_MARGIN;
+const UNSHADOWED_SNAP = 1;
 const SUN_BASIS = sunBasis({ x: SUN_POSITION[0], y: SUN_POSITION[1], z: SUN_POSITION[2] });
 const SUN_OFFSET = new THREE.Vector3(...SUN_POSITION).setLength(SHADOW_LIGHT_DISTANCE);
 const SHADOW_NORMAL_BIAS_TEXELS = 2;
-const SHADOW_UPDATE_INTERVAL_S = 1 / 30;
 const SHADOW_SETTLE_S = 0.4;
 const SHADOW_HEARTBEAT_S = 2;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -174,7 +172,6 @@ const SCREEN_CENTER = new THREE.Vector2(0, 0);
 const noRaycast = () => {};
 
 export const GAME_FOV = 55;
-export const GAME_DPR: [number, number] = [1, 1.25];
 const SPRINT_FOV_ADD = 7;
 const FOV_DAMP = 0.02;
 const FOV_EPSILON = 0.05;
@@ -418,12 +415,14 @@ interface SceneProps {
   phase: Phase;
   decoys: DecoyView[];
   teleportRef: TeleportRef;
+  lookRef: LookRef;
   tauntPulseRef: TauntPulseRef;
   shotsRef: ShotsRef;
   breaksRef: BreaksRef;
   weapon: WeaponId;
   inputBlocked: boolean;
   onShoot: () => void;
+  shadows: ShadowSettings | null;
 }
 
 export const Scene = memo(function Scene({
@@ -436,12 +435,14 @@ export const Scene = memo(function Scene({
   phase,
   decoys,
   teleportRef,
+  lookRef,
   tauntPulseRef,
   shotsRef,
   breaksRef,
   weapon,
   inputBlocked,
   onShoot,
+  shadows,
 }: SceneProps) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
@@ -524,15 +525,23 @@ export const Scene = memo(function Scene({
       )}
       <hemisphereLight args={[theme.hemiSky, theme.hemiGround, theme.hemiIntensity]} />
       <ambientLight intensity={theme.ambient} />
-      <ShadowRefresh
-        playersRef={playersRef}
-        localPos={localGroundRef}
+      {shadows && (
+        <ShadowRefresh
+          playersRef={playersRef}
+          localPos={localGroundRef}
+          motionRef={motionRef}
+          meta={meta}
+          ids={ids}
+          tauntPulseRef={tauntPulseRef}
+          refreshHz={shadows.refreshHz}
+        />
+      )}
+      <SunLight
+        intensity={theme.dir}
+        playerPos={localGroundRef}
         motionRef={motionRef}
-        meta={meta}
-        ids={ids}
-        tauntPulseRef={tauntPulseRef}
+        shadows={shadows}
       />
-      <SunLight intensity={theme.dir} playerPos={localGroundRef} motionRef={motionRef} />
       <MapView map={map} groundColor={theme.ground} />
       <PropActions room={room} enabled={canTransform} motionRef={motionRef} />
       <Decoys decoys={decoys} catalog={catalog} />
@@ -561,6 +570,7 @@ export const Scene = memo(function Scene({
         phase={phase}
         alive={localAlive}
         teleportRef={teleportRef}
+        lookRef={lookRef}
         tauntPulseRef={tauntPulseRef}
         inputBlocked={inputBlocked}
         playersRef={playersRef}
@@ -604,6 +614,7 @@ function ShadowRefresh({
   meta,
   ids,
   tauntPulseRef,
+  refreshHz,
 }: {
   playersRef: PlayersRef;
   localPos: PlayerPosRef;
@@ -611,6 +622,7 @@ function ShadowRefresh({
   meta: SceneMetaMap;
   ids: string[];
   tauntPulseRef: TauntPulseRef;
+  refreshHz: number;
 }) {
   const gl = useThree((state) => state.gl);
   const checkAccum = useRef(0);
@@ -641,7 +653,7 @@ function ShadowRefresh({
     checkAccum.current += delta;
     sinceRender.current += delta;
     sinceChange.current += delta;
-    if (checkAccum.current < SHADOW_UPDATE_INTERVAL_S) return;
+    if (checkAccum.current < 1 / refreshHz) return;
     checkAccum.current = 0;
 
     const pos = localPos.current;
@@ -713,15 +725,19 @@ function SunLight({
   intensity,
   playerPos,
   motionRef,
+  shadows,
 }: {
   intensity: number;
   playerPos: PlayerPosRef;
   motionRef: LocalMotionRef;
+  shadows: ShadowSettings | null;
 }) {
   const lightRef = useRef<THREE.DirectionalLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
   const centre = useRef({ x: Number.NaN, y: 0, z: Number.NaN });
-  const normalBias = SHADOW_TEXEL * SHADOW_NORMAL_BIAS_TEXELS;
+  const radius = shadows?.radius ?? 0;
+  const mapSize = shadows?.mapSize ?? 0;
+  const texel = shadows ? (2 * radius) / mapSize : UNSHADOWED_SNAP;
 
   useGuardedFrame(() => {
     const light = lightRef.current;
@@ -731,7 +747,7 @@ function SunLight({
     const next = snapToTexels(
       { x: pos.x - Math.sin(yaw) * SHADOW_LEAD, y: 0, z: pos.z - Math.cos(yaw) * SHADOW_LEAD },
       SUN_BASIS,
-      SHADOW_TEXEL,
+      texel,
     );
     const prev = centre.current;
     if (next.x === prev.x && next.y === prev.y && next.z === prev.z) return;
@@ -747,16 +763,16 @@ function SunLight({
         ref={lightRef}
         target={target}
         intensity={intensity}
-        castShadow
-        shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
+        castShadow={shadows !== null}
+        shadow-mapSize={[mapSize, mapSize]}
         shadow-camera-near={1}
-        shadow-camera-far={SHADOW_FAR}
-        shadow-camera-left={-SHADOW_FOLLOW_RADIUS}
-        shadow-camera-right={SHADOW_FOLLOW_RADIUS}
-        shadow-camera-top={SHADOW_FOLLOW_RADIUS}
-        shadow-camera-bottom={-SHADOW_FOLLOW_RADIUS}
+        shadow-camera-far={SHADOW_LIGHT_DISTANCE + radius + SHADOW_MARGIN}
+        shadow-camera-left={-radius}
+        shadow-camera-right={radius}
+        shadow-camera-top={radius}
+        shadow-camera-bottom={-radius}
         shadow-bias={-0.0004}
-        shadow-normalBias={normalBias}
+        shadow-normalBias={texel * SHADOW_NORMAL_BIAS_TEXELS}
       />
       <primitive object={target} />
     </>
@@ -1643,8 +1659,7 @@ function PropActions({
   return null;
 }
 
-function useMouseLook() {
-  const look = useRef({ yaw: 0, pitch: DEFAULT_PITCH });
+function useMouseLook(look: LookRef): LookRef {
   const { gl } = useThree();
 
   useEffect(() => {
@@ -1671,7 +1686,7 @@ function useMouseLook() {
       el.removeEventListener("click", requestLock);
       window.removeEventListener("mousemove", onMove);
     };
-  }, [gl]);
+  }, [gl, look]);
 
   return look;
 }
@@ -1686,6 +1701,7 @@ interface LocalPlayerProps {
   phase: Phase;
   alive: boolean;
   teleportRef: TeleportRef;
+  lookRef: LookRef;
   tauntPulseRef: TauntPulseRef;
   inputBlocked: boolean;
   playersRef: PlayersRef;
@@ -1706,6 +1722,7 @@ function LocalPlayer({
   phase,
   alive,
   teleportRef,
+  lookRef,
   tauntPulseRef,
   inputBlocked,
   playersRef,
@@ -1717,7 +1734,7 @@ function LocalPlayer({
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!inputBlocked);
-  const look = useMouseLook();
+  const look = useMouseLook(lookRef);
   const { camera } = useThree();
 
   const spawn = map.spawnPoints.props[0] ?? map.bounds.min;
