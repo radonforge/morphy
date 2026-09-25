@@ -13,6 +13,7 @@ import {
   MSG_DECOY_PLACED,
   MSG_KILL,
   MSG_MAP,
+  MSG_PUFF,
   MSG_READY,
   MSG_SET_WEAPON,
   MSG_SHOT_FIRED,
@@ -59,6 +60,7 @@ import {
   preloadSamples,
   toggleMuted,
 } from "./audio";
+import { ConfettiClouds } from "./ConfettiClouds";
 import { ControlsBar, ControlsDialog } from "./Controls";
 import { useGuardedFrame } from "./guardedFrame";
 import { lockPointer } from "./pointerLock";
@@ -611,6 +613,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           propType: player.propType,
           rerollsLeft: player.rerollsLeft,
           decoysLeft: player.decoysLeft,
+          puffsLeft: player.puffsLeft,
           ready: player.ready,
           avatar: player.avatar,
           weapon: player.weapon,
@@ -997,6 +1000,17 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [room, callRole]);
+
+  const canPuff = callRole === "prop" && (localMeta?.puffsLeft ?? 0) > 0;
+  useEffect(() => {
+    if (!canPuff) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyG" || e.repeat) return;
+      room.send(MSG_PUFF);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [room, canPuff]);
   const canTransform =
     localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
@@ -1072,6 +1086,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         />
         <RenderGate skip={blinded} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
+        <ConfettiClouds room={room} listenerRef={listenerRef} />
         {perfHud && <PerfProbe playersRef={playersRef} localId={sessionId} nodeRef={perfNodeRef} />}
       </Canvas>
 
@@ -1278,6 +1293,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
             phase={phase}
             rerollsLeft={localMeta?.rerollsLeft ?? 0}
             decoysLeft={localMeta?.decoysLeft ?? 0}
+            puffsLeft={localMeta?.puffsLeft ?? 0}
             tauntReadyAt={tauntReadyAt}
             sonarReadyAt={sonarReadyAt}
             onOpen={() => setControlsOpen(true)}

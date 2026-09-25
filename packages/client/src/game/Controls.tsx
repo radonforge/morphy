@@ -40,6 +40,7 @@ const CONTROL_GROUPS: ControlGroup[] = [
       { keys: ["Q", "E"], label: "Rotate disguise" },
       { keys: ["C"], label: "Drop decoy" },
       { keys: ["F"], label: "Taunt (+1, +3 near a hunter)" },
+      { keys: ["G"], label: "Confetti puff (blocks sight 3 s)" },
     ],
   },
   {
@@ -77,6 +78,7 @@ interface BarState {
   phase: Phase;
   rerollsLeft: number;
   decoysLeft: number;
+  puffsLeft: number;
   /** `Date.now()` at which the local prop's taunt comes off cooldown; 0 when it is ready. */
   tauntReadyAt: number;
   /** `Date.now()` at which the local hunter's sonar comes off cooldown; 0 when it is ready. */
@@ -124,7 +126,10 @@ function mainControls(s: BarState, now: number): { note?: string; items: Control
         { keys: ["Q", "E"], label: "Rotate" },
         { keys: ["C"], label: `Decoy (${s.decoysLeft})` },
         ...(s.phase === "hunting"
-          ? [{ keys: ["F"], label: cooldownLabel("Taunt", s.tauntReadyAt, now) }]
+          ? [
+              { keys: ["F"], label: cooldownLabel("Taunt", s.tauntReadyAt, now) },
+              { keys: ["G"], label: `Confetti (${s.puffsLeft})` },
+            ]
           : []),
         { keys: ["Shift"], label: "Run" },
         { keys: ["Space"], label: "Jump" },

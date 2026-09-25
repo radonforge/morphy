@@ -50,6 +50,7 @@ import {
   MSG_MAP,
   MSG_PING,
   MSG_PONG,
+  MSG_PUFF,
   MSG_READY,
   MSG_REROLL,
   MSG_SET_MAP,
@@ -70,8 +71,11 @@ import {
   PING_MAX_MS,
   type PingMessage,
   PLAYER_EYE_HEIGHT,
+  PLAYER_HEIGHT,
   type PongMessage,
   type PropBounds,
+  PUFF_BUDGET,
+  PUFF_DURATION_MS,
   RECONNECT_WINDOW_MS,
   REROLL_BUDGET,
   ROUND_DURATION_MS,
@@ -130,6 +134,7 @@ export class PlayerState extends Schema {
   @type("string") propType = "";
   @type("uint8") rerollsLeft = 0;
   @type("uint8") decoysLeft = 0;
+  @type("uint8") puffsLeft = 0;
   @type("boolean") ready = false;
   @type("string") avatar = "";
   @type("string") weapon: WeaponId = DEFAULT_WEAPON;
@@ -155,6 +160,19 @@ export class DecoyState extends Schema {
   owner = "";
 }
 
+/**
+ * A confetti cloud, centred on the body of the prop that burst it. It blocks
+ * sight for {@link PUFF_DURATION_MS} and nothing else: shots pass through,
+ * because hit resolution never looks at it. Whose it is stays off the wire for
+ * the same reason a decoy's owner does, and nothing needs it anyway.
+ */
+export class CloudState extends Schema {
+  @type("string") id = "";
+  @type("float32") x = 0;
+  @type("float32") y = 0;
+  @type("float32") z = 0;
+}
+
 export class RoomState extends Schema {
   @type("string") mapId = "";
   @type("string") phase: Phase = "lobby";
@@ -165,6 +183,7 @@ export class RoomState extends Schema {
   @type("boolean") isPrivate = false;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type({ map: DecoyState }) decoys = new MapSchema<DecoyState>();
+  @type({ map: CloudState }) clouds = new MapSchema<CloudState>();
 }
 
 interface ClearableTimer {
@@ -343,6 +362,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   /** When each prop's forced-taunt clock last restarted; see {@link sweepForcedTaunts}. */
   private tauntClockAt = new Map<string, number>();
   private decoySeq = 0;
+  private cloudSeq = 0;
   private pendingPings = new Map<string, { nonce: number; sentAt: number }>();
   private pingNonce = 0;
   private deviceIds = new Map<string, string>();
@@ -365,6 +385,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
     this.onMessage(MSG_REROLL, (client) => this.handleReroll(client));
     this.onMessage(MSG_DECOY, (client) => this.handleDecoy(client));
+    this.onMessage(MSG_PUFF, (client) => this.handlePuff(client));
     this.onMessage(MSG_TAUNT_REQUEST, (client) => this.handleTaunt(client));
     this.onMessage(MSG_SONAR, (client) => this.handleSonar(client));
     this.onMessage(MSG_SHOOT, (client, payload) => this.handleShoot(client, payload));
@@ -706,6 +727,22 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.nextSonarAt.delete(sessionId);
   }
 
+  /** A prop bursts into confetti, once a round, to break a hunter's line of sight. */
+  private handlePuff(client: Actor): void {
+    const player = this.state.players.get(client.sessionId);
+    if (player?.role !== "prop" || !player.alive) return;
+    if (this.state.phase !== "hunting") return;
+    if (player.puffsLeft <= 0) return;
+    player.puffsLeft -= 1;
+    const cloud = new CloudState();
+    cloud.id = `c${this.cloudSeq++}`;
+    cloud.x = player.x;
+    cloud.y = player.y + PLAYER_HEIGHT / 2;
+    cloud.z = player.z;
+    this.state.clouds.set(cloud.id, cloud);
+    this.clock.setTimeout(() => this.state.clouds.delete(cloud.id), PUFF_DURATION_MS);
+  }
+
   private removeDecoysOf(ownerId: string): void {
     const ids: string[] = [];
     this.state.decoys.forEach((decoy, id) => {
@@ -858,6 +895,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
         target.hp = CONVERTED_HUNTER_HP;
         target.propType = "";
         target.decoysLeft = 0;
+        target.puffsLeft = 0;
         this.breakDecoysOf(target.id);
         player.kills += 1;
         player.hp = Math.min(HUNTER_MAX_HP, player.hp + HUNTER_CAPTURE_HEAL);
@@ -944,6 +982,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
   private beginHiding(): void {
     this.state.decoys.clear();
+    this.state.clouds.clear();
     this.nextDecoyAt.clear();
     this.nextTauntAt.clear();
     this.tauntClockAt.clear();
@@ -1081,8 +1120,10 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       player.propRot = 0;
       player.rerollsLeft = 0;
       player.decoysLeft = 0;
+      player.puffsLeft = 0;
     });
     this.state.decoys.clear();
+    this.state.clouds.clear();
     this.nextDecoyAt.clear();
     this.nextTauntAt.clear();
     this.tauntClockAt.clear();
@@ -1383,6 +1424,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       player.propType = "";
       player.rerollsLeft = 0;
       player.decoysLeft = 0;
+      player.puffsLeft = 0;
     });
     for (let i = players.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -1407,6 +1449,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       player.propRot = 0;
       player.rerollsLeft = player.role === "prop" ? REROLL_BUDGET : 0;
       player.decoysLeft = player.role === "prop" ? DECOY_BUDGET : 0;
+      player.puffsLeft = player.role === "prop" ? PUFF_BUDGET : 0;
     });
   }
 }

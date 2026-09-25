@@ -16,6 +16,9 @@ import {
   MSG_SHOT_FIRED,
   MSG_SONAR_PING,
   MSG_TAUNT,
+  PLAYER_HEIGHT,
+  PUFF_BUDGET,
+  PUFF_DURATION_MS,
   RECONNECT_WINDOW_MS,
   SONAR_RADIUS,
   START_COUNTDOWN_MS,
@@ -911,6 +914,72 @@ test("a room-filling bot hears a sonar pulse, and the hunter does not hear its o
     const expected = id === hunter ? [] : [{ kind: "sonar", x: body.x, z: body.z }];
     assert.deepEqual(pulses, expected);
   }
+});
+
+/** A hunt with one prop, able to puff, standing at (3, 4). */
+function puffRoom() {
+  const room = new MorphyRoom();
+  room.clock = fakeClock();
+  room.state.phase = "hunting";
+  const prop = player("prop", "prop");
+  prop.x = 3;
+  prop.z = 4;
+  prop.puffsLeft = PUFF_BUDGET;
+  room.state.players.set(prop.id, prop);
+  room.state.players.set("hunter", player("hunter", "hunter"));
+  return { room, prop };
+}
+
+const puffAs = (room, id) => room.handlePuff({ sessionId: id, send() {} });
+
+test("a puff hangs a cloud around the prop, once a round", () => {
+  const { room, prop } = puffRoom();
+  puffAs(room, prop.id);
+  puffAs(room, prop.id);
+  assert.equal(room.state.clouds.size, PUFF_BUDGET);
+  const [cloud] = [...room.state.clouds.values()];
+  assert.deepEqual({ x: cloud.x, y: cloud.y, z: cloud.z }, { x: 3, y: PLAYER_HEIGHT / 2, z: 4 });
+  assert.equal(prop.puffsLeft, 0);
+});
+
+test("a confetti cloud clears once its time is up", () => {
+  const { room, prop } = puffRoom();
+  puffAs(room, prop.id);
+  const expiry = timersOf(room, PUFF_DURATION_MS).at(-1);
+  assert.ok(expiry, "the cloud is timed");
+  expiry.fn();
+  assert.equal(room.state.clouds.size, 0);
+});
+
+test("only a live prop puffs, and only while the hunt is on", () => {
+  const { room, prop } = puffRoom();
+  puffAs(room, "hunter");
+  room.state.phase = "hiding";
+  puffAs(room, prop.id);
+  room.state.phase = "hunting";
+  prop.alive = false;
+  puffAs(room, prop.id);
+  assert.equal(room.state.clouds.size, 0);
+});
+
+test("a shot passes straight through a confetti cloud", () => {
+  const { room, shooter, target } = lineOfFire();
+  room.clock = fakeClock();
+  target.puffsLeft = PUFF_BUDGET;
+  puffAs(room, target.id);
+  assert.equal(room.state.clouds.size, 1);
+  shootAhead(room, shooter);
+  assert.equal(target.role, "hunter", "the cloud hides the prop, it does not shield it");
+});
+
+test("a round hands every prop its confetti", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  startRound(room);
+  room.state.players.forEach((p) => {
+    assert.equal(p.puffsLeft, p.role === "prop" ? PUFF_BUDGET : 0);
+  });
 });
 
 test("lifetime stats accumulate round outcomes in SQLite", () => {

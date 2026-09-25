@@ -21,6 +21,7 @@ export const MSG_REROLL = "reroll";
 export const MSG_DECOY = "decoy";
 export const MSG_DECOY_BREAK = "decoy_break";
 export const MSG_DECOY_PLACED = "decoy_placed";
+export const MSG_PUFF = "puff";
 export const MSG_SHOOT = "shoot";
 export const MSG_SHOT_FIRED = "shot_fired";
 export const MSG_TELEPORT = "teleport";

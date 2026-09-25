@@ -69,6 +69,12 @@ export const DECOY_COOLDOWN_MS = 1_500;
 /** Share of a weapon's miss damage a shot pays when all it breaks is a decoy. */
 export const DECOY_MISS_DAMAGE_FACTOR = 0.5;
 
+/** Confetti puffs a prop gets per round. */
+export const PUFF_BUDGET = 1;
+/** Radius of a confetti cloud: it hides whatever is inside from sight, never from a shot. */
+export const PUFF_RADIUS = 2.5;
+export const PUFF_DURATION_MS = 3_000;
+
 export const PING_INTERVAL_MS = 2_000;
 export const PING_MAX_MS = 999;
 

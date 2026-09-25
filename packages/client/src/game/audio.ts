@@ -136,9 +136,9 @@ function stereo(ctx: AudioContext, master: GainNode, pan: number): StereoPannerN
 
 function noiseBurst(
   ctx: AudioContext,
-  master: GainNode,
+  master: AudioNode,
   opts: { peak: number; dur: number; filterHz: number },
-): void {
+): AudioBufferSourceNode {
   if (!noiseBuffer) {
     const length = Math.floor(ctx.sampleRate * NOISE_SECONDS);
     noiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
@@ -157,6 +157,7 @@ function noiseBurst(
   src.connect(filter).connect(gain).connect(master);
   src.start(now);
   src.stop(now + opts.dur + 0.02);
+  return src;
 }
 
 const sampleCache = new Map<string, Promise<AudioBuffer | null>>();
@@ -432,6 +433,27 @@ export function playSonar(volume: number, pan = 0): void {
     delay: 0.05,
   });
   sweep.onended = () => panner.disconnect();
+}
+
+/**
+ * Papery pop with a bright rising chirp for a confetti puff. `volume` is 0..1
+ * (typically by distance) and `pan` -1..1 places it.
+ */
+export function playPuff(volume: number, pan = 0): void {
+  const e = ensure();
+  if (!e || volume <= 0) return;
+  const panner = stereo(e.ctx, e.master, pan);
+  const level = Math.min(1, volume);
+  const pop = noiseBurst(e.ctx, panner, { peak: 0.3 * level, dur: 0.28, filterHz: 1800 });
+  tone(e.ctx, panner, {
+    type: "triangle",
+    f0: 520,
+    f1: 1560,
+    fTime: 0.16,
+    peak: 0.1 * level,
+    dur: 0.2,
+  });
+  pop.onended = () => panner.disconnect();
 }
 
 /** Clean two-tone materialize sweep when a player morphs into a prop. `volume` is 0..1. */

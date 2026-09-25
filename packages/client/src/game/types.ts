@@ -16,6 +16,7 @@ export interface RemotePlayerView {
   propType: string;
   rerollsLeft: number;
   decoysLeft: number;
+  puffsLeft: number;
   ready: boolean;
   avatar: string;
   weapon: WeaponId;
@@ -50,6 +51,7 @@ export const PLAYER_META_FIELDS = [
   "propType",
   "rerollsLeft",
   "decoysLeft",
+  "puffsLeft",
   "ready",
   "avatar",
   "weapon",
