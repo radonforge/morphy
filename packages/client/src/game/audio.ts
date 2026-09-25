@@ -24,6 +24,9 @@ const DECOY_BREAK_SAMPLES: readonly string[] = [
   "sci-fi/explosionCrunch_001.ogg",
 ];
 const DECOY_BREAK_SAMPLE_LEVEL = 0.4;
+const CATCH_BASS_SAMPLE = "sci-fi/lowFrequency_explosion_000.ogg";
+const CATCH_CRUNCH_LEVEL = 0.55;
+const CATCH_BASS_LEVEL = 0.5;
 
 const UI_HOVER_SAMPLE = "ui/rollover1.ogg";
 const UI_CLICK_SAMPLE = "ui/click1.ogg";
@@ -183,7 +186,7 @@ function loadSample(ctx: AudioContext, name: string): Promise<AudioBuffer | null
   return cached;
 }
 
-function playSample(name: string, volume: number): void {
+function playSample(name: string, volume: number, pan = 0): void {
   const e = ensure();
   if (!e || volume <= 0) return;
   void loadSample(e.ctx, name).then((buffer) => {
@@ -192,7 +195,13 @@ function playSample(name: string, volume: number): void {
     src.buffer = buffer;
     const gain = e.ctx.createGain();
     gain.gain.value = volume;
-    src.connect(gain).connect(e.master);
+    if (pan === 0) {
+      src.connect(gain).connect(e.master);
+    } else {
+      const panner = stereo(e.ctx, e.master, pan);
+      src.connect(gain).connect(panner);
+      src.onended = () => panner.disconnect();
+    }
     src.start();
   });
 }
@@ -210,6 +219,7 @@ export function preloadSamples(): void {
   }
   for (const name of HIT_SAMPLES) void loadSample(e.ctx, name);
   for (const name of DECOY_BREAK_SAMPLES) void loadSample(e.ctx, name);
+  void loadSample(e.ctx, CATCH_BASS_SAMPLE);
 }
 
 export function isMuted(): boolean {
@@ -470,6 +480,36 @@ export function playMorph(volume = 1): void {
 /** Crunchy shatter when a decoy breaks. `volume` is 0..1 (typically by distance). */
 export function playDecoyBreak(volume = 1): void {
   playSample(pickSample(DECOY_BREAK_SAMPLES), DECOY_BREAK_SAMPLE_LEVEL * Math.min(1, volume));
+}
+
+/**
+ * A prop being caught: a shatter over a low thump, heard by everyone in range, the prop too.
+ * `volume` is 0..1 (by distance) and `pan` -1..1 places it.
+ */
+export function playCatch(volume: number, pan = 0): void {
+  if (volume <= 0) return;
+  const level = Math.min(1, volume);
+  playSample(pickSample(DECOY_BREAK_SAMPLES), CATCH_CRUNCH_LEVEL * level, pan);
+  playSample(CATCH_BASS_SAMPLE, CATCH_BASS_LEVEL * level, pan);
+}
+
+/** The caught prop's cue as it turns hunter: a low hit, then a rising call to the hunt. */
+export function playYouHuntNow(): void {
+  const e = ensure();
+  if (!e) return;
+  playSample(CATCH_BASS_SAMPLE, CATCH_BASS_LEVEL);
+  [330, 392, 494].forEach((f, i) => {
+    tone(e.ctx, e.master, { type: "sawtooth", f0: f, peak: 0.1, dur: 0.16, delay: 0.1 + i * 0.1 });
+  });
+  tone(e.ctx, e.master, {
+    type: "square",
+    f0: 659,
+    f1: 988,
+    fTime: 0.14,
+    peak: 0.12,
+    dur: 0.36,
+    delay: 0.42,
+  });
 }
 
 /** Metallic impact layered under a rising chime confirming a hunter's shot caught a prop. */

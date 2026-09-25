@@ -110,3 +110,16 @@ export interface DecoyBreakFx {
 
 /** Queue of decoy breaks, filled by the network hub and drained by the scene's debris pool. */
 export type BreaksRef = { readonly current: DecoyBreakFx[] };
+
+/**
+ * The capture the local hunter just scored, stamped with `performance.now()`. Written by
+ * the network hub and read by the scene each frame for the hitstop and the screenshake,
+ * so neither costs a React render.
+ */
+export type CatchMomentRef = { current: { victimId: string; at: number } | null };
+
+/** The local prop's capture while the pull-back camera shows who got it. */
+export interface CaughtCam {
+  byId: string;
+  at: number;
+}

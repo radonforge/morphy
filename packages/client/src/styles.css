@@ -1871,6 +1871,174 @@ canvas {
   }
 }
 
+/* ---------- The catch: hit marker, shooter banner, victim card ---------- */
+
+.hitmarker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  animation: hitmarker-pop 0.32s ease-out both;
+}
+
+.hitmarker i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 13px;
+  height: 3px;
+  border-radius: 2px;
+  background: #fff;
+  box-shadow:
+    0 0 2px rgba(4, 7, 12, 0.9),
+    0 0 8px var(--amber);
+}
+
+.hitmarker i:nth-child(1) {
+  transform: translate(-50%, -50%) rotate(45deg) translateX(15px);
+}
+
+.hitmarker i:nth-child(2) {
+  transform: translate(-50%, -50%) rotate(135deg) translateX(15px);
+}
+
+.hitmarker i:nth-child(3) {
+  transform: translate(-50%, -50%) rotate(225deg) translateX(15px);
+}
+
+.hitmarker i:nth-child(4) {
+  transform: translate(-50%, -50%) rotate(315deg) translateX(15px);
+}
+
+@keyframes hitmarker-pop {
+  0% {
+    opacity: 1;
+    transform: scale(1.6);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+.catch-banner {
+  position: absolute;
+  bottom: calc(50% + 48px);
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0 16px;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  pointer-events: none;
+  text-shadow:
+    0 2px 0 rgba(4, 7, 12, 0.95),
+    0 0 10px rgba(4, 7, 12, 0.85);
+  animation: catch-banner-life 1.4s ease-out both;
+}
+
+.catch-banner-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: var(--text);
+}
+
+.catch-banner-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(1.4rem, 5vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--amber);
+}
+
+@keyframes catch-banner-life {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(1.2);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.caught-card {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14vh 16px 0;
+  text-align: center;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(90, 6, 16, 0) 50%, rgba(90, 6, 16, 0.5));
+  animation: caught-life 1.2s ease-out both;
+}
+
+.caught-title {
+  font-family: var(--font-mono);
+  font-size: clamp(2.6rem, 11vw, 5.5rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--danger);
+  text-shadow:
+    0 3px 0 rgba(4, 7, 12, 0.95),
+    0 0 28px rgba(255, 91, 91, 0.5);
+}
+
+.caught-by {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  text-shadow:
+    0 1px 2px rgba(4, 7, 12, 0.95),
+    0 0 10px rgba(4, 7, 12, 0.9);
+}
+
+@keyframes caught-life {
+  0% {
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 /* ---------- Kill feed ---------- */
 
 .killfeed {
@@ -2367,6 +2535,9 @@ canvas {
   .result-card,
   .role-card,
   .phase-banner,
+  .hitmarker,
+  .catch-banner,
+  .caught-card,
   .ring-low .ring-label {
     animation: none;
   }

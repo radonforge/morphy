@@ -46,6 +46,7 @@ import { Vector3, type WebGLRenderer } from "three";
 import type { Connection } from "../net/connection";
 import {
   isMuted,
+  playCatch,
   playDeath,
   playDecoyBreak,
   playHitConfirm,
@@ -57,6 +58,7 @@ import {
   playSonar,
   playTaunt,
   playWeaponShot,
+  playYouHuntNow,
   preloadSamples,
   toggleMuted,
 } from "./audio";
@@ -85,10 +87,12 @@ import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
 import { graphicsPreference, isPerfHudEnabled } from "./prefs";
 import { phaseLabel, propsLeftLabel } from "./roundStory";
-import { DEFAULT_PITCH, GAME_FOV, Scene } from "./Scene";
+import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene } from "./Scene";
 import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
 import type {
   BreaksRef,
+  CatchMomentRef,
+  CaughtCam,
   DecoyView,
   LookRef,
   MetaMap,
@@ -121,6 +125,9 @@ const RENDER_INTERVAL_SLACK_S = 0.002;
 const GFX_LOW_CLASS = "gfx-low";
 const ROLE_CARD_MS = 2_500;
 const PHASE_BANNER_MS = 1_600;
+const CATCH_BANNER_MS = 1_400;
+const HIT_MARKER_MS = 320;
+const CATCH_SOUND_MAX_DISTANCE = 40;
 const MS_PER_S = 1000;
 const BYTES_PER_MB = 1024 * 1024;
 /**
@@ -646,15 +653,22 @@ function RoleCard({
   );
 }
 
-const RELEASE_COPY: Record<Role, { title: string; hint: string }> = {
+interface BannerCopy {
+  title: string;
+  hint: string;
+}
+
+const RELEASE_COPY: Record<Role, BannerCopy> = {
   prop: { title: "Hunters released", hint: "Hold still. They can hear you move." },
   hunter: { title: "Go", hint: "Find the props." },
 };
 
-function PhaseBanner({ role }: { role: Role }) {
-  const copy = RELEASE_COPY[role];
+const HUNT_NOW_COPY: BannerCopy = { title: "You hunt now", hint: "Find the rest of the props." };
+
+/** A big centre call for a turn in the round, tinted by the side it speaks to. */
+function PhaseBanner({ side, copy }: { side: Role; copy: BannerCopy }) {
   return (
-    <div className={`phase-banner phase-banner-${role}`} role="status">
+    <div className={`phase-banner phase-banner-${side}`} role="status">
       <div className="phase-banner-title">{copy.title}</div>
       <div className="phase-banner-hint">{copy.hint}</div>
     </div>
@@ -744,6 +758,11 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const prevPhaseRef = useRef<Phase>("lobby");
   const [roleCard, showRoleCard] = useTransient<true>(ROLE_CARD_MS);
   const [releaseBanner, showReleaseBanner] = useTransient<true>(PHASE_BANNER_MS);
+  const [huntNowBanner, showHuntNowBanner] = useTransient<true>(PHASE_BANNER_MS);
+  const [catchBanner, showCatchBanner] = useTransient<string>(CATCH_BANNER_MS);
+  const [hitMarker, showHitMarker] = useTransient<number>(HIT_MARKER_MS);
+  const [caught, setCaught] = useState<(CaughtCam & { byName: string }) | null>(null);
+  const catchRef: CatchMomentRef = useRef(null);
 
   chatOpenRef.current = chatOpen;
 
@@ -1004,12 +1023,25 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         const event = message as KillEvent;
         if (typeof event.victimName !== "string" || typeof event.reason !== "string") return;
         pushFeed(killText(event));
-        if (event.victimId === sessionId) {
-          if (event.reason === "converted") {
-            playRoundStart();
-          } else {
-            playDeath();
+        if (event.reason === "converted") {
+          const now = performance.now();
+          if (event.victimId === sessionId) {
+            setCaught({ byId: event.byId, byName: event.byName, at: now });
+          } else if (event.byId === sessionId) {
+            catchRef.current = { victimId: event.victimId, at: now };
+            showCatchBanner(event.victimName);
+            showHitMarker(fxSeq.current++);
           }
+          const victim = playersRef.current.get(event.victimId);
+          if (victim) {
+            const listener = listenerRef.current;
+            playCatch(
+              falloff(listener, victim.x, victim.z, CATCH_SOUND_MAX_DISTANCE),
+              stereoPan(listener, victim.x, victim.z),
+            );
+          }
+        } else if (event.victimId === sessionId) {
+          playDeath();
         } else if (event.byId !== sessionId) {
           playKill();
         }
@@ -1029,7 +1061,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       playerMetaUnsubscribers.clear();
       playersRef.current.clear();
     };
-  }, [room, sessionId, pushFeed]);
+  }, [room, sessionId, pushFeed, showCatchBanner, showHitMarker]);
 
   const localScore = meta[sessionId]?.score ?? 0;
   useEffect(() => {
@@ -1038,6 +1070,17 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     if (gained <= 0) return;
     pushFeed(gained >= TAUNT_DARING_POINTS ? `Daring taunt +${gained}` : `Taunt +${gained}`);
   }, [localScore, pushFeed]);
+
+  useEffect(() => {
+    if (!caught) return;
+    const timer = setTimeout(() => {
+      setCaught(null);
+      if (prevPhaseRef.current !== "hunting") return;
+      showHuntNowBanner(true);
+      playYouHuntNow();
+    }, CAUGHT_CAM_MS);
+    return () => clearTimeout(timer);
+  }, [caught, showHuntNowBanner]);
 
   useEffect(() => {
     if (!shotFx) return;
@@ -1191,7 +1234,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const canTransform =
     localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
-  const showCrosshair = (canTransform || canShoot) && !inputBlocked;
+  const showCrosshair = (canTransform || canShoot) && !inputBlocked && !caught;
   const blinded = localRole === "hunter" && phase === "hiding";
 
   const closeChat = () => {
@@ -1316,6 +1359,8 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           inputBlocked={inputBlocked}
           onShoot={onShoot}
           shadows={tierSettings.shadows}
+          catchRef={catchRef}
+          caughtCam={caught}
         />
         <RenderGate skip={blinded} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
@@ -1411,6 +1456,29 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         </div>
       )}
 
+      {hitMarker !== null && (
+        <div key={hitMarker} className="hitmarker">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+      )}
+
+      {catchBanner !== null && (
+        <div className="catch-banner" role="status">
+          <span className="catch-banner-label">Caught</span>
+          <span className="catch-banner-name">{catchBanner}</span>
+        </div>
+      )}
+
+      {caught && phase === "hunting" && (
+        <div className="caught-card" role="status">
+          <div className="caught-title">Caught</div>
+          <div className="caught-by">by {caught.byName}</div>
+        </div>
+      )}
+
       {shotFx?.kind === "miss" && <div className="vignette" />}
 
       {blinded && (
@@ -1450,7 +1518,10 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       {roleCard && phase === "hiding" && !blinded && (
         <RoleCard role={localRole} endsAt={phaseEndsAt} />
       )}
-      {releaseBanner && phase === "hunting" && <PhaseBanner role={localRole} />}
+      {releaseBanner && phase === "hunting" && (
+        <PhaseBanner side={localRole} copy={RELEASE_COPY[localRole]} />
+      )}
+      {huntNowBanner && phase === "hunting" && <PhaseBanner side="hunter" copy={HUNT_NOW_COPY} />}
 
       {phase === "round_end" && winner !== "" && (
         <ResultScreen
@@ -1520,7 +1591,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         </div>
       )}
 
-      {phase !== "lobby" && (
+      {phase !== "lobby" && !caught && (
         <div className="hud-bottom">
           {localRole === "hunter" && localAlive && (
             <div className={`vitals hud-surface${localHp <= HP_LOW_THRESHOLD ? " hp-low" : ""}`}>
