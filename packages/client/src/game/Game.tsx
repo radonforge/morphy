@@ -74,10 +74,11 @@ import {
 import { useGuardedFrame } from "./guardedFrame";
 import { lockPointer } from "./pointerLock";
 import { graphicsPreference, isPerfHudEnabled } from "./prefs";
-import { GAME_FOV, Scene } from "./Scene";
+import { DEFAULT_PITCH, GAME_FOV, Scene } from "./Scene";
 import type {
   BreaksRef,
   DecoyView,
+  LookRef,
   MetaMap,
   PlayerMeta,
   PlayersRef,
@@ -569,6 +570,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const { room, sessionId } = connection;
   const playersRef = useRef<Map<string, RemotePlayerView>>(new Map());
   const teleportRef = useRef<{ x: number; z: number } | null>(null) as TeleportRef;
+  const lookRef: LookRef = useRef({ yaw: 0, pitch: DEFAULT_PITCH });
   const tauntPulseRef = useRef<Map<string, number>>(new Map()) as TauntPulseRef;
   const shotsRef = useRef([]) as ShotsRef;
   const breaksRef = useRef([]) as BreaksRef;
@@ -1140,6 +1142,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           phase={phase}
           decoys={decoys}
           teleportRef={teleportRef}
+          lookRef={lookRef}
           tauntPulseRef={tauntPulseRef}
           shotsRef={shotsRef}
           breaksRef={breaksRef}

@@ -57,6 +57,7 @@ import type {
   BreaksRef,
   DecoyBreakFx,
   DecoyView,
+  LookRef,
   PlayersRef,
   RemotePlayerView,
   SceneMetaMap,
@@ -155,7 +156,7 @@ const PITCH_MIN = -1.4;
 const PITCH_MAX = 1.4;
 const TP_PITCH_MIN = -0.15;
 const TP_PITCH_MAX = 1.2;
-const DEFAULT_PITCH = 0.5;
+export const DEFAULT_PITCH = 0.5;
 const SUN_POSITION: [number, number, number] = [14, 26, 10];
 const SHADOW_MARGIN = 4;
 const SHADOW_LEAD = 10;
@@ -414,6 +415,7 @@ interface SceneProps {
   phase: Phase;
   decoys: DecoyView[];
   teleportRef: TeleportRef;
+  lookRef: LookRef;
   tauntPulseRef: TauntPulseRef;
   shotsRef: ShotsRef;
   breaksRef: BreaksRef;
@@ -433,6 +435,7 @@ export const Scene = memo(function Scene({
   phase,
   decoys,
   teleportRef,
+  lookRef,
   tauntPulseRef,
   shotsRef,
   breaksRef,
@@ -567,6 +570,7 @@ export const Scene = memo(function Scene({
         phase={phase}
         alive={localAlive}
         teleportRef={teleportRef}
+        lookRef={lookRef}
         tauntPulseRef={tauntPulseRef}
         inputBlocked={inputBlocked}
         playersRef={playersRef}
@@ -1655,8 +1659,7 @@ function PropActions({
   return null;
 }
 
-function useMouseLook() {
-  const look = useRef({ yaw: 0, pitch: DEFAULT_PITCH });
+function useMouseLook(look: LookRef): LookRef {
   const { gl } = useThree();
 
   useEffect(() => {
@@ -1683,7 +1686,7 @@ function useMouseLook() {
       el.removeEventListener("click", requestLock);
       window.removeEventListener("mousemove", onMove);
     };
-  }, [gl]);
+  }, [gl, look]);
 
   return look;
 }
@@ -1698,6 +1701,7 @@ interface LocalPlayerProps {
   phase: Phase;
   alive: boolean;
   teleportRef: TeleportRef;
+  lookRef: LookRef;
   tauntPulseRef: TauntPulseRef;
   inputBlocked: boolean;
   playersRef: PlayersRef;
@@ -1718,6 +1722,7 @@ function LocalPlayer({
   phase,
   alive,
   teleportRef,
+  lookRef,
   tauntPulseRef,
   inputBlocked,
   playersRef,
@@ -1729,7 +1734,7 @@ function LocalPlayer({
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!inputBlocked);
-  const look = useMouseLook();
+  const look = useMouseLook(lookRef);
   const { camera } = useThree();
 
   const spawn = map.spawnPoints.props[0] ?? map.bounds.min;
