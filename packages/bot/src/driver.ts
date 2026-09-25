@@ -15,6 +15,7 @@ import {
   DECIDE_TIMEOUT_MS,
   MAX_TICK_SECONDS,
 } from "./config";
+import { decoySource, playerSource } from "./contacts";
 import type { Policy } from "./policy/types";
 import type { Vec3 } from "./raycast";
 import { Reflex, type ReflexWorld } from "./reflex";
@@ -135,6 +136,7 @@ export class BotDriver {
       if (world.phase === "hiding") {
         this.currentIntent = BOOTSTRAP_INTENT;
         this.reflex.onIntentChanged();
+        this.reflex.forgetContacts();
       }
       if (world.phase === "round_end" && this.options.trace) {
         this.options.trace.recordRoundEnd(world.winner, now);
@@ -218,17 +220,28 @@ export class BotDriver {
    * appeared, before its policy had been told anything about either. Working
    * out who a contact is belongs to the policy, from the observation it is
    * allowed to see. Dead players are skipped because they are not rendered for
-   * a human either, so they are not there to be noticed.
+   * a human either, so they are not there to be noticed. A limited-vision bot
+   * is woken by a decoy coming into view as well: it perceives one as a
+   * disguise like any other, and sleeping through it would be a tell.
    */
   private detectLineOfSightGain(world: ReflexWorld): boolean {
     const seen = new Set<string>();
-    let gained = false;
+    const sighted: { source: string; x: number; y: number; z: number }[] = [];
     for (const other of world.others) {
       if (!other.alive) continue;
-      const dist = Math.hypot(other.x - this.reflex.x, other.z - this.reflex.z);
-      if (dist > BOT_VISION_RANGE || !this.reflex.canSee(other.x, other.y, other.z)) continue;
-      seen.add(other.id);
-      if (!this.losIds.has(other.id)) gained = true;
+      sighted.push({ source: playerSource(other.id), x: other.x, y: other.y, z: other.z });
+    }
+    if (this.options.visibility === "limited") {
+      for (const decoy of world.decoys) {
+        sighted.push({ source: decoySource(decoy.id), x: decoy.x, y: decoy.y, z: decoy.z });
+      }
+    }
+    let gained = false;
+    for (const contact of sighted) {
+      const dist = Math.hypot(contact.x - this.reflex.x, contact.z - this.reflex.z);
+      if (dist > BOT_VISION_RANGE || !this.reflex.canSee(contact.x, contact.y, contact.z)) continue;
+      seen.add(contact.source);
+      if (!this.losIds.has(contact.source)) gained = true;
     }
     this.losIds = seen;
     return gained;

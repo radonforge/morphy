@@ -198,8 +198,9 @@ async function observationSeenBy(visibility) {
 test("a limited-vision bot is never told who the props are", async () => {
   const obs = await observationSeenBy("limited");
   assert.equal(obs.visibility, "limited");
-  const contact = obs.entities.find((e) => e.id === "contact");
-  assert.ok(contact, "a contact in the open and in line of sight is sensed");
+  assert.equal(obs.entities.length, 1, "a contact in the open and in line of sight is sensed");
+  const [contact] = obs.entities;
+  assert.notEqual(contact.id, "contact", "and it is named by a handle, not its session id");
   assert.equal(contact.role, undefined, "role is ground truth and must not leak");
   assert.equal(contact.propType, undefined, "nor the disguise it is wearing");
   assert.equal(contact.alive, undefined);
@@ -227,8 +228,8 @@ test("a limited-vision bot reads a hunter as undisguised, which is what a player
   try {
     bot.launchDecide(worldWithOneContact("hunter", "hunter", ""), Date.now());
     await new Promise((resolve) => setTimeout(resolve, 20));
-    const contact = seen[0].entities.find((e) => e.id === "contact");
-    assert.ok(contact);
+    assert.equal(seen[0].entities.length, 1);
+    const [contact] = seen[0].entities;
     assert.equal(contact.disguised, false);
     assert.equal(contact.role, undefined, "the shape is sensed, the role still is not");
   } finally {

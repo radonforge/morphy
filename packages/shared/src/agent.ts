@@ -58,9 +58,16 @@ export interface ObservedSelf {
  * Another player as perceived by the bot. Ground-truth fields
  * (`role`/`alive`/`propType`) are present only under `"full"` visibility; under
  * `"limited"` the list is filtered to what the bot can sense and only the
- * deduction signals remain.
+ * deduction signals remain, and a decoy in sight is listed exactly as a
+ * disguised player standing still would be, because that is what it looks like.
  */
 export interface ObservedEntity {
+  /**
+   * Under `"full"` visibility, the player's session id. Under `"limited"`, an
+   * opaque handle drawn from one sequence for players and decoys alike, so the
+   * id says nothing a player could not see: a session id would name a player,
+   * and a decoy's key would name a decoy.
+   */
   id: string;
   x: number;
   z: number;
