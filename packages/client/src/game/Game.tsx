@@ -84,6 +84,7 @@ import { useGuardedFrame } from "./guardedFrame";
 import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
 import { graphicsPreference, isPerfHudEnabled } from "./prefs";
+import { phaseLabel, propsLeftLabel } from "./roundStory";
 import { DEFAULT_PITCH, GAME_FOV, Scene } from "./Scene";
 import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
 import type {
@@ -118,6 +119,8 @@ const RENDER_GATE_PRIORITY = 1;
 const RENDER_INTERVAL_S = 1 / MAX_RENDER_FPS;
 const RENDER_INTERVAL_SLACK_S = 0.002;
 const GFX_LOW_CLASS = "gfx-low";
+const ROLE_CARD_MS = 2_500;
+const PHASE_BANNER_MS = 1_600;
 const MS_PER_S = 1000;
 const BYTES_PER_MB = 1024 * 1024;
 /**
@@ -212,14 +215,6 @@ function killText(event: KillEvent): string {
       return `${event.byName} eliminated ${event.victimName}`;
   }
 }
-
-const PHASE_LABEL: Record<Phase, string> = {
-  lobby: "Waiting for players",
-  starting: "Starting…",
-  hiding: "Hide!",
-  hunting: "Hunt!",
-  round_end: "Round over",
-};
 
 const ROLE_LABEL: Record<Role, string> = {
   hunter: "Hunter",
@@ -583,6 +578,89 @@ function formatClock(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+/**
+ * A value that shows for `durationMs` and then clears itself. Showing it again restarts
+ * the clock, so two moments in quick succession each get their full time on screen.
+ */
+function useTransient<T>(durationMs: number): [T | null, (value: T) => void] {
+  const [entry, setEntry] = useState<{ value: T } | null>(null);
+  useEffect(() => {
+    if (!entry) return;
+    const timer = setTimeout(() => setEntry(null), durationMs);
+    return () => clearTimeout(timer);
+  }, [entry, durationMs]);
+  const show = useCallback((value: T) => setEntry({ value }), []);
+  return [entry?.value ?? null, show];
+}
+
+function LiveClock({ endsAt }: { endsAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), COUNTDOWN_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+  return <span className="live-clock">{formatClock(endsAt - now)}</span>;
+}
+
+const ROLE_CARD_COPY: Record<Role, { title: string; goal: string; release: string }> = {
+  prop: {
+    title: "You're a prop",
+    goal: "Look like you belong here, then freeze.",
+    release: "Hunters get out in",
+  },
+  hunter: {
+    title: "You're a hunter",
+    goal: "Find the fakes. Missing a shot costs you HP.",
+    release: "You get out in",
+  },
+};
+
+/**
+ * The round's opening card: which side you are on and what that side is for. `inline`
+ * places it in the flow of the hunter's blindout, where it stands in for the blindout's
+ * own title and countdown instead of stacking over them.
+ */
+function RoleCard({
+  role,
+  endsAt,
+  inline = false,
+}: {
+  role: Role;
+  endsAt: number;
+  inline?: boolean;
+}) {
+  const copy = ROLE_CARD_COPY[role];
+  return (
+    <div
+      className={`role-card role-card-${role}${inline ? " role-card-inline" : ""}`}
+      role="status"
+    >
+      <div className="role-card-band">
+        <div className="role-card-title">{copy.title}</div>
+        <div className="role-card-goal">{copy.goal}</div>
+        <div className="role-card-release">
+          {copy.release} <LiveClock endsAt={endsAt} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const RELEASE_COPY: Record<Role, { title: string; hint: string }> = {
+  prop: { title: "Hunters released", hint: "Hold still. They can hear you move." },
+  hunter: { title: "Go", hint: "Find the props." },
+};
+
+function PhaseBanner({ role }: { role: Role }) {
+  const copy = RELEASE_COPY[role];
+  return (
+    <div className={`phase-banner phase-banner-${role}`} role="status">
+      <div className="phase-banner-title">{copy.title}</div>
+      <div className="phase-banner-hint">{copy.hint}</div>
+    </div>
+  );
+}
+
 function RingTimer({ endsAt, total }: { endsAt: number; total: number }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -664,6 +742,8 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const longTasksRef = useRef<LongTaskTally>({ count: 0, longestMs: 0 });
   const contextLossesRef = useRef(0);
   const prevPhaseRef = useRef<Phase>("lobby");
+  const [roleCard, showRoleCard] = useTransient<true>(ROLE_CARD_MS);
+  const [releaseBanner, showReleaseBanner] = useTransient<true>(PHASE_BANNER_MS);
 
   chatOpenRef.current = chatOpen;
 
@@ -1005,13 +1085,16 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       playRoundStart();
       setTauntReadyAt(0);
       setSonarReadyAt(0);
+      showRoleCard(true);
+    } else if (phase === "hunting") {
+      showReleaseBanner(true);
     } else if (phase === "round_end") {
       const role = meta[sessionId]?.role ?? "prop";
       const won =
         (role === "hunter" && winner === "hunters") || (role === "prop" && winner === "props");
       playRoundEnd(won);
     }
-  }, [phase, winner, meta, sessionId]);
+  }, [phase, winner, meta, sessionId, showRoleCard, showReleaseBanner]);
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
@@ -1332,11 +1415,17 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
 
       {blinded && (
         <div className="blindout">
-          <div className="blindout-title">The props are hiding</div>
-          <div className="blindout-timer">
-            The hunt begins
-            <Countdown endsAt={phaseEndsAt} />
-          </div>
+          {roleCard ? (
+            <RoleCard role={localRole} endsAt={phaseEndsAt} inline />
+          ) : (
+            <>
+              <div className="blindout-title">The props are hiding</div>
+              <div className="blindout-timer">
+                The hunt begins
+                <Countdown endsAt={phaseEndsAt} />
+              </div>
+            </>
+          )}
           <div className="weapon-picker">
             {WEAPON_IDS.map((id, index) => {
               const spec = WEAPONS[id];
@@ -1357,6 +1446,11 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           <div className="weapon-picker-hint">Press 1 / 2 / 3 to pick your weapon</div>
         </div>
       )}
+
+      {roleCard && phase === "hiding" && !blinded && (
+        <RoleCard role={localRole} endsAt={phaseEndsAt} />
+      )}
+      {releaseBanner && phase === "hunting" && <PhaseBanner role={localRole} />}
 
       {phase === "round_end" && winner !== "" && (
         <ResultScreen
@@ -1402,15 +1496,15 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         <div className="topbar hud-surface">
           <div className="topbar-phase">
             <span className="eyebrow">Round</span>
-            <span className="topbar-phase-name">{PHASE_LABEL[phase]}</span>
+            <span className="topbar-phase-name">{phaseLabel(phase, localRole)}</span>
           </div>
           {phaseEndsAt > 0 && <RingTimer endsAt={phaseEndsAt} total={PHASE_DURATION_MS[phase]} />}
           <div className="topbar-meta">
             <span className={`badge badge-${localRole}`}>{ROLE_LABEL[localRole]}</span>
             {(phase === "hiding" || phase === "hunting") && (
-              <span className="targets" title="Props still in play">
+              <span className="targets">
                 <span className="targets-dot" />
-                {aliveProps}
+                {propsLeftLabel(aliveProps)}
               </span>
             )}
           </div>
