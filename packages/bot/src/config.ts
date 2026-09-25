@@ -1,4 +1,10 @@
-import { DEFAULT_PORT, DEFAULT_WEAPON, PLAYER_EYE_HEIGHT, WEAPONS } from "@morphy/shared";
+import {
+  DEFAULT_PORT,
+  DEFAULT_WEAPON,
+  FOOTSTEP_HEARING_RADIUS,
+  PLAYER_EYE_HEIGHT,
+  WEAPONS,
+} from "@morphy/shared";
 
 export const CONNECT_TIMEOUT_MS = 8_000;
 
@@ -91,7 +97,7 @@ export const DECIDE_INTERVAL_MS = 700;
 export const DECIDE_TIMEOUT_MS = 500;
 
 export const BOT_VISION_RANGE = WEAPONS[DEFAULT_WEAPON].range;
-export const BOT_HEARING_RADIUS = 12;
+export const BOT_HEARING_RADIUS = FOOTSTEP_HEARING_RADIUS;
 /** Cell size a contact known only by sound is snapped to, so hearing yields a
  * neighbourhood rather than a point. Sized to a map tile: within earshot a
  * heard contact resolves to one of a handful of cells. */

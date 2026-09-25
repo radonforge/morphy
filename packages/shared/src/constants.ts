@@ -46,6 +46,12 @@ export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 
 export const PLAYER_HEIGHT = 1.8;
 export const PLAYER_EYE_HEIGHT = 1.6;
+/**
+ * How far a moving player is heard: a remote prop's rustle fades out here for a
+ * player, and a bot senses any mover within it. One number for both, so moving
+ * is the same risk whoever is listening.
+ */
+export const FOOTSTEP_HEARING_RADIUS = 12;
 
 export const MOVE_SPEED = 5;
 export const RUN_MULTIPLIER_HUNTER = 1.7;
