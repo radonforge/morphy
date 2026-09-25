@@ -15,6 +15,26 @@ test("all map builders remain deterministic and valid across 1,000 seeds", () =>
   }
 });
 
+const ROAD_STRAIGHT = "/models/urban/roads/road-straight.glb";
+const ROAD_CROSS = "/models/urban/roads/road-crossroad.glb";
+
+test("urban straight roads run along their street (road-straight.glb runs along local X)", () => {
+  for (let seed = 0; seed < 25; seed++) {
+    const map = buildMap("urban", seed);
+    const crossings = map.tiles.filter((tile) => tile.model === ROAD_CROSS);
+    const columnXs = new Set(crossings.map((tile) => tile.position.x));
+    const rowZs = new Set(crossings.map((tile) => tile.position.z));
+    const straights = map.tiles.filter((tile) => tile.model === ROAD_STRAIGHT);
+    assert.ok(straights.length > 0);
+    for (const tile of straights) {
+      const alongZ = columnXs.has(tile.position.x);
+      assert.notEqual(alongZ, rowZs.has(tile.position.z), `seed ${seed}: tile on no single street`);
+      const sin = Math.abs(Math.sin(tile.rotationY));
+      assert.ok(Math.abs(sin - (alongZ ? 1 : 0)) < 1e-9, `seed ${seed}: road tile turned across`);
+    }
+  }
+});
+
 test("urban spawns stay clear of every static prop", () => {
   for (let seed = 0; seed < 1_000; seed++) {
     const map = buildMap("urban", seed);
