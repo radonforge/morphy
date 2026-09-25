@@ -11,6 +11,7 @@ import { BotDriver, DEFAULT_DIFFICULTY, ScriptedPolicy, snapshot } from "@morphy
 import {
   type AvatarId,
   BOT_FILL_DELAY_MS,
+  CONVERTED_HUNTER_HP,
   colliderAabb,
   computePropBounds,
   DECOY_BUDGET,
@@ -21,6 +22,7 @@ import {
   type DecoyBreakEvent,
   generatePartyCode,
   HIDE_DURATION_MS,
+  HUNTER_CAPTURE_HEAL,
   HUNTER_MAX_HP,
   HUNTER_RATIO,
   INPUT_SEND_RATE_MS,
@@ -743,11 +745,12 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       for (const target of captured) {
         target.role = "hunter";
         target.alive = true;
-        target.hp = HUNTER_MAX_HP;
+        target.hp = CONVERTED_HUNTER_HP;
         target.propType = "";
         target.decoysLeft = 0;
         this.breakDecoysOf(target.id);
         player.kills += 1;
+        player.hp = Math.min(HUNTER_MAX_HP, player.hp + HUNTER_CAPTURE_HEAL);
         this.broadcast(MSG_KILL, {
           byId: player.id,
           byName: player.name,

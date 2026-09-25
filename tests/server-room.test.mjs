@@ -6,7 +6,9 @@ import { after, test } from "node:test";
 import {
   BOT_FILL_DELAY_MS,
   BOT_FILL_TARGET,
+  CONVERTED_HUNTER_HP,
   HIDE_DURATION_MS,
+  HUNTER_CAPTURE_HEAL,
   HUNTER_MAX_HP,
   LOBBY_AUTOSTART_MS,
   MSG_SHOT_FIRED,
@@ -582,6 +584,51 @@ test("shot origin is derived from the authoritative player position", () => {
     { origin: { x: 999, y: 999, z: 999 }, dir: { x: 0, y: 0, z: 1 } },
   );
   assert.deepEqual(fired.origin, { x: 4, y: 1.6, z: 5 });
+});
+
+/**
+ * A hunter at the origin looking down +z at a prop five metres away, nothing in
+ * between, and a second prop well off the line so a capture does not end the round.
+ */
+function lineOfFire() {
+  const room = new MorphyRoom();
+  room.state.phase = "hunting";
+  const shooter = player("shooter", "hunter");
+  const target = player("target", "prop");
+  target.z = 5;
+  room.state.players.set(shooter.id, shooter);
+  room.state.players.set(target.id, target);
+  const bystander = player("bystander", "prop");
+  bystander.x = -20;
+  room.state.players.set(bystander.id, bystander);
+  room.map = { colliders: [], propCatalog: [] };
+  room.propBounds = new Map();
+  room.broadcast = () => {};
+  return { room, shooter, target };
+}
+
+const shootAhead = (room, shooter) =>
+  room.handleShoot({ sessionId: shooter.id, send() {} }, { dir: { x: 0, y: 0, z: 1 } });
+
+test("a captured prop joins the hunt below full health", () => {
+  const { room, shooter, target } = lineOfFire();
+  shootAhead(room, shooter);
+  assert.equal(target.role, "hunter");
+  assert.equal(target.hp, CONVERTED_HUNTER_HP);
+});
+
+test("a capture heals the hunter who made it", () => {
+  const { room, shooter } = lineOfFire();
+  shooter.hp = HUNTER_MAX_HP / 2;
+  shootAhead(room, shooter);
+  assert.equal(shooter.hp, HUNTER_MAX_HP / 2 + HUNTER_CAPTURE_HEAL);
+});
+
+test("a capture never heals a hunter past full health", () => {
+  const { room, shooter } = lineOfFire();
+  shooter.hp = HUNTER_MAX_HP - 1;
+  shootAhead(room, shooter);
+  assert.equal(shooter.hp, HUNTER_MAX_HP);
 });
 
 test("lifetime stats accumulate round outcomes in SQLite", () => {
