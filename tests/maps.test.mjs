@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildMap } from "../packages/server/src/maps/index.ts";
-import { computePropBounds, parseMapDefinition } from "../packages/shared/src/index.ts";
+import {
+  colliderAabb,
+  computePropBounds,
+  parseMapDefinition,
+} from "../packages/shared/src/index.ts";
 
 const MAP_IDS = ["station", "urban"];
 
@@ -31,6 +35,46 @@ test("urban straight roads run along their street (road-straight.glb runs along 
       assert.notEqual(alongZ, rowZs.has(tile.position.z), `seed ${seed}: tile on no single street`);
       const sin = Math.abs(Math.sin(tile.rotationY));
       assert.ok(Math.abs(sin - (alongZ ? 1 : 0)) < 1e-9, `seed ${seed}: road tile turned across`);
+    }
+  }
+});
+
+const HUNTER_BODY_RADIUS = 0.4;
+const LOBBY_CLUSTER = 4;
+const HUNTER_RELEASE_MIN_DISTANCE = 40;
+
+test("hunter spawns stand clear of every static prop and every wall", () => {
+  for (const mapId of MAP_IDS) {
+    for (let seed = 0; seed < 100; seed++) {
+      const map = buildMap(mapId, seed);
+      const radii = new Map(map.propCatalog.map((d) => [d.id, computePropBounds(d).radius]));
+      const walls = map.colliders.filter((box) => box.position.y > 0).map(colliderAabb);
+      for (const spawn of map.spawnPoints.hunters) {
+        for (const prop of map.props) {
+          const gap = Math.hypot(prop.position.x - spawn.x, prop.position.z - spawn.z);
+          assert.ok(gap > radii.get(prop.type) + HUNTER_BODY_RADIUS, `${mapId}/${seed}: on a prop`);
+        }
+        for (const { min, max } of walls) {
+          const dx = Math.max(min.x - spawn.x, 0, spawn.x - max.x);
+          const dz = Math.max(min.z - spawn.z, 0, spawn.z - max.z);
+          assert.ok(Math.hypot(dx, dz) > HUNTER_BODY_RADIUS, `${mapId}/${seed}: inside a wall`);
+        }
+      }
+    }
+  }
+});
+
+test("some hunter spawn is always far from where the props gather", () => {
+  for (const mapId of MAP_IDS) {
+    for (let seed = 0; seed < 100; seed++) {
+      const map = buildMap(mapId, seed);
+      const cluster = map.spawnPoints.props.slice(0, LOBBY_CLUSTER);
+      const furthest = Math.max(
+        ...map.spawnPoints.hunters.map((spawn) =>
+          Math.min(...cluster.map((c) => Math.hypot(c.x - spawn.x, c.z - spawn.z))),
+        ),
+      );
+      assert.ok(furthest >= HUNTER_RELEASE_MIN_DISTANCE, `${mapId}/${seed}: ${furthest}m`);
     }
   }
 });

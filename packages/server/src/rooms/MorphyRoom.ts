@@ -27,6 +27,7 @@ import {
   HUNTER_CAPTURE_HEAL,
   HUNTER_MAX_HP,
   HUNTER_RATIO,
+  HUNTER_RESPAWN_MS,
   INPUT_SEND_RATE_MS,
   type InputMessage,
   isAvatarId,
@@ -336,6 +337,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private propBounds = new Map<string, PropBounds>();
   private phaseTimer?: ClearableTimer;
   private tauntTimer?: ClearableTimer;
+  private respawnTimers = new Map<string, ClearableTimer>();
   private nextShotAt = new Map<string, number>();
   private nextDecoyAt = new Map<string, number>();
   private nextTauntAt = new Map<string, number>();
@@ -427,7 +429,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   }
 
   onJoin(client: Client, options: unknown): void {
-    if (this.state.phase !== "lobby") {
+    if (!this.betweenRounds()) {
       throw new ServerError(409, "round already in progress");
     }
     const name = sanitizeName((options as { name?: unknown } | undefined)?.name);
@@ -451,6 +453,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   onLeave(client: Client): void {
     this.removeDecoysOf(client.sessionId);
     this.state.players.delete(client.sessionId);
+    this.cancelRespawn(client.sessionId);
     this.nextShotAt.delete(client.sessionId);
     this.nextDecoyAt.delete(client.sessionId);
     this.forgetSoundTimersOf(client.sessionId);
@@ -884,6 +887,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
           victimName: player.name,
           reason: "self",
         } satisfies KillEvent);
+        this.scheduleRespawn(player.id);
       }
     }
     client.send(MSG_SHOT_RESULT, { hit: captured.size > 0 });
@@ -934,15 +938,21 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private startCountdown(): void {
     this.state.winner = "";
     this.cancelBotFill();
+    this.setPhase("starting", START_COUNTDOWN_MS, () => this.beginHiding());
+  }
+
+  /**
+   * The room locks as roles are dealt, not as the countdown starts: the
+   * countdown and the result card are the only windows a public room between
+   * rounds has left, and a player arriving in either is dealt into the next
+   * round like everyone else.
+   */
+  private beginHiding(): void {
     if (!this.locked) {
       void this.lock().catch((error: unknown) => {
         console.error(`[morphy] failed to lock room ${this.roomId}:`, error);
       });
     }
-    this.setPhase("starting", START_COUNTDOWN_MS, () => this.beginHiding());
-  }
-
-  private beginHiding(): void {
     this.state.decoys.clear();
     this.nextDecoyAt.clear();
     this.nextTauntAt.clear();
@@ -952,7 +962,22 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.setPhase("hiding", HIDE_DURATION_MS, () => this.beginHunting());
   }
 
+  /**
+   * Hunters are released onto the map's hunter spawns furthest from the props,
+   * one spot each while there are enough: they waited out the hide where the
+   * round dealt them, which is where everyone stood, and a new prop caught
+   * seconds into the hunt by the hunter that spawned beside it never got to play.
+   */
   private beginHunting(): void {
+    const hunters: PlayerState[] = [];
+    this.state.players.forEach((player) => {
+      if (player.role === "hunter" && player.alive) hunters.push(player);
+    });
+    const spots = this.hunterSpawns(hunters.length);
+    hunters.forEach((hunter, index) => {
+      const spot = spots[index % spots.length];
+      if (spot) this.teleport(hunter, spot);
+    });
     this.startTauntClocks();
     this.tauntTimer?.clear();
     this.tauntTimer = this.clock.setInterval(() => this.sweepForcedTaunts(), TAUNT_CHECK_MS);
@@ -997,7 +1022,15 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.tauntTimer?.clear();
     this.tauntTimer = undefined;
     this.recordRoundStats();
+    this.unlockRoom();
     this.setPhase("round_end", ROUND_END_MS, () => this.afterRound());
+  }
+
+  private unlockRoom(): void {
+    if (!this.locked) return;
+    void this.unlock().catch((error: unknown) => {
+      console.error(`[morphy] failed to unlock room ${this.roomId}:`, error);
+    });
   }
 
   /**
@@ -1029,8 +1062,27 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     });
   }
 
+  /**
+   * A public room with enough players goes straight from the result card into
+   * the next countdown: the Ready lobby is where a room is first gathered, not
+   * a toll paid between every round. Seats are squared with the bot fill on
+   * the spot, since the fill delay exists to let humans arrive first in a new
+   * room and nobody is waiting on it here. A private room returns to its lobby,
+   * where the host starts the next round.
+   */
   private afterRound(): void {
-    this.resetToLobby();
+    if (
+      this.state.isPrivate ||
+      !this.canContinueRound() ||
+      this.presentCount() < MIN_PLAYERS_TO_START
+    ) {
+      this.resetToLobby();
+      return;
+    }
+    this.clearRound();
+    this.syncBots();
+    this.fillBots();
+    this.startCountdown();
   }
 
   /**
@@ -1067,10 +1119,19 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private resetToLobby(): void {
     this.phaseTimer?.clear();
     this.phaseTimer = undefined;
-    this.tauntTimer?.clear();
-    this.tauntTimer = undefined;
     this.state.phase = "lobby";
     this.state.phaseEndsAt = 0;
+    this.clearRound();
+    this.unlockRoom();
+    this.syncBots();
+    this.maybeStartRound();
+  }
+
+  /** Take back every role, disguise and round timer, leaving the players where they stand. */
+  private clearRound(): void {
+    this.tauntTimer?.clear();
+    this.tauntTimer = undefined;
+    this.cancelRespawns();
     this.state.winner = "";
     this.state.players.forEach((player) => {
       player.ready = false;
@@ -1087,13 +1148,12 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.nextTauntAt.clear();
     this.tauntClockAt.clear();
     this.nextSonarAt.clear();
-    if (this.locked) {
-      void this.unlock().catch((error: unknown) => {
-        console.error(`[morphy] failed to unlock room ${this.roomId}:`, error);
-      });
-    }
-    this.syncBots();
-    this.maybeStartRound();
+  }
+
+  /** No round is being played, so nobody holds a role and a seat can change hands. */
+  private betweenRounds(): boolean {
+    const phase = this.state.phase;
+    return phase === "lobby" || phase === "starting" || phase === "round_end";
   }
 
   /**
@@ -1163,8 +1223,8 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * Bring the bot population in line with {@link desiredBotCount}. Removals are
    * immediate so an arriving human takes a bot's seat at once; additions wait
    * out {@link BOT_FILL_DELAY_MS}, giving real players a chance to show up
-   * first. Only ever runs in a public lobby, so a round's roster never changes
-   * under the players.
+   * first. Only ever runs in a public room between rounds, so a round's roster
+   * never changes under the players.
    *
    * `state.fillAt` publishes when that wait ends, so a player alone in a room
    * sees the wait counted down instead of three bots appearing unannounced. It
@@ -1173,7 +1233,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * {@link MIN_PLAYERS_TO_START}.
    */
   private syncBots(): void {
-    if (this.state.isPrivate || this.state.phase !== "lobby") return;
+    if (this.state.isPrivate || !this.betweenRounds()) return;
     const want = desiredBotCount(this.humanCount());
     for (const sessionId of [...this.bots.keys()]) {
       if (this.bots.size <= want) break;
@@ -1209,7 +1269,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * throws, the method simply never returns.
    */
   private fillBots(): void {
-    if (this.state.isPrivate || this.state.phase !== "lobby") return;
+    if (this.state.isPrivate || !this.betweenRounds()) return;
     const want = desiredBotCount(this.humanCount());
     while (this.bots.size < want) {
       if (!this.addBot()) break;
@@ -1278,6 +1338,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.stopDriver(bot);
     this.removeDecoysOf(sessionId);
     this.state.players.delete(sessionId);
+    this.cancelRespawn(sessionId);
     this.nextShotAt.delete(sessionId);
     this.nextDecoyAt.delete(sessionId);
     this.forgetSoundTimersOf(sessionId);
@@ -1342,22 +1403,90 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     }
   }
 
+  /**
+   * Hunters win when no prop is left; props win on the clock. A hunter out of
+   * HP is waiting on a respawn, not out of the round, so hunters running dry
+   * no longer hands the props the win. Only a round left with no hunter in it
+   * at all, because every one of them walked out, ends early for the props.
+   */
   private checkRoundEnd(): void {
     if (this.state.phase !== "hunting") return;
     let aliveProps = 0;
-    let aliveHunters = 0;
+    let hunters = 0;
     this.state.players.forEach((player) => {
-      if (!player.alive) return;
-      if (player.role === "prop") aliveProps++;
-      else aliveHunters++;
+      if (player.role === "hunter") hunters++;
+      else if (player.alive) aliveProps++;
     });
     if (aliveProps === 0) {
       this.state.winner = "hunters";
       this.endRound();
-    } else if (aliveHunters === 0) {
+    } else if (hunters === 0) {
       this.state.winner = "props";
       this.endRound();
     }
+  }
+
+  /** Bring a hunter who ran out of HP back after {@link HUNTER_RESPAWN_MS}. */
+  private scheduleRespawn(sessionId: string): void {
+    this.cancelRespawn(sessionId);
+    this.respawnTimers.set(
+      sessionId,
+      this.clock.setTimeout(() => this.respawnHunter(sessionId), HUNTER_RESPAWN_MS),
+    );
+  }
+
+  private cancelRespawn(sessionId: string): void {
+    this.respawnTimers.get(sessionId)?.clear();
+    this.respawnTimers.delete(sessionId);
+  }
+
+  private cancelRespawns(): void {
+    for (const timer of this.respawnTimers.values()) timer.clear();
+    this.respawnTimers.clear();
+  }
+
+  private respawnHunter(sessionId: string): void {
+    this.respawnTimers.delete(sessionId);
+    if (this.state.phase !== "hunting") return;
+    const player = this.state.players.get(sessionId);
+    if (player?.role !== "hunter" || player.alive) return;
+    player.alive = true;
+    player.hp = CONVERTED_HUNTER_HP;
+    this.teleport(player, this.hunterSpawns(1)[0] ?? this.map.bounds.min);
+  }
+
+  /**
+   * The `count` hunter spawns furthest from every live prop, best first: where
+   * a hunter joins the hunt without landing on top of someone hiding.
+   */
+  private hunterSpawns(count: number): Vec3[] {
+    const props: PlayerState[] = [];
+    this.state.players.forEach((player) => {
+      if (player.role === "prop" && player.alive) props.push(player);
+    });
+    const clearance = (spot: Vec3): number => {
+      let nearest = Number.POSITIVE_INFINITY;
+      for (const prop of props) {
+        nearest = Math.min(nearest, Math.hypot(prop.x - spot.x, prop.z - spot.z));
+      }
+      return nearest;
+    };
+    return [...this.map.spawnPoints.hunters]
+      .sort((a, b) => clearance(b) - clearance(a))
+      .slice(0, count);
+  }
+
+  /** Move a player to a spot and tell whoever drives it, a client or a room-filling bot. */
+  private teleport(player: PlayerState, spot: Vec3): void {
+    player.x = spot.x;
+    player.y = spot.y;
+    player.z = spot.z;
+    const bot = this.bots.get(player.id);
+    if (bot) {
+      bot.driver.syncPosition(spot.x, spot.z);
+      return;
+    }
+    this.clients.getById(player.id)?.send(MSG_TELEPORT, { x: spot.x, z: spot.z });
   }
 
   /**

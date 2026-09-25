@@ -92,6 +92,20 @@ const PROP_PER_STREET_MIN = 1;
 const PROP_PER_STREET_MAX = 3;
 const LOT_PROPS = 3;
 const PROP_SPAWN_TARGET = 16;
+const SPAWN_BODY_R = 1.2;
+const SPAWN_PROP_GAP = 0.3;
+/** Offsets tried, in order, around a crossroads until a hunter fits clear of the street furniture. */
+const HUNTER_SPAWN_NUDGES: readonly (readonly [number, number])[] = [
+  [0, 0],
+  [2, 0],
+  [-2, 0],
+  [0, 2],
+  [0, -2],
+  [2, 2],
+  [-2, -2],
+  [2, -2],
+  [-2, 2],
+];
 const STREET_INSET = 2.2;
 const PLAZA_CLEAR = 7;
 const PROP_GAP = 0.6;
@@ -230,13 +244,24 @@ export function buildUrban(seed: number): MapDefinition {
     }
   }
 
+  const hunterSpawns: Vec3[] = [];
+  for (const i of ROADS) {
+    for (const j of ROADS) {
+      const nudge = HUNTER_SPAWN_NUDGES.find(([dx, dz]) =>
+        clearOf(cellCenter(i) + dx, cellCenter(j) + dz, SPAWN_BODY_R, placed, SPAWN_PROP_GAP),
+      );
+      if (!nudge) continue;
+      hunterSpawns.push({ x: cellCenter(i) + nudge[0], y: 0, z: cellCenter(j) + nudge[1] });
+    }
+  }
+
   return {
     id: "urban",
     bounds: {
       min: { x: -BOUND, y: 0, z: -BOUND },
       max: { x: BOUND, y: 40, z: BOUND },
     },
-    spawnPoints: { props: propSpawns },
+    spawnPoints: { props: propSpawns, hunters: hunterSpawns },
     colliders,
     tiles,
     scenery,

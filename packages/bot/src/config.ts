@@ -57,6 +57,12 @@ export const SONAR_PATIENCE_DECISIONS = 7;
 export const HIDE_OFFSET_MIN = 1.2;
 export const HIDE_OFFSET_MAX = 2.4;
 export const PANIC_RADIUS = 7;
+/**
+ * In plain sight of a hunter during the hunt, a prop bolts only when it is this
+ * close: anywhere further, moving is the one thing that gives a disguise away,
+ * so it holds still and lets the hunter guess.
+ */
+export const PANIC_SEEN_RADIUS = 2;
 export const WAYPOINT_MARGIN = 1.5;
 
 /** A contact counts as "watching me" when its aim is within this half-angle cone of the bearing to the bot. */
@@ -106,6 +112,23 @@ export const HEARD_POSITION_CELL = 4;
 export const HEARD_SOUND_MEMORY_MS = 3_000;
 export const MOVED_RECENTLY_MS = 600;
 export const MOVED_RECENTLY_MIN_DIST = 0.3;
+/** A disguise turning by more than this in place is seen to move, as a player sees it spin. */
+export const MOVED_RECENTLY_MIN_TURN_RAD = 0.2;
+/**
+ * How long a disguise stays a suspect after it gave itself away (seen moving,
+ * changing shape or honking): a player remembers which crate twitched for a
+ * few seconds, not for the round.
+ */
+export const BOT_TELL_WINDOW_MS = 3_000;
+/** A honk seen this close to a contact is pinned on it, as a player pins it on the object it came from. */
+export const BOT_TELL_MATCH_RADIUS = 0.75;
+/**
+ * The pace at which a hunter with no suspect spends a shot on a disguise that
+ * gave nothing away, lerped by difficulty from the first to the second. Every
+ * such shot that hits scenery costs the miss damage a player pays.
+ */
+export const BOT_PROBE_INTERVAL_MAX_MS = 6_000;
+export const BOT_PROBE_INTERVAL_MIN_MS = 2_500;
 export const NEARBY_PROP_RADIUS = 12;
 
 export const DEFAULT_BOT_COUNT = 3;
