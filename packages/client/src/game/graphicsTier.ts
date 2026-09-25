@@ -53,6 +53,9 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
   },
 };
 
+/** No tier renders faster than this: a 144 Hz monitor gains nothing a prop hunt needs. */
+export const MAX_RENDER_FPS = 60;
+
 /** A round averaging below this, in Auto, steps the next round down one tier. */
 export const STEP_DOWN_FPS = 40;
 

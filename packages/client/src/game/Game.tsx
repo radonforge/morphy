@@ -65,6 +65,7 @@ import {
 } from "./diagnostics";
 import {
   type GraphicsTier,
+  MAX_RENDER_FPS,
   nextRoundTier,
   type RoundFrames,
   resolveTier,
@@ -103,6 +104,8 @@ const RING_RADIUS = 19;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const PERF_SAMPLE_WINDOW_S = 0.5;
 const RENDER_GATE_PRIORITY = 1;
+const RENDER_INTERVAL_S = 1 / MAX_RENDER_FPS;
+const RENDER_INTERVAL_SLACK_S = 0.002;
 const GFX_LOW_CLASS = "gfx-low";
 const MS_PER_S = 1000;
 const BYTES_PER_MB = 1024 * 1024;
@@ -354,11 +357,18 @@ function PerfProbe({
  * behind an opaque blindout, and drawing the whole map under it for 20 s is pure
  * waste on a weak GPU. Taking the render over, rather than pausing the frame loop,
  * keeps every `useFrame` running, so interpolation, audio and the input pipeline
- * carry on unchanged underneath.
+ * carry on unchanged underneath. It also caps drawing at {@link MAX_RENDER_FPS},
+ * keeping the phase of the cap so a 144 Hz display lands near 60 rather than 48.
  */
 function RenderGate({ skip }: { skip: boolean }) {
-  useGuardedFrame(({ gl, scene, camera }) => {
-    if (!skip) gl.render(scene, camera);
+  const lastRender = useRef(Number.NEGATIVE_INFINITY);
+  useGuardedFrame(({ gl, scene, camera, clock }) => {
+    if (skip) return;
+    const now = clock.elapsedTime;
+    const since = now - lastRender.current;
+    if (since < RENDER_INTERVAL_S - RENDER_INTERVAL_SLACK_S) return;
+    lastRender.current = Number.isFinite(since) ? now - (since % RENDER_INTERVAL_S) : now;
+    gl.render(scene, camera);
   }, RENDER_GATE_PRIORITY);
   return null;
 }
