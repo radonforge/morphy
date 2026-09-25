@@ -38,7 +38,7 @@ const ISLAND_SKIP = 0.2;
 
 const DECOR_AREA_PER = 90;
 const DECOR_MAX = 4;
-const DECOR: readonly string[] = ["barrel", "barrels", "meteor", "meteor_detailed", "bones"];
+const DECOR: readonly string[] = ["barrel", "barrels"];
 
 const HALF_PI = Math.PI / 2;
 
