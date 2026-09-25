@@ -48,6 +48,8 @@ export const PROP_TURN_TAP_MS = 200;
 export const REROLL_BUDGET = 2;
 export const DECOY_BUDGET = 3;
 export const DECOY_COOLDOWN_MS = 1_500;
+/** Share of a weapon's miss damage a shot pays when all it breaks is a decoy. */
+export const DECOY_MISS_DAMAGE_FACTOR = 0.5;
 
 export const PING_INTERVAL_MS = 2_000;
 export const PING_MAX_MS = 999;

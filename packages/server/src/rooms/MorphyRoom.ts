@@ -17,6 +17,7 @@ import {
   DECOY_BUDGET,
   DECOY_COOLDOWN_MS,
   DEFAULT_MAP_ID,
+  DECOY_MISS_DAMAGE_FACTOR,
   DEFAULT_PLAYER_NAME,
   DEFAULT_WEAPON,
   type DecoyBreakEvent,
@@ -760,7 +761,11 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
         } satisfies KillEvent);
       }
     } else {
-      player.hp = Math.max(0, player.hp - weapon.missDamage);
+      const damage =
+        broken.size > 0
+          ? Math.floor(weapon.missDamage * DECOY_MISS_DAMAGE_FACTOR)
+          : weapon.missDamage;
+      player.hp = Math.max(0, player.hp - damage);
       if (player.hp === 0) {
         player.alive = false;
         this.broadcast(MSG_KILL, {

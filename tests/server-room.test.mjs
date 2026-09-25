@@ -7,6 +7,7 @@ import {
   BOT_FILL_DELAY_MS,
   BOT_FILL_TARGET,
   CONVERTED_HUNTER_HP,
+  DECOY_MISS_DAMAGE_FACTOR,
   HIDE_DURATION_MS,
   HUNTER_CAPTURE_HEAL,
   HUNTER_MAX_HP,
@@ -14,6 +15,7 @@ import {
   MSG_SHOT_FIRED,
   RECONNECT_WINDOW_MS,
   START_COUNTDOWN_MS,
+  WEAPONS,
 } from "../packages/shared/src/index.ts";
 
 const MS_PER_SECOND = 1_000;
@@ -21,7 +23,9 @@ const MS_PER_SECOND = 1_000;
 const databasePath = join(tmpdir(), `morphy-room-test-${process.pid}.db`);
 process.env.MORPHY_DB_PATH = databasePath;
 
-const { MorphyRoom, PlayerState } = await import("../packages/server/src/rooms/MorphyRoom.ts");
+const { DecoyState, MorphyRoom, PlayerState } = await import(
+  "../packages/server/src/rooms/MorphyRoom.ts"
+);
 const { buildMap } = await import("../packages/server/src/maps/index.ts");
 const { describeRoomException } = await import("../packages/server/src/rooms/roomErrors.ts");
 const { playerStats } = await import("../packages/server/src/stats/repository.ts");
@@ -629,6 +633,28 @@ test("a capture never heals a hunter past full health", () => {
   shooter.hp = HUNTER_MAX_HP - 1;
   shootAhead(room, shooter);
   assert.equal(shooter.hp, HUNTER_MAX_HP);
+});
+
+test("a shot that breaks only a decoy costs half the miss damage", () => {
+  const { room, shooter, target } = lineOfFire();
+  target.x = 30;
+  const decoy = new DecoyState();
+  decoy.id = "d0";
+  decoy.z = 5;
+  decoy.propType = "crate";
+  decoy.owner = target.id;
+  room.state.decoys.set(decoy.id, decoy);
+  shootAhead(room, shooter);
+  assert.equal(room.state.decoys.size, 0, "the decoy took the shot");
+  const missDamage = WEAPONS[shooter.weapon].missDamage;
+  assert.equal(shooter.hp, HUNTER_MAX_HP - Math.floor(missDamage * DECOY_MISS_DAMAGE_FACTOR));
+});
+
+test("a shot that hits nothing still costs the full miss damage", () => {
+  const { room, shooter, target } = lineOfFire();
+  target.x = 30;
+  shootAhead(room, shooter);
+  assert.equal(shooter.hp, HUNTER_MAX_HP - WEAPONS[shooter.weapon].missDamage);
 });
 
 test("lifetime stats accumulate round outcomes in SQLite", () => {
