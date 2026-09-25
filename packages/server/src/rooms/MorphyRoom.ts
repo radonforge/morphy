@@ -427,7 +427,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   }
 
   onJoin(client: Client, options: unknown): void {
-    if (this.state.phase !== "lobby") {
+    if (!this.betweenRounds()) {
       throw new ServerError(409, "round already in progress");
     }
     const name = sanitizeName((options as { name?: unknown } | undefined)?.name);
@@ -934,15 +934,21 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private startCountdown(): void {
     this.state.winner = "";
     this.cancelBotFill();
+    this.setPhase("starting", START_COUNTDOWN_MS, () => this.beginHiding());
+  }
+
+  /**
+   * The room locks as roles are dealt, not as the countdown starts: the
+   * countdown and the result card are the only windows a public room between
+   * rounds has left, and a player arriving in either is dealt into the next
+   * round like everyone else.
+   */
+  private beginHiding(): void {
     if (!this.locked) {
       void this.lock().catch((error: unknown) => {
         console.error(`[morphy] failed to lock room ${this.roomId}:`, error);
       });
     }
-    this.setPhase("starting", START_COUNTDOWN_MS, () => this.beginHiding());
-  }
-
-  private beginHiding(): void {
     this.state.decoys.clear();
     this.nextDecoyAt.clear();
     this.nextTauntAt.clear();
@@ -997,7 +1003,15 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.tauntTimer?.clear();
     this.tauntTimer = undefined;
     this.recordRoundStats();
+    this.unlockRoom();
     this.setPhase("round_end", ROUND_END_MS, () => this.afterRound());
+  }
+
+  private unlockRoom(): void {
+    if (!this.locked) return;
+    void this.unlock().catch((error: unknown) => {
+      console.error(`[morphy] failed to unlock room ${this.roomId}:`, error);
+    });
   }
 
   /**
@@ -1029,8 +1043,27 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     });
   }
 
+  /**
+   * A public room with enough players goes straight from the result card into
+   * the next countdown: the Ready lobby is where a room is first gathered, not
+   * a toll paid between every round. Seats are squared with the bot fill on
+   * the spot, since the fill delay exists to let humans arrive first in a new
+   * room and nobody is waiting on it here. A private room returns to its lobby,
+   * where the host starts the next round.
+   */
   private afterRound(): void {
-    this.resetToLobby();
+    if (
+      this.state.isPrivate ||
+      !this.canContinueRound() ||
+      this.presentCount() < MIN_PLAYERS_TO_START
+    ) {
+      this.resetToLobby();
+      return;
+    }
+    this.clearRound();
+    this.syncBots();
+    this.fillBots();
+    this.startCountdown();
   }
 
   /**
@@ -1067,10 +1100,18 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private resetToLobby(): void {
     this.phaseTimer?.clear();
     this.phaseTimer = undefined;
-    this.tauntTimer?.clear();
-    this.tauntTimer = undefined;
     this.state.phase = "lobby";
     this.state.phaseEndsAt = 0;
+    this.clearRound();
+    this.unlockRoom();
+    this.syncBots();
+    this.maybeStartRound();
+  }
+
+  /** Take back every role, disguise and round timer, leaving the players where they stand. */
+  private clearRound(): void {
+    this.tauntTimer?.clear();
+    this.tauntTimer = undefined;
     this.state.winner = "";
     this.state.players.forEach((player) => {
       player.ready = false;
@@ -1087,13 +1128,12 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.nextTauntAt.clear();
     this.tauntClockAt.clear();
     this.nextSonarAt.clear();
-    if (this.locked) {
-      void this.unlock().catch((error: unknown) => {
-        console.error(`[morphy] failed to unlock room ${this.roomId}:`, error);
-      });
-    }
-    this.syncBots();
-    this.maybeStartRound();
+  }
+
+  /** No round is being played, so nobody holds a role and a seat can change hands. */
+  private betweenRounds(): boolean {
+    const phase = this.state.phase;
+    return phase === "lobby" || phase === "starting" || phase === "round_end";
   }
 
   /**
@@ -1163,8 +1203,8 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * Bring the bot population in line with {@link desiredBotCount}. Removals are
    * immediate so an arriving human takes a bot's seat at once; additions wait
    * out {@link BOT_FILL_DELAY_MS}, giving real players a chance to show up
-   * first. Only ever runs in a public lobby, so a round's roster never changes
-   * under the players.
+   * first. Only ever runs in a public room between rounds, so a round's roster
+   * never changes under the players.
    *
    * `state.fillAt` publishes when that wait ends, so a player alone in a room
    * sees the wait counted down instead of three bots appearing unannounced. It
@@ -1173,7 +1213,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * {@link MIN_PLAYERS_TO_START}.
    */
   private syncBots(): void {
-    if (this.state.isPrivate || this.state.phase !== "lobby") return;
+    if (this.state.isPrivate || !this.betweenRounds()) return;
     const want = desiredBotCount(this.humanCount());
     for (const sessionId of [...this.bots.keys()]) {
       if (this.bots.size <= want) break;
@@ -1209,7 +1249,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
    * throws, the method simply never returns.
    */
   private fillBots(): void {
-    if (this.state.isPrivate || this.state.phase !== "lobby") return;
+    if (this.state.isPrivate || !this.betweenRounds()) return;
     const want = desiredBotCount(this.humanCount());
     while (this.bots.size < want) {
       if (!this.addBot()) break;

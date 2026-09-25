@@ -17,6 +17,7 @@ import {
   MSG_SONAR_PING,
   MSG_TAUNT,
   RECONNECT_WINDOW_MS,
+  ROUND_END_MS,
   SONAR_RADIUS,
   START_COUNTDOWN_MS,
   TAUNT_CHECK_MS,
@@ -946,4 +947,85 @@ test("the weapon a player chose survives the round it was chosen in", () => {
 
   room.resetToLobby();
   assert.equal(room.state.players.get("a").weapon, "shotgun");
+});
+
+/** Close the round the way the room does, then let its result card run out. */
+function finishRound(room) {
+  room.state.winner = "hunters";
+  room.endRound();
+  const card = timersOf(room, ROUND_END_MS).at(-1);
+  assert.ok(card, "expected the result card's timer");
+  card.fn();
+}
+
+test("a public round goes straight from its result card to the next countdown", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  startRound(room);
+  finishRound(room);
+  assert.equal(room.state.phase, "starting");
+  room.state.players.forEach((player) => {
+    assert.equal(player.role, "prop", "every role is taken back before the next deal");
+    assert.equal(player.propType, "");
+  });
+});
+
+test("a private round returns to its lobby, where the host starts the next", () => {
+  const room = publicRoom();
+  room.state.isPrivate = true;
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  startRound(room);
+  finishRound(room);
+  assert.equal(room.state.phase, "lobby");
+});
+
+test("a public room left too thin to play on returns to its lobby", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  startRound(room);
+  room.state.players.get("b").connected = false;
+  finishRound(room);
+  assert.equal(room.state.phase, "lobby");
+});
+
+test("a player arriving at the result card is dealt into the next round", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  startRound(room);
+  room.state.winner = "hunters";
+  room.endRound();
+  joinRoom(room, "late");
+  timersOf(room, ROUND_END_MS).at(-1).fn();
+  startRound(room);
+  assert.ok(room.roundRoster.has("late"));
+});
+
+test("a human arriving between rounds takes a bot's seat", () => {
+  const room = publicRoom();
+  joinRoom(room, "first");
+  fireBotFill(room);
+  startRound(room);
+  room.state.winner = "hunters";
+  room.endRound();
+  joinRoom(room, "second");
+  assert.equal(room.state.players.size, BOT_FILL_TARGET);
+  assert.equal(botCount(room), BOT_FILL_TARGET - 2);
+});
+
+test("a round locks the room as roles are dealt, not as the countdown starts", () => {
+  const room = publicRoom();
+  let locks = 0;
+  room.lock = async () => {
+    locks++;
+  };
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  room.startCountdown();
+  assert.equal(locks, 0, "the countdown is still a window to join in");
+  timersOf(room, START_COUNTDOWN_MS).at(-1).fn();
+  assert.equal(locks, 1);
 });
