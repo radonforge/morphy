@@ -1963,7 +1963,7 @@ function LocalPlayer({
 
     sendAccumMs.current += delta * 1000;
     if (sendAccumMs.current >= INPUT_SEND_RATE_MS) {
-      sendAccumMs.current = 0;
+      sendAccumMs.current = Math.min(sendAccumMs.current - INPUT_SEND_RATE_MS, INPUT_SEND_RATE_MS);
       const aim = Math.atan2(-Math.sin(yaw), -Math.cos(yaw));
       const last = lastSentInput.current;
       const moved =
