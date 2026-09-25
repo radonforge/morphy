@@ -19,6 +19,7 @@ import {
   MSG_SHOT_RESULT,
   MSG_START,
   MSG_TAUNT,
+  MSG_TAUNT_REQUEST,
   MSG_TELEPORT,
   type Phase,
   parseMapDefinition,
@@ -26,13 +27,17 @@ import {
   ROUND_END_MS,
   type Role,
   START_COUNTDOWN_MS,
+  TAUNT_COOLDOWN_MS,
+  TAUNT_DARING_POINTS,
+  TAUNT_HEARING_RADIUS,
   WEAPON_IDS,
   WEAPONS,
   type WeaponId,
   type Winner,
 } from "@morphy/shared";
 import { Canvas } from "@react-three/fiber";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Vector3 } from "three";
 import type { Connection } from "../net/connection";
 import {
   isMuted,
@@ -54,6 +59,7 @@ import { useGuardedFrame } from "./guardedFrame";
 import { lockPointer } from "./pointerLock";
 import { isPerfHudEnabled } from "./prefs";
 import { GAME_DPR, GAME_FOV, Scene } from "./Scene";
+import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
 import type {
   BreaksRef,
   DecoyView,
@@ -69,7 +75,6 @@ import type {
 import { PLAYER_META_FIELDS, SCENE_META_FIELDS } from "./types";
 
 const COUNTDOWN_TICK_MS = 250;
-const TAUNT_MAX_DISTANCE = 40;
 const SHOT_SOUND_MAX_DISTANCE = 60;
 const REMOTE_SHOT_VOLUME = 0.7;
 const CHAT_HISTORY = 6;
@@ -239,13 +244,18 @@ function sceneMetaOf(meta: MetaMap, prev: SceneMetaMap): SceneMetaMap {
   return next;
 }
 
+/** What a player is ranked on within their side: captures for a hunter, taunt points for a prop. */
+function standing(player: PlayerMeta): number {
+  return player.role === "hunter" ? player.kills : player.score;
+}
+
 function sortStandings(ids: string[], meta: MetaMap): { id: string; player: PlayerMeta }[] {
   return ids
     .map((id) => ({ id, player: meta[id] }))
     .filter((row): row is { id: string; player: PlayerMeta } => row.player !== undefined)
     .sort((a, b) => {
       if (a.player.role !== b.player.role) return a.player.role === "hunter" ? -1 : 1;
-      if (b.player.kills !== a.player.kills) return b.player.kills - a.player.kills;
+      if (standing(b.player) !== standing(a.player)) return standing(b.player) - standing(a.player);
       return a.player.name.localeCompare(b.player.name);
     });
 }
@@ -258,6 +268,7 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
         <span>Role</span>
         <span>Status</span>
         <span>Kills</span>
+        <span>Points</span>
         <span>Ping</span>
       </div>
       {sortStandings(ids, meta).map(({ id, player }) => (
@@ -279,6 +290,7 @@ function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; 
                 : "Eliminated"}
           </span>
           <span>{player.role === "hunter" ? player.kills : "-"}</span>
+          <span>{player.role === "prop" || player.score > 0 ? player.score : "-"}</span>
           <span>{player.ping} ms</span>
         </div>
       ))}
@@ -326,6 +338,33 @@ function RenderGate({ skip }: { skip: boolean }) {
   useGuardedFrame(({ gl, scene, camera }) => {
     if (!skip) gl.render(scene, camera);
   }, RENDER_GATE_PRIORITY);
+  return null;
+}
+
+/**
+ * Keeps the listener on the local player, facing where the camera looks, so a
+ * positional sound pans the way the view is turned. It writes a ref every
+ * frame and never touches React state.
+ */
+function ListenerProbe({
+  playersRef,
+  localId,
+  listenerRef,
+}: {
+  playersRef: PlayersRef;
+  localId: string;
+  listenerRef: ListenerRef;
+}) {
+  const forward = useMemo(() => new Vector3(), []);
+  useGuardedFrame(({ camera }) => {
+    camera.getWorldDirection(forward);
+    const pose = listenerRef.current;
+    const self = playersRef.current.get(localId);
+    pose.x = self?.x ?? camera.position.x;
+    pose.z = self?.z ?? camera.position.z;
+    pose.forwardX = forward.x;
+    pose.forwardZ = forward.z;
+  });
   return null;
 }
 
@@ -482,6 +521,8 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const killTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chatUnlockRef = useRef(false);
+  const listenerRef = useRef<ListenerPose>({ x: 0, z: 0, forwardX: 0, forwardZ: -1 });
+  const prevScoreRef = useRef(0);
 
   const [map, setMap] = useState<MapDefinition | null>(null);
   const [ids, setIds] = useState<string[]>([]);
@@ -504,6 +545,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [paused, setPaused] = useState(false);
   const [contextLost, setContextLost] = useState(false);
   const [decoys, setDecoys] = useState<DecoyView[]>([]);
+  const [tauntReadyAt, setTauntReadyAt] = useState(0);
   const [muted, setMuted] = useState(() => isMuted());
   const [perfHud] = useState(() => isPerfHudEnabled());
   const perfNodeRef = useRef<HTMLDivElement | null>(null);
@@ -517,6 +559,16 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     lockPointer(canvasRef.current);
   }, []);
   const weapon = meta[sessionId]?.weapon ?? DEFAULT_WEAPON;
+
+  const pushFeed = useCallback((text: string) => {
+    const key = fxSeq.current++;
+    setKillFeed((prev) => [...prev.slice(-(KILL_FEED_MAX - 1)), { key, text }]);
+    const timer = setTimeout(() => {
+      killTimersRef.current.delete(timer);
+      setKillFeed((prev) => prev.filter((line) => line.key !== key));
+    }, KILL_FEED_MS);
+    killTimersRef.current.add(timer);
+  }, []);
 
   const pickWeapon = useCallback(
     (id: WeaponId) => {
@@ -549,6 +601,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           alive: player.alive,
           hp: player.hp,
           kills: player.kills,
+          score: player.score,
           propType: player.propType,
           rerollsLeft: player.rerollsLeft,
           decoysLeft: player.decoysLeft,
@@ -650,11 +703,11 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         const m = message as Record<string, unknown>;
         if (typeof m.playerId !== "string" || !isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
         tauntPulseRef.current.set(m.playerId, performance.now());
-        const local = playersRef.current.get(sessionId);
-        const volume = local
-          ? Math.max(0, 1 - Math.hypot(local.x - m.x, local.z - m.z) / TAUNT_MAX_DISTANCE)
-          : 0.7;
-        playTaunt(volume);
+        if (m.playerId === sessionId && m.forced !== true) {
+          setTauntReadyAt(Date.now() + TAUNT_COOLDOWN_MS);
+        }
+        const listener = listenerRef.current;
+        playTaunt(falloff(listener, m.x, m.z, TAUNT_HEARING_RADIUS), stereoPan(listener, m.x, m.z));
       }),
     );
 
@@ -745,16 +798,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         if (typeof message !== "object" || message === null) return;
         const event = message as KillEvent;
         if (typeof event.victimName !== "string" || typeof event.reason !== "string") return;
-        const key = fxSeq.current++;
-        setKillFeed((prev) => [
-          ...prev.slice(-(KILL_FEED_MAX - 1)),
-          { key, text: killText(event) },
-        ]);
-        const timer = setTimeout(() => {
-          killTimersRef.current.delete(timer);
-          setKillFeed((prev) => prev.filter((line) => line.key !== key));
-        }, KILL_FEED_MS);
-        killTimersRef.current.add(timer);
+        pushFeed(killText(event));
         if (event.victimId === sessionId) {
           if (event.reason === "converted") {
             playRoundStart();
@@ -780,7 +824,15 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       playerMetaUnsubscribers.clear();
       playersRef.current.clear();
     };
-  }, [room, sessionId]);
+  }, [room, sessionId, pushFeed]);
+
+  const localScore = meta[sessionId]?.score ?? 0;
+  useEffect(() => {
+    const gained = localScore - prevScoreRef.current;
+    prevScoreRef.current = localScore;
+    if (gained <= 0) return;
+    pushFeed(gained >= TAUNT_DARING_POINTS ? `Daring taunt +${gained}` : `Taunt +${gained}`);
+  }, [localScore, pushFeed]);
 
   useEffect(() => {
     if (!shotFx) return;
@@ -826,6 +878,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     if (phase === prev) return;
     if (phase === "hiding") {
       playRoundStart();
+      setTauntReadyAt(0);
     } else if (phase === "round_end") {
       const role = meta[sessionId]?.role ?? "prop";
       const won =
@@ -914,6 +967,17 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   }, 0);
 
   const inputBlocked = chatOpen || paused;
+  const canTaunt = localRole === "prop" && localAlive && phase === "hunting" && !inputBlocked;
+
+  useEffect(() => {
+    if (!canTaunt) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyF" || e.repeat) return;
+      room.send(MSG_TAUNT_REQUEST);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [room, canTaunt]);
   const canTransform =
     localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
@@ -988,6 +1052,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           onShoot={onShoot}
         />
         <RenderGate skip={blinded} />
+        <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
         {perfHud && <PerfProbe playersRef={playersRef} localId={sessionId} nodeRef={perfNodeRef} />}
       </Canvas>
 
@@ -1194,6 +1259,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
             phase={phase}
             rerollsLeft={localMeta?.rerollsLeft ?? 0}
             decoysLeft={localMeta?.decoysLeft ?? 0}
+            tauntReadyAt={tauntReadyAt}
             onOpen={() => setControlsOpen(true)}
           />
         </div>

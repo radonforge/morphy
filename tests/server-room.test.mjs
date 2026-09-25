@@ -14,8 +14,15 @@ import {
   HUNTER_MAX_HP,
   LOBBY_AUTOSTART_MS,
   MSG_SHOT_FIRED,
+  MSG_TAUNT,
   RECONNECT_WINDOW_MS,
   START_COUNTDOWN_MS,
+  TAUNT_CHECK_MS,
+  TAUNT_DARING_POINTS,
+  TAUNT_DARING_RADIUS,
+  TAUNT_FORCED_STAGGER_MS,
+  TAUNT_INTERVAL_MS,
+  TAUNT_POINTS,
   WEAPONS,
 } from "../packages/shared/src/index.ts";
 
@@ -701,6 +708,107 @@ test("a hunter bot's decoy press is refused like a hunter's", () => {
   pressOnce(room, botWithRole(room, "hunter"), "decoy");
   room.tickBots();
   assert.equal(room.state.decoys.size, 0);
+});
+
+/** A hunt with one prop at the origin and a hunter `hunterAt` metres down +x. */
+function tauntRoom(hunterAt) {
+  const room = new MorphyRoom();
+  room.state.phase = "hunting";
+  const prop = player("prop", "prop");
+  const hunter = player("hunter", "hunter");
+  hunter.x = hunterAt;
+  room.state.players.set(prop.id, prop);
+  room.state.players.set(hunter.id, hunter);
+  const taunts = [];
+  room.broadcast = (type, payload) => {
+    if (type === MSG_TAUNT) taunts.push(payload);
+  };
+  return { room, prop, hunter, taunts };
+}
+
+const tauntAs = (room, id) => room.handleTaunt({ sessionId: id, send() {} });
+
+test("a taunt scores a point and is heard from where the prop stands", () => {
+  const { room, prop, taunts } = tauntRoom(TAUNT_DARING_RADIUS * 3);
+  tauntAs(room, prop.id);
+  assert.equal(prop.score, TAUNT_POINTS);
+  assert.deepEqual(taunts, [{ playerId: prop.id, x: 0, z: 0, forced: false }]);
+});
+
+test("a taunt under a hunter's nose scores the daring points", () => {
+  const { room, prop } = tauntRoom(TAUNT_DARING_RADIUS - 1);
+  tauntAs(room, prop.id);
+  assert.equal(prop.score, TAUNT_DARING_POINTS);
+});
+
+test("a taunt still cooling down is refused", () => {
+  const { room, prop, taunts } = tauntRoom(TAUNT_DARING_RADIUS * 3);
+  tauntAs(room, prop.id);
+  tauntAs(room, prop.id);
+  assert.equal(prop.score, TAUNT_POINTS);
+  assert.equal(taunts.length, 1);
+});
+
+test("only a live prop taunts, and only while the hunt is on", () => {
+  const { room, prop, hunter, taunts } = tauntRoom(TAUNT_DARING_RADIUS * 3);
+  tauntAs(room, hunter.id);
+  room.state.phase = "hiding";
+  tauntAs(room, prop.id);
+  room.state.phase = "hunting";
+  prop.alive = false;
+  tauntAs(room, prop.id);
+  assert.deepEqual(taunts, []);
+  assert.equal(prop.score, 0);
+});
+
+test("a prop overdue a taunt is made to honk, for nothing", () => {
+  const { room, prop, taunts } = tauntRoom(TAUNT_DARING_RADIUS * 3);
+  room.tauntClockAt.set(prop.id, Date.now() - TAUNT_INTERVAL_MS);
+  room.sweepForcedTaunts();
+  assert.deepEqual(taunts, [{ playerId: prop.id, x: 0, z: 0, forced: true }]);
+  assert.equal(prop.score, 0);
+});
+
+test("a prop that taunts on its own is never made to", () => {
+  const { room, prop, taunts } = tauntRoom(TAUNT_DARING_RADIUS * 3);
+  room.tauntClockAt.set(prop.id, Date.now() - TAUNT_INTERVAL_MS);
+  tauntAs(room, prop.id);
+  room.sweepForcedTaunts();
+  assert.equal(taunts.length, 1);
+  assert.equal(taunts[0].forced, false);
+});
+
+test("forced taunts are spread out instead of fired in unison", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  joinRoom(room, "second");
+  startRound(room);
+  const sweep = timersOf(room, TAUNT_CHECK_MS).at(-1);
+  assert.ok(sweep, "the hunt sweeps for overdue props");
+  const starts = [];
+  room.state.players.forEach((p, id) => {
+    if (p.role === "prop") starts.push(room.tauntClockAt.get(id));
+  });
+  assert.ok(starts.length > 1);
+  assert.equal(new Set(starts).size, starts.length, "no two props share a clock");
+  const now = Date.now();
+  for (const at of starts) assert.ok(at >= now - 1_000 && at <= now + TAUNT_FORCED_STAGGER_MS);
+});
+
+test("a round starts every prop's score from nothing", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  startRound(room);
+  room.state.players.forEach((p) => {
+    p.score = 7;
+  });
+  room.resetToLobby();
+  startRound(room);
+  room.state.players.forEach((p) => {
+    assert.equal(p.score, 0);
+  });
 });
 
 test("lifetime stats accumulate round outcomes in SQLite", () => {

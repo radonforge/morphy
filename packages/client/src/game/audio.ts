@@ -105,7 +105,7 @@ function ensure(): { ctx: AudioContext; master: GainNode } | null {
   return { ctx: audioContext, master: masterGain! };
 }
 
-function tone(ctx: AudioContext, master: GainNode, spec: ToneSpec): void {
+function tone(ctx: AudioContext, master: AudioNode, spec: ToneSpec): OscillatorNode {
   const start = ctx.currentTime + (spec.delay ?? 0);
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -120,6 +120,18 @@ function tone(ctx: AudioContext, master: GainNode, spec: ToneSpec): void {
   osc.connect(gain).connect(master);
   osc.start(start);
   osc.stop(start + spec.dur + 0.02);
+  return osc;
+}
+
+/**
+ * A stereo panner feeding `master`, for a sound placed left or right of the
+ * listener (`pan` -1..1). The caller disconnects it once its source ends.
+ */
+function stereo(ctx: AudioContext, master: GainNode, pan: number): StereoPannerNode {
+  const panner = ctx.createStereoPanner();
+  panner.pan.value = Math.max(-1, Math.min(1, pan));
+  panner.connect(master);
+  return panner;
 }
 
 function noiseBurst(
@@ -372,11 +384,16 @@ export function stopLobbyMusic(): void {
   musicGain = null;
 }
 
-/** Play a short rising "honk" for a prop taunt. `volume` is 0..1 (typically by distance). */
-export function playTaunt(volume: number): void {
+/**
+ * Play a short rising "honk" for a prop taunt. `volume` is 0..1 (typically by
+ * distance) and `pan` -1..1 places it left or right, so a hunter hears which
+ * way it came from.
+ */
+export function playTaunt(volume: number, pan = 0): void {
   const e = ensure();
   if (!e || volume <= 0) return;
-  tone(e.ctx, e.master, {
+  const panner = stereo(e.ctx, e.master, pan);
+  const osc = tone(e.ctx, panner, {
     type: "square",
     f0: 420,
     f1: 640,
@@ -385,6 +402,7 @@ export function playTaunt(volume: number): void {
     attack: 0.02,
     dur: 0.26,
   });
+  osc.onended = () => panner.disconnect();
 }
 
 /** Clean two-tone materialize sweep when a player morphs into a prop. `volume` is 0..1. */

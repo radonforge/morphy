@@ -15,7 +15,19 @@ export const START_COUNTDOWN_MS = 5_000;
 export const HIDE_DURATION_MS = 20_000;
 export const ROUND_DURATION_MS = 240_000;
 export const ROUND_END_MS = 8_000;
+/** A prop that has not taunted for this long during the hunt is made to, for no points. */
 export const TAUNT_INTERVAL_MS = 30_000;
+/** How far apart the props' first forced taunts of a hunt are spread, so they never honk in unison. */
+export const TAUNT_FORCED_STAGGER_MS = 10_000;
+/** How often the room looks for a prop overdue a forced taunt. */
+export const TAUNT_CHECK_MS = 1_000;
+export const TAUNT_COOLDOWN_MS = 10_000;
+export const TAUNT_POINTS = 1;
+/** Points for a taunt with a live hunter within {@link TAUNT_DARING_RADIUS}. */
+export const TAUNT_DARING_POINTS = 3;
+export const TAUNT_DARING_RADIUS = 10;
+/** Beyond this distance a taunt is not heard, by a player's client or by a bot. */
+export const TAUNT_HEARING_RADIUS = 40;
 export const RECONNECT_WINDOW_MS = 30_000;
 
 export const HUNTER_MAX_HP = 100;

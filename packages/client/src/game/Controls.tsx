@@ -1,5 +1,9 @@
 import type { Phase, Role } from "@morphy/shared";
+import { useEffect, useState } from "react";
 import { Kbd } from "../ui/Kbd";
+
+const COOLDOWN_TICK_MS = 250;
+const MS_PER_SECOND = 1_000;
 
 interface ControlSpec {
   keys: string[];
@@ -34,6 +38,7 @@ const CONTROL_GROUPS: ControlGroup[] = [
       { keys: ["R"], label: "Swap disguise (random)" },
       { keys: ["Q", "E"], label: "Rotate disguise" },
       { keys: ["C"], label: "Drop decoy" },
+      { keys: ["F"], label: "Taunt (+1, +3 near a hunter)" },
     ],
   },
   {
@@ -71,9 +76,32 @@ interface BarState {
   phase: Phase;
   rerollsLeft: number;
   decoysLeft: number;
+  /** `Date.now()` at which the local prop's taunt comes off cooldown; 0 when it is ready. */
+  tauntReadyAt: number;
 }
 
-function mainControls(s: BarState): { note?: string; items: ControlSpec[] } {
+function cooldownLabel(label: string, readyAt: number, now: number): string {
+  if (readyAt <= now) return label;
+  return `${label} (${Math.ceil((readyAt - now) / MS_PER_SECOND)}s)`;
+}
+
+/** The current time, re-rendered on a short tick until `until` has passed. */
+function useNowUntil(until: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    setNow(Date.now());
+    if (until <= Date.now()) return;
+    const timer = setInterval(() => {
+      const t = Date.now();
+      setNow(t);
+      if (t >= until) clearInterval(timer);
+    }, COOLDOWN_TICK_MS);
+    return () => clearInterval(timer);
+  }, [until]);
+  return now;
+}
+
+function mainControls(s: BarState, now: number): { note?: string; items: ControlSpec[] } {
   if (!s.alive) return { note: "Eliminated, spectating", items: [] };
   if (s.canShoot) {
     return {
@@ -91,6 +119,9 @@ function mainControls(s: BarState): { note?: string; items: ControlSpec[] } {
         { keys: ["R"], label: `Swap (${s.rerollsLeft})` },
         { keys: ["Q", "E"], label: "Rotate" },
         { keys: ["C"], label: `Decoy (${s.decoysLeft})` },
+        ...(s.phase === "hunting"
+          ? [{ keys: ["F"], label: cooldownLabel("Taunt", s.tauntReadyAt, now) }]
+          : []),
         { keys: ["Shift"], label: "Run" },
         { keys: ["Space"], label: "Jump" },
       ],
@@ -109,7 +140,8 @@ function mainControls(s: BarState): { note?: string; items: ControlSpec[] } {
 }
 
 export function ControlsBar({ onOpen, ...state }: BarState & { onOpen: () => void }) {
-  const { note, items } = mainControls(state);
+  const now = useNowUntil(state.tauntReadyAt);
+  const { note, items } = mainControls(state, now);
   return (
     <div className="controls-bar">
       {note ? (

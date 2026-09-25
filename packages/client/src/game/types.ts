@@ -12,6 +12,7 @@ export interface RemotePlayerView {
   alive: boolean;
   hp: number;
   kills: number;
+  score: number;
   propType: string;
   rerollsLeft: number;
   decoysLeft: number;
@@ -45,6 +46,7 @@ export const PLAYER_META_FIELDS = [
   "alive",
   "hp",
   "kills",
+  "score",
   "propType",
   "rerollsLeft",
   "decoysLeft",

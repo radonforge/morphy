@@ -25,6 +25,7 @@ export const MSG_SHOOT = "shoot";
 export const MSG_SHOT_FIRED = "shot_fired";
 export const MSG_TELEPORT = "teleport";
 export const MSG_TAUNT = "taunt";
+export const MSG_TAUNT_REQUEST = "taunt_request";
 export const MSG_CHAT = "chat";
 export const MSG_SHOT_RESULT = "shot_result";
 export const MSG_READY = "ready";
@@ -80,10 +81,13 @@ export interface TeleportMessage {
   z: number;
 }
 
+/** Broadcast when a prop honks. */
 export interface TauntMessage {
   playerId: string;
   x: number;
   z: number;
+  /** True for a taunt the prop did not choose: overdue, or drawn out by a sonar. It scores nothing. */
+  forced: boolean;
 }
 
 export interface ChatSend {
