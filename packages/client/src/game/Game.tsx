@@ -5,6 +5,7 @@ import {
   HUNTER_MAX_HP,
   isWeaponId,
   type KillEvent,
+  MAP_CATALOG,
   MAX_CHAT_LENGTH,
   type MapDefinition,
   MIN_PLAYERS_TO_START,
@@ -33,6 +34,7 @@ import {
 } from "@morphy/shared";
 import { Canvas } from "@react-three/fiber";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { WebGLRenderer } from "three";
 import type { Connection } from "../net/connection";
 import {
   isMuted,
@@ -50,6 +52,16 @@ import {
   toggleMuted,
 } from "./audio";
 import { ControlsBar, ControlsDialog } from "./Controls";
+import { CopyDiagnostics } from "./CopyDiagnostics";
+import {
+  createFrameRing,
+  type DiagnosticsReport,
+  type FrameRing,
+  formatDiagnostics,
+  frameStats,
+  gpuInfo,
+  recordFrame,
+} from "./diagnostics";
 import { useGuardedFrame } from "./guardedFrame";
 import { lockPointer } from "./pointerLock";
 import { isPerfHudEnabled } from "./prefs";
@@ -83,6 +95,8 @@ const RING_RADIUS = 19;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const PERF_SAMPLE_WINDOW_S = 0.5;
 const RENDER_GATE_PRIORITY = 1;
+const MS_PER_S = 1000;
+const BYTES_PER_MB = 1024 * 1024;
 /**
  * Named rather than left to the Canvas default, which asks for PCFSoft. three 0.184 downgrades
  * that to PCF on the next shadow render, and the Canvas re-applies its config on every React
@@ -295,14 +309,17 @@ function PerfProbe({
   playersRef,
   localId,
   nodeRef,
+  ring,
 }: {
   playersRef: PlayersRef;
   localId: string;
   nodeRef: React.RefObject<HTMLDivElement | null>;
+  ring: FrameRing;
 }) {
   const frames = useRef(0);
   const windowStart = useRef(0);
-  useGuardedFrame(({ clock }) => {
+  useGuardedFrame(({ clock }, delta) => {
+    recordFrame(ring, delta * MS_PER_S);
     frames.current++;
     const elapsed = clock.elapsedTime - windowStart.current;
     if (elapsed < PERF_SAMPLE_WINDOW_S) return;
@@ -327,6 +344,57 @@ function RenderGate({ skip }: { skip: boolean }) {
     if (!skip) gl.render(scene, camera);
   }, RENDER_GATE_PRIORITY);
   return null;
+}
+
+interface LongTaskTally {
+  count: number;
+  longestMs: number;
+}
+
+interface BrowserExtras {
+  deviceMemory?: number;
+  memory?: { usedJSHeapSize?: number };
+}
+
+function readDiagnostics(
+  gl: WebGLRenderer,
+  ring: FrameRing,
+  longTasks: LongTaskTally,
+  contextLosses: number,
+  mapName: string,
+  phase: Phase,
+  players: number,
+): DiagnosticsReport {
+  const context = gl.getContext();
+  const debug = context.getExtension("WEBGL_debug_renderer_info");
+  const unmasked = debug ? String(context.getParameter(debug.UNMASKED_RENDERER_WEBGL)) : null;
+  const deviceMemory = (navigator as Navigator & BrowserExtras).deviceMemory;
+  const heap = (performance as Performance & BrowserExtras).memory?.usedJSHeapSize;
+  return {
+    version: __MORPHY_VERSION__,
+    build: __MORPHY_BUILD__,
+    userAgent: navigator.userAgent,
+    gpu: gpuInfo(unmasked, String(context.getParameter(context.RENDERER))),
+    antialias: context.getContextAttributes()?.antialias ?? false,
+    pixelRatio: gl.getPixelRatio(),
+    bufferWidth: context.drawingBufferWidth,
+    bufferHeight: context.drawingBufferHeight,
+    cores: navigator.hardwareConcurrency || null,
+    memoryGb: deviceMemory ?? null,
+    frames: frameStats(ring),
+    drawCalls: gl.info.render.calls,
+    triangles: gl.info.render.triangles,
+    geometries: gl.info.memory.geometries,
+    textures: gl.info.memory.textures,
+    programs: gl.info.programs?.length ?? 0,
+    heapMb: heap === undefined ? null : heap / BYTES_PER_MB,
+    longTasks: longTasks.count,
+    longestTaskMs: longTasks.longestMs,
+    contextLosses,
+    map: mapName,
+    phase,
+    players,
+  };
 }
 
 function SpeakerIcon({ muted }: { muted: boolean }) {
@@ -507,6 +575,10 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [muted, setMuted] = useState(() => isMuted());
   const [perfHud] = useState(() => isPerfHudEnabled());
   const perfNodeRef = useRef<HTMLDivElement | null>(null);
+  const [frameRing] = useState(() => createFrameRing());
+  const glRef = useRef<WebGLRenderer | null>(null);
+  const longTasksRef = useRef<LongTaskTally>({ count: 0, longestMs: 0 });
+  const contextLossesRef = useRef(0);
   const prevPhaseRef = useRef<Phase>("lobby");
 
   chatOpenRef.current = chatOpen;
@@ -939,9 +1011,42 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   };
 
   useEffect(() => {
+    if (!PerformanceObserver.supportedEntryTypes?.includes("longtask")) return;
+    const tally = longTasksRef.current;
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        tally.count += 1;
+        tally.longestMs = Math.max(tally.longestMs, entry.duration);
+      }
+    });
+    observer.observe({ type: "longtask" });
+    return () => observer.disconnect();
+  }, []);
+
+  const collectDiagnostics = useCallback((): string => {
+    const gl = glRef.current;
+    if (!gl) return "The 3D view has not started yet.";
+    const mapName = MAP_CATALOG.find((m) => m.id === map?.id)?.name ?? map?.id ?? "?";
+    return formatDiagnostics(
+      readDiagnostics(
+        gl,
+        frameRing,
+        longTasksRef.current,
+        contextLossesRef.current,
+        mapName,
+        phase,
+        ids.length,
+      ),
+    );
+  }, [frameRing, map, phase, ids.length]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!map || !canvas) return;
-    const onLost = () => setContextLost(true);
+    const onLost = () => {
+      contextLossesRef.current += 1;
+      setContextLost(true);
+    };
     const onRestored = () => setContextLost(false);
     canvas.addEventListener("webglcontextlost", onLost);
     canvas.addEventListener("webglcontextrestored", onRestored);
@@ -968,6 +1073,9 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         dpr={GAME_DPR}
         shadows={GAME_SHADOW_TYPE}
         camera={{ position: [0, 12, 18], fov: GAME_FOV }}
+        onCreated={({ gl }) => {
+          glRef.current = gl;
+        }}
       >
         <Scene
           key={map.id}
@@ -988,7 +1096,12 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           onShoot={onShoot}
         />
         <RenderGate skip={blinded} />
-        {perfHud && <PerfProbe playersRef={playersRef} localId={sessionId} nodeRef={perfNodeRef} />}
+        <PerfProbe
+          playersRef={playersRef}
+          localId={sessionId}
+          nodeRef={perfNodeRef}
+          ring={frameRing}
+        />
       </Canvas>
 
       {perfHud && <div className="perf" ref={perfNodeRef} />}
@@ -1056,6 +1169,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
                 </span>
               </>
             )}
+            <CopyDiagnostics collect={collectDiagnostics} />
           </div>
         </div>
       )}
@@ -1229,6 +1343,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
             <button type="button" className="btn-ghost" onClick={onLeaveMatch}>
               Leave match
             </button>
+            <CopyDiagnostics collect={collectDiagnostics} />
             <span className="pause-hint">The round keeps running. Click the game to resume</span>
           </div>
         </div>
