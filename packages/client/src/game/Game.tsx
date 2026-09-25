@@ -5,6 +5,7 @@ import {
   HUNTER_MAX_HP,
   isWeaponId,
   type KillEvent,
+  MAP_CATALOG,
   MAX_CHAT_LENGTH,
   type MapDefinition,
   MIN_PLAYERS_TO_START,
@@ -41,7 +42,7 @@ import {
 } from "@morphy/shared";
 import { Canvas } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Vector3 } from "three";
+import { Vector3, type WebGLRenderer } from "three";
 import type { Connection } from "../net/connection";
 import {
   isMuted,
@@ -60,15 +61,35 @@ import {
   toggleMuted,
 } from "./audio";
 import { ControlsBar, ControlsDialog } from "./Controls";
+import { CopyDiagnostics } from "./CopyDiagnostics";
+import { deviceHints } from "./deviceProbe";
+import {
+  createFrameRing,
+  type DiagnosticsReport,
+  type FrameRing,
+  formatDiagnostics,
+  frameStats,
+  gpuInfo,
+  recordFrame,
+} from "./diagnostics";
+import {
+  type GraphicsTier,
+  MAX_RENDER_FPS,
+  nextRoundTier,
+  type RoundFrames,
+  resolveTier,
+  TIER_SETTINGS,
+} from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
 import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
-import { isPerfHudEnabled } from "./prefs";
-import { GAME_DPR, GAME_FOV, Scene } from "./Scene";
+import { graphicsPreference, isPerfHudEnabled } from "./prefs";
+import { DEFAULT_PITCH, GAME_FOV, Scene } from "./Scene";
 import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
 import type {
   BreaksRef,
   DecoyView,
+  LookRef,
   MetaMap,
   PlayerMeta,
   PlayersRef,
@@ -94,6 +115,11 @@ const RING_RADIUS = 19;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const PERF_SAMPLE_WINDOW_S = 0.5;
 const RENDER_GATE_PRIORITY = 1;
+const RENDER_INTERVAL_S = 1 / MAX_RENDER_FPS;
+const RENDER_INTERVAL_SLACK_S = 0.002;
+const GFX_LOW_CLASS = "gfx-low";
+const MS_PER_S = 1000;
+const BYTES_PER_MB = 1024 * 1024;
 /**
  * Named rather than left to the Canvas default, which asks for PCFSoft. three 0.184 downgrades
  * that to PCF on the next shadow render, and the Canvas re-applies its config on every React
@@ -313,14 +339,25 @@ function PerfProbe({
   playersRef,
   localId,
   nodeRef,
+  ring,
+  round,
+  inRound,
 }: {
   playersRef: PlayersRef;
   localId: string;
   nodeRef: React.RefObject<HTMLDivElement | null>;
+  ring: FrameRing;
+  round: RoundFrames;
+  inRound: boolean;
 }) {
   const frames = useRef(0);
   const windowStart = useRef(0);
-  useGuardedFrame(({ clock }) => {
+  useGuardedFrame(({ clock }, delta) => {
+    recordFrame(ring, delta * MS_PER_S);
+    if (inRound) {
+      round.frames += 1;
+      round.totalMs += delta * MS_PER_S;
+    }
     frames.current++;
     const elapsed = clock.elapsedTime - windowStart.current;
     if (elapsed < PERF_SAMPLE_WINDOW_S) return;
@@ -338,11 +375,18 @@ function PerfProbe({
  * behind an opaque blindout, and drawing the whole map under it for 20 s is pure
  * waste on a weak GPU. Taking the render over, rather than pausing the frame loop,
  * keeps every `useFrame` running, so interpolation, audio and the input pipeline
- * carry on unchanged underneath.
+ * carry on unchanged underneath. It also caps drawing at {@link MAX_RENDER_FPS},
+ * keeping the phase of the cap so a 144 Hz display lands near 60 rather than 48.
  */
 function RenderGate({ skip }: { skip: boolean }) {
-  useGuardedFrame(({ gl, scene, camera }) => {
-    if (!skip) gl.render(scene, camera);
+  const lastRender = useRef(Number.NEGATIVE_INFINITY);
+  useGuardedFrame(({ gl, scene, camera, clock }) => {
+    if (skip) return;
+    const now = clock.elapsedTime;
+    const since = now - lastRender.current;
+    if (since < RENDER_INTERVAL_S - RENDER_INTERVAL_SLACK_S) return;
+    lastRender.current = Number.isFinite(since) ? now - (since % RENDER_INTERVAL_S) : now;
+    gl.render(scene, camera);
   }, RENDER_GATE_PRIORITY);
   return null;
 }
@@ -372,6 +416,59 @@ function ListenerProbe({
     pose.forwardZ = forward.z;
   });
   return null;
+}
+
+interface LongTaskTally {
+  count: number;
+  longestMs: number;
+}
+
+interface BrowserExtras {
+  deviceMemory?: number;
+  memory?: { usedJSHeapSize?: number };
+}
+
+function readDiagnostics(
+  gl: WebGLRenderer,
+  ring: FrameRing,
+  longTasks: LongTaskTally,
+  contextLosses: number,
+  mapName: string,
+  phase: Phase,
+  players: number,
+  graphics: string,
+): DiagnosticsReport {
+  const context = gl.getContext();
+  const debug = context.getExtension("WEBGL_debug_renderer_info");
+  const unmasked = debug ? String(context.getParameter(debug.UNMASKED_RENDERER_WEBGL)) : null;
+  const deviceMemory = (navigator as Navigator & BrowserExtras).deviceMemory;
+  const heap = (performance as Performance & BrowserExtras).memory?.usedJSHeapSize;
+  return {
+    version: __MORPHY_VERSION__,
+    build: __MORPHY_BUILD__,
+    userAgent: navigator.userAgent,
+    gpu: gpuInfo(unmasked, String(context.getParameter(context.RENDERER))),
+    antialias: context.getContextAttributes()?.antialias ?? false,
+    pixelRatio: gl.getPixelRatio(),
+    bufferWidth: context.drawingBufferWidth,
+    bufferHeight: context.drawingBufferHeight,
+    cores: navigator.hardwareConcurrency || null,
+    memoryGb: deviceMemory ?? null,
+    frames: frameStats(ring),
+    drawCalls: gl.info.render.calls,
+    triangles: gl.info.render.triangles,
+    geometries: gl.info.memory.geometries,
+    textures: gl.info.memory.textures,
+    programs: gl.info.programs?.length ?? 0,
+    heapMb: heap === undefined ? null : heap / BYTES_PER_MB,
+    longTasks: longTasks.count,
+    longestTaskMs: longTasks.longestMs,
+    contextLosses,
+    map: mapName,
+    phase,
+    players,
+    graphics,
+  };
 }
 
 function SpeakerIcon({ muted }: { muted: boolean }) {
@@ -517,6 +614,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const { room, sessionId } = connection;
   const playersRef = useRef<Map<string, RemotePlayerView>>(new Map());
   const teleportRef = useRef<{ x: number; z: number } | null>(null) as TeleportRef;
+  const lookRef: LookRef = useRef({ yaw: 0, pitch: DEFAULT_PITCH });
   const tauntPulseRef = useRef<Map<string, number>>(new Map()) as TauntPulseRef;
   const shotsRef = useRef([]) as ShotsRef;
   const breaksRef = useRef([]) as BreaksRef;
@@ -556,6 +654,15 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [muted, setMuted] = useState(() => isMuted());
   const [perfHud] = useState(() => isPerfHudEnabled());
   const perfNodeRef = useRef<HTMLDivElement | null>(null);
+  const [frameRing] = useState(() => createFrameRing());
+  const [gfxPreference] = useState(() => graphicsPreference());
+  const [tier, setTier] = useState<GraphicsTier>(() => resolveTier(gfxPreference, deviceHints()));
+  const [roundFrames] = useState<RoundFrames>(() => ({ frames: 0, totalMs: 0 }));
+  const tierSettings = TIER_SETTINGS[tier];
+  const glConfig = useMemo(() => ({ antialias: tierSettings.antialias }), [tierSettings]);
+  const glRef = useRef<WebGLRenderer | null>(null);
+  const longTasksRef = useRef<LongTaskTally>({ count: 0, longestMs: 0 });
+  const contextLossesRef = useRef(0);
   const prevPhaseRef = useRef<Phase>("lobby");
 
   chatOpenRef.current = chatOpen;
@@ -1023,9 +1130,58 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   };
 
   useEffect(() => {
+    if (!PerformanceObserver.supportedEntryTypes?.includes("longtask")) return;
+    const tally = longTasksRef.current;
+    const observer = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        tally.count += 1;
+        tally.longestMs = Math.max(tally.longestMs, entry.duration);
+      }
+    });
+    observer.observe({ type: "longtask" });
+    return () => observer.disconnect();
+  }, []);
+
+  const collectDiagnostics = useCallback((): string => {
+    const gl = glRef.current;
+    if (!gl) return "The 3D view has not started yet.";
+    const mapName = MAP_CATALOG.find((m) => m.id === map?.id)?.name ?? map?.id ?? "?";
+    return formatDiagnostics(
+      readDiagnostics(
+        gl,
+        frameRing,
+        longTasksRef.current,
+        contextLossesRef.current,
+        mapName,
+        phase,
+        ids.length,
+        `${gfxPreference} (${tier})`,
+      ),
+    );
+  }, [frameRing, map, phase, ids.length, gfxPreference, tier]);
+
+  useEffect(() => {
+    if (phase === "hunting") {
+      roundFrames.frames = 0;
+      roundFrames.totalMs = 0;
+    } else if (phase === "round_end" && gfxPreference === "auto") {
+      setTier((current) => nextRoundTier(current, roundFrames));
+    }
+  }, [phase, gfxPreference, roundFrames]);
+
+  useEffect(() => {
+    document.body.classList.toggle(GFX_LOW_CLASS, !tierSettings.glass);
+    return () => document.body.classList.remove(GFX_LOW_CLASS);
+  }, [tierSettings]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tier is a trigger, not read in the body; a tier change remounts the Canvas, so the listeners must move to the new element.
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!map || !canvas) return;
-    const onLost = () => setContextLost(true);
+    const onLost = () => {
+      contextLossesRef.current += 1;
+      setContextLost(true);
+    };
     const onRestored = () => setContextLost(false);
     canvas.addEventListener("webglcontextlost", onLost);
     canvas.addEventListener("webglcontextrestored", onRestored);
@@ -1033,7 +1189,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       canvas.removeEventListener("webglcontextlost", onLost);
       canvas.removeEventListener("webglcontextrestored", onRestored);
     };
-  }, [map]);
+  }, [map, tier]);
 
   if (!map) {
     return (
@@ -1048,10 +1204,15 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   return (
     <>
       <Canvas
+        key={tier}
         ref={canvasRef}
-        dpr={GAME_DPR}
-        shadows={GAME_SHADOW_TYPE}
+        dpr={tierSettings.dpr}
+        gl={glConfig}
+        shadows={tierSettings.shadows ? GAME_SHADOW_TYPE : false}
         camera={{ position: [0, 12, 18], fov: GAME_FOV }}
+        onCreated={({ gl }) => {
+          glRef.current = gl;
+        }}
       >
         <Scene
           key={map.id}
@@ -1064,17 +1225,26 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           phase={phase}
           decoys={decoys}
           teleportRef={teleportRef}
+          lookRef={lookRef}
           tauntPulseRef={tauntPulseRef}
           shotsRef={shotsRef}
           breaksRef={breaksRef}
           weapon={weapon}
           inputBlocked={inputBlocked}
           onShoot={onShoot}
+          shadows={tierSettings.shadows}
         />
         <RenderGate skip={blinded} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
         <PropFootsteps playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
-        {perfHud && <PerfProbe playersRef={playersRef} localId={sessionId} nodeRef={perfNodeRef} />}
+        <PerfProbe
+          playersRef={playersRef}
+          localId={sessionId}
+          nodeRef={perfNodeRef}
+          ring={frameRing}
+          round={roundFrames}
+          inRound={phase === "hunting"}
+        />
       </Canvas>
 
       {perfHud && <div className="perf" ref={perfNodeRef} />}
@@ -1317,6 +1487,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
             <button type="button" className="btn-ghost" onClick={onLeaveMatch}>
               Leave match
             </button>
+            <CopyDiagnostics collect={collectDiagnostics} />
             <span className="pause-hint">The round keeps running. Click the game to resume</span>
           </div>
         </div>

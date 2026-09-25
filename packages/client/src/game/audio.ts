@@ -136,9 +136,9 @@ function stereo(ctx: AudioContext, master: GainNode, pan: number): StereoPannerN
 
 function noiseBurst(
   ctx: AudioContext,
-  master: GainNode,
+  master: AudioNode,
   opts: { peak: number; dur: number; filterHz: number },
-): void {
+): AudioBufferSourceNode {
   if (!noiseBuffer) {
     const length = Math.floor(ctx.sampleRate * NOISE_SECONDS);
     noiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
@@ -157,6 +157,7 @@ function noiseBurst(
   src.connect(filter).connect(gain).connect(master);
   src.start(now);
   src.stop(now + opts.dur + 0.02);
+  return src;
 }
 
 const sampleCache = new Map<string, Promise<AudioBuffer | null>>();

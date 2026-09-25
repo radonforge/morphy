@@ -77,6 +77,12 @@ export type SceneMetaMap = Record<string, SceneMeta>;
 export type TeleportRef = { current: { x: number; z: number } | null };
 
 /**
+ * The local camera's mouse-look angles. Held by `Game`, above the `Canvas`, so a
+ * graphics-tier change that remounts the Canvas keeps where the player is looking.
+ */
+export type LookRef = { current: { yaw: number; pitch: number } };
+
+/**
  * Taunt start times, as `performance.now()` milliseconds keyed by player id.
  *
  * Storing the start rather than the time left is what keeps a pulse from

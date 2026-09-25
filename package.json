@@ -13,7 +13,7 @@
     "dev:client": "pnpm --filter @morphy/client dev",
     "bot": "pnpm --filter @morphy/bot start",
     "tunnel": "ngrok http 5173 ${NGROK_DOMAIN:+--url=https://$NGROK_DOMAIN}",
-    "test": "node --import tsx --test tests/shared.test.mjs tests/maps.test.mjs tests/assets.test.mjs tests/build-info.test.mjs tests/bot-raycast.test.mjs tests/bot-perception.test.mjs tests/bot-policy.test.mjs tests/bot-hunters.test.mjs tests/bot-navigation.test.mjs tests/bot-scheduler.test.mjs tests/endpoints.test.mjs tests/safe-storage.test.mjs tests/storage.test.mjs tests/reconnect.test.mjs tests/client-movement.test.mjs tests/client-controls.test.mjs tests/client-spatial-audio.test.mjs tests/client-prop-footsteps.test.mjs tests/client-sun-shadow.test.mjs tests/carousel.test.mjs tests/diorama-transition.test.mjs && tsx --tsconfig packages/server/tsconfig.json --test tests/server-room.test.mjs",
+    "test": "node --import tsx --test tests/shared.test.mjs tests/maps.test.mjs tests/assets.test.mjs tests/build-info.test.mjs tests/bot-raycast.test.mjs tests/bot-perception.test.mjs tests/bot-policy.test.mjs tests/bot-hunters.test.mjs tests/bot-navigation.test.mjs tests/bot-scheduler.test.mjs tests/endpoints.test.mjs tests/safe-storage.test.mjs tests/storage.test.mjs tests/reconnect.test.mjs tests/client-movement.test.mjs tests/client-controls.test.mjs tests/client-spatial-audio.test.mjs tests/client-prop-footsteps.test.mjs tests/client-sun-shadow.test.mjs tests/carousel.test.mjs tests/diorama-transition.test.mjs && tsx --tsconfig packages/server/tsconfig.json --test tests/server-room.test.mjs tests/client-diagnostics.test.mjs tests/client-graphics-tier.test.mjs",
     "typecheck": "pnpm -r typecheck",
     "format": "biome format --write .",
     "lint": "biome lint .",
