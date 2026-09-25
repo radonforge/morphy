@@ -1,5 +1,12 @@
 import type { BoxCollider, MapDefinition, PropInstance, TileInstance, Vec3 } from "@morphy/shared";
-import { ARCHETYPE, type Doorway, furnishRoom, type RoomRect } from "../furnish";
+import {
+  ARCHETYPE,
+  type CorridorArm,
+  type Doorway,
+  furnishCorridor,
+  furnishRoom,
+  type RoomRect,
+} from "../furnish";
 import { SPACE_CATALOG } from "../spaceCatalog";
 import {
   type Cell,
@@ -27,6 +34,12 @@ interface Room {
 }
 
 const CORR = "corr";
+
+type CellRect = Pick<Room, "i0" | "i1" | "j0" | "j1">;
+
+const SPINE_NS: CellRect = { i0: 10, i1: 12, j0: 0, j1: GZ };
+const SPINE_EW: CellRect = { i0: 0, i1: GX, j0: 8, j1: 10 };
+const CROSSING_CLEAR = TILE / 2;
 
 /**
  * Hand-authored deck plan: a `+`-shaped corridor splits the deck into six themed
@@ -60,10 +73,34 @@ const SPAWN_INSET = 2.6;
 const SPAWN_DOOR_CLEAR = 4;
 const SPAWNS_PER_ROOM = 3;
 
-function paint(region: Cell[][], id: string, r: Pick<Room, "i0" | "i1" | "j0" | "j1">): void {
+function paint(region: Cell[][], id: string, r: CellRect): void {
   for (let i = r.i0; i < r.i1; i++) {
     for (let j = r.j0; j < r.j1; j++) region[i]![j] = id;
   }
+}
+
+/** The four arms of the `+` spine, each stopping short of the crossing so it stays open. */
+function spineArms(grid: Grid): CorridorArm[] {
+  const across = { x0: lineX(grid, SPINE_NS.i0), x1: lineX(grid, SPINE_NS.i1) };
+  const down = { z0: lineZ(grid, SPINE_EW.j0), z1: lineZ(grid, SPINE_EW.j1) };
+  return [
+    {
+      axis: "z",
+      rect: { ...across, z0: lineZ(grid, SPINE_NS.j0), z1: down.z0 - CROSSING_CLEAR },
+    },
+    {
+      axis: "z",
+      rect: { ...across, z0: down.z1 + CROSSING_CLEAR, z1: lineZ(grid, SPINE_NS.j1) },
+    },
+    {
+      axis: "x",
+      rect: { ...down, x0: lineX(grid, SPINE_EW.i0), x1: across.x0 - CROSSING_CLEAR },
+    },
+    {
+      axis: "x",
+      rect: { ...down, x0: across.x1 + CROSSING_CLEAR, x1: lineX(grid, SPINE_EW.i1) },
+    },
+  ];
 }
 
 /** Per-room prop spawns: inset corners far enough from doorways, spread out. */
@@ -92,8 +129,8 @@ export function buildStation(seed: number): MapDefinition {
   const grid: Grid = { gx: GX, gz: GZ, halfW: (GX * TILE) / 2, halfD: (GZ * TILE) / 2 };
 
   const region: Cell[][] = Array.from({ length: GX }, () => new Array<Cell>(GZ).fill(null));
-  paint(region, CORR, { i0: 10, i1: 12, j0: 0, j1: GZ });
-  paint(region, CORR, { i0: 0, i1: GX, j0: 8, j1: 10 });
+  paint(region, CORR, SPINE_NS);
+  paint(region, CORR, SPINE_EW);
   for (const r of ROOMS) paint(region, r.id, r);
   for (let i = 0; i < GX; i++) {
     for (let j = 0; j < GZ; j++) {
@@ -136,6 +173,9 @@ export function buildStation(seed: number): MapDefinition {
       archetype: room.archetype,
     });
     propSpawns.push(...spawns);
+  }
+  for (const arm of spineArms(grid)) {
+    furnishCorridor({ arm, doorways, catalog: SPACE_CATALOG, rng, out: props });
   }
 
   return {

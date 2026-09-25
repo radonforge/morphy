@@ -13,6 +13,16 @@ export interface Doorway {
   z: number;
 }
 
+/**
+ * One straight arm of a corridor: `rect` spans it wall line to wall line across
+ * and end to end along `axis`, the direction it runs. Only its two long sides
+ * are treated as walls, so an end opening onto a crossing stays open.
+ */
+export interface CorridorArm {
+  rect: RoomRect;
+  axis: "x" | "z";
+}
+
 type Rng = () => number;
 
 const WALL_GAP = 0.6;
@@ -44,6 +54,26 @@ const ISLAND_SKIP = 0.2;
 const DECOR_AREA_PER = 90;
 const DECOR_MAX = 4;
 const DECOR: readonly string[] = ["barrel", "barrels"];
+
+const CORRIDOR_SLOT = 4;
+const CORRIDOR_END_MARGIN = 1;
+const CORRIDOR_SKIP = 0.35;
+const CORRIDOR_ROW_GAP = 0.15;
+const CORRIDOR_STAGGER: readonly number[] = [0.25, 0.75];
+
+interface CorridorGroup {
+  types: readonly string[];
+  lo: number;
+  hi: number;
+}
+
+const CORRIDOR_GROUPS: readonly CorridorGroup[] = [
+  { types: ["container", "container-tall", "container-flat", "container-tall"], lo: 2, hi: 3 },
+  { types: ["barrel", "barrels"], lo: 1, hi: 3 },
+  { types: ["computer-system", "computer-system", "computer"], lo: 1, hi: 2 },
+  { types: ["machine_barrel", "machine_generator"], lo: 1, hi: 2 },
+  { types: ["skip", "container-flat"], lo: 1, hi: 2 },
+];
 
 const HALF_PI = Math.PI / 2;
 
@@ -92,7 +122,7 @@ interface Placer {
 function makePlacer(
   rect: RoomRect,
   doorways: Doorway[],
-  spawn: { x: number; z: number },
+  spawn: { x: number; z: number } | null,
   available: Set<string>,
   radiusOf: (id: string) => number,
   out: PropInstance[],
@@ -122,7 +152,7 @@ function makePlacer(
     for (const d of doors) {
       if (Math.hypot(x - d.x, z - d.z) < DOOR_KEEPOUT + r) return false;
     }
-    if (Math.hypot(x - spawn.x, z - spawn.z) < SPAWN_RESERVE + r) return false;
+    if (spawn && Math.hypot(x - spawn.x, z - spawn.z) < SPAWN_RESERVE + r) return false;
     if (checkGap) {
       for (const p of placed) {
         if (Math.hypot(x - p.x, z - p.z) < r + p.r + GAP_EPS) return false;
@@ -273,6 +303,18 @@ function placeWalls(p: Placer, types: readonly string[], rng: Rng): void {
   }
 }
 
+/** A row of `types` side by side along wall `side`, centred on `along`. */
+function wallRow(p: Placer, side: number, along: number, types: readonly string[]): void {
+  const widths = types.map((type) => 2 * p.radiusOf(type));
+  const span = widths.reduce((sum, w) => sum + w, 0) + CORRIDOR_ROW_GAP * (types.length - 1);
+  let cursor = along - span / 2;
+  types.forEach((type, i) => {
+    const w = widths[i]!;
+    placeOnWall(p, side, cursor + w / 2, type);
+    cursor += w + CORRIDOR_ROW_GAP;
+  });
+}
+
 /** Fill the room interior (inset from the walls) with free-standing island groups. */
 function placeIslands(p: Placer, islands: Group[], rng: Rng): void {
   if (islands.length === 0) return;
@@ -306,6 +348,19 @@ function scatterDecor(p: Placer, rng: Rng): void {
   }
 }
 
+function placerFor(
+  rect: RoomRect,
+  doorways: Doorway[],
+  spawn: { x: number; z: number } | null,
+  catalog: PropDefinition[],
+  out: PropInstance[],
+): Placer {
+  const available = new Set(catalog.map((d) => d.id));
+  const radii = new Map(catalog.map((d) => [d.id, computePropBounds(d).radius]));
+  const radiusOf = (id: string): number => radii.get(id) ?? DEFAULT_RADIUS;
+  return makePlacer(rect, doorways, spawn, available, radiusOf, out);
+}
+
 /**
  * Furnish one room with a semantically coherent arrangement chosen from a fixed
  * set of archetypes: each wall is lined with appropriate furniture backed flush
@@ -324,10 +379,7 @@ export function furnishRoom(opts: {
   /** Force a specific archetype (index into the internal set); random when omitted. */
   archetype?: number;
 }): void {
-  const available = new Set(opts.catalog.map((d) => d.id));
-  const radii = new Map(opts.catalog.map((d) => [d.id, computePropBounds(d).radius]));
-  const radiusOf = (id: string): number => radii.get(id) ?? DEFAULT_RADIUS;
-  const placer = makePlacer(opts.rect, opts.doorways, opts.spawn, available, radiusOf, opts.out);
+  const placer = placerFor(opts.rect, opts.doorways, opts.spawn, opts.catalog, opts.out);
   const forced = opts.archetype;
   const archetype =
     forced !== undefined && forced >= 0 && forced < ARCHETYPES.length
@@ -337,4 +389,39 @@ export function furnishRoom(opts: {
   placeWalls(placer, archetype.wall, opts.rng);
   placeIslands(placer, archetype.islands, opts.rng);
   scatterDecor(placer, opts.rng);
+}
+
+/**
+ * Dress one corridor arm with what a station passage holds: cargo, barrels,
+ * wall consoles and maintenance machinery, each group backed flush against one
+ * of the two long walls and facing out of it. Slots alternate between the two
+ * walls, so the centre lane stays open end to end for movement and line of
+ * fire, while props still find cover on the way between rooms. Keeps clear of
+ * doorways and of the arm's ends; `catalog` filters every pool. Appends to
+ * `out`. Deterministic per `rng`.
+ */
+export function furnishCorridor(opts: {
+  arm: CorridorArm;
+  doorways: Doorway[];
+  catalog: PropDefinition[];
+  rng: Rng;
+  out: PropInstance[];
+}): void {
+  const { arm, rng } = opts;
+  const placer = placerFor(arm.rect, opts.doorways, null, opts.catalog, opts.out);
+  const alongZ = arm.axis === "z";
+  const start = (alongZ ? arm.rect.z0 : arm.rect.x0) + CORRIDOR_END_MARGIN;
+  const usable = (alongZ ? arm.rect.z1 : arm.rect.x1) - CORRIDOR_END_MARGIN - start;
+  if (usable <= 0) return;
+  const slots = Math.max(1, Math.round(usable / CORRIDOR_SLOT));
+  const sides = alongZ ? [0, 1] : [2, 3];
+  for (let k = 0; k < slots; k++) {
+    sides.forEach((side, wall) => {
+      if (rng() < CORRIDOR_SKIP) return;
+      const group = pick(CORRIDOR_GROUPS, rng);
+      const count = group.lo + Math.floor(rng() * (group.hi - group.lo + 1));
+      const types = Array.from({ length: count }, () => pick(group.types, rng));
+      wallRow(placer, side, start + ((k + CORRIDOR_STAGGER[wall]!) / slots) * usable, types);
+    });
+  }
 }
