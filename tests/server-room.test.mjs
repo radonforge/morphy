@@ -7,6 +7,7 @@ import {
   BOT_FILL_DELAY_MS,
   BOT_FILL_TARGET,
   CONVERTED_HUNTER_HP,
+  DECOY_BUDGET,
   DECOY_MISS_DAMAGE_FACTOR,
   HIDE_DURATION_MS,
   HUNTER_CAPTURE_HEAL,
@@ -683,6 +684,7 @@ test("a room-filling prop bot drops a decoy where it stands", () => {
   const prop = botWithRole(room, "prop");
   const body = room.state.players.get(prop);
   body.propType = room.map.propCatalog[0].id;
+  body.decoysLeft = DECOY_BUDGET;
   pressOnce(room, prop, "decoy");
   room.tickBots();
   assert.equal(room.state.decoys.size, 1);
