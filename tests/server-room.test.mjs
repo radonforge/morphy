@@ -668,6 +668,29 @@ test("a shot that hits nothing still costs the full miss damage", () => {
   assert.equal(shooter.hp, HUNTER_MAX_HP - WEAPONS[shooter.weapon].missDamage);
 });
 
+const CHEAP_GUESSES = 12;
+
+test("a hunter can test a dozen wrong objects and still stand", () => {
+  const { room, shooter, target } = lineOfFire();
+  target.x = 30;
+  for (let guess = 0; guess < CHEAP_GUESSES; guess++) {
+    room.nextShotAt.clear();
+    shootAhead(room, shooter);
+  }
+  assert.equal(shooter.alive, true);
+  assert.ok(shooter.hp > 0, `left on ${shooter.hp} HP`);
+});
+
+test("a capture pays back more than the guesses it usually takes", () => {
+  const { room, shooter } = lineOfFire();
+  shooter.hp = HUNTER_MAX_HP / 2;
+  shootAhead(room, shooter);
+  assert.ok(
+    shooter.hp - HUNTER_MAX_HP / 2 >= (WEAPONS[shooter.weapon].missDamage * CHEAP_GUESSES) / 2,
+    "a find refunds at least half a dozen misses",
+  );
+});
+
 /** Replace a room-filling bot's brain with one that presses a single key once. */
 function pressOnce(room, sessionId, act) {
   let pressed = false;

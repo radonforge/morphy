@@ -39,8 +39,11 @@ export const RECONNECT_WINDOW_MS = 30_000;
 export const HUNTER_MAX_HP = 100;
 /** A captured prop joins the hunt below full health, so each capture snowballs less. */
 export const CONVERTED_HUNTER_HP = 60;
-/** HP a hunter wins back per prop captured, capped at {@link HUNTER_MAX_HP}: one pistol miss refunded. */
-export const HUNTER_CAPTURE_HEAL = 20;
+/**
+ * HP a hunter wins back per prop captured, capped at {@link HUNTER_MAX_HP}: half
+ * a health bar, so a find pays for the wrong guesses that led to it.
+ */
+export const HUNTER_CAPTURE_HEAL = 50;
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 
