@@ -110,6 +110,7 @@ interface GameProps {
   connection: Connection;
   onBackToParty: () => void;
   onLeaveMatch: () => void;
+  onRestartView: () => void;
 }
 
 interface RoomStateView {
@@ -466,7 +467,7 @@ function RingTimer({ endsAt, total }: { endsAt: number; total: number }) {
   );
 }
 
-export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
+export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }: GameProps) {
   const { room, sessionId } = connection;
   const playersRef = useRef<Map<string, RemotePlayerView>>(new Map());
   const teleportRef = useRef<{ x: number; z: number } | null>(null) as TeleportRef;
@@ -500,6 +501,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [contextLost, setContextLost] = useState(false);
   const [decoys, setDecoys] = useState<DecoyView[]>([]);
   const [muted, setMuted] = useState(() => isMuted());
   const [perfHud] = useState(() => isPerfHudEnabled());
@@ -935,6 +937,19 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
     }
   };
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!map || !canvas) return;
+    const onLost = () => setContextLost(true);
+    const onRestored = () => setContextLost(false);
+    canvas.addEventListener("webglcontextlost", onLost);
+    canvas.addEventListener("webglcontextrestored", onRestored);
+    return () => {
+      canvas.removeEventListener("webglcontextlost", onLost);
+      canvas.removeEventListener("webglcontextrestored", onRestored);
+    };
+  }, [map]);
+
   if (!map) {
     return (
       <div className="lobby">
@@ -1183,6 +1198,24 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
         </div>
       )}
       {controlsOpen && <ControlsDialog onClose={() => setControlsOpen(false)} />}
+
+      {contextLost && (
+        <div className="pause">
+          <div className="pause-card panel">
+            <span className="eyebrow">Graphics reset</span>
+            <h2>Restoring the view…</h2>
+            <span className="pause-hint">
+              The browser reset the graphics driver. The match keeps running.
+            </span>
+            <button type="button" onClick={onRestartView}>
+              Restart the view
+            </button>
+            <button type="button" className="btn-ghost" onClick={onLeaveMatch}>
+              Leave match
+            </button>
+          </div>
+        </div>
+      )}
 
       {paused && isRoundInPlay(phase) && (
         <div className="pause">

@@ -194,6 +194,7 @@ export function App() {
             connection={connection}
             onBackToParty={handleBackToParty}
             onLeaveMatch={disconnect}
+            onRestartView={restartMatch}
           />
         </MatchErrorBoundary>
         {reconnecting && <Reconnecting onLeave={disconnect} />}
