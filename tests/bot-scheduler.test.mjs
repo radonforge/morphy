@@ -322,3 +322,31 @@ test("a bot wakes its policy for any contact that comes into view, not just enem
     await bot.stop();
   }
 });
+
+test("a decided action is pressed on the next tick and only once", async () => {
+  let decisions = 0;
+  const driver = new BotDriver({
+    name: "Presser",
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "press-once",
+      decide: (obs) => {
+        decisions++;
+        return decisions === 1
+          ? { kind: "idle", act: "decoy", seq: obs.seq }
+          : { kind: "idle", seq: obs.seq };
+      },
+    },
+    visibility: "limited",
+    trace: null,
+  });
+  driver.setMap(buildMap("station", 1));
+  const world = { phase: "hunting", winner: "", self: livePlayer(true), others: [], decoys: [] };
+
+  assert.equal(driver.tick(world, Date.now()).act, null, "nothing is decided yet");
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(driver.tick(world, Date.now()).act, "decoy");
+  assert.equal(driver.tick(world, Date.now()).act, null, "a key press is not held down");
+  await driver.stop();
+});

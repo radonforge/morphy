@@ -657,6 +657,50 @@ test("a shot that hits nothing still costs the full miss damage", () => {
   assert.equal(shooter.hp, HUNTER_MAX_HP - WEAPONS[shooter.weapon].missDamage);
 });
 
+/** Replace a room-filling bot's brain with one that presses a single key once. */
+function pressOnce(room, sessionId, act) {
+  let pressed = false;
+  room.bots.get(sessionId).driver.tick = () => {
+    const action = { ready: false, input: null, shoot: null, say: null, act: pressed ? null : act };
+    pressed = true;
+    return action;
+  };
+}
+
+function botWithRole(room, role) {
+  for (const id of room.bots.keys()) {
+    if (room.state.players.get(id).role === role) return id;
+  }
+  assert.fail(`expected a bot playing ${role}`);
+}
+
+test("a room-filling prop bot drops a decoy where it stands", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  startRound(room);
+  pinHunterOnABot(room);
+  const prop = botWithRole(room, "prop");
+  const body = room.state.players.get(prop);
+  body.propType = room.map.propCatalog[0].id;
+  pressOnce(room, prop, "decoy");
+  room.tickBots();
+  assert.equal(room.state.decoys.size, 1);
+  const [decoy] = [...room.state.decoys.values()];
+  assert.deepEqual({ x: decoy.x, z: decoy.z }, { x: body.x, z: body.z });
+});
+
+test("a hunter bot's decoy press is refused like a hunter's", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  startRound(room);
+  pinHunterOnABot(room);
+  pressOnce(room, botWithRole(room, "hunter"), "decoy");
+  room.tickBots();
+  assert.equal(room.state.decoys.size, 0);
+});
+
 test("lifetime stats accumulate round outcomes in SQLite", () => {
   const deviceId = "stats-device-test";
   assert.deepEqual(playerStats.get(deviceId), { rounds: 0, wins: 0, kills: 0, survivals: 0 });

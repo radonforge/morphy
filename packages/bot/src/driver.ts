@@ -1,4 +1,5 @@
 import {
+  type BotAct,
   type InputMessage,
   type Intent,
   type MapDefinition,
@@ -60,9 +61,10 @@ export interface DriverAction {
   input: InputMessage | null;
   shoot: { dir: Vec3 } | null;
   say: string | null;
+  act: BotAct | null;
 }
 
-const IDLE: DriverAction = { ready: false, input: null, shoot: null, say: null };
+const IDLE: DriverAction = { ready: false, input: null, shoot: null, say: null, act: null };
 
 /**
  * The transport-free half of a bot: the reflex, the intent lifecycle and the
@@ -98,6 +100,8 @@ export class BotDriver {
   private losIds = new Set<string>();
   /** A decided chat line is only worth saying on the very next tick; a bot that dies or returns to the lobby first drops it rather than blurting it out a round later. */
   private pendingSay: string | null = null;
+  /** A decided action is pressed on the next tick or not at all, for the same reason as {@link pendingSay}. */
+  private pendingAct: BotAct | null = null;
 
   constructor(private readonly options: BotDriverOptions) {
     this.reflex = new Reflex(options.difficulty, options.visibility);
@@ -146,6 +150,7 @@ export class BotDriver {
 
     if (world.phase === "lobby") {
       this.pendingSay = null;
+      this.pendingAct = null;
       const playerCount = world.others.length + 1;
       const wantsReady = !self.ready && playerCount >= this.options.readyAtPlayers;
       return { ...IDLE, ready: wantsReady };
@@ -153,6 +158,7 @@ export class BotDriver {
 
     if (!self.alive) {
       this.pendingSay = null;
+      this.pendingAct = null;
       return IDLE;
     }
 
@@ -166,8 +172,10 @@ export class BotDriver {
     this.maybeKickDecide(reflexWorld, now);
 
     const say = this.pendingSay;
+    const act = this.pendingAct;
     this.pendingSay = null;
-    return { ready: false, input: motor.input, shoot: motor.shoot, say };
+    this.pendingAct = null;
+    return { ready: false, input: motor.input, shoot: motor.shoot, say, act };
   }
 
   recordKill(event: { byId: string; victimId: string; reason: string }, now: number): void {
@@ -286,6 +294,7 @@ export class BotDriver {
     if (changed || speechChanged) {
       this.pendingSay = intent.kind === "chat" ? intent.text : (intent.say ?? null);
     }
+    if (intent.act) this.pendingAct = intent.act;
     this.options.trace?.recordDecision(this.options.policy.name, obs, intent, Date.now());
   }
 

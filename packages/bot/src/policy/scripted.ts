@@ -60,6 +60,10 @@ function nearest(
  *   sight, and one still moving is run down (`inspect`) until it settles. A
  *   contact known only by sound carries no shape at all and is investigated
  *   whoever it turns out to be; a player hearing footsteps knows no better.
+ *   A decoy in sight is one more disguise standing still, so it is shot like
+ *   one, and the hunter pays for the mistake as a player would.
+ * - A prop that breaks cover while the hunt is on drops a decoy where it
+ *   stood, so the hunter bearing down on it finds a double in its place.
  *
  * It picks *what* to do; the reflex still owns aim, the line-of-sight gate and the
  * fire cooldown, and difficulty still tunes trigger latency inside the reflex.
@@ -153,8 +157,11 @@ export class ScriptedPolicy implements Policy {
       }
       if (threat.distance < PANIC_RADIUS) {
         this.clearHidePlan();
+        const breakingCover = this.fleeSpot === null && obs.phase === "hunting";
         const flee = this.ensureFleePlan(obs, threat);
-        return { kind: "moveTo", x: flee.x, z: flee.z, run: true, seq };
+        const intent: Intent = { kind: "moveTo", x: flee.x, z: flee.z, run: true, seq };
+        if (breakingCover) intent.act = "decoy";
+        return intent;
       }
     }
     this.clearFleePlan();

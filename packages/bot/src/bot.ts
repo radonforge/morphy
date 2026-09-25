@@ -1,8 +1,10 @@
 import { Client, type Room } from "@colyseus/sdk";
 import {
+  type BotAct,
   INPUT_SEND_RATE_MS,
   type MapId,
   MSG_CHAT,
+  MSG_DECOY,
   MSG_INPUT,
   MSG_KILL,
   MSG_MAP,
@@ -23,6 +25,11 @@ import { BotDriver } from "./driver";
 import type { Policy } from "./policy/types";
 import type { Trace } from "./trace";
 import { snapshot } from "./view";
+
+/** The client message each {@link BotAct} is sent as, the one a player's key press sends. */
+const ACT_MESSAGES: Record<BotAct, string> = {
+  decoy: MSG_DECOY,
+};
 
 export interface BotOptions {
   serverUrl: string;
@@ -147,6 +154,7 @@ export class Bot {
     if (!room) return;
     const action = this.driver.tick(snapshot(room.state, room.sessionId), Date.now());
     if (action.ready) room.send(MSG_READY, { ready: true });
+    if (action.act) room.send(ACT_MESSAGES[action.act]);
     if (action.input) room.send(MSG_INPUT, action.input);
     if (action.shoot) room.send(MSG_SHOOT, { dir: action.shoot.dir });
     if (action.say) room.send(MSG_CHAT, { text: action.say });

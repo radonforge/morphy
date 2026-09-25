@@ -11,13 +11,14 @@ import { BotDriver, DEFAULT_DIFFICULTY, ScriptedPolicy, snapshot } from "@morphy
 import {
   type AvatarId,
   BOT_FILL_DELAY_MS,
+  type BotAct,
   CONVERTED_HUNTER_HP,
   colliderAabb,
   computePropBounds,
   DECOY_BUDGET,
   DECOY_COOLDOWN_MS,
-  DEFAULT_MAP_ID,
   DECOY_MISS_DAMAGE_FACTOR,
+  DEFAULT_MAP_ID,
   DEFAULT_PLAYER_NAME,
   DEFAULT_WEAPON,
   type DecoyBreakEvent,
@@ -576,7 +577,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     return pool[Math.floor(Math.random() * pool.length)]?.id ?? "";
   }
 
-  private handleDecoy(client: Client): void {
+  private handleDecoy(client: Actor): void {
     const player = this.state.players.get(client.sessionId);
     if (player?.role !== "prop" || !player.alive || !player.propType) return;
     if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
@@ -1178,9 +1179,23 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private driveBot(bot: BotRuntime, sessionId: string, now: number): void {
     const action = bot.driver.tick(snapshot(this.state, sessionId), now);
     if (action.ready) this.handleReady(bot.actor, { ready: true });
+    if (action.act) this.handleAct(bot.actor, action.act);
     if (action.input) this.handleInput(bot.actor, action.input);
     if (action.shoot) this.handleShoot(bot.actor, { dir: action.shoot.dir });
     if (action.say) this.handleChat(bot.actor, { text: action.say });
+  }
+
+  /**
+   * A bot's key press, routed to the handler the matching client message
+   * reaches, so it passes the same checks. It runs before the tick's movement,
+   * which puts a decoy where the bot stood when it decided to drop one.
+   */
+  private handleAct(actor: Actor, act: BotAct): void {
+    switch (act) {
+      case "decoy":
+        this.handleDecoy(actor);
+        break;
+    }
   }
 
   private checkRoundEnd(): void {

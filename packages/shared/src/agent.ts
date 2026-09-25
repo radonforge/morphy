@@ -16,12 +16,20 @@ import type { Phase, Role } from "./protocol";
  * wire.
  */
 
+/**
+ * A one-key action a player can take on top of moving and shooting. Each is
+ * sent once, through the same room message a player's key press sends.
+ */
+export type BotAct = "decoy";
+
 /** Fields every {@link Intent} carries regardless of `kind`. */
 export interface IntentMeta {
   /** Monotonic decision id (echoes {@link Observation.seq}); used for trace correlation and stale-result drop. */
   seq: number;
   /** Optional one-shot chat line spoken when this intent becomes current. */
   say?: string;
+  /** Optional one-shot action, pressed once when this intent is applied. */
+  act?: BotAct;
 }
 
 /**

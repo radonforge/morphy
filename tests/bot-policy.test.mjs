@@ -383,3 +383,32 @@ test("a cornered prop that has spent its escapes stays put after arriving", asyn
     "an arrival must not hand a cornered prop a fresh set of escape angles",
   );
 });
+
+/** A prop in the hunt with a crate nearby to hide by, sensing `entities`. */
+const hiddenProp = (seq, entities, phase = "hunting") => ({
+  ...observation(seq, entities, asProp),
+  phase,
+  map: { bounds: BOUNDS, doorways: [], nearbyProps: [{ type: "crate", x: 6, z: 6 }] },
+});
+
+test("a prop that breaks cover drops a decoy, once", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const hunterClose = [character("hunter-b", PANIC_RADIUS - 3)];
+  const hidden = await policy.decide(hiddenProp(1, []));
+  const breaks = await policy.decide(hiddenProp(2, hunterClose));
+  const flees = await policy.decide(hiddenProp(3, hunterClose));
+  assert.equal(hidden.kind, "hideAs");
+  assert.equal(hidden.act, undefined);
+  assert.equal(breaks.kind, "moveTo");
+  assert.equal(breaks.act, "decoy", "the double stays behind where the prop stood");
+  assert.equal(flees.kind, "moveTo");
+  assert.equal(flees.act, undefined, "one decoy per break, not one per decision");
+});
+
+test("a prop running while the hunters are still blind drops nothing", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const hunterClose = [character("hunter-b", PANIC_RADIUS - 3)];
+  const breaks = await policy.decide(hiddenProp(1, hunterClose, "hiding"));
+  assert.equal(breaks.kind, "moveTo");
+  assert.equal(breaks.act, undefined);
+});
