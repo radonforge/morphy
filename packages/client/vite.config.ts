@@ -5,6 +5,7 @@ import { resolveBuildInfo } from "./buildInfo";
 import { runtimeAssetsPlugin } from "./viteRuntimeAssets";
 
 const buildInfo = resolveBuildInfo();
+const serverTarget = `http://localhost:${Number(process.env.PORT ?? DEFAULT_PORT)}`;
 
 export default defineConfig({
   plugins: [react(), runtimeAssetsPlugin()],
@@ -38,13 +39,13 @@ export default defineConfig({
     allowedHosts: [".ngrok-free.dev"],
     proxy: {
       [COLYSEUS_PROXY_PATH]: {
-        target: `http://localhost:${DEFAULT_PORT}`,
+        target: serverTarget,
         ws: true,
         changeOrigin: true,
         rewrite: (path) => path.slice(COLYSEUS_PROXY_PATH.length),
       },
       [STATS_PATH]: {
-        target: `http://localhost:${DEFAULT_PORT}`,
+        target: serverTarget,
         changeOrigin: true,
       },
     },
