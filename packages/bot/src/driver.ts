@@ -6,6 +6,7 @@ import {
   type Observation,
   type Phase,
   type Role,
+  type SoundKind,
   type Visibility,
   withTimeout,
 } from "@morphy/shared";
@@ -53,6 +54,13 @@ export interface BotDriverOptions {
   policy: Policy;
   visibility: Visibility;
   trace: Trace | null;
+}
+
+/** A sound the room played, at the spot a player's client plays it from. */
+export interface RoomSound {
+  kind: SoundKind;
+  x: number;
+  z: number;
 }
 
 /** What the caller must deliver to the room on behalf of the bot this tick. */
@@ -175,7 +183,13 @@ export class BotDriver {
     const act = this.pendingAct;
     this.pendingSay = null;
     this.pendingAct = null;
+    if (act) this.reflex.notePressed(act, now);
     return { ready: false, input: motor.input, shoot: motor.shoot, say, act };
+  }
+
+  /** Let the bot hear a sound the room played, as a player's client would play it. */
+  hear(sound: RoomSound, now: number): void {
+    this.reflex.hear(sound.kind, sound.x, sound.z, now);
   }
 
   recordKill(event: { byId: string; victimId: string; reason: string }, now: number): void {
@@ -217,6 +231,7 @@ export class BotDriver {
     if (this.detectLineOfSightGain(world)) event = true;
     if (this.reflex.consumeArrivalEvent()) event = true;
     if (this.reflex.consumeBlockedEvent()) event = true;
+    if (this.reflex.consumeHeardEvent()) event = true;
 
     return event;
   }

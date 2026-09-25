@@ -28,6 +28,20 @@ export const FLEE_DEFLECTION_RAD = (2 * Math.PI) / 5;
  */
 export const MAX_FLEE_DEFLECTIONS = 4;
 
+/**
+ * Per-decision chance that a hidden prop with no hunter in sight taunts once it
+ * can, lerped by difficulty: at the default a taunt comes some ten seconds after
+ * the cooldown, ahead of the forced one but not on the dot.
+ */
+export const TAUNT_CHANCE_MIN = 0.03;
+export const TAUNT_CHANCE_MAX = 0.1;
+/**
+ * The same with a possible hunter inside the daring radius that has not seen
+ * the prop: three times the points for a far likelier capture, so taken rarely.
+ */
+export const TAUNT_DARING_CHANCE_MIN = 0.01;
+export const TAUNT_DARING_CHANCE_MAX = 0.05;
+
 export const HIDE_OFFSET_MIN = 1.2;
 export const HIDE_OFFSET_MAX = 2.4;
 export const PANIC_RADIUS = 7;
@@ -76,6 +90,8 @@ export const BOT_HEARING_RADIUS = 12;
  * neighbourhood rather than a point. Sized to a map tile: within earshot a
  * heard contact resolves to one of a handful of cells. */
 export const HEARD_POSITION_CELL = 4;
+/** How long a bot remembers a sound it heard: long enough for its next few decisions to act on it. */
+export const HEARD_SOUND_MEMORY_MS = 3_000;
 export const MOVED_RECENTLY_MS = 600;
 export const MOVED_RECENTLY_MIN_DIST = 0.3;
 export const NEARBY_PROP_RADIUS = 12;

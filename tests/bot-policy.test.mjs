@@ -4,6 +4,10 @@ import {
   MAX_FLEE_DEFLECTIONS,
   MAX_HIDE_REPICKS,
   PANIC_RADIUS,
+  TAUNT_CHANCE_MAX,
+  TAUNT_CHANCE_MIN,
+  TAUNT_DARING_CHANCE_MAX,
+  TAUNT_DARING_CHANCE_MIN,
 } from "../packages/bot/src/config.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
 
@@ -58,9 +62,11 @@ const observation = (seq, entities, self = {}) => ({
     rot: 0,
     propType: "",
     canShootNow: true,
+    canTauntNow: false,
     ...self,
   },
   entities,
+  sounds: [],
   map: { bounds: BOUNDS, doorways: [], nearbyProps: [] },
 });
 
@@ -243,8 +249,10 @@ const hidingObservation = (seq, pathBlocked) => ({
     rot: 0,
     propType: "crate",
     canShootNow: true,
+    canTauntNow: false,
   },
   entities: [],
+  sounds: [],
   map: {
     bounds: BOUNDS,
     doorways: [],
@@ -312,8 +320,10 @@ const fleeingObservation = (seq, pathBlocked, threatZ, over = {}) => {
       rot: 0,
       propType: "crate",
       canShootNow: true,
+      canTauntNow: false,
     },
     entities: [character("hunter-b", THREAT_GAP, { x: x + THREAT_GAP, z: z + threatZ })],
+    sounds: [],
     map: { bounds: BOUNDS, doorways: [], nearbyProps: [{ type: "crate", x: 6, z: 6 }] },
   };
 };
@@ -411,4 +421,118 @@ test("a prop running while the hunters are still blind drops nothing", async () 
   const breaks = await policy.decide(hiddenProp(1, hunterClose, "hiding"));
   assert.equal(breaks.kind, "moveTo");
   assert.equal(breaks.act, undefined);
+});
+
+/** A honk heard `distance` metres off on +x, `ageMs` ago, out of sight. */
+const taunt = (id, distance, ageMs = 100) => ({
+  id,
+  kind: "taunt",
+  x: distance,
+  z: 0,
+  distance,
+  hasLineOfSight: false,
+  ageMs,
+});
+
+const hearing = (seq, entities, sounds, over = {}) => ({
+  ...observation(seq, entities),
+  sounds,
+  ...over,
+});
+
+test("a hunter runs to a taunt it heard", async () => {
+  const intent = await new ScriptedPolicy(DIFFICULTY).decide(hearing(1, [], [taunt("s1", 20)]));
+  assert.equal(intent.kind, "moveTo");
+  assert.deepEqual({ x: intent.x, z: intent.z }, { x: 20, z: 0 });
+  assert.equal(intent.run, true, "only a prop honks, so there is no teammate to mistake");
+});
+
+test("a hunter goes after a disguise in sight before a taunt", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = await policy.decide(hearing(1, [mover("prop-a", 12)], [taunt("s1", 8)]));
+  assert.equal(intent.kind, "inspect");
+  assert.equal(intent.targetId, "prop-a");
+});
+
+test("a hunter follows a taunt before footsteps that could be a teammate's", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = await policy.decide(hearing(1, [heard("noise", 5)], [taunt("s1", 20)]));
+  assert.equal(intent.kind, "moveTo");
+  assert.equal(intent.x, 20);
+});
+
+test("a hunter drops a taunt once it has got there", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  await policy.decide(hearing(1, [], [taunt("s1", 20)]));
+  const there = await policy.decide(hearing(2, [], [taunt("s1", 0, 1_500)], { arrived: true }));
+  assert.equal(there.kind, "patrol", "the same honk is not chased twice");
+});
+
+test("a newer taunt takes the lead over an older one", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  await policy.decide(hearing(1, [], [taunt("s1", 20)]));
+  const next = await policy.decide(
+    hearing(2, [], [taunt("s1", 20, 900), { ...taunt("s2", 10), z: 6 }]),
+  );
+  assert.equal(next.kind, "moveTo");
+  assert.deepEqual({ x: next.x, z: next.z }, { x: 10, z: 6 });
+});
+
+/** A prop settled in its hiding spot during the hunt, able to taunt unless told otherwise. */
+const settledProp = (seq, entities, self = {}, over = {}) => ({
+  ...observation(seq, entities, { ...asProp, canTauntNow: true, ...self }),
+  arrived: true,
+  map: { bounds: BOUNDS, doorways: [], nearbyProps: [{ type: "crate", x: 6, z: 6 }] },
+  ...over,
+});
+
+/** Decide with `Math.random` pinned, so a per-decision chance becomes a yes or a no. */
+async function decideWithRoll(policy, obs, roll) {
+  const random = Math.random;
+  Math.random = () => roll;
+  try {
+    return await policy.decide(obs);
+  } finally {
+    Math.random = random;
+  }
+}
+
+const safeChance = TAUNT_CHANCE_MIN + (TAUNT_CHANCE_MAX - TAUNT_CHANCE_MIN) * DIFFICULTY;
+const daringChance =
+  TAUNT_DARING_CHANCE_MIN + (TAUNT_DARING_CHANCE_MAX - TAUNT_DARING_CHANCE_MIN) * DIFFICULTY;
+
+test("a hidden prop taunts once it can", async () => {
+  const intent = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), settledProp(1, []), 0);
+  assert.equal(intent.kind, "hideAs", "a taunt is made from the hiding spot, not on the move");
+  assert.equal(intent.act, "taunt");
+});
+
+test("a prop does not taunt while its taunt is cooling down", async () => {
+  const obs = settledProp(1, [], { canTauntNow: false });
+  const intent = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), obs, 0);
+  assert.equal(intent.act, undefined);
+});
+
+test("a prop never taunts with a possible hunter in sight", async () => {
+  const obs = settledProp(1, [character("hunter-b", 15)]);
+  const intent = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), obs, 0);
+  assert.equal(intent.kind, "hideAs");
+  assert.equal(intent.act, undefined, "the honk would point straight at it");
+});
+
+test("a prop does not taunt while the hunters are still blind", async () => {
+  const obs = settledProp(1, [], {}, { phase: "hiding" });
+  const intent = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), obs, 0);
+  assert.equal(intent.act, undefined);
+});
+
+test("a daring taunt, with a hunter close but blind, is taken more rarely", async () => {
+  assert.ok(daringChance < safeChance, "the risk is weighed against the reward");
+  const roll = (daringChance + safeChance) / 2;
+  const alone = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), settledProp(1, []), roll);
+  assert.equal(alone.act, "taunt");
+  const closeBy = settledProp(1, [heard("steps", PANIC_RADIUS + 1)]);
+  const dared = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), closeBy, roll);
+  assert.equal(dared.kind, "hideAs");
+  assert.equal(dared.act, undefined);
 });

@@ -79,6 +79,7 @@ import {
   rayAabb,
   type ShootMessage,
   type ShotFiredEvent,
+  type SoundKind,
   START_COUNTDOWN_MS,
   TAUNT_CHECK_MS,
   TAUNT_COOLDOWN_MS,
@@ -649,6 +650,19 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       z: player.z,
       forced,
     } satisfies TauntMessage);
+    this.letBotsHear("taunt", player.x, player.z, player.id);
+  }
+
+  /**
+   * Hand a broadcast sound to every room-filling bot but its source, as the
+   * position a player's client plays it from. Bots are not clients, so a
+   * broadcast alone never reaches them.
+   */
+  private letBotsHear(kind: SoundKind, x: number, z: number, sourceId: string): void {
+    const now = Date.now();
+    for (const [sessionId, bot] of this.bots) {
+      if (sessionId !== sourceId) bot.driver.hear({ kind, x, z }, now);
+    }
   }
 
   private forgetTauntsOf(sessionId: string): void {
@@ -1280,6 +1294,9 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     switch (act) {
       case "decoy":
         this.handleDecoy(actor);
+        break;
+      case "taunt":
+        this.handleTaunt(actor);
         break;
     }
   }

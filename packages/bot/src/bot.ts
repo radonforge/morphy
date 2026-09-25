@@ -14,6 +14,7 @@ import {
   MSG_SHOOT,
   MSG_SHOT_RESULT,
   MSG_TAUNT,
+  MSG_TAUNT_REQUEST,
   MSG_TELEPORT,
   parseMapDefinition,
   ROOM_NAME,
@@ -29,7 +30,12 @@ import { snapshot } from "./view";
 /** The client message each {@link BotAct} is sent as, the one a player's key press sends. */
 const ACT_MESSAGES: Record<BotAct, string> = {
   decoy: MSG_DECOY,
+  taunt: MSG_TAUNT_REQUEST,
 };
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
 
 export interface BotOptions {
   serverUrl: string;
@@ -84,12 +90,13 @@ export class Bot {
     room.onMessage(MSG_MAP, (raw: unknown) => this.applyMap(raw));
     room.onMessage(MSG_TELEPORT, (message: unknown) => this.onTeleport(message));
     room.onMessage(MSG_KILL, (message: unknown) => this.onKill(message));
+    room.onMessage(MSG_TAUNT, (message: unknown) => this.onTaunt(message, room.sessionId));
     room.onMessage(MSG_PING, (message: unknown) => {
       if (typeof message !== "object" || message === null) return;
       const n = (message as Record<string, unknown>).n;
       if (typeof n === "number" && Number.isFinite(n)) room.send(MSG_PONG, { n });
     });
-    for (const ignored of [MSG_TAUNT, MSG_CHAT, MSG_SHOT_RESULT]) {
+    for (const ignored of [MSG_CHAT, MSG_SHOT_RESULT]) {
       room.onMessage(ignored, () => {});
     }
     room.onError((code: number, message?: string) =>
@@ -134,6 +141,14 @@ export class Bot {
     if (typeof m.x === "number" && typeof m.z === "number") {
       this.driver.syncPosition(m.x, m.z);
     }
+  }
+
+  private onTaunt(message: unknown, selfId: string): void {
+    if (typeof message !== "object" || message === null) return;
+    const m = message as Record<string, unknown>;
+    if (m.playerId === selfId) return;
+    if (!isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
+    this.driver.hear({ kind: "taunt", x: m.x, z: m.z }, Date.now());
   }
 
   private onKill(message: unknown): void {

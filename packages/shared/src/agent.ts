@@ -20,7 +20,7 @@ import type { Phase, Role } from "./protocol";
  * A one-key action a player can take on top of moving and shooting. Each is
  * sent once, through the same room message a player's key press sends.
  */
-export type BotAct = "decoy";
+export type BotAct = "decoy" | "taunt";
 
 /** Fields every {@link Intent} carries regardless of `kind`. */
 export interface IntentMeta {
@@ -60,6 +60,8 @@ export interface ObservedSelf {
   rot: number;
   propType: string;
   canShootNow: boolean;
+  /** A prop's taunt is off cooldown, as its own HUD shows it. */
+  canTauntNow: boolean;
 }
 
 /**
@@ -102,6 +104,26 @@ export interface ObservedEntity {
   facingMe?: boolean;
 }
 
+/** A sound a player's client plays positionally, and so one a bot hears too. */
+export type SoundKind = "taunt";
+
+/**
+ * A sound the bot heard, at most a few seconds ago. It carries where and what,
+ * never who: a player hears a honk from a direction, not a name. The position
+ * is exact when the source was in line of sight and snapped to a neighbourhood
+ * otherwise, the same rule footsteps follow.
+ */
+export interface ObservedSound {
+  /** Names the noise so a policy can tell a new one from one it already followed; says nothing about its source. */
+  id: string;
+  kind: SoundKind;
+  x: number;
+  z: number;
+  distance: number;
+  hasLineOfSight: boolean;
+  ageMs: number;
+}
+
 export interface ObservedDoorway {
   x: number;
   z: number;
@@ -135,5 +157,6 @@ export interface Observation {
   arrived: boolean;
   self: ObservedSelf;
   entities: ObservedEntity[];
+  sounds: ObservedSound[];
   map: ObservedMap;
 }

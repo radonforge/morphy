@@ -350,3 +350,67 @@ test("a decided action is pressed on the next tick and only once", async () => {
   assert.equal(driver.tick(world, Date.now()).act, null, "a key press is not held down");
   await driver.stop();
 });
+
+test("a heard taunt wakes the policy", async () => {
+  const calls = [];
+  const bot = new BotDriver({
+    name: "Ears",
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "counter",
+      decide: (obs) => {
+        calls.push(obs);
+        return { kind: "patrol", seq: obs.seq };
+      },
+    },
+    visibility: "limited",
+    trace: null,
+  });
+  bot.setMap(buildMap("station", 1));
+  const self = livePlayer(true);
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 15));
+  try {
+    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [] }, 1_000);
+    await settle();
+    const baseline = calls.length;
+    bot.hear({ kind: "taunt", x: self.x + 3, z: self.z }, 1_001);
+    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [] }, 1_002);
+    await settle();
+    assert.equal(calls.length, baseline + 1, "a honk is reacted to at once, as a player would");
+    assert.equal(calls.at(-1).sounds.length, 1);
+  } finally {
+    await bot.stop();
+  }
+});
+
+test("a bot's taunt cools down on its own HUD once pressed", async () => {
+  const seen = [];
+  const driver = new BotDriver({
+    name: "Honker",
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "honk",
+      decide: (obs) => {
+        seen.push(obs);
+        return seen.length === 1
+          ? { kind: "idle", act: "taunt", seq: obs.seq }
+          : { kind: "idle", seq: obs.seq };
+      },
+    },
+    visibility: "limited",
+    trace: null,
+  });
+  driver.setMap(buildMap("station", 1));
+  const world = { phase: "hunting", winner: "", self: livePlayer(true), others: [], decoys: [] };
+  const start = Date.now();
+  driver.tick(world, start);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(seen[0].self.canTauntNow, true);
+  assert.equal(driver.tick(world, start + 50).act, "taunt");
+  driver.launchDecide(world, start + 60);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(seen.at(-1).self.canTauntNow, false);
+  await driver.stop();
+});

@@ -1,4 +1,13 @@
-import type { Intent, MapBounds, Observation, ObservedEntity, Phase, Role } from "@morphy/shared";
+import {
+  type Intent,
+  type MapBounds,
+  type Observation,
+  type ObservedEntity,
+  type ObservedSound,
+  type Phase,
+  type Role,
+  TAUNT_DARING_RADIUS,
+} from "@morphy/shared";
 import {
   ENGAGE_RANGE_MAX,
   ENGAGE_RANGE_MIN,
@@ -10,6 +19,10 @@ import {
   MAX_FLEE_DEFLECTIONS,
   MAX_HIDE_REPICKS,
   PANIC_RADIUS,
+  TAUNT_CHANCE_MAX,
+  TAUNT_CHANCE_MIN,
+  TAUNT_DARING_CHANCE_MAX,
+  TAUNT_DARING_CHANCE_MIN,
   WAYPOINT_MARGIN,
 } from "../config";
 import type { Policy } from "./types";
@@ -17,6 +30,11 @@ import type { Policy } from "./types";
 interface Spot {
   x: number;
   z: number;
+}
+
+/** A heard taunt the hunter is running to, named by its sound id. */
+interface Lead extends Spot {
+  id: string;
 }
 
 /**
@@ -62,8 +80,13 @@ function nearest(
  *   whoever it turns out to be; a player hearing footsteps knows no better.
  *   A decoy in sight is one more disguise standing still, so it is shot like
  *   one, and the hunter pays for the mistake as a player would.
+ *   A heard taunt can only be a prop's, so it is run to, after a disguise in
+ *   sight and before a noise that might be a teammate's footsteps.
  * - A prop that breaks cover while the hunt is on drops a decoy where it
  *   stood, so the hunter bearing down on it finds a double in its place.
+ * - A prop settled in its hiding spot taunts for points now and then, never
+ *   with a possible hunter in sight, and only rarely with one close but blind
+ *   to it, which is worth more and far riskier.
  *
  * It picks *what* to do; the reflex still owns aim, the line-of-sight gate and the
  * fire cooldown, and difficulty still tunes trigger latency inside the reflex.
@@ -75,6 +98,8 @@ export class ScriptedPolicy implements Policy {
   private hideRepicks = 0;
   private fleeSpot: Spot | null = null;
   private fleeDeflections = 0;
+  private lead: Lead | null = null;
+  private readonly followed = new Set<string>();
   private prevPhase: Phase | null = null;
   private prevRole: Role | null = null;
 
@@ -114,8 +139,39 @@ export class ScriptedPolicy implements Policy {
       .sort((a, b) => a.distance - b.distance);
     if (shootable[0]) return { kind: "shootTarget", targetId: shootable[0].id, seq };
     const suspect = this.nearestSuspect(obs);
+    if (suspect?.hasLineOfSight) {
+      return { kind: "inspect", targetId: suspect.id, run: isFleeing(suspect), seq };
+    }
+    const lead = this.followTaunt(obs);
+    if (lead) return { kind: "moveTo", x: lead.x, z: lead.z, run: true, seq };
     if (suspect) return { kind: "inspect", targetId: suspect.id, run: isFleeing(suspect), seq };
     return { kind: "patrol", seq };
+  }
+
+  /**
+   * The taunt worth running to: the most recent one not yet followed. Only a
+   * prop honks, so unlike footsteps a taunt is surely an enemy's. The lead is
+   * held until the hunter gets there or finds the way blocked, then dropped,
+   * and what is in sight from the spot takes over.
+   */
+  private followTaunt(obs: Observation): Lead | null {
+    if (this.lead && (obs.arrived || obs.pathBlocked)) {
+      this.followed.add(this.lead.id);
+      this.lead = null;
+    }
+    const heard = new Set(obs.sounds.map((sound) => sound.id));
+    for (const id of [...this.followed]) {
+      if (!heard.has(id)) this.followed.delete(id);
+    }
+    let newest: ObservedSound | null = null;
+    for (const sound of obs.sounds) {
+      if (sound.kind !== "taunt" || this.followed.has(sound.id)) continue;
+      if (!newest || sound.ageMs < newest.ageMs) newest = sound;
+    }
+    if (newest && newest.id !== this.lead?.id) {
+      this.lead = { id: newest.id, x: newest.x, z: newest.z };
+    }
+    return this.lead;
   }
 
   /**
@@ -165,7 +221,30 @@ export class ScriptedPolicy implements Policy {
       }
     }
     this.clearFleePlan();
-    return { kind: "hideAs", x: spot.x, z: spot.z, seq };
+    const intent: Intent = { kind: "hideAs", x: spot.x, z: spot.z, seq };
+    if (this.wantsToTaunt(obs, threat)) intent.act = "taunt";
+    return intent;
+  }
+
+  /**
+   * Whether a prop settled in its hiding spot honks now. Never with a possible
+   * hunter in sight: the honk would point straight at the prop. With one inside
+   * {@link TAUNT_DARING_RADIUS} that cannot see it the taunt is worth three
+   * times as much and the capture far likelier, so it is taken far less often.
+   */
+  private wantsToTaunt(obs: Observation, threat: ObservedEntity | null): boolean {
+    if (obs.phase !== "hunting" || !obs.arrived || !obs.self.canTauntNow) return false;
+    const watched = obs.entities.some(
+      (e) =>
+        e.hasLineOfSight &&
+        (obs.visibility === "limited" ? e.disguised !== true : e.role === "hunter"),
+    );
+    if (watched) return false;
+    const daring = threat !== null && threat.distance <= TAUNT_DARING_RADIUS;
+    const chance = daring
+      ? lerp(TAUNT_DARING_CHANCE_MIN, TAUNT_DARING_CHANCE_MAX, this.difficulty)
+      : lerp(TAUNT_CHANCE_MIN, TAUNT_CHANCE_MAX, this.difficulty);
+    return Math.random() < chance;
   }
 
   /** The nearest contact that might be a hunter: one seen not to be wearing a
@@ -257,11 +336,14 @@ export class ScriptedPolicy implements Policy {
         this.clearHidePlan();
         this.clearFleePlan();
         this.hideRepicks = 0;
+        this.lead = null;
+        this.followed.clear();
       }
       this.prevPhase = obs.phase;
     }
     if (obs.self.role !== this.prevRole) {
       this.clearHidePlan();
+      this.lead = null;
       this.prevRole = obs.self.role;
     }
   }

@@ -796,6 +796,26 @@ test("forced taunts are spread out instead of fired in unison", () => {
   for (const at of starts) assert.ok(at >= now - 1_000 && at <= now + TAUNT_FORCED_STAGGER_MS);
 });
 
+test("a room-filling bot hears a taunt, and the taunter does not hear itself", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  startRound(room);
+  pinHunterOnABot(room);
+  const taunter = botWithRole(room, "prop");
+  const heard = new Map();
+  for (const [id, bot] of room.bots) {
+    heard.set(id, []);
+    bot.driver.hear = (sound) => heard.get(id).push(sound);
+  }
+  tauntAs(room, taunter);
+  const body = room.state.players.get(taunter);
+  for (const [id, sounds] of heard) {
+    const expected = id === taunter ? [] : [{ kind: "taunt", x: body.x, z: body.z }];
+    assert.deepEqual(sounds, expected);
+  }
+});
+
 test("a round starts every prop's score from nothing", () => {
   const room = publicRoom();
   joinRoom(room, "a");

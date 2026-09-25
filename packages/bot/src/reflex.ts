@@ -1,4 +1,5 @@
 import {
+  type BotAct,
   computePropBounds,
   type InputMessage,
   type Intent,
@@ -8,10 +9,14 @@ import {
   type ObservedEntity,
   type ObservedMap,
   type ObservedSelf,
+  type ObservedSound,
   type Phase,
   type PropBounds,
   RUN_MULTIPLIER_HUNTER,
   RUN_MULTIPLIER_PROP,
+  type SoundKind,
+  TAUNT_COOLDOWN_MS,
+  TAUNT_HEARING_RADIUS,
   UNTRANSFORMED_PROP_HEIGHT,
   UNTRANSFORMED_PROP_RADIUS,
   type Visibility,
@@ -38,6 +43,7 @@ import {
   ENGAGE_RANGE_MIN,
   FACING_CONE_COS,
   HEARD_POSITION_CELL,
+  HEARD_SOUND_MEMORY_MS,
   lerp,
   MAX_REPLANS_BEFORE_BLOCKED,
   MOVED_RECENTLY_MIN_DIST,
@@ -109,6 +115,21 @@ interface Contact {
   playerId: string | null;
 }
 
+/** A sound as the bot heard it, fixed where and when it was heard. */
+interface HeardSound {
+  id: string;
+  kind: SoundKind;
+  x: number;
+  z: number;
+  hasLineOfSight: boolean;
+  heardAt: number;
+}
+
+/** How far each kind of sound carries: the distance a player's client stops playing it at. */
+const HEARING_RANGE: Record<SoundKind, number> = {
+  taunt: TAUNT_HEARING_RADIUS,
+};
+
 interface MovementSample {
   x: number;
   z: number;
@@ -159,6 +180,10 @@ export class Reflex {
   private readonly movement = new Map<string, MovementSample>();
   private readonly lastPerceived = new Map<string, Point2>();
   private readonly handles = new ContactHandles();
+  private heard: HeardSound[] = [];
+  private soundSeq = 0;
+  private heardEdge = false;
+  private readonly pressedAt = new Map<BotAct, number>();
 
   constructor(
     private readonly difficulty: number,
@@ -233,10 +258,65 @@ export class Reflex {
     this.lastShotAt = 0;
   }
 
-  /** Drop every contact handle and last sighting, as a new round begins. */
+  /** Drop every contact handle, last sighting and heard sound, as a new round begins. */
   forgetContacts(): void {
     this.lastPerceived.clear();
     this.handles.clear();
+    this.heard = [];
+  }
+
+  /**
+   * Take in a sound the room played at (x, z), if it carries this far. It is
+   * placed the way footsteps are: exactly when the spot is in line of sight,
+   * and only to a neighbourhood otherwise, which is what a panned honk tells a
+   * player through a wall.
+   */
+  hear(kind: SoundKind, x: number, z: number, now: number): void {
+    this.forgetOldSounds(now);
+    if (Math.hypot(x - this.posX, z - this.posZ) > HEARING_RANGE[kind]) return;
+    const hasLineOfSight = this.canSee(x, 0, z);
+    const at = this.sensedPosition({ x, z }, hasLineOfSight);
+    this.heard.push({
+      id: `s${++this.soundSeq}`,
+      kind,
+      x: at.x,
+      z: at.z,
+      hasLineOfSight,
+      heardAt: now,
+    });
+    this.heardEdge = true;
+  }
+
+  consumeHeardEvent(): boolean {
+    const v = this.heardEdge;
+    this.heardEdge = false;
+    return v;
+  }
+
+  /** Record a key the bot pressed, for the cooldowns its own HUD would show. */
+  notePressed(act: BotAct, now: number): void {
+    this.pressedAt.set(act, now);
+  }
+
+  private sincePressed(act: BotAct, now: number): number {
+    return now - (this.pressedAt.get(act) ?? Number.NEGATIVE_INFINITY);
+  }
+
+  private forgetOldSounds(now: number): void {
+    this.heard = this.heard.filter((sound) => now - sound.heardAt <= HEARD_SOUND_MEMORY_MS);
+  }
+
+  private observeSounds(now: number): ObservedSound[] {
+    this.forgetOldSounds(now);
+    return this.heard.map((sound) => ({
+      id: sound.id,
+      kind: sound.kind,
+      x: sound.x,
+      z: sound.z,
+      distance: Math.hypot(sound.x - this.posX, sound.z - this.posZ),
+      hasLineOfSight: sound.hasLineOfSight,
+      ageMs: now - sound.heardAt,
+    }));
   }
 
   syncPosition(x: number, z: number, rot?: number): void {
@@ -285,6 +365,7 @@ export class Reflex {
       rot: this.rot,
       propType: self.propType,
       canShootNow: now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS,
+      canTauntNow: this.sincePressed("taunt", now) >= TAUNT_COOLDOWN_MS,
     };
 
     const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };
@@ -350,6 +431,7 @@ export class Reflex {
       arrived: this.settled,
       self: selfObs,
       entities,
+      sounds: this.observeSounds(now),
       map: this.buildObservedMap(),
     };
   }

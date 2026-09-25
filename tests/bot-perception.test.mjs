@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { HEARD_SOUND_MEMORY_MS } from "../packages/bot/src/config.ts";
 import { Reflex } from "../packages/bot/src/reflex.ts";
+import { TAUNT_HEARING_RADIUS } from "../packages/shared/src/index.ts";
 
 // A single wall standing between the bot at the origin and a contact further
 // down the +x axis: it blocks line of sight without blocking the ground the
@@ -275,4 +277,51 @@ test("a hunter shoots a decoy it has in its sights", () => {
   }
   assert.ok(shot, "the decoy is fired at like any disguise standing still");
   assert.ok(shot.dir.x < 0, "and the shot goes toward it");
+});
+
+test("a taunt in sight is heard where it was", () => {
+  const reflex = ready("limited");
+  reflex.hear("taunt", -5.9, 1.9, 1_000);
+  const [sound] = reflex.buildObservation(world(GONE), 1, 1_100).sounds;
+  assert.ok(sound);
+  assert.equal(sound.hasLineOfSight, true);
+  assert.deepEqual({ x: sound.x, z: sound.z }, { x: -5.9, z: 1.9 });
+  assert.equal(sound.ageMs, 100);
+});
+
+test("a taunt behind a wall is heard only roughly", () => {
+  const reflex = ready("limited");
+  reflex.hear("taunt", 5.9, 1.9, 1_000);
+  const [sound] = reflex.buildObservation(world(GONE), 1, 1_100).sounds;
+  assert.ok(sound);
+  assert.equal(sound.hasLineOfSight, false);
+  assert.deepEqual({ x: sound.x, z: sound.z }, { x: 4, z: 0 }, "snapped, as footsteps are");
+});
+
+test("a taunt names where and what, never who", () => {
+  const reflex = ready("limited");
+  reflex.hear("taunt", -5.9, 1.9, 1_000);
+  const [sound] = reflex.buildObservation(world(GONE), 1, 1_100).sounds;
+  assert.deepEqual(Object.keys(sound).sort(), [
+    "ageMs",
+    "distance",
+    "hasLineOfSight",
+    "id",
+    "kind",
+    "x",
+    "z",
+  ]);
+});
+
+test("a taunt past hearing range is not heard", () => {
+  const reflex = ready("limited");
+  reflex.hear("taunt", TAUNT_HEARING_RADIUS + 1, 0, 1_000);
+  assert.deepEqual(reflex.buildObservation(world(GONE), 1, 1_100).sounds, []);
+});
+
+test("a heard taunt is forgotten after a few seconds", () => {
+  const reflex = ready("limited");
+  reflex.hear("taunt", -5.9, 1.9, 1_000);
+  const later = 1_000 + HEARD_SOUND_MEMORY_MS + 1;
+  assert.deepEqual(reflex.buildObservation(world(GONE), 1, later).sounds, []);
 });
