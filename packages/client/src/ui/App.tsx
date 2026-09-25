@@ -19,6 +19,7 @@ import { SERVER_URL } from "../net/endpoints";
 import { usePartyRoom } from "../net/usePartyRoom";
 import { getDeviceId } from "../storage";
 import { type ConnectStatus, Lobby, type PartyViewProps } from "./Lobby";
+import { MatchErrorBoundary } from "./MatchErrorBoundary";
 
 type View = "menu" | "party" | "game";
 
@@ -183,16 +184,19 @@ export function App() {
   }, []);
 
   const handleBackToParty = useCallback(() => setView("party"), []);
+  const restartMatch = useCallback(() => setMatchSeq((seq) => seq + 1), []);
 
   if (view === "game" && connection) {
     return (
       <Suspense fallback={<div className="game-loading">Loading match…</div>}>
-        <Game
-          key={matchSeq}
-          connection={connection}
-          onBackToParty={handleBackToParty}
-          onLeaveMatch={disconnect}
-        />
+        <MatchErrorBoundary key={matchSeq} onRejoin={restartMatch} onLeave={disconnect}>
+          <Game
+            connection={connection}
+            onBackToParty={handleBackToParty}
+            onLeaveMatch={disconnect}
+            onRestartView={restartMatch}
+          />
+        </MatchErrorBoundary>
         {reconnecting && <Reconnecting onLeave={disconnect} />}
       </Suspense>
     );

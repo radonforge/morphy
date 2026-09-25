@@ -61,6 +61,17 @@ export type PlayerMeta = Pick<RemotePlayerView, PlayerMetaField>;
 
 export type MetaMap = Record<string, PlayerMeta>;
 
+/**
+ * The player fields the 3D scene reads. Everything else in {@link PlayerMeta} is
+ * HUD-only, and `ping` alone changes every 2 s per human: handing the scene the
+ * full map re-rendered the whole R3F tree on each of those.
+ */
+export const SCENE_META_FIELDS = ["role", "alive", "propType", "avatar"] as const;
+
+export type SceneMeta = Pick<PlayerMeta, (typeof SCENE_META_FIELDS)[number]>;
+
+export type SceneMetaMap = Record<string, SceneMeta>;
+
 export type TeleportRef = { current: { x: number; z: number } | null };
 
 /**

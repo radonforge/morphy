@@ -31,7 +31,7 @@ import {
   type WeaponId,
   type Winner,
 } from "@morphy/shared";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Connection } from "../net/connection";
 import {
@@ -50,6 +50,7 @@ import {
   toggleMuted,
 } from "./audio";
 import { ControlsBar, ControlsDialog } from "./Controls";
+import { useGuardedFrame } from "./guardedFrame";
 import { lockPointer } from "./pointerLock";
 import { isPerfHudEnabled } from "./prefs";
 import { GAME_DPR, GAME_FOV, Scene } from "./Scene";
@@ -60,11 +61,12 @@ import type {
   PlayerMeta,
   PlayersRef,
   RemotePlayerView,
+  SceneMetaMap,
   ShotsRef,
   TauntPulseRef,
   TeleportRef,
 } from "./types";
-import { PLAYER_META_FIELDS } from "./types";
+import { PLAYER_META_FIELDS, SCENE_META_FIELDS } from "./types";
 
 const COUNTDOWN_TICK_MS = 250;
 const TAUNT_MAX_DISTANCE = 40;
@@ -80,6 +82,7 @@ const HP_LOW_THRESHOLD = 40;
 const RING_RADIUS = 19;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const PERF_SAMPLE_WINDOW_S = 0.5;
+const RENDER_GATE_PRIORITY = 1;
 /**
  * Named rather than left to the Canvas default, which asks for PCFSoft. three 0.184 downgrades
  * that to PCF on the next shadow render, and the Canvas re-applies its config on every React
@@ -108,6 +111,7 @@ interface GameProps {
   connection: Connection;
   onBackToParty: () => void;
   onLeaveMatch: () => void;
+  onRestartView: () => void;
 }
 
 interface RoomStateView {
@@ -209,6 +213,32 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
   });
 }
 
+function sceneMetaOf(meta: MetaMap, prev: SceneMetaMap): SceneMetaMap {
+  const ids = Object.keys(meta);
+  const unchanged =
+    ids.length === Object.keys(prev).length &&
+    ids.every((id) => {
+      const before = prev[id];
+      const now = meta[id];
+      return (
+        before !== undefined &&
+        now !== undefined &&
+        SCENE_META_FIELDS.every((field) => before[field] === now[field])
+      );
+    });
+  if (unchanged) return prev;
+  const next: SceneMetaMap = {};
+  for (const [id, player] of Object.entries(meta)) {
+    next[id] = {
+      role: player.role,
+      alive: player.alive,
+      propType: player.propType,
+      avatar: player.avatar,
+    };
+  }
+  return next;
+}
+
 function sortStandings(ids: string[], meta: MetaMap): { id: string; player: PlayerMeta }[] {
   return ids
     .map((id) => ({ id, player: meta[id] }))
@@ -272,7 +302,7 @@ function PerfProbe({
 }) {
   const frames = useRef(0);
   const windowStart = useRef(0);
-  useFrame(({ clock }) => {
+  useGuardedFrame(({ clock }) => {
     frames.current++;
     const elapsed = clock.elapsedTime - windowStart.current;
     if (elapsed < PERF_SAMPLE_WINDOW_S) return;
@@ -282,6 +312,20 @@ function PerfProbe({
     const ping = playersRef.current.get(localId)?.ping ?? 0;
     if (nodeRef.current) nodeRef.current.textContent = `${fps} fps · ${ping} ms`;
   });
+  return null;
+}
+
+/**
+ * Owns the frame's render call so it can skip it: a hunter spends the hiding phase
+ * behind an opaque blindout, and drawing the whole map under it for 20 s is pure
+ * waste on a weak GPU. Taking the render over, rather than pausing the frame loop,
+ * keeps every `useFrame` running, so interpolation, audio and the input pipeline
+ * carry on unchanged underneath.
+ */
+function RenderGate({ skip }: { skip: boolean }) {
+  useGuardedFrame(({ gl, scene, camera }) => {
+    if (!skip) gl.render(scene, camera);
+  }, RENDER_GATE_PRIORITY);
   return null;
 }
 
@@ -424,7 +468,7 @@ function RingTimer({ endsAt, total }: { endsAt: number; total: number }) {
   );
 }
 
-export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
+export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }: GameProps) {
   const { room, sessionId } = connection;
   const playersRef = useRef<Map<string, RemotePlayerView>>(new Map());
   const teleportRef = useRef<{ x: number; z: number } | null>(null) as TeleportRef;
@@ -442,6 +486,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   const [map, setMap] = useState<MapDefinition | null>(null);
   const [ids, setIds] = useState<string[]>([]);
   const [meta, setMeta] = useState<MetaMap>({});
+  const [sceneMeta, setSceneMeta] = useState<SceneMetaMap>({});
   const [phase, setPhase] = useState<Phase>("lobby");
   const [phaseEndsAt, setPhaseEndsAt] = useState(0);
   const [fillAt, setFillAt] = useState(0);
@@ -457,6 +502,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [paused, setPaused] = useState(false);
+  const [contextLost, setContextLost] = useState(false);
   const [decoys, setDecoys] = useState<DecoyView[]>([]);
   const [muted, setMuted] = useState(() => isMuted());
   const [perfHud] = useState(() => isPerfHudEnabled());
@@ -514,6 +560,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
         };
       }
       setMeta((prev) => (metaEqual(prev, next) ? prev : next));
+      setSceneMeta((prev) => sceneMetaOf(next, prev));
     };
 
     unsubscribers.push(
@@ -871,6 +918,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
     localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
   const showCrosshair = (canTransform || canShoot) && !inputBlocked;
+  const blinded = localRole === "hunter" && phase === "hiding";
 
   const closeChat = () => {
     setChatOpen(false);
@@ -889,6 +937,19 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
       closeChat();
     }
   };
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!map || !canvas) return;
+    const onLost = () => setContextLost(true);
+    const onRestored = () => setContextLost(false);
+    canvas.addEventListener("webglcontextlost", onLost);
+    canvas.addEventListener("webglcontextrestored", onRestored);
+    return () => {
+      canvas.removeEventListener("webglcontextlost", onLost);
+      canvas.removeEventListener("webglcontextrestored", onRestored);
+    };
+  }, [map]);
 
   if (!map) {
     return (
@@ -915,7 +976,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
           localId={sessionId}
           ids={ids}
           playersRef={playersRef}
-          meta={meta}
+          meta={sceneMeta}
           phase={phase}
           decoys={decoys}
           teleportRef={teleportRef}
@@ -926,6 +987,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
           inputBlocked={inputBlocked}
           onShoot={onShoot}
         />
+        <RenderGate skip={blinded} />
         {perfHud && <PerfProbe playersRef={playersRef} localId={sessionId} nodeRef={perfNodeRef} />}
       </Canvas>
 
@@ -1012,7 +1074,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
 
       {shotFx?.kind === "miss" && <div className="vignette" />}
 
-      {localRole === "hunter" && phase === "hiding" && (
+      {blinded && (
         <div className="blindout">
           <div className="blindout-title">The props are hiding</div>
           <div className="blindout-timer">
@@ -1137,6 +1199,24 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
         </div>
       )}
       {controlsOpen && <ControlsDialog onClose={() => setControlsOpen(false)} />}
+
+      {contextLost && (
+        <div className="pause">
+          <div className="pause-card panel">
+            <span className="eyebrow">Graphics reset</span>
+            <h2>Restoring the view…</h2>
+            <span className="pause-hint">
+              The browser reset the graphics driver. The match keeps running.
+            </span>
+            <button type="button" onClick={onRestartView}>
+              Restart the view
+            </button>
+            <button type="button" className="btn-ghost" onClick={onLeaveMatch}>
+              Leave match
+            </button>
+          </div>
+        </div>
+      )}
 
       {paused && isRoundInPlay(phase) && (
         <div className="pause">

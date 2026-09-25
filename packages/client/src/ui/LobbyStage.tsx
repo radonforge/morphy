@@ -5,6 +5,7 @@ import { type RefObject, Suspense, useCallback, useEffect, useMemo, useRef, useS
 import * as THREE from "three";
 import { playUiHover } from "../game/audio";
 import { enableShadows } from "../game/modelShading";
+import { useSharedGLTF } from "../game/sharedTextures";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { avatarNeighbors, mapNeighbors } from "./carousel";
 import {
@@ -263,7 +264,7 @@ function AvatarActor({
   const pop = useRef<THREE.Group>(null);
   const popIn = useRef(materialize).current;
   const popAge = useRef(popIn ? 0 : POP_SETTLED);
-  const { scene, animations } = useGLTF(avatarModel(avatar));
+  const { scene, animations } = useSharedGLTF(avatarModel(avatar));
   const object = useMemo(() => scene.clone(true), [scene]);
   const { actions, mixer } = useAnimations(animations, group);
 
@@ -359,7 +360,7 @@ function AvatarActor({
  * fade there would blink both neighbours out on every step.
  */
 function AvatarGhost({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
-  const { scene } = useGLTF(avatarModel(avatar));
+  const { scene } = useSharedGLTF(avatarModel(avatar));
   const ghost = useMemo(() => {
     const material = new THREE.MeshBasicMaterial({
       color: MORPH_COLOR,
@@ -570,7 +571,7 @@ function SetPieceModel({
   count: number;
   transition: RefObject<DioramaTransition>;
 }) {
-  const { scene } = useGLTF(piece.url);
+  const { scene } = useSharedGLTF(piece.url);
   const pop = useRef<THREE.Group>(null);
   const object = useMemo(() => {
     const clone = scene.clone(true);

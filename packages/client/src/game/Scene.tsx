@@ -4,7 +4,6 @@ import {
   INPUT_IDLE_EPSILON,
   INPUT_SEND_RATE_MS,
   MAP_CATALOG,
-  type MapBounds,
   type MapDefinition,
   MOVE_SPEED,
   MSG_DECOY,
@@ -28,12 +27,13 @@ import {
   WEAPONS,
   type WeaponId,
 } from "@morphy/shared";
-import { Billboard, Sky, Text, useGLTF } from "@react-three/drei";
-import { useFrame, useThree } from "@react-three/fiber";
+import { Billboard, Sky, Text } from "@react-three/drei";
+import { useThree } from "@react-three/fiber";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
+import { useGuardedFrame } from "./guardedFrame";
 import { enableShadows } from "./modelShading";
 import {
   advanceMovement,
@@ -49,13 +49,15 @@ import {
   supportHeightAt,
 } from "./movement";
 import { lockPointer } from "./pointerLock";
+import { useSharedGLTF } from "./sharedTextures";
+import { snapToTexels, sunBasis } from "./sunShadow";
 import type {
   BreaksRef,
   DecoyBreakFx,
   DecoyView,
-  MetaMap,
   PlayersRef,
   RemotePlayerView,
+  SceneMetaMap,
   ShotsRef,
   TauntPulseRef,
   TeleportRef,
@@ -154,8 +156,15 @@ const TP_PITCH_MIN = -0.15;
 const TP_PITCH_MAX = 1.2;
 const DEFAULT_PITCH = 0.5;
 const SUN_POSITION: [number, number, number] = [14, 26, 10];
-const SHADOW_MAP_SIZE = 2048;
+const SHADOW_MAP_SIZE = 1024;
 const SHADOW_MARGIN = 4;
+const SHADOW_FOLLOW_RADIUS = 25;
+const SHADOW_LEAD = 10;
+const SHADOW_TEXEL = (2 * SHADOW_FOLLOW_RADIUS) / SHADOW_MAP_SIZE;
+const SHADOW_LIGHT_DISTANCE = 60;
+const SHADOW_FAR = SHADOW_LIGHT_DISTANCE + SHADOW_FOLLOW_RADIUS + SHADOW_MARGIN;
+const SUN_BASIS = sunBasis({ x: SUN_POSITION[0], y: SUN_POSITION[1], z: SUN_POSITION[2] });
+const SUN_OFFSET = new THREE.Vector3(...SUN_POSITION).setLength(SHADOW_LIGHT_DISTANCE);
 const SHADOW_NORMAL_BIAS_TEXELS = 2;
 const SHADOW_UPDATE_INTERVAL_S = 1 / 30;
 const SHADOW_SETTLE_S = 0.4;
@@ -405,7 +414,7 @@ interface SceneProps {
   localId: string;
   ids: string[];
   playersRef: PlayersRef;
-  meta: MetaMap;
+  meta: SceneMetaMap;
   phase: Phase;
   decoys: DecoyView[];
   teleportRef: TeleportRef;
@@ -417,7 +426,7 @@ interface SceneProps {
   onShoot: () => void;
 }
 
-export function Scene({
+export const Scene = memo(function Scene({
   room,
   map,
   localId,
@@ -523,7 +532,7 @@ export function Scene({
         ids={ids}
         tauntPulseRef={tauntPulseRef}
       />
-      <SunLight intensity={theme.dir} bounds={map.bounds} />
+      <SunLight intensity={theme.dir} playerPos={localGroundRef} motionRef={motionRef} />
       <MapView map={map} groundColor={theme.ground} />
       <PropActions room={room} enabled={canTransform} motionRef={motionRef} />
       <Decoys decoys={decoys} catalog={catalog} />
@@ -579,7 +588,7 @@ export function Scene({
         ))}
     </>
   );
-}
+});
 
 interface ShadowPose {
   x: number;
@@ -599,7 +608,7 @@ function ShadowRefresh({
   playersRef: PlayersRef;
   localPos: PlayerPosRef;
   motionRef: LocalMotionRef;
-  meta: MetaMap;
+  meta: SceneMetaMap;
   ids: string[];
   tauntPulseRef: TauntPulseRef;
 }) {
@@ -628,7 +637,7 @@ function ShadowRefresh({
     sinceChange.current = 0;
   }, [meta, ids]);
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     checkAccum.current += delta;
     sinceRender.current += delta;
     sinceChange.current += delta;
@@ -691,40 +700,63 @@ function ShadowRefresh({
   return null;
 }
 
-function SunLight({ intensity, bounds }: { intensity: number; bounds: MapBounds }) {
-  const frustum = useMemo(() => {
-    const cx = (bounds.min.x + bounds.max.x) / 2;
-    const cz = (bounds.min.z + bounds.max.z) / 2;
-    const radius =
-      Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z) / 2 + SHADOW_MARGIN;
-    const far =
-      Math.hypot(SUN_POSITION[0], SUN_POSITION[1], SUN_POSITION[2]) + radius + SHADOW_MARGIN;
-    const normalBias = ((2 * radius) / SHADOW_MAP_SIZE) * SHADOW_NORMAL_BIAS_TEXELS;
-    return { cx, cz, radius, far, normalBias };
-  }, [bounds]);
-  const target = useMemo(() => {
-    const object = new THREE.Object3D();
-    object.position.set(frustum.cx, 0, frustum.cz);
-    object.updateMatrixWorld();
-    return object;
-  }, [frustum]);
+/**
+ * The shadowed sun, with its shadow camera kept on the local player rather than
+ * stretched over the whole map: three culls casters against that camera, so most
+ * of the map drops out of the shadow pass. The centre leads the view direction,
+ * where the player is looking, and snaps to the texel grid so edges do not shimmer.
+ * The light sits {@link SHADOW_LIGHT_DISTANCE} back along the sun so the near plane
+ * never slices the top off a tower standing sunward of the player: a clipped roof
+ * takes that tower's shadow with it.
+ */
+function SunLight({
+  intensity,
+  playerPos,
+  motionRef,
+}: {
+  intensity: number;
+  playerPos: PlayerPosRef;
+  motionRef: LocalMotionRef;
+}) {
+  const lightRef = useRef<THREE.DirectionalLight>(null);
+  const target = useMemo(() => new THREE.Object3D(), []);
+  const centre = useRef({ x: Number.NaN, y: 0, z: Number.NaN });
+  const normalBias = SHADOW_TEXEL * SHADOW_NORMAL_BIAS_TEXELS;
+
+  useGuardedFrame(() => {
+    const light = lightRef.current;
+    if (!light) return;
+    const pos = playerPos.current;
+    const yaw = motionRef.current.yaw;
+    const next = snapToTexels(
+      { x: pos.x - Math.sin(yaw) * SHADOW_LEAD, y: 0, z: pos.z - Math.cos(yaw) * SHADOW_LEAD },
+      SUN_BASIS,
+      SHADOW_TEXEL,
+    );
+    const prev = centre.current;
+    if (next.x === prev.x && next.y === prev.y && next.z === prev.z) return;
+    centre.current = next;
+    target.position.set(next.x, next.y, next.z);
+    target.updateMatrixWorld();
+    light.position.set(next.x + SUN_OFFSET.x, next.y + SUN_OFFSET.y, next.z + SUN_OFFSET.z);
+  });
 
   return (
     <>
       <directionalLight
-        position={[frustum.cx + SUN_POSITION[0], SUN_POSITION[1], frustum.cz + SUN_POSITION[2]]}
+        ref={lightRef}
         target={target}
         intensity={intensity}
         castShadow
         shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
         shadow-camera-near={1}
-        shadow-camera-far={frustum.far}
-        shadow-camera-left={-frustum.radius}
-        shadow-camera-right={frustum.radius}
-        shadow-camera-top={frustum.radius}
-        shadow-camera-bottom={-frustum.radius}
+        shadow-camera-far={SHADOW_FAR}
+        shadow-camera-left={-SHADOW_FOLLOW_RADIUS}
+        shadow-camera-right={SHADOW_FOLLOW_RADIUS}
+        shadow-camera-top={SHADOW_FOLLOW_RADIUS}
+        shadow-camera-bottom={-SHADOW_FOLLOW_RADIUS}
         shadow-bias={-0.0004}
-        shadow-normalBias={frustum.normalBias}
+        shadow-normalBias={normalBias}
       />
       <primitive object={target} />
     </>
@@ -806,7 +838,7 @@ function Tracers({ shotsRef }: { shotsRef: ShotsRef }) {
     [pool],
   );
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const tracers = tracersRef.current;
     for (const shot of shotsRef.current) {
       const color = WEAPONS[shot.weapon].tracerColor;
@@ -925,7 +957,7 @@ function MorphEffects({ morphsRef }: { morphsRef: MorphFxRef }) {
     [beams],
   );
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const bursts = burstsRef.current;
     for (const fx of morphsRef.current) {
       if (bursts.length >= MORPH_MAX_BURSTS) bursts.shift();
@@ -1105,7 +1137,7 @@ function DecoyBreakEffects({ breaksRef, catalog }: { breaksRef: BreaksRef; catal
     [flashes],
   );
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const bursts = burstsRef.current;
     for (const fx of breaksRef.current) {
       const def = catalog.get(fx.propType);
@@ -1202,7 +1234,7 @@ function PropPopIn({ popKey, children }: { popKey: string; children: ReactElemen
     age.current = 0;
   }, [popKey]);
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const group = groupRef.current;
     if (!group) return;
     age.current = Math.min(age.current + delta, MORPH_POP_DURATION_S);
@@ -1260,7 +1292,7 @@ function FittedModel({
   baseY: number;
   scaleMul?: number;
 }) {
-  const { scene } = useGLTF(url);
+  const { scene } = useSharedGLTF(url);
   const object = useMemo(() => {
     const clone = scene.clone(true);
     enableShadows(clone);
@@ -1318,7 +1350,7 @@ function tileHeight(geometry: THREE.BufferGeometry, tiles: TileInstance[]): numb
 }
 
 function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) {
-  const { scene } = useGLTF(url);
+  const { scene } = useSharedGLTF(url);
   const { geometry, material } = useMemo(() => {
     const mesh = firstMesh(scene);
     return { geometry: mesh.geometry, material: mesh.material };
@@ -1359,7 +1391,7 @@ function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) 
 }
 
 function SceneryModel({ inst }: { inst: SceneryInstance }) {
-  const { scene } = useGLTF(inst.model);
+  const { scene } = useSharedGLTF(inst.model);
   const object = useMemo(() => {
     const clone = scene.clone(true);
     enableShadows(clone);
@@ -1395,7 +1427,7 @@ function PropMesh({ def }: { def: PropDefinition }) {
 }
 
 function WeaponModel({ url, scale }: { url: string; scale: number }) {
-  const { scene } = useGLTF(url);
+  const { scene } = useSharedGLTF(url);
   const object = useMemo(() => {
     const clone = scene.clone(true);
     clone.traverse((child) => {
@@ -1432,7 +1464,7 @@ function HunterViewmodel({
   const bobPhase = useRef(0);
   const sway = useRef({ x: 0, y: 0, prevYaw: 0, prevPitch: 0 });
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const group = groupRef.current;
     if (!group) return;
     const motion = motionRef.current;
@@ -1763,7 +1795,7 @@ function LocalPlayer({
     [colliders, map.bounds, runMultiplier],
   );
 
-  useFrame((_, rawDelta) => {
+  useGuardedFrame((_, rawDelta) => {
     const delta = cappedFrameSeconds(rawDelta);
     if (!spawnApplied.current) {
       const self = playersRef.current.get(id);
@@ -1930,7 +1962,7 @@ function LocalPlayer({
 
     sendAccumMs.current += delta * 1000;
     if (sendAccumMs.current >= INPUT_SEND_RATE_MS) {
-      sendAccumMs.current = 0;
+      sendAccumMs.current = Math.min(sendAccumMs.current - INPUT_SEND_RATE_MS, INPUT_SEND_RATE_MS);
       const aim = Math.atan2(-Math.sin(yaw), -Math.cos(yaw));
       const last = lastSentInput.current;
       const moved =
@@ -2018,7 +2050,7 @@ function RemotePlayer({
     return PLAYER_HEAD_Y + NAMEPLATE_GAP;
   }, [role, propType, catalog]);
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const group = groupRef.current;
     if (!group || !view) {
       return;
