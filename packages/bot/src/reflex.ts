@@ -12,6 +12,7 @@ import {
   type ObservedSound,
   type Phase,
   type PropBounds,
+  PUFF_RADIUS,
   RUN_MULTIPLIER_HUNTER,
   RUN_MULTIPLIER_PROP,
   SONAR_COOLDOWN_MS,
@@ -73,8 +74,14 @@ import {
   worldToCell,
 } from "./nav/grid";
 import { PathFollower, smoothPath } from "./nav/path";
-import { canHitTarget, lineOfSightClear, normalize3, type Vec3 } from "./raycast";
-import type { BotDecoy, BotPlayer } from "./view";
+import {
+  canHitTarget,
+  lineOfSightClear,
+  normalize3,
+  type SightOccluder,
+  type Vec3,
+} from "./raycast";
+import type { BotCloud, BotDecoy, BotPlayer } from "./view";
 
 const STEER_MIN_DIST = 1e-4;
 
@@ -95,6 +102,7 @@ export interface ReflexWorld {
   self: BotPlayer;
   others: BotPlayer[];
   decoys: BotDecoy[];
+  clouds: BotCloud[];
 }
 
 /** The synchronous motor commands the bot ships to the server this tick. */
@@ -187,6 +195,7 @@ export class Reflex {
   private soundSeq = 0;
   private heardEdge = false;
   private readonly pressedAt = new Map<BotAct, number>();
+  private occluders: SightOccluder[] = [];
 
   constructor(
     private readonly difficulty: number,
@@ -216,7 +225,19 @@ export class Reflex {
     const map = this.map;
     if (!map) return false;
     const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };
-    return lineOfSightClear(origin, { x, y, z }, map.colliders);
+    return lineOfSightClear(origin, { x, y, z }, map.colliders, this.occluders);
+  }
+
+  /**
+   * Take in the confetti clouds hanging in the air this tick. A player cannot
+   * see into or through one, so under `"limited"` visibility neither can the
+   * bot; `"full"` is ground truth and sees through anything.
+   */
+  private noteClouds(clouds: readonly BotCloud[]): void {
+    this.occluders =
+      this.visibility === "limited"
+        ? clouds.map((cloud) => ({ x: cloud.x, y: cloud.y, z: cloud.z, radius: PUFF_RADIUS }))
+        : [];
   }
 
   /**
@@ -358,6 +379,7 @@ export class Reflex {
   }
 
   buildObservation(world: ReflexWorld, seq: number, now: number): Observation {
+    this.noteClouds(world.clouds);
     const self = world.self;
     const selfObs: ObservedSelf = {
       role: self.role,
@@ -385,6 +407,7 @@ export class Reflex {
         origin,
         { x: other.x, y: aimY, z: other.z },
         colliders,
+        this.occluders,
       );
       const movedRecently = this.trackMovement(other, now);
       const disguised = other.propType !== "";
@@ -459,7 +482,8 @@ export class Reflex {
       if (distance > BOT_VISION_RANGE) continue;
       const bounds = this.propBounds.get(decoy.propType) ?? UNTRANSFORMED_BOUNDS;
       const aimY = decoy.y + (bounds.yMin + bounds.yMax) / 2;
-      if (!lineOfSightClear(origin, { x: decoy.x, y: aimY, z: decoy.z }, colliders)) continue;
+      const target = { x: decoy.x, y: aimY, z: decoy.z };
+      if (!lineOfSightClear(origin, target, colliders, this.occluders)) continue;
       const source = decoySource(decoy.id);
       this.lastPerceived.set(source, { x: decoy.x, z: decoy.z });
       seen.push({
@@ -613,6 +637,7 @@ export class Reflex {
 
   executeIntent(intent: Intent, world: ReflexWorld, dt: number, now: number): MotorOutput {
     if (!this.grid || !this.map) return HOLD(this.posX, this.posZ, this.rot);
+    this.noteClouds(world.clouds);
     this.activeObstacles = [
       ...this.obstacles,
       ...world.decoys
@@ -803,7 +828,8 @@ export class Reflex {
     const canHit =
       dir !== null &&
       dist <= engageRange &&
-      canHitTarget(origin, dir, target.x, target.y, target.z, bounds, map.colliders);
+      canHitTarget(origin, dir, target.x, target.y, target.z, bounds, map.colliders) &&
+      this.canSeePoint(target.x, aimY, target.z);
 
     if (canHit && dir) {
       this.follower.clear();

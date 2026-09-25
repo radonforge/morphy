@@ -9,4 +9,10 @@ export { BOT_NAMES, clampDifficulty, DEFAULT_DIFFICULTY } from "./config";
 export { BotDriver, type BotDriverOptions, type DriverAction, type RoomSound } from "./driver";
 export { ScriptedPolicy } from "./policy/scripted";
 export type { Policy } from "./policy/types";
-export { type BotDecoy, type BotPlayer, snapshot, type WorldSnapshot } from "./view";
+export {
+  type BotCloud,
+  type BotDecoy,
+  type BotPlayer,
+  snapshot,
+  type WorldSnapshot,
+} from "./view";

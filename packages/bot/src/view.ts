@@ -24,6 +24,13 @@ export interface BotDecoy {
   propType: string;
 }
 
+/** A confetti cloud, centred where it burst. */
+export interface BotCloud {
+  x: number;
+  y: number;
+  z: number;
+}
+
 interface PlayersView {
   get(key: string): BotPlayer | undefined;
   forEach(cb: (value: BotPlayer, key: string) => void): void;
@@ -34,12 +41,17 @@ interface DecoysView {
   forEach(cb: (value: BotDecoy, key: string) => void): void;
 }
 
+interface CloudsView {
+  forEach(cb: (value: BotCloud, key: string) => void): void;
+}
+
 interface RoomStateView {
   phase: Phase;
   phaseEndsAt: number;
   winner: Winner;
   players: PlayersView;
   decoys: DecoysView;
+  clouds: CloudsView;
 }
 
 export interface WorldSnapshot {
@@ -48,6 +60,7 @@ export interface WorldSnapshot {
   self: BotPlayer | undefined;
   others: BotPlayer[];
   decoys: BotDecoy[];
+  clouds: BotCloud[];
 }
 
 /** Read the synced Colyseus room state (an untyped Schema) into a plain snapshot. */
@@ -55,11 +68,15 @@ export function snapshot(rawState: unknown, selfId: string): WorldSnapshot {
   const state = rawState as RoomStateView;
   const others: BotPlayer[] = [];
   const decoys: BotDecoy[] = [];
+  const clouds: BotCloud[] = [];
   state.players.forEach((player, key) => {
     if (key !== selfId) others.push(player);
   });
   state.decoys.forEach((decoy, key) => {
     decoys.push({ id: key, x: decoy.x, y: decoy.y, z: decoy.z, propType: decoy.propType });
+  });
+  state.clouds.forEach((cloud) => {
+    clouds.push({ x: cloud.x, y: cloud.y, z: cloud.z });
   });
   return {
     phase: state.phase,
@@ -67,5 +84,6 @@ export function snapshot(rawState: unknown, selfId: string): WorldSnapshot {
     self: state.players.get(selfId),
     others,
     decoys,
+    clouds,
   };
 }

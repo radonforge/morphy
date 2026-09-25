@@ -175,6 +175,7 @@ export class BotDriver {
       self,
       others: world.others,
       decoys: world.decoys,
+      clouds: world.clouds,
     };
     const motor = this.reflex.executeIntent(this.currentIntent, reflexWorld, dt, now);
     this.maybeKickDecide(reflexWorld, now);

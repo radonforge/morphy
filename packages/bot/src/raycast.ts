@@ -40,6 +40,26 @@ function rayHitsProp(
   );
 }
 
+/** A sphere that blocks sight and nothing else: a confetti cloud. */
+export interface SightOccluder {
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+}
+
+/** Whether the segment from `origin` along unit `dir` for `dist` passes through the sphere. */
+function segmentMeetsSphere(origin: Vec3, dir: Vec3, dist: number, sphere: SightOccluder): boolean {
+  const cx = sphere.x - origin.x;
+  const cy = sphere.y - origin.y;
+  const cz = sphere.z - origin.z;
+  const along = Math.min(dist, Math.max(0, cx * dir.x + cy * dir.y + cz * dir.z));
+  const nx = cx - dir.x * along;
+  const ny = cy - dir.y * along;
+  const nz = cz - dir.z * along;
+  return nx * nx + ny * ny + nz * nz <= sphere.radius * sphere.radius;
+}
+
 export function normalize3(v: Vec3): Vec3 | null {
   const len = Math.hypot(v.x, v.y, v.z);
   if (len === 0) return null;
@@ -50,15 +70,24 @@ export function normalize3(v: Vec3): Vec3 | null {
  * Whether the straight segment from `origin` to `target` reaches it without a
  * wall in between: the bot's line-of-sight test for {@link buildObservation}.
  * Uses the same wall colliders and slab test as shot resolution, so "I can see
- * it" and "I could hit it" share one geometry.
+ * it" and "I could hit it" share one geometry. `occluders` block sight only,
+ * so a target behind one can still be hit, just not seen.
  */
-export function lineOfSightClear(origin: Vec3, target: Vec3, colliders: BoxCollider[]): boolean {
+export function lineOfSightClear(
+  origin: Vec3,
+  target: Vec3,
+  colliders: BoxCollider[],
+  occluders: readonly SightOccluder[] = [],
+): boolean {
   const dx = target.x - origin.x;
   const dy = target.y - origin.y;
   const dz = target.z - origin.z;
   const dist = Math.hypot(dx, dy, dz);
   if (dist < RAY_EPSILON) return true;
   const dir: Vec3 = { x: dx / dist, y: dy / dist, z: dz / dist };
+  for (const sphere of occluders) {
+    if (segmentMeetsSphere(origin, dir, dist, sphere)) return false;
+  }
   for (const collider of colliders) {
     if (collider.position.y <= 0) continue;
     const { min, max } = colliderAabb(collider);

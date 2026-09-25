@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { HEARD_SOUND_MEMORY_MS } from "../packages/bot/src/config.ts";
 import { Reflex } from "../packages/bot/src/reflex.ts";
-import { SONAR_HEARING_RADIUS, TAUNT_HEARING_RADIUS } from "../packages/shared/src/index.ts";
+import {
+  PLAYER_HEIGHT,
+  SONAR_HEARING_RADIUS,
+  TAUNT_HEARING_RADIUS,
+} from "../packages/shared/src/index.ts";
 
 // A single wall standing between the bot at the origin and a contact further
 // down the +x axis: it blocks line of sight without blocking the ground the
@@ -41,6 +45,7 @@ const world = (other) => ({
   self: { ...contact(0, 0), id: "self", name: "self", role: "hunter", hp: 100, propType: "" },
   others: [other],
   decoys: [],
+  clouds: [],
 });
 
 /** The one contact an observation holds, found without knowing its handle. */
@@ -333,4 +338,45 @@ test("a sonar pulse carries only as far as a player hears it", () => {
   const sounds = reflex.buildObservation(world(GONE), 1, 1_100).sounds;
   assert.equal(sounds.length, 1);
   assert.equal(sounds[0].kind, "sonar");
+});
+
+/** A confetti cloud centred on a body standing at (x, z), as the room places one. */
+const cloudAt = (x, z) => ({ x, y: PLAYER_HEIGHT / 2, z });
+
+const inCloud = (base, clouds) => ({ ...base, clouds });
+
+test("a disguise inside a confetti cloud is not seen", () => {
+  const still = contact(-5, 0);
+  const obs = ready("limited").buildObservation(inCloud(world(still), [cloudAt(-5, 0)]), 1, 1_000);
+  assert.deepEqual(obs.entities, [], "a player cannot see into the cloud either");
+});
+
+test("a confetti cloud between the bot and a disguise hides it", () => {
+  const still = contact(-8, 0);
+  const obs = ready("limited").buildObservation(inCloud(world(still), [cloudAt(-4, 0)]), 1, 1_000);
+  assert.deepEqual(obs.entities, []);
+});
+
+test("a decoy inside a confetti cloud is not seen", () => {
+  const scene = inCloud(withDecoys([], [decoyAt(-5, 0)]), [cloudAt(-5, 0)]);
+  assert.deepEqual(ready("limited").buildObservation(scene, 1, 1_000).entities, []);
+});
+
+test("the full-vision anchor sees through a confetti cloud", () => {
+  const still = contact(-5, 0);
+  const obs = ready("full").buildObservation(inCloud(world(still), [cloudAt(-5, 0)]), 1, 1_000);
+  assert.equal(obs.entities.length, 1);
+  assert.equal(obs.entities[0].hasLineOfSight, true);
+});
+
+test("a hunter holds fire at a disguise that vanished into a cloud", () => {
+  const reflex = ready("limited");
+  const still = contact(-5, 0);
+  const handle = sole(reflex.buildObservation(world(still), 1, 1_000)).id;
+  const hidden = inCloud(world(still), [cloudAt(-5, 0)]);
+  const intent = { kind: "shootTarget", targetId: handle, seq: 1 };
+  for (let tick = 1; tick <= 60; tick++) {
+    const { shoot } = reflex.executeIntent(intent, hidden, 0.05, 1_000 + tick * 50);
+    assert.equal(shoot, null, `no shot into the cloud at tick ${tick}`);
+  }
 });

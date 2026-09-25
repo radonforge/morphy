@@ -116,6 +116,7 @@ test("two hunter bots left alone never target each other on sight", async () => 
         self,
         others: bodies.filter((_, other) => other !== index),
         decoys: [],
+        clouds: [],
       };
       const action = driver.tick(world, now);
       if (!action.input) continue;
@@ -185,7 +186,14 @@ test("a hunter closes on a disguise running at a prop's top speed", async () => 
   const chase = async (ticks) => {
     for (let tick = 0; tick < ticks; tick++) {
       now += TICK_MS;
-      const world = { phase: "hunting", winner: "", self, others: [quarry], decoys: [] };
+      const world = {
+        phase: "hunting",
+        winner: "",
+        self,
+        others: [quarry],
+        decoys: [],
+        clouds: [],
+      };
       const action = driver.tick(world, now);
       if (action.input) {
         self.x = action.input.x;
@@ -237,7 +245,7 @@ test("a prop under chase keeps fleeing past its first escape point", async () =>
     chaser.x = self.x - FLEE_GAP;
     chaser.z = self.z;
     const action = driver.tick(
-      { phase: "hunting", winner: "", self, others: [chaser], decoys: [] },
+      { phase: "hunting", winner: "", self, others: [chaser], decoys: [], clouds: [] },
       now,
     );
     if (action.input) {

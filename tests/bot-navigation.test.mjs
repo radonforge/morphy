@@ -41,6 +41,7 @@ const hidingWorld = (x, z) => ({
   },
   others: [],
   decoys: [],
+  clouds: [],
 });
 
 function reflexAt(colliders, x, z) {

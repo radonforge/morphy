@@ -30,6 +30,7 @@ test("bot decision timeout releases single-flight even when policy ignores abort
     },
     others: [],
     decoys: [],
+    clouds: [],
   };
   const originalError = console.error;
   console.error = () => {};
@@ -77,6 +78,7 @@ test("bot decision scheduler releases single-flight after a synchronous policy t
     },
     others: [],
     decoys: [],
+    clouds: [],
   };
   const originalError = console.error;
   console.error = () => {};
@@ -129,6 +131,7 @@ test("a chat line decided before the bot died is dropped, not saved for later", 
     self: livePlayer(alive),
     others: [],
     decoys: [],
+    clouds: [],
   });
 
   driver.tick(world(true), Date.now());
@@ -167,6 +170,7 @@ function worldWithOneContact(selfRole, contactRole, contactPropType) {
     self: body("self", selfRole, ""),
     others: [body("contact", contactRole, contactPropType)],
     decoys: [],
+    clouds: [],
   };
 }
 
@@ -304,7 +308,7 @@ test("a bot wakes its policy for any contact that comes into view, not just enem
   try {
     // First kick establishes the baseline: nobody in view, and the phase change
     // itself is the event that fires it.
-    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [] }, 1_000);
+    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [], clouds: [] }, 1_000);
     await settle();
     const baseline = calls.length;
     assert.ok(baseline > 0, "the first kick fires on the phase change");
@@ -313,7 +317,7 @@ test("a bot wakes its policy for any contact that comes into view, not just enem
     // fires now fires because a contact was noticed, and the contact is a
     // fellow hunter, which the old role filter skipped.
     bot.maybeKickDecide(
-      { phase: "hunting", self, others: [body("mate", "hunter", 3)], decoys: [] },
+      { phase: "hunting", self, others: [body("mate", "hunter", 3)], decoys: [], clouds: [] },
       1_001,
     );
     await settle();
@@ -342,7 +346,14 @@ test("a decided action is pressed on the next tick and only once", async () => {
     trace: null,
   });
   driver.setMap(buildMap("station", 1));
-  const world = { phase: "hunting", winner: "", self: livePlayer(true), others: [], decoys: [] };
+  const world = {
+    phase: "hunting",
+    winner: "",
+    self: livePlayer(true),
+    others: [],
+    decoys: [],
+    clouds: [],
+  };
 
   assert.equal(driver.tick(world, Date.now()).act, null, "nothing is decided yet");
   await new Promise((resolve) => setTimeout(resolve, 30));
@@ -371,11 +382,11 @@ test("a heard taunt wakes the policy", async () => {
   const self = livePlayer(true);
   const settle = () => new Promise((resolve) => setTimeout(resolve, 15));
   try {
-    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [] }, 1_000);
+    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [], clouds: [] }, 1_000);
     await settle();
     const baseline = calls.length;
     bot.hear({ kind: "taunt", x: self.x + 3, z: self.z }, 1_001);
-    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [] }, 1_002);
+    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [], clouds: [] }, 1_002);
     await settle();
     assert.equal(calls.length, baseline + 1, "a honk is reacted to at once, as a player would");
     assert.equal(calls.at(-1).sounds.length, 1);
@@ -403,7 +414,14 @@ test("a bot's taunt cools down on its own HUD once pressed", async () => {
     trace: null,
   });
   driver.setMap(buildMap("station", 1));
-  const world = { phase: "hunting", winner: "", self: livePlayer(true), others: [], decoys: [] };
+  const world = {
+    phase: "hunting",
+    winner: "",
+    self: livePlayer(true),
+    others: [],
+    decoys: [],
+    clouds: [],
+  };
   const start = Date.now();
   driver.tick(world, start);
   await new Promise((resolve) => setTimeout(resolve, 30));
