@@ -1227,7 +1227,6 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
                 </span>
               </>
             )}
-            <CopyDiagnostics collect={collectDiagnostics} />
           </div>
         </div>
       )}

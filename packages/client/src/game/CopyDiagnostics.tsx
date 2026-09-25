@@ -42,7 +42,7 @@ export function CopyDiagnostics({ collect }: { collect: () => string }) {
     );
   }
   return (
-    <button type="button" className="btn-ghost" onClick={copy}>
+    <button type="button" className="diag-link" onClick={copy}>
       {state.kind === "copied" ? "Copied" : "Copy diagnostics"}
     </button>
   );
