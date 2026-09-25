@@ -147,6 +147,13 @@ function InstancedModel({ url, placements }: { url: string; placements: Placemen
  * A map prop is fitted through {@link fitModel} with the same box a disguised
  * player's clone measures, so a real prop and its look-alike render identically;
  * only the players stay as clones. Props without a model are left to the caller.
+ * Each model suspends on its own, as each prop did before, so one slow GLB does
+ * not hold back the rest of the map.
+ *
+ * The box and part matrices are read off the cached `gltf.scene` itself, which is
+ * only correct while that scene is never parented: every renderer of a model mounts
+ * a clone of it. Mounting the cached scene directly anywhere would move every
+ * instanced prop away from its disguised look-alike.
  */
 export function StaticModels({
   map,
@@ -157,10 +164,12 @@ export function StaticModels({
 }) {
   const groups = useMemo(() => placementsByModel(map, catalog), [map, catalog]);
   return (
-    <Suspense fallback={null}>
+    <>
       {groups.map(([url, placements]) => (
-        <InstancedModel key={url} url={url} placements={placements} />
+        <Suspense key={url} fallback={null}>
+          <InstancedModel url={url} placements={placements} />
+        </Suspense>
       ))}
-    </Suspense>
+    </>
   );
 }
