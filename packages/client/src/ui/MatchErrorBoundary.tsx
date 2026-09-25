@@ -14,10 +14,11 @@ interface MatchErrorBoundaryState {
  * Catches an error thrown anywhere in the match view, the 3D scene included.
  *
  * R3F re-throws scene errors out of `<Canvas>`, and with nothing above it React
- * unmounts the whole root: a blank page that reads as a crashed tab. The room
- * connection lives above this boundary, so the seat survives, and rejoining just
- * remounts the match on it. A class because React offers error boundaries in no
- * other form.
+ * unmounts the whole root: a blank page that reads as a crashed tab. Frame-loop
+ * errors never reach React on their own; `useGuardedFrame` is what forwards them
+ * here. The room connection lives above this boundary, so the seat survives, and
+ * rejoining just remounts the match on it. A class because React offers error
+ * boundaries in no other form.
  */
 export class MatchErrorBoundary extends Component<
   MatchErrorBoundaryProps,

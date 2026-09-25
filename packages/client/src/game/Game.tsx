@@ -31,7 +31,7 @@ import {
   type WeaponId,
   type Winner,
 } from "@morphy/shared";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas } from "@react-three/fiber";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Connection } from "../net/connection";
 import {
@@ -50,6 +50,7 @@ import {
   toggleMuted,
 } from "./audio";
 import { ControlsBar, ControlsDialog } from "./Controls";
+import { useGuardedFrame } from "./guardedFrame";
 import { lockPointer } from "./pointerLock";
 import { isPerfHudEnabled } from "./prefs";
 import { GAME_DPR, GAME_FOV, Scene } from "./Scene";
@@ -301,7 +302,7 @@ function PerfProbe({
 }) {
   const frames = useRef(0);
   const windowStart = useRef(0);
-  useFrame(({ clock }) => {
+  useGuardedFrame(({ clock }) => {
     frames.current++;
     const elapsed = clock.elapsedTime - windowStart.current;
     if (elapsed < PERF_SAMPLE_WINDOW_S) return;
@@ -322,7 +323,7 @@ function PerfProbe({
  * carry on unchanged underneath.
  */
 function RenderGate({ skip }: { skip: boolean }) {
-  useFrame(({ gl, scene, camera }) => {
+  useGuardedFrame(({ gl, scene, camera }) => {
     if (!skip) gl.render(scene, camera);
   }, RENDER_GATE_PRIORITY);
   return null;

@@ -28,11 +28,12 @@ import {
   type WeaponId,
 } from "@morphy/shared";
 import { Billboard, Sky, Text } from "@react-three/drei";
-import { useFrame, useThree } from "@react-three/fiber";
+import { useThree } from "@react-three/fiber";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
+import { useGuardedFrame } from "./guardedFrame";
 import { enableShadows } from "./modelShading";
 import {
   advanceMovement,
@@ -636,7 +637,7 @@ function ShadowRefresh({
     sinceChange.current = 0;
   }, [meta, ids]);
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     checkAccum.current += delta;
     sinceRender.current += delta;
     sinceChange.current += delta;
@@ -722,7 +723,7 @@ function SunLight({
   const centre = useRef({ x: Number.NaN, y: 0, z: Number.NaN });
   const normalBias = SHADOW_TEXEL * SHADOW_NORMAL_BIAS_TEXELS;
 
-  useFrame(() => {
+  useGuardedFrame(() => {
     const light = lightRef.current;
     if (!light) return;
     const pos = playerPos.current;
@@ -837,7 +838,7 @@ function Tracers({ shotsRef }: { shotsRef: ShotsRef }) {
     [pool],
   );
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const tracers = tracersRef.current;
     for (const shot of shotsRef.current) {
       const color = WEAPONS[shot.weapon].tracerColor;
@@ -956,7 +957,7 @@ function MorphEffects({ morphsRef }: { morphsRef: MorphFxRef }) {
     [beams],
   );
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const bursts = burstsRef.current;
     for (const fx of morphsRef.current) {
       if (bursts.length >= MORPH_MAX_BURSTS) bursts.shift();
@@ -1136,7 +1137,7 @@ function DecoyBreakEffects({ breaksRef, catalog }: { breaksRef: BreaksRef; catal
     [flashes],
   );
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const bursts = burstsRef.current;
     for (const fx of breaksRef.current) {
       const def = catalog.get(fx.propType);
@@ -1233,7 +1234,7 @@ function PropPopIn({ popKey, children }: { popKey: string; children: ReactElemen
     age.current = 0;
   }, [popKey]);
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const group = groupRef.current;
     if (!group) return;
     age.current = Math.min(age.current + delta, MORPH_POP_DURATION_S);
@@ -1463,7 +1464,7 @@ function HunterViewmodel({
   const bobPhase = useRef(0);
   const sway = useRef({ x: 0, y: 0, prevYaw: 0, prevPitch: 0 });
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const group = groupRef.current;
     if (!group) return;
     const motion = motionRef.current;
@@ -1794,7 +1795,7 @@ function LocalPlayer({
     [colliders, map.bounds, runMultiplier],
   );
 
-  useFrame((_, rawDelta) => {
+  useGuardedFrame((_, rawDelta) => {
     const delta = cappedFrameSeconds(rawDelta);
     if (!spawnApplied.current) {
       const self = playersRef.current.get(id);
@@ -2049,7 +2050,7 @@ function RemotePlayer({
     return PLAYER_HEAD_Y + NAMEPLATE_GAP;
   }, [role, propType, catalog]);
 
-  useFrame((_, delta) => {
+  useGuardedFrame((_, delta) => {
     const group = groupRef.current;
     if (!group || !view) {
       return;
