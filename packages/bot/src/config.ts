@@ -42,6 +42,12 @@ export const TAUNT_CHANCE_MAX = 0.1;
 export const TAUNT_DARING_CHANCE_MIN = 0.01;
 export const TAUNT_DARING_CHANCE_MAX = 0.05;
 
+/**
+ * Decisions in a row a hunter spends searching with nothing to follow before it
+ * sounds its sonar, about five seconds at the decision rate.
+ */
+export const SONAR_PATIENCE_DECISIONS = 7;
+
 export const HIDE_OFFSET_MIN = 1.2;
 export const HIDE_OFFSET_MAX = 2.4;
 export const PANIC_RADIUS = 7;

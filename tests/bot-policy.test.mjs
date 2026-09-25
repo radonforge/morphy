@@ -4,6 +4,7 @@ import {
   MAX_FLEE_DEFLECTIONS,
   MAX_HIDE_REPICKS,
   PANIC_RADIUS,
+  SONAR_PATIENCE_DECISIONS,
   TAUNT_CHANCE_MAX,
   TAUNT_CHANCE_MIN,
   TAUNT_DARING_CHANCE_MAX,
@@ -535,4 +536,70 @@ test("a daring taunt, with a hunter close but blind, is taken more rarely", asyn
   const dared = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), closeBy, roll);
   assert.equal(dared.kind, "hideAs");
   assert.equal(dared.act, undefined);
+});
+
+/** Decide `count` times with nothing to follow, collecting every intent. */
+async function searchQuietly(policy, count, self = {}, sounds = []) {
+  const intents = [];
+  for (let i = 0; i < count; i++) {
+    intents.push(
+      await policy.decide(
+        hearing(i + 1, [], sounds, { self: { ...observation(0, []).self, ...self } }),
+      ),
+    );
+  }
+  return intents;
+}
+
+test("a hunter with nothing to follow for a while sounds its sonar, once", async () => {
+  const intents = await searchQuietly(
+    new ScriptedPolicy(DIFFICULTY),
+    SONAR_PATIENCE_DECISIONS * 2,
+    {
+      canSonarNow: true,
+    },
+  );
+  const pulses = intents.filter((intent) => intent.act === "sonar");
+  assert.equal(pulses.length, 2, "one per stretch of quiet, not one per decision");
+  assert.equal(intents.indexOf(pulses[0]), SONAR_PATIENCE_DECISIONS - 1);
+  assert.deepEqual(kinds(pulses), ["patrol"], "it keeps searching while it listens");
+});
+
+test("a hunter does not sound a sonar that is cooling down", async () => {
+  const intents = await searchQuietly(
+    new ScriptedPolicy(DIFFICULTY),
+    SONAR_PATIENCE_DECISIONS * 2,
+    {
+      canSonarNow: false,
+    },
+  );
+  assert.equal(intents.filter((intent) => intent.act === "sonar").length, 0);
+});
+
+test("a hunter with a taunt to follow has no need of a sonar", async () => {
+  const intents = await searchQuietly(
+    new ScriptedPolicy(DIFFICULTY),
+    SONAR_PATIENCE_DECISIONS * 2,
+    { canSonarNow: true },
+    [taunt("s1", 20)],
+  );
+  assert.equal(intents.filter((intent) => intent.act === "sonar").length, 0);
+});
+
+/** A sonar pulse heard `distance` metres off on +x. */
+const pulse = (distance) => ({ ...taunt("p1", distance), kind: "sonar" });
+
+test("a prop runs from a sonar sounded right next to it", async () => {
+  const obs = { ...settledProp(1, []), sounds: [pulse(PANIC_RADIUS - 2)] };
+  const intent = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), obs, 0);
+  assert.equal(intent.kind, "moveTo");
+  assert.equal(intent.run, true);
+  assert.ok(intent.x < 0, "away from the hunter");
+});
+
+test("a prop holds still and quiet at a sonar further off", async () => {
+  const obs = { ...settledProp(1, []), sounds: [pulse(PANIC_RADIUS + 5)] };
+  const intent = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), obs, 0);
+  assert.equal(intent.kind, "hideAs");
+  assert.equal(intent.act, undefined, "no honk with a hunter sounding close by");
 });

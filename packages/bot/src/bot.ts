@@ -13,6 +13,7 @@ import {
   MSG_READY,
   MSG_SHOOT,
   MSG_SHOT_RESULT,
+  MSG_SONAR,
   MSG_SONAR_PING,
   MSG_TAUNT,
   MSG_TAUNT_REQUEST,
@@ -33,6 +34,7 @@ import { snapshot } from "./view";
 const ACT_MESSAGES: Record<BotAct, string> = {
   decoy: MSG_DECOY,
   taunt: MSG_TAUNT_REQUEST,
+  sonar: MSG_SONAR,
 };
 
 function isFiniteNumber(value: unknown): value is number {

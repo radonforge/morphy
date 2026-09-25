@@ -1336,6 +1336,9 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       case "taunt":
         this.handleTaunt(actor);
         break;
+      case "sonar":
+        this.handleSonar(actor);
+        break;
     }
   }
 

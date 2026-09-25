@@ -19,6 +19,7 @@ import {
   MAX_FLEE_DEFLECTIONS,
   MAX_HIDE_REPICKS,
   PANIC_RADIUS,
+  SONAR_PATIENCE_DECISIONS,
   TAUNT_CHANCE_MAX,
   TAUNT_CHANCE_MIN,
   TAUNT_DARING_CHANCE_MAX,
@@ -30,6 +31,17 @@ import type { Policy } from "./types";
 interface Spot {
   x: number;
   z: number;
+}
+
+/**
+ * What a prop runs from or freezes before: a contact that might be a hunter,
+ * or a sonar pulse, which only a hunter sends.
+ */
+interface Threat {
+  x: number;
+  z: number;
+  distance: number;
+  facingMe?: boolean;
 }
 
 /** A heard taunt the hunter is running to, named by its sound id. */
@@ -81,12 +93,15 @@ function nearest(
  *   A decoy in sight is one more disguise standing still, so it is shot like
  *   one, and the hunter pays for the mistake as a player would.
  *   A heard taunt can only be a prop's, so it is run to, after a disguise in
- *   sight and before a noise that might be a teammate's footsteps.
+ *   sight and before a noise that might be a teammate's footsteps. With
+ *   nothing to follow for a while it sounds its sonar, which makes the props
+ *   close by honk.
  * - A prop that breaks cover while the hunt is on drops a decoy where it
  *   stood, so the hunter bearing down on it finds a double in its place.
  * - A prop settled in its hiding spot taunts for points now and then, never
  *   with a possible hunter in sight, and only rarely with one close but blind
- *   to it, which is worth more and far riskier.
+ *   to it, which is worth more and far riskier. A sonar pulse it hears is a
+ *   hunter close by: it runs if that is too close and otherwise holds still.
  *
  * It picks *what* to do; the reflex still owns aim, the line-of-sight gate and the
  * fire cooldown, and difficulty still tunes trigger latency inside the reflex.
@@ -100,6 +115,7 @@ export class ScriptedPolicy implements Policy {
   private fleeDeflections = 0;
   private lead: Lead | null = null;
   private readonly followed = new Set<string>();
+  private quietDecisions = 0;
   private prevPhase: Phase | null = null;
   private prevRole: Role | null = null;
 
@@ -137,15 +153,21 @@ export class ScriptedPolicy implements Policy {
           e.disguised === true && !e.movedRecently && e.hasLineOfSight && e.distance <= engageRange,
       )
       .sort((a, b) => a.distance - b.distance);
-    if (shootable[0]) return { kind: "shootTarget", targetId: shootable[0].id, seq };
     const suspect = this.nearestSuspect(obs);
+    const lead = this.followTaunt(obs);
+    this.quietDecisions = shootable[0] || suspect || lead ? 0 : this.quietDecisions + 1;
+    if (shootable[0]) return { kind: "shootTarget", targetId: shootable[0].id, seq };
     if (suspect?.hasLineOfSight) {
       return { kind: "inspect", targetId: suspect.id, run: isFleeing(suspect), seq };
     }
-    const lead = this.followTaunt(obs);
     if (lead) return { kind: "moveTo", x: lead.x, z: lead.z, run: true, seq };
     if (suspect) return { kind: "inspect", targetId: suspect.id, run: isFleeing(suspect), seq };
-    return { kind: "patrol", seq };
+    const intent: Intent = { kind: "patrol", seq };
+    if (this.quietDecisions >= SONAR_PATIENCE_DECISIONS && obs.self.canSonarNow) {
+      intent.act = "sonar";
+      this.quietDecisions = 0;
+    }
+    return intent;
   }
 
   /**
@@ -232,8 +254,9 @@ export class ScriptedPolicy implements Policy {
    * {@link TAUNT_DARING_RADIUS} that cannot see it the taunt is worth three
    * times as much and the capture far likelier, so it is taken far less often.
    */
-  private wantsToTaunt(obs: Observation, threat: ObservedEntity | null): boolean {
+  private wantsToTaunt(obs: Observation, threat: Threat | null): boolean {
     if (obs.phase !== "hunting" || !obs.arrived || !obs.self.canTauntNow) return false;
+    if (obs.sounds.some((sound) => sound.kind === "sonar")) return false;
     const watched = obs.entities.some(
       (e) =>
         e.hasLineOfSight &&
@@ -251,8 +274,16 @@ export class ScriptedPolicy implements Policy {
    * disguise, or one only heard, since footsteps could be anyone's. A contact
    * seen to be disguised is a fellow prop, however much it happens to be moving,
    * and is no reason to break cover. */
-  private nearestThreatLimited(obs: Observation): ObservedEntity | null {
-    return nearest(obs.entities, (e) => e.disguised !== true);
+  private nearestThreatLimited(obs: Observation): Threat | null {
+    const contact = nearest(obs.entities, (e) => e.disguised !== true);
+    let pulse: Threat | null = null;
+    for (const sound of obs.sounds) {
+      if (sound.kind !== "sonar") continue;
+      if (!pulse || sound.distance < pulse.distance) pulse = sound;
+    }
+    if (!contact) return pulse;
+    if (!pulse) return contact;
+    return pulse.distance < contact.distance ? pulse : contact;
   }
 
   private nearestHunter(obs: Observation): ObservedEntity | null {
@@ -277,7 +308,7 @@ export class ScriptedPolicy implements Policy {
    * deflections are spent the fallback re-derives the prop's own position, so
    * the re-issued goal is unchanged and nothing churns.
    */
-  private ensureFleePlan(obs: Observation, threat: ObservedEntity): Spot {
+  private ensureFleePlan(obs: Observation, threat: Threat): Spot {
     if (this.fleeSpot && !obs.pathBlocked && !obs.arrived) return this.fleeSpot;
     if (obs.pathBlocked) this.fleeDeflections += 1;
     this.fleeSpot =
@@ -292,7 +323,7 @@ export class ScriptedPolicy implements Policy {
     this.fleeDeflections = 0;
   }
 
-  private fleeFrom(obs: Observation, threat: ObservedEntity, deflection: number): Spot {
+  private fleeFrom(obs: Observation, threat: Threat, deflection: number): Spot {
     const self = obs.self;
     let dx = self.x - threat.x;
     let dz = self.z - threat.z;
@@ -338,6 +369,7 @@ export class ScriptedPolicy implements Policy {
         this.hideRepicks = 0;
         this.lead = null;
         this.followed.clear();
+        this.quietDecisions = 0;
       }
       this.prevPhase = obs.phase;
     }

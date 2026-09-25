@@ -14,6 +14,7 @@ import {
   type PropBounds,
   RUN_MULTIPLIER_HUNTER,
   RUN_MULTIPLIER_PROP,
+  SONAR_COOLDOWN_MS,
   SONAR_HEARING_RADIUS,
   type SoundKind,
   TAUNT_COOLDOWN_MS,
@@ -368,6 +369,7 @@ export class Reflex {
       propType: self.propType,
       canShootNow: now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS,
       canTauntNow: this.sincePressed("taunt", now) >= TAUNT_COOLDOWN_MS,
+      canSonarNow: this.sincePressed("sonar", now) >= SONAR_COOLDOWN_MS,
     };
 
     const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };

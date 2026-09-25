@@ -20,7 +20,7 @@ import type { Phase, Role } from "./protocol";
  * A one-key action a player can take on top of moving and shooting. Each is
  * sent once, through the same room message a player's key press sends.
  */
-export type BotAct = "decoy" | "taunt";
+export type BotAct = "decoy" | "taunt" | "sonar";
 
 /** Fields every {@link Intent} carries regardless of `kind`. */
 export interface IntentMeta {
@@ -62,6 +62,8 @@ export interface ObservedSelf {
   canShootNow: boolean;
   /** A prop's taunt is off cooldown, as its own HUD shows it. */
   canTauntNow: boolean;
+  /** A hunter's sonar is off cooldown, as its own HUD shows it. */
+  canSonarNow: boolean;
 }
 
 /**
