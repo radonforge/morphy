@@ -43,9 +43,12 @@ let bots play on their own (handy as a server smoke test).
   `--visibility limited` it has no `role` to read: a contact seen to wear no
   disguise is a teammate and is left alone, a disguise standing still is shot,
   one still moving is chased down, and a contact known only by sound is
-  investigated whoever it turns out to be.
+  investigated whoever it turns out to be. A taunt it hears is run to. A decoy
+  in sight looks like any other disguise and is shot like one.
 - **Prop**: picks a prop type that exists in the scene, hides next to a matching
-  cluster, transforms, holds still, and bolts if a hunter gets close.
+  cluster, transforms, holds still, and bolts if a hunter gets close, dropping a
+  decoy where it stood. Once hidden it taunts for points now and then, never
+  with a hunter in sight.
 
 Movement integrates at `MOVE_SPEED` (times `RUN_MULTIPLIER_HUNTER` or
 `RUN_MULTIPLIER_PROP` while running) with the client's wall/furniture push-out,
