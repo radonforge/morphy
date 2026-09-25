@@ -79,7 +79,13 @@ function shareKitTextures(model: LoadedModel): void {
   });
 }
 
-/** `useGLTF` for every renderable model: the cached result, with its kit textures shared. */
+/**
+ * `useGLTF` for every renderable model: the cached result, with its kit textures shared.
+ *
+ * The sharing runs during render on purpose. It is idempotent per model and correct
+ * whether or not the render commits, and it has to land before the first frame
+ * uploads the model's textures, which an effect would run too late for.
+ */
 export function useSharedGLTF(url: string): ReturnType<typeof useGLTF<string>> {
   const model = useGLTF(url);
   shareKitTextures(model);
