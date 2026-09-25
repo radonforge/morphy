@@ -1,4 +1,13 @@
-import type { Intent, MapBounds, Observation, ObservedEntity, Phase, Role } from "@morphy/shared";
+import {
+  type Intent,
+  type MapBounds,
+  type Observation,
+  type ObservedEntity,
+  type ObservedSound,
+  type Phase,
+  type Role,
+  TAUNT_DARING_RADIUS,
+} from "@morphy/shared";
 import {
   ENGAGE_RANGE_MAX,
   ENGAGE_RANGE_MIN,
@@ -10,6 +19,11 @@ import {
   MAX_FLEE_DEFLECTIONS,
   MAX_HIDE_REPICKS,
   PANIC_RADIUS,
+  SONAR_PATIENCE_DECISIONS,
+  TAUNT_CHANCE_MAX,
+  TAUNT_CHANCE_MIN,
+  TAUNT_DARING_CHANCE_MAX,
+  TAUNT_DARING_CHANCE_MIN,
   WAYPOINT_MARGIN,
 } from "../config";
 import type { Policy } from "./types";
@@ -17,6 +31,22 @@ import type { Policy } from "./types";
 interface Spot {
   x: number;
   z: number;
+}
+
+/**
+ * What a prop runs from or freezes before: a contact that might be a hunter,
+ * or a sonar pulse, which only a hunter sends.
+ */
+interface Threat {
+  x: number;
+  z: number;
+  distance: number;
+  facingMe?: boolean;
+}
+
+/** A heard taunt the hunter is running to, named by its sound id. */
+interface Lead extends Spot {
+  id: string;
 }
 
 /**
@@ -60,6 +90,18 @@ function nearest(
  *   sight, and one still moving is run down (`inspect`) until it settles. A
  *   contact known only by sound carries no shape at all and is investigated
  *   whoever it turns out to be; a player hearing footsteps knows no better.
+ *   A decoy in sight is one more disguise standing still, so it is shot like
+ *   one, and the hunter pays for the mistake as a player would.
+ *   A heard taunt can only be a prop's, so it is run to, after a disguise in
+ *   sight and before a noise that might be a teammate's footsteps. With
+ *   nothing to follow for a while it sounds its sonar, which makes the props
+ *   close by honk.
+ * - A prop that breaks cover while the hunt is on drops a decoy where it
+ *   stood, so the hunter bearing down on it finds a double in its place.
+ * - A prop settled in its hiding spot taunts for points now and then, never
+ *   with a possible hunter in sight, and only rarely with one close but blind
+ *   to it, which is worth more and far riskier. A sonar pulse it hears is a
+ *   hunter close by: it runs if that is too close and otherwise holds still.
  *
  * It picks *what* to do; the reflex still owns aim, the line-of-sight gate and the
  * fire cooldown, and difficulty still tunes trigger latency inside the reflex.
@@ -71,6 +113,9 @@ export class ScriptedPolicy implements Policy {
   private hideRepicks = 0;
   private fleeSpot: Spot | null = null;
   private fleeDeflections = 0;
+  private lead: Lead | null = null;
+  private readonly followed = new Set<string>();
+  private quietDecisions = 0;
   private prevPhase: Phase | null = null;
   private prevRole: Role | null = null;
 
@@ -108,10 +153,47 @@ export class ScriptedPolicy implements Policy {
           e.disguised === true && !e.movedRecently && e.hasLineOfSight && e.distance <= engageRange,
       )
       .sort((a, b) => a.distance - b.distance);
-    if (shootable[0]) return { kind: "shootTarget", targetId: shootable[0].id, seq };
     const suspect = this.nearestSuspect(obs);
+    const lead = this.followTaunt(obs);
+    this.quietDecisions = shootable[0] || suspect || lead ? 0 : this.quietDecisions + 1;
+    if (shootable[0]) return { kind: "shootTarget", targetId: shootable[0].id, seq };
+    if (suspect?.hasLineOfSight) {
+      return { kind: "inspect", targetId: suspect.id, run: isFleeing(suspect), seq };
+    }
+    if (lead) return { kind: "moveTo", x: lead.x, z: lead.z, run: true, seq };
     if (suspect) return { kind: "inspect", targetId: suspect.id, run: isFleeing(suspect), seq };
-    return { kind: "patrol", seq };
+    const intent: Intent = { kind: "patrol", seq };
+    if (this.quietDecisions >= SONAR_PATIENCE_DECISIONS && obs.self.canSonarNow) {
+      intent.act = "sonar";
+      this.quietDecisions = 0;
+    }
+    return intent;
+  }
+
+  /**
+   * The taunt worth running to: the most recent one not yet followed. Only a
+   * prop honks, so unlike footsteps a taunt is surely an enemy's. The lead is
+   * held until the hunter gets there or finds the way blocked, then dropped,
+   * and what is in sight from the spot takes over.
+   */
+  private followTaunt(obs: Observation): Lead | null {
+    if (this.lead && (obs.arrived || obs.pathBlocked)) {
+      this.followed.add(this.lead.id);
+      this.lead = null;
+    }
+    const heard = new Set(obs.sounds.map((sound) => sound.id));
+    for (const id of [...this.followed]) {
+      if (!heard.has(id)) this.followed.delete(id);
+    }
+    let newest: ObservedSound | null = null;
+    for (const sound of obs.sounds) {
+      if (sound.kind !== "taunt" || this.followed.has(sound.id)) continue;
+      if (!newest || sound.ageMs < newest.ageMs) newest = sound;
+    }
+    if (newest && newest.id !== this.lead?.id) {
+      this.lead = { id: newest.id, x: newest.x, z: newest.z };
+    }
+    return this.lead;
   }
 
   /**
@@ -153,20 +235,55 @@ export class ScriptedPolicy implements Policy {
       }
       if (threat.distance < PANIC_RADIUS) {
         this.clearHidePlan();
+        const breakingCover = this.fleeSpot === null && obs.phase === "hunting";
         const flee = this.ensureFleePlan(obs, threat);
-        return { kind: "moveTo", x: flee.x, z: flee.z, run: true, seq };
+        const intent: Intent = { kind: "moveTo", x: flee.x, z: flee.z, run: true, seq };
+        if (breakingCover) intent.act = "decoy";
+        return intent;
       }
     }
     this.clearFleePlan();
-    return { kind: "hideAs", x: spot.x, z: spot.z, seq };
+    const intent: Intent = { kind: "hideAs", x: spot.x, z: spot.z, seq };
+    if (this.wantsToTaunt(obs, threat)) intent.act = "taunt";
+    return intent;
+  }
+
+  /**
+   * Whether a prop settled in its hiding spot honks now. Never with a possible
+   * hunter in sight: the honk would point straight at the prop. With one inside
+   * {@link TAUNT_DARING_RADIUS} that cannot see it the taunt is worth three
+   * times as much and the capture far likelier, so it is taken far less often.
+   */
+  private wantsToTaunt(obs: Observation, threat: Threat | null): boolean {
+    if (obs.phase !== "hunting" || !obs.arrived || !obs.self.canTauntNow) return false;
+    if (obs.sounds.some((sound) => sound.kind === "sonar")) return false;
+    const watched = obs.entities.some(
+      (e) =>
+        e.hasLineOfSight &&
+        (obs.visibility === "limited" ? e.disguised !== true : e.role === "hunter"),
+    );
+    if (watched) return false;
+    const daring = threat !== null && threat.distance <= TAUNT_DARING_RADIUS;
+    const chance = daring
+      ? lerp(TAUNT_DARING_CHANCE_MIN, TAUNT_DARING_CHANCE_MAX, this.difficulty)
+      : lerp(TAUNT_CHANCE_MIN, TAUNT_CHANCE_MAX, this.difficulty);
+    return Math.random() < chance;
   }
 
   /** The nearest contact that might be a hunter: one seen not to be wearing a
    * disguise, or one only heard, since footsteps could be anyone's. A contact
    * seen to be disguised is a fellow prop, however much it happens to be moving,
    * and is no reason to break cover. */
-  private nearestThreatLimited(obs: Observation): ObservedEntity | null {
-    return nearest(obs.entities, (e) => e.disguised !== true);
+  private nearestThreatLimited(obs: Observation): Threat | null {
+    const contact = nearest(obs.entities, (e) => e.disguised !== true);
+    let pulse: Threat | null = null;
+    for (const sound of obs.sounds) {
+      if (sound.kind !== "sonar") continue;
+      if (!pulse || sound.distance < pulse.distance) pulse = sound;
+    }
+    if (!contact) return pulse;
+    if (!pulse) return contact;
+    return pulse.distance < contact.distance ? pulse : contact;
   }
 
   private nearestHunter(obs: Observation): ObservedEntity | null {
@@ -191,7 +308,7 @@ export class ScriptedPolicy implements Policy {
    * deflections are spent the fallback re-derives the prop's own position, so
    * the re-issued goal is unchanged and nothing churns.
    */
-  private ensureFleePlan(obs: Observation, threat: ObservedEntity): Spot {
+  private ensureFleePlan(obs: Observation, threat: Threat): Spot {
     if (this.fleeSpot && !obs.pathBlocked && !obs.arrived) return this.fleeSpot;
     if (obs.pathBlocked) this.fleeDeflections += 1;
     this.fleeSpot =
@@ -206,7 +323,7 @@ export class ScriptedPolicy implements Policy {
     this.fleeDeflections = 0;
   }
 
-  private fleeFrom(obs: Observation, threat: ObservedEntity, deflection: number): Spot {
+  private fleeFrom(obs: Observation, threat: Threat, deflection: number): Spot {
     const self = obs.self;
     let dx = self.x - threat.x;
     let dz = self.z - threat.z;
@@ -250,11 +367,15 @@ export class ScriptedPolicy implements Policy {
         this.clearHidePlan();
         this.clearFleePlan();
         this.hideRepicks = 0;
+        this.lead = null;
+        this.followed.clear();
+        this.quietDecisions = 0;
       }
       this.prevPhase = obs.phase;
     }
     if (obs.self.role !== this.prevRole) {
       this.clearHidePlan();
+      this.lead = null;
       this.prevRole = obs.self.role;
     }
   }

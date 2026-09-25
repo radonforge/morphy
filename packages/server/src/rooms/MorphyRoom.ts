@@ -11,16 +11,20 @@ import { BotDriver, DEFAULT_DIFFICULTY, ScriptedPolicy, snapshot } from "@morphy
 import {
   type AvatarId,
   BOT_FILL_DELAY_MS,
+  type BotAct,
+  CONVERTED_HUNTER_HP,
   colliderAabb,
   computePropBounds,
   DECOY_BUDGET,
   DECOY_COOLDOWN_MS,
+  DECOY_MISS_DAMAGE_FACTOR,
   DEFAULT_MAP_ID,
   DEFAULT_PLAYER_NAME,
   DEFAULT_WEAPON,
   type DecoyBreakEvent,
   generatePartyCode,
   HIDE_DURATION_MS,
+  HUNTER_CAPTURE_HEAL,
   HUNTER_MAX_HP,
   HUNTER_RATIO,
   INPUT_SEND_RATE_MS,
@@ -54,8 +58,11 @@ import {
   MSG_SHOOT,
   MSG_SHOT_FIRED,
   MSG_SHOT_RESULT,
+  MSG_SONAR,
+  MSG_SONAR_PING,
   MSG_START,
   MSG_TAUNT,
+  MSG_TAUNT_REQUEST,
   MSG_TELEPORT,
   PATCH_RATE_MS,
   type Phase,
@@ -74,8 +81,19 @@ import {
   rayAabb,
   type ShootMessage,
   type ShotFiredEvent,
+  SONAR_COOLDOWN_MS,
+  SONAR_RADIUS,
+  type SonarPingMessage,
+  type SoundKind,
   START_COUNTDOWN_MS,
+  TAUNT_CHECK_MS,
+  TAUNT_COOLDOWN_MS,
+  TAUNT_DARING_POINTS,
+  TAUNT_DARING_RADIUS,
+  TAUNT_FORCED_STAGGER_MS,
   TAUNT_INTERVAL_MS,
+  TAUNT_POINTS,
+  type TauntMessage,
   UNTRANSFORMED_PROP_HEIGHT,
   UNTRANSFORMED_PROP_RADIUS,
   type Vec3,
@@ -107,6 +125,8 @@ export class PlayerState extends Schema {
   @type("boolean") alive = true;
   @type("number") hp = 0;
   @type("number") kills = 0;
+  /** A prop's points for the round, from taunting. Shown in the standings, never persisted. */
+  @type("uint16") score = 0;
   @type("string") propType = "";
   @type("uint8") rerollsLeft = 0;
   @type("uint8") decoysLeft = 0;
@@ -318,6 +338,10 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private tauntTimer?: ClearableTimer;
   private nextShotAt = new Map<string, number>();
   private nextDecoyAt = new Map<string, number>();
+  private nextTauntAt = new Map<string, number>();
+  private nextSonarAt = new Map<string, number>();
+  /** When each prop's forced-taunt clock last restarted; see {@link sweepForcedTaunts}. */
+  private tauntClockAt = new Map<string, number>();
   private decoySeq = 0;
   private pendingPings = new Map<string, { nonce: number; sentAt: number }>();
   private pingNonce = 0;
@@ -341,6 +365,8 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.onMessage(MSG_INPUT, (client, payload) => this.handleInput(client, payload));
     this.onMessage(MSG_REROLL, (client) => this.handleReroll(client));
     this.onMessage(MSG_DECOY, (client) => this.handleDecoy(client));
+    this.onMessage(MSG_TAUNT_REQUEST, (client) => this.handleTaunt(client));
+    this.onMessage(MSG_SONAR, (client) => this.handleSonar(client));
     this.onMessage(MSG_SHOOT, (client, payload) => this.handleShoot(client, payload));
     this.onMessage(MSG_CHAT, (client, payload) => this.handleChat(client, payload));
     this.onMessage(MSG_READY, (client, payload) => this.handleReady(client, payload));
@@ -427,6 +453,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.state.players.delete(client.sessionId);
     this.nextShotAt.delete(client.sessionId);
     this.nextDecoyAt.delete(client.sessionId);
+    this.forgetSoundTimersOf(client.sessionId);
     this.pendingPings.delete(client.sessionId);
     this.deviceIds.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
@@ -573,7 +600,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     return pool[Math.floor(Math.random() * pool.length)]?.id ?? "";
   }
 
-  private handleDecoy(client: Client): void {
+  private handleDecoy(client: Actor): void {
     const player = this.state.players.get(client.sessionId);
     if (player?.role !== "prop" || !player.alive || !player.propType) return;
     if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
@@ -592,6 +619,91 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     player.decoysLeft -= 1;
     this.nextDecoyAt.set(client.sessionId, now + DECOY_COOLDOWN_MS);
     client.send(MSG_DECOY_PLACED);
+  }
+
+  /**
+   * A prop honks on purpose. It scores {@link TAUNT_POINTS}, or
+   * {@link TAUNT_DARING_POINTS} with a live hunter within
+   * {@link TAUNT_DARING_RADIUS}, and restarts its forced-taunt clock, so a prop
+   * that taunts on its own terms is never made to.
+   */
+  private handleTaunt(client: Actor): void {
+    const player = this.state.players.get(client.sessionId);
+    if (player?.role !== "prop" || !player.alive) return;
+    if (this.state.phase !== "hunting") return;
+    const now = Date.now();
+    if (now < (this.nextTauntAt.get(client.sessionId) ?? 0)) return;
+    this.nextTauntAt.set(client.sessionId, now + TAUNT_COOLDOWN_MS);
+    this.tauntClockAt.set(client.sessionId, now);
+    player.score += this.hunterWithin(player, TAUNT_DARING_RADIUS)
+      ? TAUNT_DARING_POINTS
+      : TAUNT_POINTS;
+    this.emitTaunt(player, false);
+  }
+
+  private hunterWithin(player: PlayerState, radius: number): boolean {
+    let near = false;
+    this.state.players.forEach((other) => {
+      if (other.role !== "hunter" || !other.alive) return;
+      if (Math.hypot(other.x - player.x, other.z - player.z) <= radius) near = true;
+    });
+    return near;
+  }
+
+  private emitTaunt(player: PlayerState, forced: boolean): void {
+    this.broadcast(MSG_TAUNT, {
+      playerId: player.id,
+      x: player.x,
+      z: player.z,
+      forced,
+    } satisfies TauntMessage);
+    this.letBotsHear("taunt", player.x, player.z, player.id);
+  }
+
+  /**
+   * Hand a broadcast sound to every room-filling bot but its source, as the
+   * position a player's client plays it from. Bots are not clients, so a
+   * broadcast alone never reaches them.
+   */
+  private letBotsHear(kind: SoundKind, x: number, z: number, sourceId: string): void {
+    const now = Date.now();
+    for (const [sessionId, bot] of this.bots) {
+      if (sessionId !== sourceId) bot.driver.hear({ kind, x, z }, now);
+    }
+  }
+
+  /**
+   * A hunter's sonar: every live prop within {@link SONAR_RADIUS} honks, as a
+   * forced taunt that scores nothing and leaves its own clock alone. A decoy is
+   * not a player and stays silent, which is the hunter's answer to it. The
+   * pulse is broadcast as well, so a prop hears that a hunter is close.
+   */
+  private handleSonar(client: Actor): void {
+    const player = this.state.players.get(client.sessionId);
+    if (player?.role !== "hunter" || !player.alive) return;
+    if (this.state.phase !== "hunting") return;
+    const now = Date.now();
+    if (now < (this.nextSonarAt.get(client.sessionId) ?? 0)) return;
+    this.nextSonarAt.set(client.sessionId, now + SONAR_COOLDOWN_MS);
+    this.broadcast(MSG_SONAR_PING, {
+      playerId: player.id,
+      x: player.x,
+      z: player.z,
+    } satisfies SonarPingMessage);
+    this.letBotsHear("sonar", player.x, player.z, player.id);
+    this.state.players.forEach((prop) => {
+      if (prop.role !== "prop" || !prop.alive) return;
+      if (Math.hypot(prop.x - player.x, prop.z - player.z) <= SONAR_RADIUS) {
+        this.emitTaunt(prop, true);
+      }
+    });
+  }
+
+  /** Drop a player's taunt and sonar timers. */
+  private forgetSoundTimersOf(sessionId: string): void {
+    this.nextTauntAt.delete(sessionId);
+    this.tauntClockAt.delete(sessionId);
+    this.nextSonarAt.delete(sessionId);
   }
 
   private removeDecoysOf(ownerId: string): void {
@@ -743,11 +855,12 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       for (const target of captured) {
         target.role = "hunter";
         target.alive = true;
-        target.hp = HUNTER_MAX_HP;
+        target.hp = CONVERTED_HUNTER_HP;
         target.propType = "";
         target.decoysLeft = 0;
         this.breakDecoysOf(target.id);
         player.kills += 1;
+        player.hp = Math.min(HUNTER_MAX_HP, player.hp + HUNTER_CAPTURE_HEAL);
         this.broadcast(MSG_KILL, {
           byId: player.id,
           byName: player.name,
@@ -757,7 +870,11 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
         } satisfies KillEvent);
       }
     } else {
-      player.hp = Math.max(0, player.hp - weapon.missDamage);
+      const damage =
+        broken.size > 0
+          ? Math.floor(weapon.missDamage * DECOY_MISS_DAMAGE_FACTOR)
+          : weapon.missDamage;
+      player.hp = Math.max(0, player.hp - damage);
       if (player.hp === 0) {
         player.alive = false;
         this.broadcast(MSG_KILL, {
@@ -828,13 +945,17 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private beginHiding(): void {
     this.state.decoys.clear();
     this.nextDecoyAt.clear();
+    this.nextTauntAt.clear();
+    this.tauntClockAt.clear();
+    this.nextSonarAt.clear();
     this.assignRoles();
     this.setPhase("hiding", HIDE_DURATION_MS, () => this.beginHunting());
   }
 
   private beginHunting(): void {
+    this.startTauntClocks();
     this.tauntTimer?.clear();
-    this.tauntTimer = this.clock.setInterval(() => this.broadcastTaunts(), TAUNT_INTERVAL_MS);
+    this.tauntTimer = this.clock.setInterval(() => this.sweepForcedTaunts(), TAUNT_CHECK_MS);
     this.setPhase("hunting", ROUND_DURATION_MS, () => {
       this.state.winner = "props";
       this.endRound();
@@ -842,11 +963,33 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.checkRoundEnd();
   }
 
-  private broadcastTaunts(): void {
-    this.state.players.forEach((player) => {
-      if (player.role === "prop" && player.alive) {
-        this.broadcast(MSG_TAUNT, { playerId: player.id, x: player.x, z: player.z });
+  /**
+   * Start every prop's forced-taunt clock at a random point of the first
+   * {@link TAUNT_FORCED_STAGGER_MS} of the hunt. A clock starting with the hunt
+   * for everyone would make every prop's first forced taunt fire in the same
+   * second, which blurs them into one honk with no direction.
+   */
+  private startTauntClocks(): void {
+    const now = Date.now();
+    this.state.players.forEach((player, sessionId) => {
+      if (player.role !== "prop" || !player.alive) return;
+      this.tauntClockAt.set(sessionId, now + Math.random() * TAUNT_FORCED_STAGGER_MS);
+    });
+  }
+
+  /** Make every prop that has not taunted within {@link TAUNT_INTERVAL_MS} honk, for no points. */
+  private sweepForcedTaunts(): void {
+    const now = Date.now();
+    this.state.players.forEach((player, sessionId) => {
+      if (player.role !== "prop" || !player.alive) return;
+      const since = this.tauntClockAt.get(sessionId);
+      if (since === undefined) {
+        this.tauntClockAt.set(sessionId, now);
+        return;
       }
+      if (now - since < TAUNT_INTERVAL_MS) return;
+      this.tauntClockAt.set(sessionId, now);
+      this.emitTaunt(player, true);
     });
   }
 
@@ -941,6 +1084,9 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     });
     this.state.decoys.clear();
     this.nextDecoyAt.clear();
+    this.nextTauntAt.clear();
+    this.tauntClockAt.clear();
+    this.nextSonarAt.clear();
     if (this.locked) {
       void this.unlock().catch((error: unknown) => {
         console.error(`[morphy] failed to unlock room ${this.roomId}:`, error);
@@ -1134,6 +1280,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.state.players.delete(sessionId);
     this.nextShotAt.delete(sessionId);
     this.nextDecoyAt.delete(sessionId);
+    this.forgetSoundTimersOf(sessionId);
     if (this.bots.size === 0) this.stopBotTicker();
   }
 
@@ -1170,9 +1317,29 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private driveBot(bot: BotRuntime, sessionId: string, now: number): void {
     const action = bot.driver.tick(snapshot(this.state, sessionId), now);
     if (action.ready) this.handleReady(bot.actor, { ready: true });
+    if (action.act) this.handleAct(bot.actor, action.act);
     if (action.input) this.handleInput(bot.actor, action.input);
     if (action.shoot) this.handleShoot(bot.actor, { dir: action.shoot.dir });
     if (action.say) this.handleChat(bot.actor, { text: action.say });
+  }
+
+  /**
+   * A bot's key press, routed to the handler the matching client message
+   * reaches, so it passes the same checks. It runs before the tick's movement,
+   * which puts a decoy where the bot stood when it decided to drop one.
+   */
+  private handleAct(actor: Actor, act: BotAct): void {
+    switch (act) {
+      case "decoy":
+        this.handleDecoy(actor);
+        break;
+      case "taunt":
+        this.handleTaunt(actor);
+        break;
+      case "sonar":
+        this.handleSonar(actor);
+        break;
+    }
   }
 
   private checkRoundEnd(): void {
@@ -1235,6 +1402,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       player.alive = true;
       player.hp = player.role === "hunter" ? HUNTER_MAX_HP : 0;
       player.kills = 0;
+      player.score = 0;
       player.propType = player.role === "prop" ? this.randomPropId() : "";
       player.propRot = 0;
       player.rerollsLeft = player.role === "prop" ? REROLL_BUDGET : 0;

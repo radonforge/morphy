@@ -198,8 +198,9 @@ async function observationSeenBy(visibility) {
 test("a limited-vision bot is never told who the props are", async () => {
   const obs = await observationSeenBy("limited");
   assert.equal(obs.visibility, "limited");
-  const contact = obs.entities.find((e) => e.id === "contact");
-  assert.ok(contact, "a contact in the open and in line of sight is sensed");
+  assert.equal(obs.entities.length, 1, "a contact in the open and in line of sight is sensed");
+  const [contact] = obs.entities;
+  assert.notEqual(contact.id, "contact", "and it is named by a handle, not its session id");
   assert.equal(contact.role, undefined, "role is ground truth and must not leak");
   assert.equal(contact.propType, undefined, "nor the disguise it is wearing");
   assert.equal(contact.alive, undefined);
@@ -227,8 +228,8 @@ test("a limited-vision bot reads a hunter as undisguised, which is what a player
   try {
     bot.launchDecide(worldWithOneContact("hunter", "hunter", ""), Date.now());
     await new Promise((resolve) => setTimeout(resolve, 20));
-    const contact = seen[0].entities.find((e) => e.id === "contact");
-    assert.ok(contact);
+    assert.equal(seen[0].entities.length, 1);
+    const [contact] = seen[0].entities;
     assert.equal(contact.disguised, false);
     assert.equal(contact.role, undefined, "the shape is sensed, the role still is not");
   } finally {
@@ -320,4 +321,96 @@ test("a bot wakes its policy for any contact that comes into view, not just enem
   } finally {
     await bot.stop();
   }
+});
+
+test("a decided action is pressed on the next tick and only once", async () => {
+  let decisions = 0;
+  const driver = new BotDriver({
+    name: "Presser",
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "press-once",
+      decide: (obs) => {
+        decisions++;
+        return decisions === 1
+          ? { kind: "idle", act: "decoy", seq: obs.seq }
+          : { kind: "idle", seq: obs.seq };
+      },
+    },
+    visibility: "limited",
+    trace: null,
+  });
+  driver.setMap(buildMap("station", 1));
+  const world = { phase: "hunting", winner: "", self: livePlayer(true), others: [], decoys: [] };
+
+  assert.equal(driver.tick(world, Date.now()).act, null, "nothing is decided yet");
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(driver.tick(world, Date.now()).act, "decoy");
+  assert.equal(driver.tick(world, Date.now()).act, null, "a key press is not held down");
+  await driver.stop();
+});
+
+test("a heard taunt wakes the policy", async () => {
+  const calls = [];
+  const bot = new BotDriver({
+    name: "Ears",
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "counter",
+      decide: (obs) => {
+        calls.push(obs);
+        return { kind: "patrol", seq: obs.seq };
+      },
+    },
+    visibility: "limited",
+    trace: null,
+  });
+  bot.setMap(buildMap("station", 1));
+  const self = livePlayer(true);
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 15));
+  try {
+    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [] }, 1_000);
+    await settle();
+    const baseline = calls.length;
+    bot.hear({ kind: "taunt", x: self.x + 3, z: self.z }, 1_001);
+    bot.maybeKickDecide({ phase: "hunting", self, others: [], decoys: [] }, 1_002);
+    await settle();
+    assert.equal(calls.length, baseline + 1, "a honk is reacted to at once, as a player would");
+    assert.equal(calls.at(-1).sounds.length, 1);
+  } finally {
+    await bot.stop();
+  }
+});
+
+test("a bot's taunt cools down on its own HUD once pressed", async () => {
+  const seen = [];
+  const driver = new BotDriver({
+    name: "Honker",
+    difficulty: 0.5,
+    readyAtPlayers: 2,
+    policy: {
+      name: "honk",
+      decide: (obs) => {
+        seen.push(obs);
+        return seen.length === 1
+          ? { kind: "idle", act: "taunt", seq: obs.seq }
+          : { kind: "idle", seq: obs.seq };
+      },
+    },
+    visibility: "limited",
+    trace: null,
+  });
+  driver.setMap(buildMap("station", 1));
+  const world = { phase: "hunting", winner: "", self: livePlayer(true), others: [], decoys: [] };
+  const start = Date.now();
+  driver.tick(world, start);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(seen[0].self.canTauntNow, true);
+  assert.equal(driver.tick(world, start + 50).act, "taunt");
+  driver.launchDecide(world, start + 60);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(seen.at(-1).self.canTauntNow, false);
+  await driver.stop();
 });

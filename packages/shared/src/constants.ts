@@ -15,15 +15,43 @@ export const START_COUNTDOWN_MS = 5_000;
 export const HIDE_DURATION_MS = 20_000;
 export const ROUND_DURATION_MS = 240_000;
 export const ROUND_END_MS = 8_000;
+/** A prop that has not taunted for this long during the hunt is made to, for no points. */
 export const TAUNT_INTERVAL_MS = 30_000;
+/** How far apart the props' first forced taunts of a hunt are spread, so they never honk in unison. */
+export const TAUNT_FORCED_STAGGER_MS = 10_000;
+/** How often the room looks for a prop overdue a forced taunt. */
+export const TAUNT_CHECK_MS = 1_000;
+export const TAUNT_COOLDOWN_MS = 10_000;
+export const TAUNT_POINTS = 1;
+/** Points for a taunt with a live hunter within {@link TAUNT_DARING_RADIUS}. */
+export const TAUNT_DARING_POINTS = 3;
+export const TAUNT_DARING_RADIUS = 10;
+/** Beyond this distance a taunt is not heard, by a player's client or by a bot. */
+export const TAUNT_HEARING_RADIUS = 40;
+
+/** A hunter's sonar makes every live prop within this radius honk; decoys stay silent. */
+export const SONAR_RADIUS = 12;
+export const SONAR_COOLDOWN_MS = 30_000;
+/** The pulse itself carries this far, so a prop hears a hunter sounding close by. */
+export const SONAR_HEARING_RADIUS = SONAR_RADIUS * 2;
 export const RECONNECT_WINDOW_MS = 30_000;
 
 export const HUNTER_MAX_HP = 100;
+/** A captured prop joins the hunt below full health, so each capture snowballs less. */
+export const CONVERTED_HUNTER_HP = 60;
+/** HP a hunter wins back per prop captured, capped at {@link HUNTER_MAX_HP}: one pistol miss refunded. */
+export const HUNTER_CAPTURE_HEAL = 20;
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 
 export const PLAYER_HEIGHT = 1.8;
 export const PLAYER_EYE_HEIGHT = 1.6;
+/**
+ * How far a moving player is heard: a remote prop's rustle fades out here for a
+ * player, and a bot senses any mover within it. One number for both, so moving
+ * is the same risk whoever is listening.
+ */
+export const FOOTSTEP_HEARING_RADIUS = 12;
 
 export const MOVE_SPEED = 5;
 export const RUN_MULTIPLIER_HUNTER = 1.7;
@@ -44,6 +72,8 @@ export const PROP_TURN_TAP_MS = 200;
 export const REROLL_BUDGET = 2;
 export const DECOY_BUDGET = 3;
 export const DECOY_COOLDOWN_MS = 1_500;
+/** Share of a weapon's miss damage a shot pays when all it breaks is a decoy. */
+export const DECOY_MISS_DAMAGE_FACTOR = 0.5;
 
 export const PING_INTERVAL_MS = 2_000;
 export const PING_MAX_MS = 999;

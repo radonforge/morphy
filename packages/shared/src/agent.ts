@@ -16,12 +16,20 @@ import type { Phase, Role } from "./protocol";
  * wire.
  */
 
+/**
+ * A one-key action a player can take on top of moving and shooting. Each is
+ * sent once, through the same room message a player's key press sends.
+ */
+export type BotAct = "decoy" | "taunt" | "sonar";
+
 /** Fields every {@link Intent} carries regardless of `kind`. */
 export interface IntentMeta {
   /** Monotonic decision id (echoes {@link Observation.seq}); used for trace correlation and stale-result drop. */
   seq: number;
   /** Optional one-shot chat line spoken when this intent becomes current. */
   say?: string;
+  /** Optional one-shot action, pressed once when this intent is applied. */
+  act?: BotAct;
 }
 
 /**
@@ -52,15 +60,26 @@ export interface ObservedSelf {
   rot: number;
   propType: string;
   canShootNow: boolean;
+  /** A prop's taunt is off cooldown, as its own HUD shows it. */
+  canTauntNow: boolean;
+  /** A hunter's sonar is off cooldown, as its own HUD shows it. */
+  canSonarNow: boolean;
 }
 
 /**
  * Another player as perceived by the bot. Ground-truth fields
  * (`role`/`alive`/`propType`) are present only under `"full"` visibility; under
  * `"limited"` the list is filtered to what the bot can sense and only the
- * deduction signals remain.
+ * deduction signals remain, and a decoy in sight is listed exactly as a
+ * disguised player standing still would be, because that is what it looks like.
  */
 export interface ObservedEntity {
+  /**
+   * Under `"full"` visibility, the player's session id. Under `"limited"`, an
+   * opaque handle drawn from one sequence for players and decoys alike, so the
+   * id says nothing a player could not see: a session id would name a player,
+   * and a decoy's key would name a decoy.
+   */
   id: string;
   x: number;
   z: number;
@@ -85,6 +104,26 @@ export interface ObservedEntity {
   movedRecently?: boolean;
   /** This entity has line of sight to the bot and is aiming roughly at it, i.e. it is watching the bot right now. */
   facingMe?: boolean;
+}
+
+/** A sound a player's client plays positionally, and so one a bot hears too. */
+export type SoundKind = "taunt" | "sonar";
+
+/**
+ * A sound the bot heard, at most a few seconds ago. It carries where and what,
+ * never who: a player hears a honk from a direction, not a name. The position
+ * is exact when the source was in line of sight and snapped to a neighbourhood
+ * otherwise, the same rule footsteps follow.
+ */
+export interface ObservedSound {
+  /** Names the noise so a policy can tell a new one from one it already followed; says nothing about its source. */
+  id: string;
+  kind: SoundKind;
+  x: number;
+  z: number;
+  distance: number;
+  hasLineOfSight: boolean;
+  ageMs: number;
 }
 
 export interface ObservedDoorway {
@@ -120,5 +159,6 @@ export interface Observation {
   arrived: boolean;
   self: ObservedSelf;
   entities: ObservedEntity[];
+  sounds: ObservedSound[];
   map: ObservedMap;
 }

@@ -1,10 +1,12 @@
 import {
+  type BotAct,
   type InputMessage,
   type Intent,
   type MapDefinition,
   type Observation,
   type Phase,
   type Role,
+  type SoundKind,
   type Visibility,
   withTimeout,
 } from "@morphy/shared";
@@ -15,6 +17,7 @@ import {
   DECIDE_TIMEOUT_MS,
   MAX_TICK_SECONDS,
 } from "./config";
+import { decoySource, playerSource } from "./contacts";
 import type { Policy } from "./policy/types";
 import type { Vec3 } from "./raycast";
 import { Reflex, type ReflexWorld } from "./reflex";
@@ -53,15 +56,23 @@ export interface BotDriverOptions {
   trace: Trace | null;
 }
 
+/** A sound the room played, at the spot a player's client plays it from. */
+export interface RoomSound {
+  kind: SoundKind;
+  x: number;
+  z: number;
+}
+
 /** What the caller must deliver to the room on behalf of the bot this tick. */
 export interface DriverAction {
   ready: boolean;
   input: InputMessage | null;
   shoot: { dir: Vec3 } | null;
   say: string | null;
+  act: BotAct | null;
 }
 
-const IDLE: DriverAction = { ready: false, input: null, shoot: null, say: null };
+const IDLE: DriverAction = { ready: false, input: null, shoot: null, say: null, act: null };
 
 /**
  * The transport-free half of a bot: the reflex, the intent lifecycle and the
@@ -97,6 +108,8 @@ export class BotDriver {
   private losIds = new Set<string>();
   /** A decided chat line is only worth saying on the very next tick; a bot that dies or returns to the lobby first drops it rather than blurting it out a round later. */
   private pendingSay: string | null = null;
+  /** A decided action is pressed on the next tick or not at all, for the same reason as {@link pendingSay}. */
+  private pendingAct: BotAct | null = null;
 
   constructor(private readonly options: BotDriverOptions) {
     this.reflex = new Reflex(options.difficulty, options.visibility);
@@ -135,6 +148,7 @@ export class BotDriver {
       if (world.phase === "hiding") {
         this.currentIntent = BOOTSTRAP_INTENT;
         this.reflex.onIntentChanged();
+        this.reflex.forgetContacts();
       }
       if (world.phase === "round_end" && this.options.trace) {
         this.options.trace.recordRoundEnd(world.winner, now);
@@ -144,6 +158,7 @@ export class BotDriver {
 
     if (world.phase === "lobby") {
       this.pendingSay = null;
+      this.pendingAct = null;
       const playerCount = world.others.length + 1;
       const wantsReady = !self.ready && playerCount >= this.options.readyAtPlayers;
       return { ...IDLE, ready: wantsReady };
@@ -151,6 +166,7 @@ export class BotDriver {
 
     if (!self.alive) {
       this.pendingSay = null;
+      this.pendingAct = null;
       return IDLE;
     }
 
@@ -164,8 +180,16 @@ export class BotDriver {
     this.maybeKickDecide(reflexWorld, now);
 
     const say = this.pendingSay;
+    const act = this.pendingAct;
     this.pendingSay = null;
-    return { ready: false, input: motor.input, shoot: motor.shoot, say };
+    this.pendingAct = null;
+    if (act) this.reflex.notePressed(act, now);
+    return { ready: false, input: motor.input, shoot: motor.shoot, say, act };
+  }
+
+  /** Let the bot hear a sound the room played, as a player's client would play it. */
+  hear(sound: RoomSound, now: number): void {
+    this.reflex.hear(sound.kind, sound.x, sound.z, now);
   }
 
   recordKill(event: { byId: string; victimId: string; reason: string }, now: number): void {
@@ -207,6 +231,7 @@ export class BotDriver {
     if (this.detectLineOfSightGain(world)) event = true;
     if (this.reflex.consumeArrivalEvent()) event = true;
     if (this.reflex.consumeBlockedEvent()) event = true;
+    if (this.reflex.consumeHeardEvent()) event = true;
 
     return event;
   }
@@ -218,17 +243,28 @@ export class BotDriver {
    * appeared, before its policy had been told anything about either. Working
    * out who a contact is belongs to the policy, from the observation it is
    * allowed to see. Dead players are skipped because they are not rendered for
-   * a human either, so they are not there to be noticed.
+   * a human either, so they are not there to be noticed. A limited-vision bot
+   * is woken by a decoy coming into view as well: it perceives one as a
+   * disguise like any other, and sleeping through it would be a tell.
    */
   private detectLineOfSightGain(world: ReflexWorld): boolean {
     const seen = new Set<string>();
-    let gained = false;
+    const sighted: { source: string; x: number; y: number; z: number }[] = [];
     for (const other of world.others) {
       if (!other.alive) continue;
-      const dist = Math.hypot(other.x - this.reflex.x, other.z - this.reflex.z);
-      if (dist > BOT_VISION_RANGE || !this.reflex.canSee(other.x, other.y, other.z)) continue;
-      seen.add(other.id);
-      if (!this.losIds.has(other.id)) gained = true;
+      sighted.push({ source: playerSource(other.id), x: other.x, y: other.y, z: other.z });
+    }
+    if (this.options.visibility === "limited") {
+      for (const decoy of world.decoys) {
+        sighted.push({ source: decoySource(decoy.id), x: decoy.x, y: decoy.y, z: decoy.z });
+      }
+    }
+    let gained = false;
+    for (const contact of sighted) {
+      const dist = Math.hypot(contact.x - this.reflex.x, contact.z - this.reflex.z);
+      if (dist > BOT_VISION_RANGE || !this.reflex.canSee(contact.x, contact.y, contact.z)) continue;
+      seen.add(contact.source);
+      if (!this.losIds.has(contact.source)) gained = true;
     }
     this.losIds = seen;
     return gained;
@@ -273,6 +309,7 @@ export class BotDriver {
     if (changed || speechChanged) {
       this.pendingSay = intent.kind === "chat" ? intent.text : (intent.say ?? null);
     }
+    if (intent.act) this.pendingAct = intent.act;
     this.options.trace?.recordDecision(this.options.policy.name, obs, intent, Date.now());
   }
 

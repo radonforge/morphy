@@ -1,4 +1,10 @@
-import { DEFAULT_PORT, DEFAULT_WEAPON, PLAYER_EYE_HEIGHT, WEAPONS } from "@morphy/shared";
+import {
+  DEFAULT_PORT,
+  DEFAULT_WEAPON,
+  FOOTSTEP_HEARING_RADIUS,
+  PLAYER_EYE_HEIGHT,
+  WEAPONS,
+} from "@morphy/shared";
 
 export const CONNECT_TIMEOUT_MS = 8_000;
 
@@ -27,6 +33,26 @@ export const FLEE_DEFLECTION_RAD = (2 * Math.PI) / 5;
  * replan counter so a blocked path never latched.
  */
 export const MAX_FLEE_DEFLECTIONS = 4;
+
+/**
+ * Per-decision chance that a hidden prop with no hunter in sight taunts once it
+ * can, lerped by difficulty: at the default a taunt comes some ten seconds after
+ * the cooldown, ahead of the forced one but not on the dot.
+ */
+export const TAUNT_CHANCE_MIN = 0.03;
+export const TAUNT_CHANCE_MAX = 0.1;
+/**
+ * The same with a possible hunter inside the daring radius that has not seen
+ * the prop: three times the points for a far likelier capture, so taken rarely.
+ */
+export const TAUNT_DARING_CHANCE_MIN = 0.01;
+export const TAUNT_DARING_CHANCE_MAX = 0.05;
+
+/**
+ * Decisions in a row a hunter spends searching with nothing to follow before it
+ * sounds its sonar, about five seconds at the decision rate.
+ */
+export const SONAR_PATIENCE_DECISIONS = 7;
 
 export const HIDE_OFFSET_MIN = 1.2;
 export const HIDE_OFFSET_MAX = 2.4;
@@ -71,11 +97,13 @@ export const DECIDE_INTERVAL_MS = 700;
 export const DECIDE_TIMEOUT_MS = 500;
 
 export const BOT_VISION_RANGE = WEAPONS[DEFAULT_WEAPON].range;
-export const BOT_HEARING_RADIUS = 12;
+export const BOT_HEARING_RADIUS = FOOTSTEP_HEARING_RADIUS;
 /** Cell size a contact known only by sound is snapped to, so hearing yields a
  * neighbourhood rather than a point. Sized to a map tile: within earshot a
  * heard contact resolves to one of a handful of cells. */
 export const HEARD_POSITION_CELL = 4;
+/** How long a bot remembers a sound it heard: long enough for its next few decisions to act on it. */
+export const HEARD_SOUND_MEMORY_MS = 3_000;
 export const MOVED_RECENTLY_MS = 600;
 export const MOVED_RECENTLY_MIN_DIST = 0.3;
 export const NEARBY_PROP_RADIUS = 12;

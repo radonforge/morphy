@@ -105,7 +105,7 @@ function ensure(): { ctx: AudioContext; master: GainNode } | null {
   return { ctx: audioContext, master: masterGain! };
 }
 
-function tone(ctx: AudioContext, master: GainNode, spec: ToneSpec): void {
+function tone(ctx: AudioContext, master: AudioNode, spec: ToneSpec): OscillatorNode {
   const start = ctx.currentTime + (spec.delay ?? 0);
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -120,13 +120,25 @@ function tone(ctx: AudioContext, master: GainNode, spec: ToneSpec): void {
   osc.connect(gain).connect(master);
   osc.start(start);
   osc.stop(start + spec.dur + 0.02);
+  return osc;
+}
+
+/**
+ * A stereo panner feeding `master`, for a sound placed left or right of the
+ * listener (`pan` -1..1). The caller disconnects it once its source ends.
+ */
+function stereo(ctx: AudioContext, master: GainNode, pan: number): StereoPannerNode {
+  const panner = ctx.createStereoPanner();
+  panner.pan.value = Math.max(-1, Math.min(1, pan));
+  panner.connect(master);
+  return panner;
 }
 
 function noiseBurst(
   ctx: AudioContext,
-  master: GainNode,
+  master: AudioNode,
   opts: { peak: number; dur: number; filterHz: number },
-): void {
+): AudioBufferSourceNode {
   if (!noiseBuffer) {
     const length = Math.floor(ctx.sampleRate * NOISE_SECONDS);
     noiseBuffer = ctx.createBuffer(1, length, ctx.sampleRate);
@@ -145,6 +157,7 @@ function noiseBurst(
   src.connect(filter).connect(gain).connect(master);
   src.start(now);
   src.stop(now + opts.dur + 0.02);
+  return src;
 }
 
 const sampleCache = new Map<string, Promise<AudioBuffer | null>>();
@@ -372,11 +385,16 @@ export function stopLobbyMusic(): void {
   musicGain = null;
 }
 
-/** Play a short rising "honk" for a prop taunt. `volume` is 0..1 (typically by distance). */
-export function playTaunt(volume: number): void {
+/**
+ * Play a short rising "honk" for a prop taunt. `volume` is 0..1 (typically by
+ * distance) and `pan` -1..1 places it left or right, so a hunter hears which
+ * way it came from.
+ */
+export function playTaunt(volume: number, pan = 0): void {
   const e = ensure();
   if (!e || volume <= 0) return;
-  tone(e.ctx, e.master, {
+  const panner = stereo(e.ctx, e.master, pan);
+  const osc = tone(e.ctx, panner, {
     type: "square",
     f0: 420,
     f1: 640,
@@ -385,6 +403,36 @@ export function playTaunt(volume: number): void {
     attack: 0.02,
     dur: 0.26,
   });
+  osc.onended = () => panner.disconnect();
+}
+
+/**
+ * Low falling sweep with a faint ping on top for a hunter's sonar pulse.
+ * `volume` is 0..1 (typically by distance) and `pan` -1..1 places it, so a
+ * prop hears which side the hunter sounded from.
+ */
+export function playSonar(volume: number, pan = 0): void {
+  const e = ensure();
+  if (!e || volume <= 0) return;
+  const panner = stereo(e.ctx, e.master, pan);
+  const level = Math.min(1, volume);
+  const sweep = tone(e.ctx, panner, {
+    type: "sine",
+    f0: 260,
+    f1: 90,
+    fTime: 0.55,
+    peak: 0.22 * level,
+    attack: 0.02,
+    dur: 0.6,
+  });
+  tone(e.ctx, panner, {
+    type: "triangle",
+    f0: 1320,
+    peak: 0.05 * level,
+    dur: 0.18,
+    delay: 0.05,
+  });
+  sweep.onended = () => panner.disconnect();
 }
 
 /** Clean two-tone materialize sweep when a player morphs into a prop. `volume` is 0..1. */
@@ -438,6 +486,20 @@ export function playHitConfirm(): void {
  */
 export function playWeaponShot(weapon: WeaponId, volume = 1): void {
   playSample(pickSample(WEAPON_SAMPLES[weapon]), WEAPON_SAMPLE_LEVEL * Math.min(1, volume));
+}
+
+/**
+ * Dry papery rustle for a disguise on the move. `volume` is 0..1 (by distance
+ * and pace) and `pan` -1..1 places it.
+ */
+export function playRustle(volume: number, pan = 0): void {
+  const e = ensure();
+  if (!e || volume <= 0) return;
+  const panner = stereo(e.ctx, e.master, pan);
+  const level = Math.min(1, volume);
+  noiseBurst(e.ctx, panner, { peak: 0.09 * level, dur: 0.07, filterHz: 3200 });
+  const tail = noiseBurst(e.ctx, panner, { peak: 0.05 * level, dur: 0.12, filterHz: 1900 });
+  tail.onended = () => panner.disconnect();
 }
 
 /** Soft low thud for a footstep. `volume` is 0..1 (1 for the local player, by distance for others). */
