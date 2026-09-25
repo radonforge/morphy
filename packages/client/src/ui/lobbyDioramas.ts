@@ -9,7 +9,6 @@ export interface SetPiece {
 
 const mod = (name: string): string => `/models/space/modular/${name}.glb`;
 const sta = (name: string): string => `/models/space/station/${name}.glb`;
-const ext = (name: string): string => `/models/space/exterior/${name}.glb`;
 const urb = (name: string): string => `/models/urban/${name}.glb`;
 
 /** Model set pieces rendered behind the lobby for each selected map. */
@@ -36,26 +35,6 @@ export const LOBBY_DIORAMAS: Record<MapId, SetPiece[]> = {
     { url: sta("computer-wide"), position: [7.4, 0, -10], scale: 2.8 },
     { url: sta("chair"), position: [7.4, 0, -8.4], rotationY: Math.PI, scale: 2.8 },
     { url: sta("structure-barrier"), position: [9.8, 0, -7.4], scale: 2.8 },
-  ],
-  mars: [
-    { url: ext("hangar_roundA"), position: [-7, 0, -16], scale: 3 },
-    { url: ext("chimney_detailed"), position: [0.1, 0, -17.5], scale: 2.2 },
-    { url: ext("satelliteDish_large"), position: [-9.5, 0, -9.5], scale: 2 },
-    { url: ext("machine_wireless"), position: [-10, 0, -7.5], scale: 2.2 },
-    { url: ext("barrels"), position: [-4.5, 0, -9], scale: 2.2 },
-    { url: ext("rocket_baseA"), position: [6, 0, -13], scale: 2.4 },
-    { url: ext("rocket_sidesA"), position: [6, 3.84, -13], scale: 2.4 },
-    { url: ext("rocket_topA"), position: [6, 6.24, -13], scale: 2.4 },
-    { url: ext("rocket_fuelA"), position: [9.8, 0, -14], scale: 2.4 },
-    { url: ext("barrel"), position: [4.3, 0, -10.2], scale: 2.2 },
-    { url: ext("rover"), position: [3.3, 0, -9], scale: 2 },
-    { url: ext("astronautA"), position: [2.2, 0, -8.8], scale: 1.6 },
-    { url: ext("meteor_half"), position: [-7, 0, -6], rotationY: 1.1, scale: 1.8 },
-    { url: ext("rock_largeA"), position: [-10.5, 0, -4.5], rotationY: 1.2, scale: 2.5 },
-    { url: ext("rocks_smallB"), position: [8.5, 0, -4.2], rotationY: 0.4, scale: 2.5 },
-    { url: ext("rocks_smallA"), position: [1, 0, -3.5], rotationY: 0.7, scale: 2.5 },
-    { url: ext("craterLarge"), position: [-5, 0, -2.5], rotationY: 0.5, scale: 3.5 },
-    { url: ext("crater"), position: [7, 0, -3.5], rotationY: 1.8, scale: 3 },
   ],
   urban: [
     { url: urb("roads/road-side"), position: [-12, -0.05, -1], scale: 4 },

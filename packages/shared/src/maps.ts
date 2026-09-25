@@ -27,13 +27,6 @@ export const MAP_CATALOG = [
     blurb: "Pressurized modules and tight corridors: blend in among furniture and containers.",
   },
   {
-    id: "mars",
-    name: "Ares Outpost",
-    theme: "mars",
-    tag: "Open",
-    blurb: "Open-air Martian apron around a small base: little cover, long sightlines.",
-  },
-  {
     id: "urban",
     name: "North District",
     theme: "urban",

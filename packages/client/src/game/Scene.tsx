@@ -228,18 +228,6 @@ const THEMES: Record<string, ThemePreset> = {
     turbidity: 9,
     rayleigh: 0.5,
   },
-  mars: {
-    ground: MAP_THEME_BASE.mars.ground,
-    background: MAP_THEME_BASE.mars.background,
-    hemiSky: MAP_THEME_BASE.mars.hemiSky,
-    hemiGround: MAP_THEME_BASE.mars.hemiGround,
-    hemiIntensity: 1.1,
-    ambient: 0.8,
-    dir: MAP_THEME_BASE.mars.directional,
-    sky: false,
-    turbidity: 6,
-    rayleigh: 1.2,
-  },
   urban: {
     ground: MAP_THEME_BASE.urban.ground,
     background: MAP_THEME_BASE.urban.background,
