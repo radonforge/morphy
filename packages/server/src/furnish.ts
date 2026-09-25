@@ -22,6 +22,11 @@ const GAP_EPS = 0.15;
 const DOOR_NEAR = 5;
 const DEFAULT_RADIUS = 0.5;
 
+const WALL_FACE = 0.5;
+const FLUSH_GAP = 0.05;
+const FLUSH_WALL_GAP = WALL_FACE + FLUSH_GAP;
+const FLUSH_EPS = 0.01;
+
 const RING_RADIUS = 1.75;
 const ROW_SPACING = 1.8;
 const STACK_SPREAD = 1.1;
@@ -42,6 +47,12 @@ const DECOR: readonly string[] = ["barrel", "barrels", "meteor", "meteor_detaile
 
 const HALF_PI = Math.PI / 2;
 
+/** Yaw turning a model's +Z front out of wall `side` (0 = x0, 1 = x1, 2 = z0, 3 = z1). */
+const WALL_FACING: readonly number[] = [HALF_PI, -HALF_PI, 0, Math.PI];
+
+/** Models authored with their front toward -Z, which need a half turn more to face out of a wall. */
+const REAR_FRONTED: ReadonlySet<string> = new Set(["desk_computer", "desk_computerCorner"]);
+
 function pick<T>(arr: readonly T[], rng: Rng): T {
   return arr[Math.floor(rng() * arr.length)]!;
 }
@@ -54,18 +65,23 @@ function randCardinal(rng: Rng): number {
   return Math.floor(rng() * 4) * HALF_PI;
 }
 
-/** Yaw so a model at (x, z) faces toward (cx, cz). */
-function faceCenter(x: number, z: number, cx: number, cz: number): number {
-  return Math.atan2(cx - x, cz - z);
-}
-
 /**
  * Bounded placement context for one room: validates every candidate against the
  * room walls, its doorways, the prop spawn point and already-placed furniture.
  */
 interface Placer {
-  /** Try to place `type` at (x, z); returns false (placing nothing) if invalid. */
-  place: (type: string, x: number, z: number, rot: number, checkGap?: boolean) => boolean;
+  /**
+   * Try to place `type` at (x, z); returns false (placing nothing) if invalid.
+   * `wallGap` is the clearance its footprint keeps from every wall line.
+   */
+  place: (
+    type: string,
+    x: number,
+    z: number,
+    rot: number,
+    checkGap?: boolean,
+    wallGap?: number,
+  ) => boolean;
   has: (type: string) => boolean;
   radiusOf: (id: string) => number;
   rect: RoomRect;
@@ -92,11 +108,17 @@ function makePlacer(
   );
   const placed: { x: number; z: number; r: number }[] = [];
 
-  const valid = (type: string, x: number, z: number, checkGap: boolean): boolean => {
+  const valid = (
+    type: string,
+    x: number,
+    z: number,
+    checkGap: boolean,
+    wallGap: number,
+  ): boolean => {
     if (!available.has(type)) return false;
     const r = radiusOf(type);
-    if (x - r < rect.x0 + WALL_GAP || x + r > rect.x1 - WALL_GAP) return false;
-    if (z - r < rect.z0 + WALL_GAP || z + r > rect.z1 - WALL_GAP) return false;
+    if (x - r < rect.x0 + wallGap || x + r > rect.x1 - wallGap) return false;
+    if (z - r < rect.z0 + wallGap || z + r > rect.z1 - wallGap) return false;
     for (const d of doors) {
       if (Math.hypot(x - d.x, z - d.z) < DOOR_KEEPOUT + r) return false;
     }
@@ -110,8 +132,8 @@ function makePlacer(
   };
 
   return {
-    place: (type, x, z, rot, checkGap = true) => {
-      if (!valid(type, x, z, checkGap)) return false;
+    place: (type, x, z, rot, checkGap = true, wallGap = WALL_GAP) => {
+      if (!valid(type, x, z, checkGap, wallGap)) return false;
       out.push({ type, position: { x, y: 0, z }, rotation: rot });
       placed.push({ x, z, r: radiusOf(type) });
       return true;
@@ -218,7 +240,23 @@ const ARCHETYPES: readonly Archetype[] = [
   },
 ];
 
-/** Line each wall with furniture from `types`, inset by radius, facing inward. */
+/** Centre of a `type` standing flush against wall `side` of the placer's rect, at `along` on it. */
+function onWall(p: Placer, side: number, along: number, type: string): { x: number; z: number } {
+  const inset = FLUSH_WALL_GAP + p.radiusOf(type) + FLUSH_EPS;
+  if (side === 0) return { x: p.rect.x0 + inset, z: along };
+  if (side === 1) return { x: p.rect.x1 - inset, z: along };
+  if (side === 2) return { x: along, z: p.rect.z0 + inset };
+  return { x: along, z: p.rect.z1 - inset };
+}
+
+/** Place `type` flush against wall `side` at `along`, facing out of the wall. */
+function placeOnWall(p: Placer, side: number, along: number, type: string): void {
+  const { x, z } = onWall(p, side, along, type);
+  const facing = WALL_FACING[side]! + (REAR_FRONTED.has(type) ? Math.PI : 0);
+  p.place(type, x, z, facing, true, FLUSH_WALL_GAP);
+}
+
+/** Line each wall with furniture from `types`, backed flush against it and facing out of it. */
 function placeWalls(p: Placer, types: readonly string[], rng: Rng): void {
   for (let side = 0; side < 4; side++) {
     const alongZ = side < 2;
@@ -229,25 +267,8 @@ function placeWalls(p: Placer, types: readonly string[], rng: Rng): void {
     for (let k = 0; k < n; k++) {
       if (rng() < WALL_SKIP) continue;
       const type = pick(types, rng);
-      const inset = WALL_GAP + p.radiusOf(type) + 0.1;
       const t = n === 1 ? 0.5 : (k + 0.5) / n;
-      const along = (alongZ ? p.rect.z0 : p.rect.x0) + CORNER_MARGIN + t * usable;
-      let x: number;
-      let z: number;
-      if (side === 0) {
-        x = p.rect.x0 + inset;
-        z = along;
-      } else if (side === 1) {
-        x = p.rect.x1 - inset;
-        z = along;
-      } else if (side === 2) {
-        x = along;
-        z = p.rect.z0 + inset;
-      } else {
-        x = along;
-        z = p.rect.z1 - inset;
-      }
-      p.place(type, x, z, faceCenter(x, z, p.cx, p.cz));
+      placeOnWall(p, side, (alongZ ? p.rect.z0 : p.rect.x0) + CORNER_MARGIN + t * usable, type);
     }
   }
 }
@@ -287,10 +308,11 @@ function scatterDecor(p: Placer, rng: Rng): void {
 
 /**
  * Furnish one room with a semantically coherent arrangement chosen from a fixed
- * set of archetypes: each wall is lined with appropriate furniture facing inward,
- * and the interior is filled on a zone grid with free-standing islands
- * (table+chairs, stacks, machines) so room centers don't read as empty. Keeps
- * clear of doorways and the prop spawn. Appends to `out`. Deterministic per `rng`.
+ * set of archetypes: each wall is lined with appropriate furniture backed flush
+ * against it and facing out of it, and the interior is filled on a zone grid
+ * with free-standing islands (table+chairs, stacks, machines) so room centers
+ * don't read as empty. Keeps clear of doorways and the prop spawn. Appends to
+ * `out`. Deterministic per `rng`.
  */
 export function furnishRoom(opts: {
   rect: RoomRect;
