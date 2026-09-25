@@ -33,7 +33,7 @@ import {
   type Winner,
 } from "@morphy/shared";
 import { Canvas } from "@react-three/fiber";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WebGLRenderer } from "three";
 import type { Connection } from "../net/connection";
 import {
@@ -53,6 +53,7 @@ import {
 } from "./audio";
 import { ControlsBar, ControlsDialog } from "./Controls";
 import { CopyDiagnostics } from "./CopyDiagnostics";
+import { deviceHints } from "./deviceProbe";
 import {
   createFrameRing,
   type DiagnosticsReport,
@@ -62,10 +63,17 @@ import {
   gpuInfo,
   recordFrame,
 } from "./diagnostics";
+import {
+  type GraphicsTier,
+  nextRoundTier,
+  type RoundFrames,
+  resolveTier,
+  TIER_SETTINGS,
+} from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
 import { lockPointer } from "./pointerLock";
-import { isPerfHudEnabled } from "./prefs";
-import { GAME_DPR, GAME_FOV, Scene } from "./Scene";
+import { graphicsPreference, isPerfHudEnabled } from "./prefs";
+import { GAME_FOV, Scene } from "./Scene";
 import type {
   BreaksRef,
   DecoyView,
@@ -95,6 +103,7 @@ const RING_RADIUS = 19;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const PERF_SAMPLE_WINDOW_S = 0.5;
 const RENDER_GATE_PRIORITY = 1;
+const GFX_LOW_CLASS = "gfx-low";
 const MS_PER_S = 1000;
 const BYTES_PER_MB = 1024 * 1024;
 /**
@@ -310,16 +319,24 @@ function PerfProbe({
   localId,
   nodeRef,
   ring,
+  round,
+  inRound,
 }: {
   playersRef: PlayersRef;
   localId: string;
   nodeRef: React.RefObject<HTMLDivElement | null>;
   ring: FrameRing;
+  round: RoundFrames;
+  inRound: boolean;
 }) {
   const frames = useRef(0);
   const windowStart = useRef(0);
   useGuardedFrame(({ clock }, delta) => {
     recordFrame(ring, delta * MS_PER_S);
+    if (inRound) {
+      round.frames += 1;
+      round.totalMs += delta * MS_PER_S;
+    }
     frames.current++;
     const elapsed = clock.elapsedTime - windowStart.current;
     if (elapsed < PERF_SAMPLE_WINDOW_S) return;
@@ -364,6 +381,7 @@ function readDiagnostics(
   mapName: string,
   phase: Phase,
   players: number,
+  graphics: string,
 ): DiagnosticsReport {
   const context = gl.getContext();
   const debug = context.getExtension("WEBGL_debug_renderer_info");
@@ -394,6 +412,7 @@ function readDiagnostics(
     map: mapName,
     phase,
     players,
+    graphics,
   };
 }
 
@@ -576,6 +595,11 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [perfHud] = useState(() => isPerfHudEnabled());
   const perfNodeRef = useRef<HTMLDivElement | null>(null);
   const [frameRing] = useState(() => createFrameRing());
+  const [gfxPreference] = useState(() => graphicsPreference());
+  const [tier, setTier] = useState<GraphicsTier>(() => resolveTier(gfxPreference, deviceHints()));
+  const [roundFrames] = useState<RoundFrames>(() => ({ frames: 0, totalMs: 0 }));
+  const tierSettings = TIER_SETTINGS[tier];
+  const glConfig = useMemo(() => ({ antialias: tierSettings.antialias }), [tierSettings]);
   const glRef = useRef<WebGLRenderer | null>(null);
   const longTasksRef = useRef<LongTaskTally>({ count: 0, longestMs: 0 });
   const contextLossesRef = useRef(0);
@@ -1036,10 +1060,26 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         mapName,
         phase,
         ids.length,
+        `${gfxPreference} (${tier})`,
       ),
     );
-  }, [frameRing, map, phase, ids.length]);
+  }, [frameRing, map, phase, ids.length, gfxPreference, tier]);
 
+  useEffect(() => {
+    if (phase === "hunting") {
+      roundFrames.frames = 0;
+      roundFrames.totalMs = 0;
+    } else if (phase === "round_end" && gfxPreference === "auto") {
+      setTier((current) => nextRoundTier(current, roundFrames));
+    }
+  }, [phase, gfxPreference, roundFrames]);
+
+  useEffect(() => {
+    document.body.classList.toggle(GFX_LOW_CLASS, !tierSettings.glass);
+    return () => document.body.classList.remove(GFX_LOW_CLASS);
+  }, [tierSettings]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tier is a trigger, not read in the body; a tier change remounts the Canvas, so the listeners must move to the new element.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!map || !canvas) return;
@@ -1054,7 +1094,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       canvas.removeEventListener("webglcontextlost", onLost);
       canvas.removeEventListener("webglcontextrestored", onRestored);
     };
-  }, [map]);
+  }, [map, tier]);
 
   if (!map) {
     return (
@@ -1069,9 +1109,11 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   return (
     <>
       <Canvas
+        key={tier}
         ref={canvasRef}
-        dpr={GAME_DPR}
-        shadows={GAME_SHADOW_TYPE}
+        dpr={tierSettings.dpr}
+        gl={glConfig}
+        shadows={tierSettings.shadows ? GAME_SHADOW_TYPE : false}
         camera={{ position: [0, 12, 18], fov: GAME_FOV }}
         onCreated={({ gl }) => {
           glRef.current = gl;
@@ -1094,6 +1136,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           weapon={weapon}
           inputBlocked={inputBlocked}
           onShoot={onShoot}
+          shadows={tierSettings.shadows}
         />
         <RenderGate skip={blinded} />
         <PerfProbe
@@ -1101,6 +1144,8 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           localId={sessionId}
           nodeRef={perfNodeRef}
           ring={frameRing}
+          round={roundFrames}
+          inRound={phase === "hunting"}
         />
       </Canvas>
 

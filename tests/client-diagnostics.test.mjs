@@ -64,6 +64,7 @@ test("the copied text leads with the version and says plainly when acceleration 
     map: "Kepler-9 Station",
     phase: "hunting",
     players: 6,
+    graphics: "auto (low)",
   });
   assert.match(text.split("\n")[0], /^Morphy 0\.3\.0 \(abc1234\)$/);
   assert.match(text, /Hardware acceleration: OFF/);
