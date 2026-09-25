@@ -14,8 +14,10 @@ import {
   HUNTER_MAX_HP,
   LOBBY_AUTOSTART_MS,
   MSG_SHOT_FIRED,
+  MSG_SONAR_PING,
   MSG_TAUNT,
   RECONNECT_WINDOW_MS,
+  SONAR_RADIUS,
   START_COUNTDOWN_MS,
   TAUNT_CHECK_MS,
   TAUNT_DARING_POINTS,
@@ -829,6 +831,86 @@ test("a round starts every prop's score from nothing", () => {
   room.state.players.forEach((p) => {
     assert.equal(p.score, 0);
   });
+});
+
+/** A hunter at the origin with one prop inside its sonar, one outside, and a decoy inside. */
+function sonarRoom() {
+  const room = new MorphyRoom();
+  room.state.phase = "hunting";
+  const hunter = player("hunter", "hunter");
+  const near = player("near", "prop");
+  near.x = SONAR_RADIUS - 1;
+  const far = player("far", "prop");
+  far.x = SONAR_RADIUS * 3;
+  for (const p of [hunter, near, far]) room.state.players.set(p.id, p);
+  const decoy = new DecoyState();
+  decoy.id = "d0";
+  decoy.z = 2;
+  decoy.owner = far.id;
+  room.state.decoys.set(decoy.id, decoy);
+  const sent = [];
+  room.broadcast = (type, payload) => sent.push({ type, payload });
+  return { room, hunter, near, far, sent };
+}
+
+const sonarAs = (room, id) => room.handleSonar({ sessionId: id, send() {} });
+
+test("a sonar makes the props within reach honk, and only them", () => {
+  const { room, hunter, near, sent } = sonarRoom();
+  sonarAs(room, hunter.id);
+  assert.deepEqual(sent, [
+    { type: MSG_SONAR_PING, payload: { playerId: hunter.id, x: 0, z: 0 } },
+    { type: MSG_TAUNT, payload: { playerId: near.id, x: near.x, z: 0, forced: true } },
+  ]);
+});
+
+test("a honk drawn out by a sonar scores nothing and leaves the prop's clock alone", () => {
+  const { room, hunter, near } = sonarRoom();
+  const clock = Date.now() - 1_000;
+  room.tauntClockAt.set(near.id, clock);
+  sonarAs(room, hunter.id);
+  assert.equal(near.score, 0);
+  assert.equal(room.tauntClockAt.get(near.id), clock);
+});
+
+test("a sonar still cooling down is refused", () => {
+  const { room, hunter, sent } = sonarRoom();
+  sonarAs(room, hunter.id);
+  const once = sent.length;
+  sonarAs(room, hunter.id);
+  assert.equal(sent.length, once);
+});
+
+test("only a live hunter sounds a sonar, and only while the hunt is on", () => {
+  const { room, hunter, near, sent } = sonarRoom();
+  sonarAs(room, near.id);
+  room.state.phase = "hiding";
+  sonarAs(room, hunter.id);
+  room.state.phase = "hunting";
+  hunter.alive = false;
+  sonarAs(room, hunter.id);
+  assert.deepEqual(sent, []);
+});
+
+test("a room-filling bot hears a sonar pulse, and the hunter does not hear its own", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  startRound(room);
+  pinHunterOnABot(room);
+  const hunter = botWithRole(room, "hunter");
+  const heard = new Map();
+  for (const [id, bot] of room.bots) {
+    heard.set(id, []);
+    bot.driver.hear = (sound) => heard.get(id).push(sound);
+  }
+  sonarAs(room, hunter);
+  const body = room.state.players.get(hunter);
+  for (const [id, sounds] of heard) {
+    const pulses = sounds.filter((sound) => sound.kind === "sonar");
+    const expected = id === hunter ? [] : [{ kind: "sonar", x: body.x, z: body.z }];
+    assert.deepEqual(pulses, expected);
+  }
 });
 
 test("lifetime stats accumulate round outcomes in SQLite", () => {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { HEARD_SOUND_MEMORY_MS } from "../packages/bot/src/config.ts";
 import { Reflex } from "../packages/bot/src/reflex.ts";
-import { TAUNT_HEARING_RADIUS } from "../packages/shared/src/index.ts";
+import { SONAR_HEARING_RADIUS, TAUNT_HEARING_RADIUS } from "../packages/shared/src/index.ts";
 
 // A single wall standing between the bot at the origin and a contact further
 // down the +x axis: it blocks line of sight without blocking the ground the
@@ -324,4 +324,13 @@ test("a heard taunt is forgotten after a few seconds", () => {
   reflex.hear("taunt", -5.9, 1.9, 1_000);
   const later = 1_000 + HEARD_SOUND_MEMORY_MS + 1;
   assert.deepEqual(reflex.buildObservation(world(GONE), 1, later).sounds, []);
+});
+
+test("a sonar pulse carries only as far as a player hears it", () => {
+  const reflex = ready("limited");
+  reflex.hear("sonar", -(SONAR_HEARING_RADIUS - 1), 0, 1_000);
+  reflex.hear("sonar", SONAR_HEARING_RADIUS + 1, 0, 1_000);
+  const sounds = reflex.buildObservation(world(GONE), 1, 1_100).sounds;
+  assert.equal(sounds.length, 1);
+  assert.equal(sounds[0].kind, "sonar");
 });

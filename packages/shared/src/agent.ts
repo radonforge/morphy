@@ -105,7 +105,7 @@ export interface ObservedEntity {
 }
 
 /** A sound a player's client plays positionally, and so one a bot hears too. */
-export type SoundKind = "taunt";
+export type SoundKind = "taunt" | "sonar";
 
 /**
  * A sound the bot heard, at most a few seconds ago. It carries where and what,

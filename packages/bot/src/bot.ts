@@ -13,11 +13,13 @@ import {
   MSG_READY,
   MSG_SHOOT,
   MSG_SHOT_RESULT,
+  MSG_SONAR_PING,
   MSG_TAUNT,
   MSG_TAUNT_REQUEST,
   MSG_TELEPORT,
   parseMapDefinition,
   ROOM_NAME,
+  type SoundKind,
   type Visibility,
   withTimeout,
 } from "@morphy/shared";
@@ -90,7 +92,10 @@ export class Bot {
     room.onMessage(MSG_MAP, (raw: unknown) => this.applyMap(raw));
     room.onMessage(MSG_TELEPORT, (message: unknown) => this.onTeleport(message));
     room.onMessage(MSG_KILL, (message: unknown) => this.onKill(message));
-    room.onMessage(MSG_TAUNT, (message: unknown) => this.onTaunt(message, room.sessionId));
+    room.onMessage(MSG_TAUNT, (message: unknown) => this.onSound("taunt", message, room.sessionId));
+    room.onMessage(MSG_SONAR_PING, (message: unknown) =>
+      this.onSound("sonar", message, room.sessionId),
+    );
     room.onMessage(MSG_PING, (message: unknown) => {
       if (typeof message !== "object" || message === null) return;
       const n = (message as Record<string, unknown>).n;
@@ -143,12 +148,12 @@ export class Bot {
     }
   }
 
-  private onTaunt(message: unknown, selfId: string): void {
+  private onSound(kind: SoundKind, message: unknown, selfId: string): void {
     if (typeof message !== "object" || message === null) return;
     const m = message as Record<string, unknown>;
     if (m.playerId === selfId) return;
     if (!isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
-    this.driver.hear({ kind: "taunt", x: m.x, z: m.z }, Date.now());
+    this.driver.hear({ kind, x: m.x, z: m.z }, Date.now());
   }
 
   private onKill(message: unknown): void {

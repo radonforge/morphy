@@ -17,6 +17,8 @@ import {
   MSG_SET_WEAPON,
   MSG_SHOT_FIRED,
   MSG_SHOT_RESULT,
+  MSG_SONAR,
+  MSG_SONAR_PING,
   MSG_START,
   MSG_TAUNT,
   MSG_TAUNT_REQUEST,
@@ -26,6 +28,8 @@ import {
   ROUND_DURATION_MS,
   ROUND_END_MS,
   type Role,
+  SONAR_COOLDOWN_MS,
+  SONAR_HEARING_RADIUS,
   START_COUNTDOWN_MS,
   TAUNT_COOLDOWN_MS,
   TAUNT_DARING_POINTS,
@@ -49,6 +53,7 @@ import {
   playMorph,
   playRoundEnd,
   playRoundStart,
+  playSonar,
   playTaunt,
   playWeaponShot,
   preloadSamples,
@@ -546,6 +551,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [contextLost, setContextLost] = useState(false);
   const [decoys, setDecoys] = useState<DecoyView[]>([]);
   const [tauntReadyAt, setTauntReadyAt] = useState(0);
+  const [sonarReadyAt, setSonarReadyAt] = useState(0);
   const [muted, setMuted] = useState(() => isMuted());
   const [perfHud] = useState(() => isPerfHudEnabled());
   const perfNodeRef = useRef<HTMLDivElement | null>(null);
@@ -708,6 +714,17 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         }
         const listener = listenerRef.current;
         playTaunt(falloff(listener, m.x, m.z, TAUNT_HEARING_RADIUS), stereoPan(listener, m.x, m.z));
+      }),
+    );
+
+    unsubscribers.push(
+      room.onMessage(MSG_SONAR_PING, (message: unknown) => {
+        if (typeof message !== "object" || message === null) return;
+        const m = message as Record<string, unknown>;
+        if (typeof m.playerId !== "string" || !isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
+        if (m.playerId === sessionId) setSonarReadyAt(Date.now() + SONAR_COOLDOWN_MS);
+        const listener = listenerRef.current;
+        playSonar(falloff(listener, m.x, m.z, SONAR_HEARING_RADIUS), stereoPan(listener, m.x, m.z));
       }),
     );
 
@@ -879,6 +896,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     if (phase === "hiding") {
       playRoundStart();
       setTauntReadyAt(0);
+      setSonarReadyAt(0);
     } else if (phase === "round_end") {
       const role = meta[sessionId]?.role ?? "prop";
       const won =
@@ -967,17 +985,18 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   }, 0);
 
   const inputBlocked = chatOpen || paused;
-  const canTaunt = localRole === "prop" && localAlive && phase === "hunting" && !inputBlocked;
+  const callRole = localAlive && phase === "hunting" && !inputBlocked ? localRole : null;
 
   useEffect(() => {
-    if (!canTaunt) return;
+    if (!callRole) return;
+    const message = callRole === "prop" ? MSG_TAUNT_REQUEST : MSG_SONAR;
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "KeyF" || e.repeat) return;
-      room.send(MSG_TAUNT_REQUEST);
+      room.send(message);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [room, canTaunt]);
+  }, [room, callRole]);
   const canTransform =
     localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
@@ -1260,6 +1279,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
             rerollsLeft={localMeta?.rerollsLeft ?? 0}
             decoysLeft={localMeta?.decoysLeft ?? 0}
             tauntReadyAt={tauntReadyAt}
+            sonarReadyAt={sonarReadyAt}
             onOpen={() => setControlsOpen(true)}
           />
         </div>

@@ -14,6 +14,7 @@ import {
   type PropBounds,
   RUN_MULTIPLIER_HUNTER,
   RUN_MULTIPLIER_PROP,
+  SONAR_HEARING_RADIUS,
   type SoundKind,
   TAUNT_COOLDOWN_MS,
   TAUNT_HEARING_RADIUS,
@@ -128,6 +129,7 @@ interface HeardSound {
 /** How far each kind of sound carries: the distance a player's client stops playing it at. */
 const HEARING_RANGE: Record<SoundKind, number> = {
   taunt: TAUNT_HEARING_RADIUS,
+  sonar: SONAR_HEARING_RADIUS,
 };
 
 interface MovementSample {

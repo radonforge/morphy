@@ -405,6 +405,35 @@ export function playTaunt(volume: number, pan = 0): void {
   osc.onended = () => panner.disconnect();
 }
 
+/**
+ * Low falling sweep with a faint ping on top for a hunter's sonar pulse.
+ * `volume` is 0..1 (typically by distance) and `pan` -1..1 places it, so a
+ * prop hears which side the hunter sounded from.
+ */
+export function playSonar(volume: number, pan = 0): void {
+  const e = ensure();
+  if (!e || volume <= 0) return;
+  const panner = stereo(e.ctx, e.master, pan);
+  const level = Math.min(1, volume);
+  const sweep = tone(e.ctx, panner, {
+    type: "sine",
+    f0: 260,
+    f1: 90,
+    fTime: 0.55,
+    peak: 0.22 * level,
+    attack: 0.02,
+    dur: 0.6,
+  });
+  tone(e.ctx, panner, {
+    type: "triangle",
+    f0: 1320,
+    peak: 0.05 * level,
+    dur: 0.18,
+    delay: 0.05,
+  });
+  sweep.onended = () => panner.disconnect();
+}
+
 /** Clean two-tone materialize sweep when a player morphs into a prop. `volume` is 0..1. */
 export function playMorph(volume = 1): void {
   const e = ensure();

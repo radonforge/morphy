@@ -28,6 +28,12 @@ export const TAUNT_DARING_POINTS = 3;
 export const TAUNT_DARING_RADIUS = 10;
 /** Beyond this distance a taunt is not heard, by a player's client or by a bot. */
 export const TAUNT_HEARING_RADIUS = 40;
+
+/** A hunter's sonar makes every live prop within this radius honk; decoys stay silent. */
+export const SONAR_RADIUS = 12;
+export const SONAR_COOLDOWN_MS = 30_000;
+/** The pulse itself carries this far, so a prop hears a hunter sounding close by. */
+export const SONAR_HEARING_RADIUS = SONAR_RADIUS * 2;
 export const RECONNECT_WINDOW_MS = 30_000;
 
 export const HUNTER_MAX_HP = 100;

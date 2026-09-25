@@ -30,6 +30,7 @@ const CONTROL_GROUPS: ControlGroup[] = [
     items: [
       { keys: ["LMB"], label: "Shoot" },
       { keys: ["1", "2", "3"], label: "Switch weapon" },
+      { keys: ["F"], label: "Sonar (props nearby honk)" },
     ],
   },
   {
@@ -78,6 +79,8 @@ interface BarState {
   decoysLeft: number;
   /** `Date.now()` at which the local prop's taunt comes off cooldown; 0 when it is ready. */
   tauntReadyAt: number;
+  /** `Date.now()` at which the local hunter's sonar comes off cooldown; 0 when it is ready. */
+  sonarReadyAt: number;
 }
 
 function cooldownLabel(label: string, readyAt: number, now: number): string {
@@ -108,6 +111,7 @@ function mainControls(s: BarState, now: number): { note?: string; items: Control
       items: [
         { keys: ["LMB"], label: "Shoot" },
         { keys: ["1", "2", "3"], label: "Weapon" },
+        { keys: ["F"], label: cooldownLabel("Sonar", s.sonarReadyAt, now) },
         { keys: ["Shift"], label: "Run" },
         { keys: ["Space"], label: "Jump" },
       ],
@@ -140,7 +144,7 @@ function mainControls(s: BarState, now: number): { note?: string; items: Control
 }
 
 export function ControlsBar({ onOpen, ...state }: BarState & { onOpen: () => void }) {
-  const now = useNowUntil(state.tauntReadyAt);
+  const now = useNowUntil(Math.max(state.tauntReadyAt, state.sonarReadyAt));
   const { note, items } = mainControls(state, now);
   return (
     <div className="controls-bar">

@@ -58,6 +58,8 @@ import {
   MSG_SHOOT,
   MSG_SHOT_FIRED,
   MSG_SHOT_RESULT,
+  MSG_SONAR,
+  MSG_SONAR_PING,
   MSG_START,
   MSG_TAUNT,
   MSG_TAUNT_REQUEST,
@@ -79,6 +81,9 @@ import {
   rayAabb,
   type ShootMessage,
   type ShotFiredEvent,
+  SONAR_COOLDOWN_MS,
+  SONAR_RADIUS,
+  type SonarPingMessage,
   type SoundKind,
   START_COUNTDOWN_MS,
   TAUNT_CHECK_MS,
@@ -334,6 +339,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private nextShotAt = new Map<string, number>();
   private nextDecoyAt = new Map<string, number>();
   private nextTauntAt = new Map<string, number>();
+  private nextSonarAt = new Map<string, number>();
   /** When each prop's forced-taunt clock last restarted; see {@link sweepForcedTaunts}. */
   private tauntClockAt = new Map<string, number>();
   private decoySeq = 0;
@@ -360,6 +366,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.onMessage(MSG_REROLL, (client) => this.handleReroll(client));
     this.onMessage(MSG_DECOY, (client) => this.handleDecoy(client));
     this.onMessage(MSG_TAUNT_REQUEST, (client) => this.handleTaunt(client));
+    this.onMessage(MSG_SONAR, (client) => this.handleSonar(client));
     this.onMessage(MSG_SHOOT, (client, payload) => this.handleShoot(client, payload));
     this.onMessage(MSG_CHAT, (client, payload) => this.handleChat(client, payload));
     this.onMessage(MSG_READY, (client, payload) => this.handleReady(client, payload));
@@ -446,7 +453,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.state.players.delete(client.sessionId);
     this.nextShotAt.delete(client.sessionId);
     this.nextDecoyAt.delete(client.sessionId);
-    this.forgetTauntsOf(client.sessionId);
+    this.forgetSoundTimersOf(client.sessionId);
     this.pendingPings.delete(client.sessionId);
     this.deviceIds.delete(client.sessionId);
     if (this.state.hostId === client.sessionId) {
@@ -665,9 +672,38 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     }
   }
 
-  private forgetTauntsOf(sessionId: string): void {
+  /**
+   * A hunter's sonar: every live prop within {@link SONAR_RADIUS} honks, as a
+   * forced taunt that scores nothing and leaves its own clock alone. A decoy is
+   * not a player and stays silent, which is the hunter's answer to it. The
+   * pulse is broadcast as well, so a prop hears that a hunter is close.
+   */
+  private handleSonar(client: Actor): void {
+    const player = this.state.players.get(client.sessionId);
+    if (player?.role !== "hunter" || !player.alive) return;
+    if (this.state.phase !== "hunting") return;
+    const now = Date.now();
+    if (now < (this.nextSonarAt.get(client.sessionId) ?? 0)) return;
+    this.nextSonarAt.set(client.sessionId, now + SONAR_COOLDOWN_MS);
+    this.broadcast(MSG_SONAR_PING, {
+      playerId: player.id,
+      x: player.x,
+      z: player.z,
+    } satisfies SonarPingMessage);
+    this.letBotsHear("sonar", player.x, player.z, player.id);
+    this.state.players.forEach((prop) => {
+      if (prop.role !== "prop" || !prop.alive) return;
+      if (Math.hypot(prop.x - player.x, prop.z - player.z) <= SONAR_RADIUS) {
+        this.emitTaunt(prop, true);
+      }
+    });
+  }
+
+  /** Drop a player's taunt and sonar timers. */
+  private forgetSoundTimersOf(sessionId: string): void {
     this.nextTauntAt.delete(sessionId);
     this.tauntClockAt.delete(sessionId);
+    this.nextSonarAt.delete(sessionId);
   }
 
   private removeDecoysOf(ownerId: string): void {
@@ -911,6 +947,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.nextDecoyAt.clear();
     this.nextTauntAt.clear();
     this.tauntClockAt.clear();
+    this.nextSonarAt.clear();
     this.assignRoles();
     this.setPhase("hiding", HIDE_DURATION_MS, () => this.beginHunting());
   }
@@ -1049,6 +1086,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.nextDecoyAt.clear();
     this.nextTauntAt.clear();
     this.tauntClockAt.clear();
+    this.nextSonarAt.clear();
     if (this.locked) {
       void this.unlock().catch((error: unknown) => {
         console.error(`[morphy] failed to unlock room ${this.roomId}:`, error);
@@ -1242,7 +1280,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.state.players.delete(sessionId);
     this.nextShotAt.delete(sessionId);
     this.nextDecoyAt.delete(sessionId);
-    this.forgetTauntsOf(sessionId);
+    this.forgetSoundTimersOf(sessionId);
     if (this.bots.size === 0) this.stopBotTicker();
   }
 
