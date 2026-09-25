@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type RefObject, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { playUiHover } from "../game/audio";
+import { enableShadows } from "../game/modelShading";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { avatarNeighbors, mapNeighbors } from "./carousel";
 import {
@@ -573,13 +574,7 @@ function SetPieceModel({
   const pop = useRef<THREE.Group>(null);
   const object = useMemo(() => {
     const clone = scene.clone(true);
-    clone.traverse((child) => {
-      const mesh = child as THREE.Mesh;
-      if (mesh.isMesh) {
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-      }
-    });
+    enableShadows(clone);
     return clone;
   }, [scene]);
   const anchor = useMemo(() => {
