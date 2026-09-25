@@ -50,6 +50,15 @@ interface Lead extends Spot {
 }
 
 /**
+ * Whether a contact is a disguise in sight that gave itself away within the
+ * last few seconds: moved, changed shape or honked. Only such a disguise is a
+ * suspect; one that did none of these reads exactly as the furniture around it.
+ */
+function isSuspect(entity: ObservedEntity): boolean {
+  return entity.hasLineOfSight && entity.disguised === true && entity.tellRecently === true;
+}
+
+/**
  * Whether a contact is a disguise *seen* to be on the move: the one suspect
  * worth sprinting after, because it is the one a walking hunter can never catch:
  * a panicking prop runs at `MOVE_SPEED * RUN_MULTIPLIER_PROP` and a walking
@@ -83,19 +92,22 @@ function nearest(
  * - `"full"` reads ground truth (role/alive/propType), the parity anchor against
  *   which limited-vision LLM policies are measured (the former `HunterBrain`/`PropBrain`).
  * - `"limited"` reasons only from sensed signals (line of sight, distance,
- *   `disguised`, `movedRecently`), so the hunter is no longer omniscient: it must
- *   explore to find props rather than read `role` off them. A hunter is never
- *   disguised, so a contact *seen* to wear no disguise is a teammate and is
- *   neither shot at nor walked up to; a disguise standing still is shot on
- *   sight, and one still moving is run down (`inspect`) until it settles. A
- *   contact known only by sound carries no shape at all and is investigated
- *   whoever it turns out to be; a player hearing footsteps knows no better.
- *   A decoy in sight is one more disguise standing still, so it is shot like
- *   one, and the hunter pays for the mistake as a player would.
- *   A heard taunt can only be a prop's, so it is run to, after a disguise in
- *   sight and before a noise that might be a teammate's footsteps. With
- *   nothing to follow for a while it sounds its sonar, which makes the props
- *   close by honk.
+ *   `disguised`, `movedRecently`, `tellRecently`), so the hunter is no longer
+ *   omniscient: it must explore to find props rather than read `role` off them.
+ *   A hunter is never disguised, so a contact *seen* to wear no disguise is a
+ *   teammate and is neither shot at nor walked up to. Every disguise in sight
+ *   is either a suspect (it moved, changed shape or honked a moment ago) or one
+ *   more object in the room, since scene props, decoys and still props are
+ *   listed alike. A suspect standing still is shot, and one still moving is run
+ *   down (`inspect`) until it settles. With no suspect, and once its probe
+ *   cadence allows, it tests the nearest object in reach it has not tested yet
+ *   by shooting it, and pays the miss damage a player pays when that was
+ *   furniture. A contact known only by sound carries no shape at all and is
+ *   investigated whoever it turns out to be; a player hearing footsteps knows
+ *   no better. A heard taunt can only be a prop's, so it is run to, after a
+ *   suspect in sight and before a noise that might be a teammate's footsteps.
+ *   With nothing to follow for a while it sounds its sonar, which makes the
+ *   props close by honk.
  * - A prop that breaks cover while the hunt is on drops a decoy where it
  *   stood, so the hunter bearing down on it finds a double in its place.
  * - A prop settled in its hiding spot taunts for points now and then, never
@@ -115,6 +127,8 @@ export class ScriptedPolicy implements Policy {
   private fleeDeflections = 0;
   private lead: Lead | null = null;
   private readonly followed = new Set<string>();
+  private probeTarget: string | null = null;
+  private readonly probed = new Set<string>();
   private quietDecisions = 0;
   private prevPhase: Phase | null = null;
   private prevRole: Role | null = null;
@@ -147,27 +161,59 @@ export class ScriptedPolicy implements Policy {
   private hunterLimited(obs: Observation): Intent {
     const seq = obs.seq;
     const engageRange = lerp(ENGAGE_RANGE_MIN, ENGAGE_RANGE_MAX, this.difficulty);
-    const shootable = obs.entities
-      .filter(
-        (e) =>
-          e.disguised === true && !e.movedRecently && e.hasLineOfSight && e.distance <= engageRange,
-      )
-      .sort((a, b) => a.distance - b.distance);
+    const shootable = nearest(
+      obs.entities,
+      (e) => isSuspect(e) && !e.movedRecently && e.distance <= engageRange,
+    );
     const suspect = this.nearestSuspect(obs);
     const lead = this.followTaunt(obs);
-    this.quietDecisions = shootable[0] || suspect || lead ? 0 : this.quietDecisions + 1;
-    if (shootable[0]) return { kind: "shootTarget", targetId: shootable[0].id, seq };
+    this.settleProbe(obs);
+    this.quietDecisions = shootable || suspect || lead ? 0 : this.quietDecisions + 1;
+    if (shootable) return { kind: "shootTarget", targetId: shootable.id, seq };
     if (suspect?.hasLineOfSight) {
       return { kind: "inspect", targetId: suspect.id, run: isFleeing(suspect), seq };
     }
     if (lead) return { kind: "moveTo", x: lead.x, z: lead.z, run: true, seq };
     if (suspect) return { kind: "inspect", targetId: suspect.id, run: isFleeing(suspect), seq };
+    const probe = this.pickProbe(obs, engageRange);
+    if (probe) return { kind: "shootTarget", targetId: probe.id, seq };
     const intent: Intent = { kind: "patrol", seq };
     if (this.quietDecisions >= SONAR_PATIENCE_DECISIONS && obs.self.canSonarNow) {
       intent.act = "sonar";
       this.quietDecisions = 0;
     }
     return intent;
+  }
+
+  /** Once the bot has fired, the object it was testing counts as tested. */
+  private settleProbe(obs: Observation): void {
+    if (obs.self.canProbeNow || this.probeTarget === null) return;
+    this.probed.add(this.probeTarget);
+    this.probeTarget = null;
+  }
+
+  /**
+   * The object in reach to test with a shot, held until the shot is fired: the
+   * nearest disguise in sight that gave nothing away and has not been tested
+   * yet. A player tests the scene the same way, and remembers which crates it
+   * already shot, since one that survived a shot is furniture. The cadence is
+   * the reflex's `canProbeNow`, so a bot never tests faster than it can afford.
+   */
+  private pickProbe(obs: Observation, engageRange: number): ObservedEntity | null {
+    if (!obs.self.canProbeNow) return null;
+    const held = obs.entities.find((e) => e.id === this.probeTarget);
+    if (held?.hasLineOfSight && held.distance <= engageRange) return held;
+    const pick = nearest(
+      obs.entities,
+      (e) =>
+        e.hasLineOfSight &&
+        e.disguised === true &&
+        e.tellRecently !== true &&
+        e.distance <= engageRange &&
+        !this.probed.has(e.id),
+    );
+    this.probeTarget = pick?.id ?? null;
+    return pick;
   }
 
   /**
@@ -197,8 +243,10 @@ export class ScriptedPolicy implements Policy {
   }
 
   /**
-   * The nearest contact worth going to look at: a disguise that is out of range or
+   * The nearest contact worth going to look at: a suspect that is out of range or
    * still moving, or a contact whose shape is unknown because it was only heard.
+   * A disguise in sight that gave nothing away is no suspect: it is one more
+   * object in the room, and the probe is what tests those.
    *
    * Only a contact *seen* to be undisguised is excluded, and that exclusion is
    * the whole reason a pack of hunters no longer forms. A hunter renders as a
@@ -210,7 +258,7 @@ export class ScriptedPolicy implements Policy {
    * player cannot tell a teammate's footsteps from a prop's.
    */
   private nearestSuspect(obs: Observation): ObservedEntity | null {
-    return nearest(obs.entities, (e) => e.disguised !== false);
+    return nearest(obs.entities, (e) => e.disguised === undefined || isSuspect(e));
   }
 
   private prop(obs: Observation): Intent {
@@ -370,6 +418,8 @@ export class ScriptedPolicy implements Policy {
         this.lead = null;
         this.followed.clear();
         this.quietDecisions = 0;
+        this.probeTarget = null;
+        this.probed.clear();
       }
       this.prevPhase = obs.phase;
     }

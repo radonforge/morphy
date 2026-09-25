@@ -8,6 +8,11 @@ export function decoySource(id: string): string {
   return `d:${id}`;
 }
 
+/** Source key of a scene prop contact, by its index in the map's prop list. */
+export function scenePropSource(index: number): string {
+  return `s:${index}`;
+}
+
 /**
  * Opaque names for what a limited-vision bot perceives. A session id would tell
  * a policy it is looking at a player, and a decoy's room key would tell it the

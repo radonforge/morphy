@@ -164,11 +164,13 @@ test("two hunter bots left alone never target each other on sight", async () => 
  * breaks contact, which is the case that was never broken.
  *
  * Measured from the end of a warm-up rather than from the start: the hunter
- * spends its first second on the bootstrap patrol and one shot at a contact it
- * has not yet seen move, and losing ground before the chase begins is not what
- * this is about.
+ * spends its first second patrolling past a contact it has not yet seen move,
+ * and losing ground before the chase begins is not what this is about. The
+ * patrol goal is pinned straight down the arena, since a random one sends the
+ * hunter off the quarry's line and the result would be about that detour.
  */
-test("a hunter closes on a disguise running at a prop's top speed", async () => {
+test("a hunter closes on a disguise running at a prop's top speed", async (t) => {
+  t.mock.method(Math, "random", () => 0.5);
   const log = [];
   const driver = driverFor("Alpha", ARENA, log);
   const self = body("bot:1", { x: 0, y: 0, z: 0 });

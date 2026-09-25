@@ -64,21 +64,30 @@ export interface ObservedSelf {
   canTauntNow: boolean;
   /** A hunter's sonar is off cooldown, as its own HUD shows it. */
   canSonarNow: boolean;
+  /**
+   * Long enough has passed since the bot last fired to spend a speculative shot
+   * on a disguise that has given nothing away: the pace a player tests the scene
+   * at, never faster, because every such shot that misses costs HP.
+   */
+  canProbeNow: boolean;
 }
 
 /**
  * Another player as perceived by the bot. Ground-truth fields
  * (`role`/`alive`/`propType`) are present only under `"full"` visibility; under
  * `"limited"` the list is filtered to what the bot can sense and only the
- * deduction signals remain, and a decoy in sight is listed exactly as a
- * disguised player standing still would be, because that is what it looks like.
+ * deduction signals remain. A decoy in sight, and for a hunter every scene prop
+ * in sight, is listed exactly as a disguised player standing still would be,
+ * because that is what it looks like: a hunter cannot tell a still disguise
+ * from the furniture it copies, and has to shoot one to find out.
  */
 export interface ObservedEntity {
   /**
    * Under `"full"` visibility, the player's session id. Under `"limited"`, an
-   * opaque handle drawn from one sequence for players and decoys alike, so the
-   * id says nothing a player could not see: a session id would name a player,
-   * and a decoy's key would name a decoy.
+   * opaque handle drawn from one sequence for players, decoys and scene props
+   * alike, dealt nearest first, so the id says nothing a player could not see:
+   * a session id would name a player, a decoy's key would name a decoy, and a
+   * handle dealt to players first would name them by their place in the line.
    */
   id: string;
   x: number;
@@ -102,6 +111,14 @@ export interface ObservedEntity {
    */
   disguised?: boolean;
   movedRecently?: boolean;
+  /**
+   * `"limited"` only, and only in line of sight: the contact gave itself away
+   * within the last few seconds, by being seen to move, to change shape or to
+   * honk. It is what makes a disguise a suspect rather than one more object in
+   * the room, and it is the only such signal: a still disguise that did none of
+   * these reads exactly as the scenery around it.
+   */
+  tellRecently?: boolean;
   /** This entity has line of sight to the bot and is aiming roughly at it, i.e. it is watching the bot right now. */
   facingMe?: boolean;
 }

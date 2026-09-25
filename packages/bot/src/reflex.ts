@@ -12,6 +12,7 @@ import {
   type ObservedSound,
   type Phase,
   type PropBounds,
+  type PropInstance,
   RUN_MULTIPLIER_HUNTER,
   RUN_MULTIPLIER_PROP,
   SONAR_COOLDOWN_MS,
@@ -39,6 +40,10 @@ import {
   BOT_EYE_HEIGHT,
   BOT_FIRE_COOLDOWN_MS,
   BOT_HEARING_RADIUS,
+  BOT_PROBE_INTERVAL_MAX_MS,
+  BOT_PROBE_INTERVAL_MIN_MS,
+  BOT_TELL_MATCH_RADIUS,
+  BOT_TELL_WINDOW_MS,
   BOT_VISION_RANGE,
   DOORWAY_TILE_MARKER,
   ENGAGE_RANGE_MAX,
@@ -49,6 +54,7 @@ import {
   lerp,
   MAX_REPLANS_BEFORE_BLOCKED,
   MOVED_RECENTLY_MIN_DIST,
+  MOVED_RECENTLY_MIN_TURN_RAD,
   MOVED_RECENTLY_MS,
   NAV_CELL_SIZE,
   NAV_SNAP_RADIUS_CELLS,
@@ -62,7 +68,7 @@ import {
   TARGET_MOVE_REPLAN_CELLS,
   WAYPOINT_MARGIN,
 } from "./config";
-import { ContactHandles, decoySource, playerSource } from "./contacts";
+import { ContactHandles, decoySource, playerSource, scenePropSource } from "./contacts";
 import { findPath } from "./nav/astar";
 import {
   buildNavGrid,
@@ -104,8 +110,8 @@ export interface MotorOutput {
 }
 
 /**
- * Something an intent can name as its target: a player, or a decoy. A decoy
- * never moves, so it can be seen but never heard.
+ * Something an intent can name as its target: a player, a decoy or a scene
+ * prop. The last two never move, so they can be seen but never heard.
  */
 interface Contact {
   source: string;
@@ -113,7 +119,7 @@ interface Contact {
   y: number;
   z: number;
   propType: string;
-  /** The player behind the contact, whose movement can be heard; null for a decoy. */
+  /** The player behind the contact, whose movement can be heard; null for a decoy or a scene prop. */
   playerId: string | null;
 }
 
@@ -136,8 +142,16 @@ const HEARING_RANGE: Record<SoundKind, number> = {
 interface MovementSample {
   x: number;
   z: number;
+  /** Which way the disguise faces; a spin in place is movement too. */
+  rot: number;
   /** Null until the contact has actually been seen to move. */
   lastMovedAt: number | null;
+}
+
+/** A contact the bot perceives this observation, before it is handed its handle. */
+interface Sensed {
+  source: string;
+  entity: Omit<ObservedEntity, "id">;
 }
 
 const HOLD = (x: number, z: number, rot: number): MotorOutput => ({
@@ -159,6 +173,7 @@ export class Reflex {
   private obstacles: Obstacle[] = [];
   private activeObstacles: Obstacle[] = [];
   private propBounds = new Map<string, PropBounds>();
+  private sceneProps = new Map<string, PropInstance>();
   private doorways: Point2[] = [];
 
   private posX = 0;
@@ -182,6 +197,10 @@ export class Reflex {
 
   private readonly movement = new Map<string, MovementSample>();
   private readonly lastPerceived = new Map<string, Point2>();
+  /** When each contact last gave itself away; see {@link toldRecently}. */
+  private readonly tellAt = new Map<string, number>();
+  /** Each player's disguise as last observed, so a change of shape can be noticed. */
+  private readonly shapes = new Map<string, string>();
   private readonly handles = new ContactHandles();
   private heard: HeardSound[] = [];
   private soundSeq = 0;
@@ -252,18 +271,26 @@ export class Reflex {
     this.propBounds = new Map(
       map.propCatalog.map((def) => [def.id, computePropBounds(def)] as const),
     );
+    this.sceneProps = new Map(map.props.map((prop, index) => [scenePropSource(index), prop]));
     this.doorways = map.tiles
       .filter((tile) => tile.model.includes(DOORWAY_TILE_MARKER))
       .map((tile) => ({ x: tile.position.x, z: tile.position.z }));
     this.resetMotion();
-    this.movement.clear();
     this.forgetContacts();
     this.lastShotAt = 0;
   }
 
-  /** Drop every contact handle, last sighting and heard sound, as a new round begins. */
+  /**
+   * Drop every contact handle, last sighting, movement sample, tell and heard
+   * sound, as a new round begins. A sample kept from before the props hid
+   * would read every prop that walked to its spot as one seen moving the
+   * moment the hunt opens.
+   */
   forgetContacts(): void {
     this.lastPerceived.clear();
+    this.movement.clear();
+    this.tellAt.clear();
+    this.shapes.clear();
     this.handles.clear();
     this.heard = [];
   }
@@ -357,8 +384,19 @@ export class Reflex {
     return v;
   }
 
+  /**
+   * What the bot perceives right now. A limited-vision hunter perceives nothing
+   * while the props hide, because a player hunter stares at a blindout card for
+   * that whole phase: a bot that watched the props walk to their spots started
+   * the hunt knowing where each one stood.
+   */
   buildObservation(world: ReflexWorld, seq: number, now: number): Observation {
     const self = world.self;
+    const probeInterval = lerp(
+      BOT_PROBE_INTERVAL_MAX_MS,
+      BOT_PROBE_INTERVAL_MIN_MS,
+      this.difficulty,
+    );
     const selfObs: ObservedSelf = {
       role: self.role,
       alive: self.alive,
@@ -370,61 +408,15 @@ export class Reflex {
       canShootNow: now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS,
       canTauntNow: this.sincePressed("taunt", now) >= TAUNT_COOLDOWN_MS,
       canSonarNow: this.sincePressed("sonar", now) >= SONAR_COOLDOWN_MS,
+      canProbeNow: now - this.lastShotAt >= probeInterval,
     };
-
-    const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };
-    const colliders = this.map?.colliders ?? [];
-    const entities: ObservedEntity[] = [];
     this.forgetDeparted(world.others, world.decoys);
-    for (const other of world.others) {
-      if (!other.alive) continue;
-      const distance = Math.hypot(other.x - this.posX, other.z - this.posZ);
-      const bounds = this.propBounds.get(other.propType) ?? UNTRANSFORMED_BOUNDS;
-      const aimY = other.y + (bounds.yMin + bounds.yMax) / 2;
-      const hasLineOfSight = lineOfSightClear(
-        origin,
-        { x: other.x, y: aimY, z: other.z },
-        colliders,
-      );
-      const movedRecently = this.trackMovement(other, now);
-      const disguised = other.propType !== "";
-      if (this.visibility === "full") {
-        entities.push({
-          id: other.id,
-          x: other.x,
-          z: other.z,
-          distance,
-          hasLineOfSight,
-          role: other.role,
-          alive: other.alive,
-          propType: other.propType,
-          disguised,
-          movedRecently,
-          facingMe: hasLineOfSight && this.isAimedAtMe(other),
-        });
-        continue;
-      }
-      const sensed =
-        (hasLineOfSight && distance <= BOT_VISION_RANGE) ||
-        (movedRecently && distance <= BOT_HEARING_RADIUS);
-      if (!sensed) continue;
-      const source = playerSource(other.id);
-      const sensedAt = this.sensedPosition(other, hasLineOfSight);
-      this.lastPerceived.set(source, sensedAt);
-      entities.push({
-        id: this.handles.handleFor(source),
-        x: sensedAt.x,
-        z: sensedAt.z,
-        distance: Math.hypot(sensedAt.x - this.posX, sensedAt.z - this.posZ),
-        hasLineOfSight,
-        disguised: hasLineOfSight ? disguised : undefined,
-        movedRecently,
-        facingMe: hasLineOfSight && !disguised && this.isAimedAtMe(other),
-      });
-    }
-    if (this.visibility === "limited") {
-      entities.push(...this.observeDecoys(world.decoys, origin, colliders));
-      entities.sort((a, b) => a.distance - b.distance);
+    const blind =
+      this.visibility === "limited" && self.role === "hunter" && world.phase === "hiding";
+    let entities: ObservedEntity[] = [];
+    if (!blind) {
+      entities =
+        this.visibility === "full" ? this.observeFull(world, now) : this.observeLimited(world, now);
     }
 
     return {
@@ -435,8 +427,90 @@ export class Reflex {
       arrived: this.settled,
       self: selfObs,
       entities,
-      sounds: this.observeSounds(now),
+      sounds: blind ? [] : this.observeSounds(now),
       map: this.buildObservedMap(),
+    };
+  }
+
+  /** Whether the bot sees the middle of a body of this shape standing at (x, y, z). */
+  private seesBody(x: number, y: number, z: number, propType: string): boolean {
+    const bounds = this.propBounds.get(propType) ?? UNTRANSFORMED_BOUNDS;
+    const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };
+    const target: Vec3 = { x, y: y + (bounds.yMin + bounds.yMax) / 2, z };
+    return lineOfSightClear(origin, target, this.map?.colliders ?? []);
+  }
+
+  /** Ground truth for every live player: the measuring anchor, never a live room's mode. */
+  private observeFull(world: ReflexWorld, now: number): ObservedEntity[] {
+    const entities: ObservedEntity[] = [];
+    for (const other of world.others) {
+      if (!other.alive) continue;
+      const hasLineOfSight = this.seesBody(other.x, other.y, other.z, other.propType);
+      entities.push({
+        id: other.id,
+        x: other.x,
+        z: other.z,
+        distance: Math.hypot(other.x - this.posX, other.z - this.posZ),
+        hasLineOfSight,
+        role: other.role,
+        alive: other.alive,
+        propType: other.propType,
+        disguised: other.propType !== "",
+        movedRecently: this.trackMovement(other, now),
+        facingMe: hasLineOfSight && this.isAimedAtMe(other),
+      });
+    }
+    return entities;
+  }
+
+  /**
+   * What a player would read off the screen: players in sight or earshot,
+   * decoys in sight and, for a hunter, every scene prop in sight, with handles
+   * dealt nearest first so the order they are named in says nothing about what
+   * they are.
+   */
+  private observeLimited(world: ReflexWorld, now: number): ObservedEntity[] {
+    const sensed: Sensed[] = [];
+    for (const other of world.others) {
+      if (!other.alive) continue;
+      const contact = this.observePlayer(other, now);
+      if (contact) sensed.push(contact);
+    }
+    sensed.push(...this.observeDecoys(world.decoys, now));
+    if (world.self.role === "hunter") sensed.push(...this.observeSceneProps(now));
+    sensed.sort((a, b) => a.entity.distance - b.entity.distance);
+    return sensed.map(({ source, entity }) => ({ id: this.handles.handleFor(source), ...entity }));
+  }
+
+  private observePlayer(other: BotPlayer, now: number): Sensed | null {
+    const distance = Math.hypot(other.x - this.posX, other.z - this.posZ);
+    const hasLineOfSight = this.seesBody(other.x, other.y, other.z, other.propType);
+    const movedRecently = this.trackMovement(other, now);
+    const disguised = other.propType !== "";
+    const source = playerSource(other.id);
+    const previousShape = this.shapes.get(other.id);
+    this.shapes.set(other.id, other.propType);
+    const morphed =
+      previousShape !== undefined && previousShape !== "" && previousShape !== other.propType;
+    if (hasLineOfSight && disguised && (movedRecently || morphed)) this.tellAt.set(source, now);
+    const sensed =
+      (hasLineOfSight && distance <= BOT_VISION_RANGE) ||
+      (movedRecently && distance <= BOT_HEARING_RADIUS);
+    if (!sensed) return null;
+    const at = this.sensedPosition(other, hasLineOfSight);
+    this.lastPerceived.set(source, at);
+    return {
+      source,
+      entity: {
+        x: at.x,
+        z: at.z,
+        distance: Math.hypot(at.x - this.posX, at.z - this.posZ),
+        hasLineOfSight,
+        disguised: hasLineOfSight ? disguised : undefined,
+        movedRecently,
+        facingMe: hasLineOfSight && !disguised && this.isAimedAtMe(other),
+        tellRecently: hasLineOfSight && disguised ? this.toldRecently(source, at, now) : undefined,
+      },
     };
   }
 
@@ -448,32 +522,76 @@ export class Reflex {
    * every other disguise alike, because a player cannot see where a disguise is
    * looking.
    */
-  private observeDecoys(
-    decoys: readonly BotDecoy[],
-    origin: Vec3,
-    colliders: MapDefinition["colliders"],
-  ): ObservedEntity[] {
-    const seen: ObservedEntity[] = [];
+  private observeDecoys(decoys: readonly BotDecoy[], now: number): Sensed[] {
+    const seen: Sensed[] = [];
     for (const decoy of decoys) {
-      const distance = Math.hypot(decoy.x - this.posX, decoy.z - this.posZ);
-      if (distance > BOT_VISION_RANGE) continue;
-      const bounds = this.propBounds.get(decoy.propType) ?? UNTRANSFORMED_BOUNDS;
-      const aimY = decoy.y + (bounds.yMin + bounds.yMax) / 2;
-      if (!lineOfSightClear(origin, { x: decoy.x, y: aimY, z: decoy.z }, colliders)) continue;
-      const source = decoySource(decoy.id);
-      this.lastPerceived.set(source, { x: decoy.x, z: decoy.z });
-      seen.push({
-        id: this.handles.handleFor(source),
-        x: decoy.x,
-        z: decoy.z,
+      const at = { x: decoy.x, z: decoy.z };
+      const contact = this.stillDisguise(decoySource(decoy.id), at, decoy.y, decoy.propType, now);
+      if (contact) seen.push(contact);
+    }
+    return seen;
+  }
+
+  /**
+   * The furniture a hunter looks at, listed exactly as a disguised player
+   * standing still would be. Every scene prop is a shape from the catalog a
+   * prop can wear, so to a player a still disguise is one more object in the
+   * room until it moves, honks or is shot; a hunter shown only players knew
+   * every disguise in sight was one, and shot it on sight.
+   */
+  private observeSceneProps(now: number): Sensed[] {
+    const seen: Sensed[] = [];
+    for (const [source, prop] of this.sceneProps) {
+      const at = { x: prop.position.x, z: prop.position.z };
+      const contact = this.stillDisguise(source, at, prop.position.y, prop.type, now);
+      if (contact) seen.push(contact);
+    }
+    return seen;
+  }
+
+  /** A shape that never moves, if it stands in sight within vision range. */
+  private stillDisguise(
+    source: string,
+    at: Point2,
+    y: number,
+    propType: string,
+    now: number,
+  ): Sensed | null {
+    const distance = Math.hypot(at.x - this.posX, at.z - this.posZ);
+    if (distance > BOT_VISION_RANGE) return null;
+    if (!this.seesBody(at.x, y, at.z, propType)) return null;
+    this.lastPerceived.set(source, at);
+    return {
+      source,
+      entity: {
+        x: at.x,
+        z: at.z,
         distance,
         hasLineOfSight: true,
         disguised: true,
         movedRecently: false,
         facingMe: false,
-      });
+        tellRecently: this.toldRecently(source, at, now),
+      },
+    };
+  }
+
+  /**
+   * Whether a contact in sight gave itself away within {@link BOT_TELL_WINDOW_MS}.
+   * Movement and a change of shape are noted as they are observed; a honk is
+   * pinned on whatever stands within {@link BOT_TELL_MATCH_RADIUS} of where it
+   * was seen, which is also how a player can pin one on the wrong crate.
+   */
+  private toldRecently(source: string, at: Point2, now: number): boolean {
+    for (const sound of this.heard) {
+      if (sound.kind !== "taunt" || !sound.hasLineOfSight) continue;
+      if (Math.hypot(sound.x - at.x, sound.z - at.z) > BOT_TELL_MATCH_RADIUS) continue;
+      if (sound.heardAt > (this.tellAt.get(source) ?? Number.NEGATIVE_INFINITY)) {
+        this.tellAt.set(source, sound.heardAt);
+      }
     }
-    return seen;
+    const told = this.tellAt.get(source);
+    return told !== undefined && now - told <= BOT_TELL_WINDOW_MS;
   }
 
   private buildObservedMap(): ObservedMap {
@@ -500,12 +618,22 @@ export class Reflex {
   private trackMovement(other: BotPlayer, now: number): boolean {
     const prev = this.movement.get(other.id);
     if (!prev) {
-      this.movement.set(other.id, { x: other.x, z: other.z, lastMovedAt: null });
+      this.movement.set(other.id, {
+        x: other.x,
+        z: other.z,
+        rot: other.propRot,
+        lastMovedAt: null,
+      });
       return false;
     }
-    if (Math.hypot(other.x - prev.x, other.z - prev.z) > MOVED_RECENTLY_MIN_DIST) {
+    const stepped = Math.hypot(other.x - prev.x, other.z - prev.z) > MOVED_RECENTLY_MIN_DIST;
+    const spun =
+      other.propType !== "" &&
+      Math.abs(wrapAngle(other.propRot - prev.rot)) > MOVED_RECENTLY_MIN_TURN_RAD;
+    if (stepped || spun) {
       prev.x = other.x;
       prev.z = other.z;
+      prev.rot = other.propRot;
       prev.lastMovedAt = now;
     }
     return this.movedRecently(other.id, now);
@@ -530,18 +658,25 @@ export class Reflex {
     for (const id of [...this.movement.keys()]) {
       if (!present.has(id)) this.movement.delete(id);
     }
+    for (const id of [...this.shapes.keys()]) {
+      if (!present.has(id)) this.shapes.delete(id);
+    }
     const live = new Set([
       ...others.map((o) => playerSource(o.id)),
       ...decoys.map((d) => decoySource(d.id)),
+      ...this.sceneProps.keys(),
     ]);
     for (const source of [...this.lastPerceived.keys()]) {
       if (!live.has(source)) this.lastPerceived.delete(source);
+    }
+    for (const source of [...this.tellAt.keys()]) {
+      if (!live.has(source)) this.tellAt.delete(source);
     }
     this.handles.retain(live);
   }
 
   /**
-   * The player or decoy an intent names. Under `"full"` visibility the name is
+   * The player, decoy or scene prop an intent names. Under `"full"` visibility the name is
    * a session id; under `"limited"` it is a handle the observation handed out,
    * which this resolves without the policy ever learning what it stood for.
    */
@@ -572,7 +707,16 @@ export class Reflex {
         playerId: null,
       };
     }
-    return null;
+    const prop = this.sceneProps.get(source);
+    if (prop === undefined) return null;
+    return {
+      source,
+      x: prop.position.x,
+      y: prop.position.y,
+      z: prop.position.z,
+      propType: prop.type,
+      playerId: null,
+    };
   }
 
   /**
