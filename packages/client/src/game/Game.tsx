@@ -80,6 +80,12 @@ const HP_LOW_THRESHOLD = 40;
 const RING_RADIUS = 19;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const PERF_SAMPLE_WINDOW_S = 0.5;
+/**
+ * Named rather than left to the Canvas default, which asks for PCFSoft. three 0.184 downgrades
+ * that to PCF on the next shadow render, and the Canvas re-applies its config on every React
+ * render, sees the type change back, and forces a full shadow redraw: once per ping, per shot.
+ */
+const GAME_SHADOW_TYPE = "percentage" as const;
 
 const PHASE_DURATION_MS: Record<Phase, number> = {
   lobby: 0,
@@ -899,7 +905,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
       <Canvas
         ref={canvasRef}
         dpr={GAME_DPR}
-        shadows
+        shadows={GAME_SHADOW_TYPE}
         camera={{ position: [0, 12, 18], fov: GAME_FOV }}
       >
         <Scene

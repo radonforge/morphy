@@ -25,6 +25,7 @@ const HALF = (G * TILE) / 2;
 const BARRIER = 54;
 const BARRIER_THICK = 3;
 const BARRIER_H = 8;
+const BARRIER_FACE = BARRIER - BARRIER_THICK / 2;
 const BOUND = 58;
 const FIELD = 51;
 
@@ -68,6 +69,19 @@ function kitCenter(
   const cos = Math.cos(rot);
   const sin = Math.sin(rot);
   return { cx: x + offX * cos + offZ * sin, cz: z - offX * sin + offZ * cos };
+}
+
+/** Inverse of {@link kitCenter}: the instance origin that puts a kit model's mesh center at `(cx, cz)`. */
+function kitOrigin(
+  cx: number,
+  cz: number,
+  rot: number,
+  scale: number,
+  ox: number,
+  oz: number,
+): { x: number; z: number } {
+  const center = kitCenter(0, 0, rot, scale, ox, oz);
+  return { x: cx - center.cx, z: cz - center.cz };
 }
 
 const ROCKET_PARTS: { model: string; y: number }[] = [
@@ -278,12 +292,15 @@ export function buildMars(seed: number): MapDefinition {
 
   for (let t = -BARRIER + BARRIER_ROCK_STEP / 2; t < BARRIER; t += BARRIER_ROCK_STEP) {
     for (const [x, z] of [
-      [t, -BARRIER],
-      [t, BARRIER],
-      [-BARRIER, t],
-      [BARRIER, t],
+      [t, -BARRIER_FACE],
+      [t, BARRIER_FACE],
+      [-BARRIER_FACE, t],
+      [BARRIER_FACE, t],
     ] as const) {
-      pushSolid(pick(BARRIER_ROCKS, rng), x, z, cardinalRot(rng));
+      const item = pick(BARRIER_ROCKS, rng);
+      const rot = cardinalRot(rng);
+      const origin = kitOrigin(x, z, rot, item.scale, item.ox, item.oz);
+      pushSolid(item, origin.x, origin.z, rot);
     }
   }
 
@@ -354,12 +371,16 @@ export function buildMars(seed: number): MapDefinition {
   for (let n = 0; n < FLAT_DECOR_COUNT; n++) {
     const x = randRange(rng, -FIELD, FIELD);
     const z = randRange(rng, -FIELD, FIELD);
-    if (!farFromWalls(x, z, 1, walls)) continue;
+    if (inBase(x, z) || !farFromWalls(x, z, 1, walls)) continue;
+    const model = ex(pick(FLAT_DECOR, rng));
+    const rot = rng() * Math.PI * 2;
+    const scale = randRange(rng, 1.6, 3);
+    const origin = kitOrigin(x, z, rot, scale, KIT_OFFSET_X, KIT_OFFSET_Z);
     scenery.push({
-      model: ex(pick(FLAT_DECOR, rng)),
-      position: { x, y: 0, z },
-      rotationY: rng() * Math.PI * 2,
-      scale: randRange(rng, 1.6, 3),
+      model,
+      position: { x: origin.x, y: 0, z: origin.z },
+      rotationY: rot,
+      scale,
     });
   }
 

@@ -34,6 +34,7 @@ import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "r
 import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
+import { enableShadows } from "./modelShading";
 import {
   advanceMovement,
   cappedFrameSeconds,
@@ -88,6 +89,7 @@ const HUNTER_COLOR = "#e8564a";
 const PROP_COLOR = "#5bd75b";
 const MODEL_MIN_SIZE = 0.001;
 const BASE_PLANE_MARGIN = 8;
+const FLAT_TILE_MAX_HEIGHT = 0.1;
 const BASE_PLANE_Y = -0.02;
 const animalModel = (id: string): string => `/models/pets/animal-${id}.glb`;
 const WEAPON_SCALE = 0.32;
@@ -1245,20 +1247,6 @@ function PrimitiveParts({ parts }: { parts: PrimitiveSpec[] }) {
   );
 }
 
-function enableShadows(object: THREE.Object3D): void {
-  object.traverse((child) => {
-    const mesh = child as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    for (const material of materials) {
-      const standard = material as THREE.MeshStandardMaterial;
-      if (standard.isMeshStandardMaterial) standard.metalness = 0;
-    }
-  });
-}
-
 function FittedModel({
   url,
   width,
@@ -1313,12 +1301,32 @@ function firstMesh(root: THREE.Object3D): THREE.Mesh {
   return found;
 }
 
+/**
+ * Tallest rendered height of a tile group, in world units. Floor and road
+ * tiles come out near zero: those must not cast, because a flat double-sided
+ * tile that casts shadows its own surface and darkens the whole floor.
+ */
+function tileHeight(geometry: THREE.BufferGeometry, tiles: TileInstance[]): number {
+  if (!geometry.boundingBox) geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  const local = box ? box.max.y - box.min.y : 0;
+  let height = 0;
+  for (const tile of tiles) {
+    height = Math.max(height, local * (tile.scaleY ?? tile.scale ?? 1));
+  }
+  return height;
+}
+
 function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) {
   const { scene } = useGLTF(url);
   const { geometry, material } = useMemo(() => {
     const mesh = firstMesh(scene);
     return { geometry: mesh.geometry, material: mesh.material };
   }, [scene]);
+  const castShadow = useMemo(
+    () => tileHeight(geometry, tiles) > FLAT_TILE_MAX_HEIGHT,
+    [geometry, tiles],
+  );
   const meshRef = useRef<THREE.InstancedMesh>(null);
 
   useEffect(() => {
@@ -1342,7 +1350,7 @@ function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) 
     <instancedMesh
       ref={meshRef}
       args={[geometry, material, tiles.length]}
-      castShadow
+      castShadow={castShadow}
       receiveShadow
       frustumCulled={false}
       dispose={null}

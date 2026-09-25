@@ -137,7 +137,7 @@ export function buildUrban(seed: number): MapDefinition {
         tiles.push({
           model: cross ? ROAD_CROSS : ROAD_STRAIGHT,
           position: { x: cx, y: ROAD_Y, z: cz },
-          rotationY: cross ? 0 : roadI ? 0 : HALF_PI,
+          rotationY: roadI && !cross ? HALF_PI : 0,
           scale: ROAD_SCALE,
           scaleY: ROAD_SCALE_Y,
         });
