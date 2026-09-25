@@ -54,9 +54,9 @@ import type {
   BreaksRef,
   DecoyBreakFx,
   DecoyView,
-  MetaMap,
   PlayersRef,
   RemotePlayerView,
+  SceneMetaMap,
   ShotsRef,
   TauntPulseRef,
   TeleportRef,
@@ -414,7 +414,7 @@ interface SceneProps {
   localId: string;
   ids: string[];
   playersRef: PlayersRef;
-  meta: MetaMap;
+  meta: SceneMetaMap;
   phase: Phase;
   decoys: DecoyView[];
   teleportRef: TeleportRef;
@@ -426,7 +426,7 @@ interface SceneProps {
   onShoot: () => void;
 }
 
-export function Scene({
+export const Scene = memo(function Scene({
   room,
   map,
   localId,
@@ -588,7 +588,7 @@ export function Scene({
         ))}
     </>
   );
-}
+});
 
 interface ShadowPose {
   x: number;
@@ -608,7 +608,7 @@ function ShadowRefresh({
   playersRef: PlayersRef;
   localPos: PlayerPosRef;
   motionRef: LocalMotionRef;
-  meta: MetaMap;
+  meta: SceneMetaMap;
   ids: string[];
   tauntPulseRef: TauntPulseRef;
 }) {

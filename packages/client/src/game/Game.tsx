@@ -60,11 +60,12 @@ import type {
   PlayerMeta,
   PlayersRef,
   RemotePlayerView,
+  SceneMetaMap,
   ShotsRef,
   TauntPulseRef,
   TeleportRef,
 } from "./types";
-import { PLAYER_META_FIELDS } from "./types";
+import { PLAYER_META_FIELDS, SCENE_META_FIELDS } from "./types";
 
 const COUNTDOWN_TICK_MS = 250;
 const TAUNT_MAX_DISTANCE = 40;
@@ -208,6 +209,32 @@ function metaEqual(a: MetaMap, b: MetaMap): boolean {
       PLAYER_META_FIELDS.every((field) => ai[field] === bi[field])
     );
   });
+}
+
+function sceneMetaOf(meta: MetaMap, prev: SceneMetaMap): SceneMetaMap {
+  const ids = Object.keys(meta);
+  const unchanged =
+    ids.length === Object.keys(prev).length &&
+    ids.every((id) => {
+      const before = prev[id];
+      const now = meta[id];
+      return (
+        before !== undefined &&
+        now !== undefined &&
+        SCENE_META_FIELDS.every((field) => before[field] === now[field])
+      );
+    });
+  if (unchanged) return prev;
+  const next: SceneMetaMap = {};
+  for (const [id, player] of Object.entries(meta)) {
+    next[id] = {
+      role: player.role,
+      alive: player.alive,
+      propType: player.propType,
+      avatar: player.avatar,
+    };
+  }
+  return next;
 }
 
 function sortStandings(ids: string[], meta: MetaMap): { id: string; player: PlayerMeta }[] {
@@ -457,6 +484,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
   const [map, setMap] = useState<MapDefinition | null>(null);
   const [ids, setIds] = useState<string[]>([]);
   const [meta, setMeta] = useState<MetaMap>({});
+  const [sceneMeta, setSceneMeta] = useState<SceneMetaMap>({});
   const [phase, setPhase] = useState<Phase>("lobby");
   const [phaseEndsAt, setPhaseEndsAt] = useState(0);
   const [fillAt, setFillAt] = useState(0);
@@ -529,6 +557,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
         };
       }
       setMeta((prev) => (metaEqual(prev, next) ? prev : next));
+      setSceneMeta((prev) => sceneMetaOf(next, prev));
     };
 
     unsubscribers.push(
@@ -931,7 +960,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch }: GameProps) {
           localId={sessionId}
           ids={ids}
           playersRef={playersRef}
-          meta={meta}
+          meta={sceneMeta}
           phase={phase}
           decoys={decoys}
           teleportRef={teleportRef}
