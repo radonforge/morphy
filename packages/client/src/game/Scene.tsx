@@ -22,7 +22,6 @@ import {
   type Role,
   RUN_MULTIPLIER_HUNTER,
   RUN_MULTIPLIER_PROP,
-  type SceneryInstance,
   type TileInstance,
   WEAPONS,
   type WeaponId,
@@ -51,6 +50,7 @@ import {
 } from "./movement";
 import { lockPointer } from "./pointerLock";
 import { useSharedGLTF } from "./sharedTextures";
+import { StaticModels } from "./staticModels";
 import { snapToTexels, sunBasis } from "./sunShadow";
 import type {
   BreaksRef,
@@ -1377,24 +1377,6 @@ function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) 
   );
 }
 
-function SceneryModel({ inst }: { inst: SceneryInstance }) {
-  const { scene } = useSharedGLTF(inst.model);
-  const object = useMemo(() => {
-    const clone = scene.clone(true);
-    enableShadows(clone);
-    return clone;
-  }, [scene]);
-  return (
-    <group
-      position={[inst.position.x, inst.position.y, inst.position.z]}
-      rotation-y={inst.rotationY}
-      scale={inst.scale}
-    >
-      <primitive object={object} />
-    </group>
-  );
-}
-
 function PropMesh({ def }: { def: PropDefinition }) {
   const bounds = useMemo(() => computePropBounds(def), [def]);
   if (def.model) {
@@ -1542,16 +1524,11 @@ const MapView = memo(function MapView({
         ))}
       </Suspense>
 
-      <Suspense fallback={null}>
-        {map.scenery.map((inst, index) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: static per-map scenery, never reordered
-          <SceneryModel key={`scn-${index}`} inst={inst} />
-        ))}
-      </Suspense>
+      <StaticModels map={map} catalog={catalog} />
 
       {map.props.map((instance, index) => {
         const def = catalog.get(instance.type);
-        if (!def) {
+        if (!def || def.model) {
           return null;
         }
         return (
@@ -1561,7 +1538,7 @@ const MapView = memo(function MapView({
             position={[instance.position.x, instance.position.y, instance.position.z]}
             rotation-y={instance.rotation}
           >
-            <PropMesh def={def} />
+            <PrimitiveParts parts={def.parts} />
           </group>
         );
       })}
