@@ -34,6 +34,7 @@ import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "r
 import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
+import { enableShadows } from "./modelShading";
 import {
   advanceMovement,
   cappedFrameSeconds,
@@ -1244,20 +1245,6 @@ function PrimitiveParts({ parts }: { parts: PrimitiveSpec[] }) {
       ))}
     </>
   );
-}
-
-function enableShadows(object: THREE.Object3D): void {
-  object.traverse((child) => {
-    const mesh = child as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-    for (const material of materials) {
-      const standard = material as THREE.MeshStandardMaterial;
-      if (standard.isMeshStandardMaterial) standard.metalness = 0;
-    }
-  });
 }
 
 function FittedModel({
