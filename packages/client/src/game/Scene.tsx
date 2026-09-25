@@ -160,11 +160,10 @@ const SHADOW_MARGIN = 4;
 const SHADOW_FOLLOW_RADIUS = 25;
 const SHADOW_LEAD = 10;
 const SHADOW_TEXEL = (2 * SHADOW_FOLLOW_RADIUS) / SHADOW_MAP_SIZE;
-const SHADOW_FAR =
-  Math.hypot(SUN_POSITION[0], SUN_POSITION[1], SUN_POSITION[2]) +
-  SHADOW_FOLLOW_RADIUS +
-  SHADOW_MARGIN;
+const SHADOW_LIGHT_DISTANCE = 60;
+const SHADOW_FAR = SHADOW_LIGHT_DISTANCE + SHADOW_FOLLOW_RADIUS + SHADOW_MARGIN;
 const SUN_BASIS = sunBasis({ x: SUN_POSITION[0], y: SUN_POSITION[1], z: SUN_POSITION[2] });
+const SUN_OFFSET = new THREE.Vector3(...SUN_POSITION).setLength(SHADOW_LIGHT_DISTANCE);
 const SHADOW_NORMAL_BIAS_TEXELS = 2;
 const SHADOW_UPDATE_INTERVAL_S = 1 / 30;
 const SHADOW_SETTLE_S = 0.4;
@@ -705,6 +704,9 @@ function ShadowRefresh({
  * stretched over the whole map: three culls casters against that camera, so most
  * of the map drops out of the shadow pass. The centre leads the view direction,
  * where the player is looking, and snaps to the texel grid so edges do not shimmer.
+ * The light sits {@link SHADOW_LIGHT_DISTANCE} back along the sun so the near plane
+ * never slices the top off a tower standing sunward of the player: a clipped roof
+ * takes that tower's shadow with it.
  */
 function SunLight({
   intensity,
@@ -735,11 +737,7 @@ function SunLight({
     centre.current = next;
     target.position.set(next.x, next.y, next.z);
     target.updateMatrixWorld();
-    light.position.set(
-      next.x + SUN_POSITION[0],
-      next.y + SUN_POSITION[1],
-      next.z + SUN_POSITION[2],
-    );
+    light.position.set(next.x + SUN_OFFSET.x, next.y + SUN_OFFSET.y, next.z + SUN_OFFSET.z);
   });
 
   return (
