@@ -50,7 +50,7 @@ const glowing = new WeakSet<THREE.Object3D>();
 
 function maskFor(rule: GlowRule, map: THREE.Texture): THREE.Texture | null {
   const image = map.source.data as CanvasImageSource & { width?: number; height?: number };
-  if (!image || !image.width || !image.height) return null;
+  if (!image?.width || !image.height) return null;
   let byRule = masks.get(map.source);
   if (!byRule) {
     byRule = new Map();
