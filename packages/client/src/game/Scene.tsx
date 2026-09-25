@@ -34,6 +34,7 @@ import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
 import { useGuardedFrame } from "./guardedFrame";
+import { fitModel, MODEL_MIN_SIZE } from "./modelFit";
 import { enableShadows } from "./modelShading";
 import {
   advanceMovement,
@@ -89,7 +90,6 @@ const PLAYER_BODY_Y = PLAYER_BODY_LENGTH / 2 + PLAYER_RADIUS;
 const PLAYER_HEAD_Y = PLAYER_BODY_LENGTH + PLAYER_RADIUS * 1.6;
 const HUNTER_COLOR = "#e8564a";
 const PROP_COLOR = "#5bd75b";
-const MODEL_MIN_SIZE = 0.001;
 const BASE_PLANE_MARGIN = 8;
 const FLAT_TILE_MAX_HEIGHT = 0.1;
 const BASE_PLANE_Y = -0.02;
@@ -1298,23 +1298,10 @@ function FittedModel({
     enableShadows(clone);
     return clone;
   }, [scene]);
-  const { scale, offset } = useMemo(() => {
-    const box = new THREE.Box3().setFromObject(object);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    const fit =
-      Math.min(
-        width / Math.max(size.x, MODEL_MIN_SIZE),
-        height / Math.max(size.y, MODEL_MIN_SIZE),
-        width / Math.max(size.z, MODEL_MIN_SIZE),
-      ) * scaleMul;
-    return {
-      scale: fit,
-      offset: [-center.x * fit, baseY - box.min.y * fit, -center.z * fit] as const,
-    };
-  }, [object, width, height, baseY, scaleMul]);
+  const { scale, offset } = useMemo(
+    () => fitModel(new THREE.Box3().setFromObject(object), width, height, baseY, scaleMul),
+    [object, width, height, baseY, scaleMul],
+  );
   return (
     <group position={[offset[0], offset[1], offset[2]]} scale={scale}>
       <primitive object={object} />
