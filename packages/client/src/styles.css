@@ -1967,6 +1967,28 @@ canvas {
   color: var(--muted);
 }
 
+.pause-card .diag-link {
+  align-self: center;
+  padding: 2px 4px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.pause-card .diag-link:hover {
+  color: var(--text);
+  filter: none;
+  box-shadow: none;
+}
+
 .diag-text {
   width: 100%;
   min-height: 10rem;
