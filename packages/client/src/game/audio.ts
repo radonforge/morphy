@@ -487,6 +487,20 @@ export function playWeaponShot(weapon: WeaponId, volume = 1): void {
   playSample(pickSample(WEAPON_SAMPLES[weapon]), WEAPON_SAMPLE_LEVEL * Math.min(1, volume));
 }
 
+/**
+ * Dry papery rustle for a disguise on the move. `volume` is 0..1 (by distance
+ * and pace) and `pan` -1..1 places it.
+ */
+export function playRustle(volume: number, pan = 0): void {
+  const e = ensure();
+  if (!e || volume <= 0) return;
+  const panner = stereo(e.ctx, e.master, pan);
+  const level = Math.min(1, volume);
+  noiseBurst(e.ctx, panner, { peak: 0.09 * level, dur: 0.07, filterHz: 3200 });
+  const tail = noiseBurst(e.ctx, panner, { peak: 0.05 * level, dur: 0.12, filterHz: 1900 });
+  tail.onended = () => panner.disconnect();
+}
+
 /** Soft low thud for a footstep. `volume` is 0..1 (1 for the local player, by distance for others). */
 export function playStep(volume = 1): void {
   const e = ensure();

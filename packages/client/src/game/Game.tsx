@@ -61,6 +61,7 @@ import {
 } from "./audio";
 import { ControlsBar, ControlsDialog } from "./Controls";
 import { useGuardedFrame } from "./guardedFrame";
+import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
 import { isPerfHudEnabled } from "./prefs";
 import { GAME_DPR, GAME_FOV, Scene } from "./Scene";
@@ -1072,6 +1073,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         />
         <RenderGate skip={blinded} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
+        <PropFootsteps playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
         {perfHud && <PerfProbe playersRef={playersRef} localId={sessionId} nodeRef={perfNodeRef} />}
       </Canvas>
 
