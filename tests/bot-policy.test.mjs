@@ -4,6 +4,7 @@ import {
   MAX_FLEE_DEFLECTIONS,
   MAX_HIDE_REPICKS,
   PANIC_RADIUS,
+  PANIC_SEEN_RADIUS,
   SONAR_PATIENCE_DECISIONS,
   TAUNT_CHANCE_MAX,
   TAUNT_CHANCE_MIN,
@@ -252,9 +253,12 @@ test("a hunter chases the nearest disguise, not the nearest contact", async () =
   assert.equal(intent.targetId, "prop-near");
 });
 
-test("a prop flees the nearest contact wearing no disguise", async () => {
+/** Close enough that a prop in plain sight of the hunter still bolts. */
+const POINT_BLANK = PANIC_SEEN_RADIUS / 2;
+
+test("a prop flees a contact wearing no disguise that is on top of it", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const intent = (await run(policy, 1, () => [character("hunter-b", PANIC_RADIUS - 3)], asProp))[0];
+  const intent = (await run(policy, 1, () => [character("hunter-b", POINT_BLANK)], asProp))[0];
   assert.equal(intent.kind, "moveTo");
   assert.equal(intent.run, true);
   assert.ok(intent.x < 0, `the flee goes away from the hunter on +x, got x=${intent.x}`);
@@ -271,6 +275,21 @@ test("a prop freezes instead of running when the hunter is already watching", as
     )
   )[0];
   assert.equal(intent.kind, "idle");
+});
+
+/**
+ * With fair hunters, moving in view is the tell that gets a prop shot; the
+ * flee-on-sight reflex dated from bot hunters that shot any disguise they saw.
+ */
+test("a prop in plain sight of a hunter holds still rather than give itself away", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intents = await run(
+    policy,
+    DECISIONS,
+    () => [character("hunter-b", PANIC_RADIUS - 3)],
+    asProp,
+  );
+  assert.deepEqual(kinds(intents), ["idle"]);
 });
 
 /** A fellow prop is not a threat, whatever it is doing: it cannot shoot. */
@@ -352,7 +371,7 @@ test("a prop stops re-picking hide spots it can never reach", async () => {
   assert.deepEqual({ x: last.x, z: last.z }, { x: 0, z: 0 }, "it hides where it stands");
 });
 
-const THREAT_GAP = PANIC_RADIUS - 3;
+const THREAT_GAP = POINT_BLANK;
 
 /**
  * A prop panicking at a hunter that keeps drifting sideways. The hunter trails
@@ -459,7 +478,7 @@ const hiddenProp = (seq, entities, phase = "hunting") => ({
 
 test("a prop that breaks cover drops a decoy, once", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const hunterClose = [character("hunter-b", PANIC_RADIUS - 3)];
+  const hunterClose = [character("hunter-b", POINT_BLANK)];
   const hidden = await policy.decide(hiddenProp(1, []));
   const breaks = await policy.decide(hiddenProp(2, hunterClose));
   const flees = await policy.decide(hiddenProp(3, hunterClose));
@@ -572,7 +591,7 @@ test("a prop does not taunt while its taunt is cooling down", async () => {
 test("a prop never taunts with a possible hunter in sight", async () => {
   const obs = settledProp(1, [character("hunter-b", 15)]);
   const intent = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), obs, 0);
-  assert.equal(intent.kind, "hideAs");
+  assert.equal(intent.kind, "idle", "it holds still in view");
   assert.equal(intent.act, undefined, "the honk would point straight at it");
 });
 

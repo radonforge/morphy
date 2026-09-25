@@ -19,6 +19,7 @@ import {
   MAX_FLEE_DEFLECTIONS,
   MAX_HIDE_REPICKS,
   PANIC_RADIUS,
+  PANIC_SEEN_RADIUS,
   SONAR_PATIENCE_DECISIONS,
   TAUNT_CHANCE_MAX,
   TAUNT_CHANCE_MIN,
@@ -41,6 +42,7 @@ interface Threat {
   x: number;
   z: number;
   distance: number;
+  hasLineOfSight: boolean;
   facingMe?: boolean;
 }
 
@@ -277,7 +279,7 @@ export class ScriptedPolicy implements Policy {
     const threat =
       obs.visibility === "limited" ? this.nearestThreatLimited(obs) : this.nearestHunter(obs);
     if (threat) {
-      if (threat.facingMe === true && threat.distance < FREEZE_RADIUS) {
+      if (this.holdsStill(obs, threat)) {
         this.clearFleePlan();
         return { kind: "idle", seq };
       }
@@ -294,6 +296,18 @@ export class ScriptedPolicy implements Policy {
     const intent: Intent = { kind: "hideAs", x: spot.x, z: spot.z, seq };
     if (this.wantsToTaunt(obs, threat)) intent.act = "taunt";
     return intent;
+  }
+
+  /**
+   * Whether a prop freezes rather than runs: with the hunter already looking
+   * its way, or with one in plain sight during the hunt that is not yet on top
+   * of it. A disguise that stands still reads as the furniture around it, and
+   * one seen moving is a suspect, so running in view hands the hunter the one
+   * tell it is looking for. Out of sight, running still pays.
+   */
+  private holdsStill(obs: Observation, threat: Threat): boolean {
+    if (threat.facingMe === true && threat.distance < FREEZE_RADIUS) return true;
+    return obs.phase === "hunting" && threat.hasLineOfSight && threat.distance >= PANIC_SEEN_RADIUS;
   }
 
   /**

@@ -51,7 +51,9 @@ let bots play on their own (handy as a server smoke test).
   taunt it hears is run to, and with nothing to follow for a while it sounds
   its sonar.
 - **Prop**: picks a prop type that exists in the scene, hides next to a matching
-  cluster, transforms, holds still, and bolts if a hunter gets close, dropping a
+  cluster, transforms and holds still. With a hunter in plain sight it keeps
+  holding still, since moving is what gives a disguise away, and bolts only when
+  that hunter is on top of it or when it only hears one close by, dropping a
   decoy where it stood. Once hidden it taunts for points now and then, never
   with a hunter in sight. A sonar pulse close by sends it running; one further
   off keeps it still and quiet.

@@ -57,6 +57,12 @@ export const SONAR_PATIENCE_DECISIONS = 7;
 export const HIDE_OFFSET_MIN = 1.2;
 export const HIDE_OFFSET_MAX = 2.4;
 export const PANIC_RADIUS = 7;
+/**
+ * In plain sight of a hunter during the hunt, a prop bolts only when it is this
+ * close: anywhere further, moving is the one thing that gives a disguise away,
+ * so it holds still and lets the hunter guess.
+ */
+export const PANIC_SEEN_RADIUS = 2;
 export const WAYPOINT_MARGIN = 1.5;
 
 /** A contact counts as "watching me" when its aim is within this half-angle cone of the bearing to the bot. */

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { PANIC_SEEN_RADIUS } from "../packages/bot/src/config.ts";
 import { BotDriver } from "../packages/bot/src/driver.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
@@ -18,7 +19,7 @@ const PROP_RUN_SPEED = MOVE_SPEED * RUN_MULTIPLIER_PROP;
 
 const FLEE_TICKS = 200;
 const FLEE_SETTLE_TICKS = 40;
-const FLEE_GAP = 3;
+const FLEE_GAP = PANIC_SEEN_RADIUS * 0.75;
 const MIN_FLEE_TRAVEL = 20;
 
 /**
@@ -216,7 +217,8 @@ test("a hunter closes on a disguise running at a prop's top speed", async (t) =>
 });
 
 /**
- * A prop running from a hunter that keeps pace three metres behind. Driver-level
+ * A prop running from a hunter that keeps pace right behind it, close enough
+ * that holding still in plain sight is no longer the better bet. Driver-level
  * rather than policy-level because the failure needs all three parts: the policy
  * re-issues the escape point it already sent, the driver reads the repeat as no
  * change and leaves the reflex alone, and the reflex is parked on a goal it has
