@@ -98,10 +98,20 @@ export interface MapBounds {
   max: Vec3;
 }
 
+/**
+ * Where players are put down. Everyone waits for a round on a `props` point;
+ * hunters are released onto `hunters` points as the hunt opens, and respawn on
+ * them, so they start the hunt away from where the props went to hide.
+ */
+export interface SpawnPoints {
+  props: Vec3[];
+  hunters: Vec3[];
+}
+
 export interface MapDefinition {
   id: string;
   bounds: MapBounds;
-  spawnPoints: { props: Vec3[] };
+  spawnPoints: SpawnPoints;
   colliders: BoxCollider[];
   tiles: TileInstance[];
   scenery: SceneryInstance[];
@@ -211,11 +221,18 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
   if (!isRecord(raw.bounds) || !isVec3(raw.bounds.min) || !isVec3(raw.bounds.max)) {
     throw new MapValidationError(id, "field 'bounds' must have Vec3 'min' and 'max'");
   }
-  if (!isRecord(raw.spawnPoints) || !vec3List(raw.spawnPoints.props)) {
-    throw new MapValidationError(id, "field 'spawnPoints' must have Vec3[] 'props'");
+  if (
+    !isRecord(raw.spawnPoints) ||
+    !vec3List(raw.spawnPoints.props) ||
+    !vec3List(raw.spawnPoints.hunters)
+  ) {
+    throw new MapValidationError(id, "field 'spawnPoints' must have Vec3[] 'props' and 'hunters'");
   }
   if (raw.spawnPoints.props.length === 0) {
     throw new MapValidationError(id, "field 'spawnPoints.props' must not be empty");
+  }
+  if (raw.spawnPoints.hunters.length === 0) {
+    throw new MapValidationError(id, "field 'spawnPoints.hunters' must not be empty");
   }
   if (!Array.isArray(raw.colliders) || !raw.colliders.every(isBoxCollider)) {
     throw new MapValidationError(id, "field 'colliders' must be BoxCollider[]");
@@ -241,7 +258,7 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
   if (min.x >= max.x || min.y >= max.y || min.z >= max.z) {
     throw new MapValidationError(id, "field 'bounds' must have min < max on every axis");
   }
-  for (const spawn of raw.spawnPoints.props) {
+  for (const spawn of [...raw.spawnPoints.props, ...raw.spawnPoints.hunters]) {
     if (
       spawn.x < min.x ||
       spawn.x > max.x ||
@@ -270,7 +287,7 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
   return {
     id,
     bounds: { min: raw.bounds.min, max: raw.bounds.max },
-    spawnPoints: { props: raw.spawnPoints.props },
+    spawnPoints: { props: raw.spawnPoints.props, hunters: raw.spawnPoints.hunters },
     colliders: raw.colliders,
     tiles: raw.tiles,
     scenery,

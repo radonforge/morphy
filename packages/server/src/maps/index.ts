@@ -1,5 +1,4 @@
 import type { MapDefinition, MapId } from "@morphy/shared";
-import { buildMars } from "./mars";
 import { buildStation } from "./station";
 import { buildUrban } from "./urban";
 
@@ -10,7 +9,6 @@ import { buildUrban } from "./urban";
  */
 export const MAP_BUILDERS: Record<MapId, (seed: number) => MapDefinition> = {
   station: buildStation,
-  mars: buildMars,
   urban: buildUrban,
 };
 

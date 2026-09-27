@@ -8,6 +8,7 @@ export interface BotPlayer {
   z: number;
   rot: number;
   aim: number;
+  propRot: number;
   role: Role;
   alive: boolean;
   hp: number;

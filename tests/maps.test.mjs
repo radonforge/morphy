@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildMap } from "../packages/server/src/maps/index.ts";
-import { computePropBounds, parseMapDefinition } from "../packages/shared/src/index.ts";
+import {
+  colliderAabb,
+  computePropBounds,
+  parseMapDefinition,
+} from "../packages/shared/src/index.ts";
 
-const MAP_IDS = ["station", "mars", "urban"];
+const MAP_IDS = ["station", "urban"];
 
 test("all map builders remain deterministic and valid across 1,000 seeds", () => {
   for (const mapId of MAP_IDS) {
@@ -35,49 +39,42 @@ test("urban straight roads run along their street (road-straight.glb runs along 
   }
 });
 
-const MARS_BARRIER_FACE = 52.5;
-const MARS_BARRIER_ROCKS_PER_SIDE = 12;
+const HUNTER_BODY_RADIUS = 0.4;
+const LOBBY_CLUSTER = 4;
+const HUNTER_RELEASE_MIN_DISTANCE = 40;
 
-test("mars barrier rocks stand on the barrier's inner face, not in front of or behind it", () => {
-  for (let seed = 0; seed < 25; seed++) {
-    const map = buildMap("mars", seed);
-    const rocks = map.colliders.filter((box) => Math.max(box.size.x, box.size.z) < 5);
-    const straddles = (center, half) =>
-      Math.abs(center) - half <= MARS_BARRIER_FACE && Math.abs(center) + half >= MARS_BARRIER_FACE;
-    const sides = [
-      rocks.filter((box) => box.position.z < 0 && straddles(box.position.z, box.size.z / 2)),
-      rocks.filter((box) => box.position.z > 0 && straddles(box.position.z, box.size.z / 2)),
-      rocks.filter((box) => box.position.x < 0 && straddles(box.position.x, box.size.x / 2)),
-      rocks.filter((box) => box.position.x > 0 && straddles(box.position.x, box.size.x / 2)),
-    ];
-    for (const side of sides) {
-      assert.ok(side.length >= MARS_BARRIER_ROCKS_PER_SIDE, `seed ${seed}: ${side.length} rocks`);
+test("hunter spawns stand clear of every static prop and every wall", () => {
+  for (const mapId of MAP_IDS) {
+    for (let seed = 0; seed < 100; seed++) {
+      const map = buildMap(mapId, seed);
+      const radii = new Map(map.propCatalog.map((d) => [d.id, computePropBounds(d).radius]));
+      const walls = map.colliders.filter((box) => box.position.y > 0).map(colliderAabb);
+      for (const spawn of map.spawnPoints.hunters) {
+        for (const prop of map.props) {
+          const gap = Math.hypot(prop.position.x - spawn.x, prop.position.z - spawn.z);
+          assert.ok(gap > radii.get(prop.type) + HUNTER_BODY_RADIUS, `${mapId}/${seed}: on a prop`);
+        }
+        for (const { min, max } of walls) {
+          const dx = Math.max(min.x - spawn.x, 0, spawn.x - max.x);
+          const dz = Math.max(min.z - spawn.z, 0, spawn.z - max.z);
+          assert.ok(Math.hypot(dx, dz) > HUNTER_BODY_RADIUS, `${mapId}/${seed}: inside a wall`);
+        }
+      }
     }
   }
 });
 
-const MARS_KIT_OFFSET = { x: 2, z: 1.5 };
-const MARS_FLAT_DECOR = /\/(crater|craterLarge|rocks_smallA|rocks_smallB)\.glb$/;
-
-test("mars flat decor never renders on the module floor", () => {
-  for (let seed = 0; seed < 100; seed++) {
-    const map = buildMap("mars", seed);
-    const floor = {
-      minX: Math.min(...map.tiles.map((tile) => tile.position.x)),
-      maxX: Math.max(...map.tiles.map((tile) => tile.position.x)),
-      minZ: Math.min(...map.tiles.map((tile) => tile.position.z)),
-      maxZ: Math.max(...map.tiles.map((tile) => tile.position.z)),
-    };
-    for (const inst of map.scenery.filter((item) => MARS_FLAT_DECOR.test(item.model))) {
-      const scale = inst.scale ?? 1;
-      const cos = Math.cos(inst.rotationY);
-      const sin = Math.sin(inst.rotationY);
-      const ox = scale * MARS_KIT_OFFSET.x;
-      const oz = scale * MARS_KIT_OFFSET.z;
-      const x = inst.position.x + ox * cos + oz * sin;
-      const z = inst.position.z - ox * sin + oz * cos;
-      const onFloor = x >= floor.minX && x <= floor.maxX && z >= floor.minZ && z <= floor.maxZ;
-      assert.ok(!onFloor, `seed ${seed}: ${inst.model} renders at (${x}, ${z})`);
+test("some hunter spawn is always far from where the props gather", () => {
+  for (const mapId of MAP_IDS) {
+    for (let seed = 0; seed < 100; seed++) {
+      const map = buildMap(mapId, seed);
+      const cluster = map.spawnPoints.props.slice(0, LOBBY_CLUSTER);
+      const furthest = Math.max(
+        ...map.spawnPoints.hunters.map((spawn) =>
+          Math.min(...cluster.map((c) => Math.hypot(c.x - spawn.x, c.z - spawn.z))),
+        ),
+      );
+      assert.ok(furthest >= HUNTER_RELEASE_MIN_DISTANCE, `${mapId}/${seed}: ${furthest}m`);
     }
   }
 });

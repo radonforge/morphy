@@ -4,6 +4,7 @@ import {
   MAX_FLEE_DEFLECTIONS,
   MAX_HIDE_REPICKS,
   PANIC_RADIUS,
+  PANIC_SEEN_RADIUS,
   SONAR_PATIENCE_DECISIONS,
   TAUNT_CHANCE_MAX,
   TAUNT_CHANCE_MIN,
@@ -16,7 +17,10 @@ const DIFFICULTY = 0.6;
 const BOUNDS = { min: { x: -20, y: 0, z: -20 }, max: { x: 20, y: 10, z: 20 } };
 const DECISIONS = 12;
 
-/** A contact on the +x axis, in plain sight, disguised and standing still. */
+/**
+ * A contact on the +x axis, in plain sight, disguised and standing still, that
+ * has given nothing away: to a hunter, one more object in the room.
+ */
 const contact = (id, distance, over = {}) => ({
   id,
   x: distance,
@@ -26,14 +30,19 @@ const contact = (id, distance, over = {}) => ({
   disguised: true,
   movedRecently: false,
   facingMe: false,
+  tellRecently: false,
   ...over,
 });
+
+/** A disguise standing still that gave itself away a moment ago: a suspect. */
+const suspect = (id, distance, over = {}) => contact(id, distance, { tellRecently: true, ...over });
 
 /** A contact wearing no disguise: a character with a weapon, so a hunter. */
 const character = (id, distance, over = {}) => contact(id, distance, { disguised: false, ...over });
 
-/** A disguise that is on the move, so not yet worth a shot. */
-const mover = (id, distance, over = {}) => contact(id, distance, { movedRecently: true, ...over });
+/** A disguise seen on the move, so a suspect, but not yet worth a shot. */
+const mover = (id, distance, over = {}) =>
+  contact(id, distance, { movedRecently: true, tellRecently: true, ...over });
 
 /**
  * A contact known only by sound: moving, out of sight, and (like the footsteps
@@ -41,7 +50,7 @@ const mover = (id, distance, over = {}) => contact(id, distance, { movedRecently
  * `disguised` for these, so the fixture must too.
  */
 const heard = (id, distance) => {
-  const { disguised, ...rest } = contact(id, distance, {
+  const { disguised, tellRecently, ...rest } = contact(id, distance, {
     movedRecently: true,
     hasLineOfSight: false,
   });
@@ -114,16 +123,78 @@ test("a hunter keeps hunting past a teammate stood in the way", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
   const intents = await run(policy, DECISIONS, () => [
     character("hunter-b", 0.8),
-    contact("prop-a", 9),
+    suspect("prop-a", 9),
   ]);
   assert.deepEqual(kinds(intents), ["shootTarget"]);
   assert.equal(intents[0].targetId, "prop-a", "the nearer teammate is not a target");
 });
 
-test("a hunter shoots a disguise standing still in range", async () => {
+test("a hunter shoots a suspect standing still in range", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const intent = (await run(policy, 1, () => [contact("prop-a", 9)]))[0];
+  const intent = (await run(policy, 1, () => [suspect("prop-a", 9)]))[0];
   assert.equal(intent.kind, "shootTarget");
+  assert.equal(intent.targetId, "prop-a");
+});
+
+/**
+ * The shape leak this closes: a hunter used to be shown players only, so every
+ * disguise in sight was a prop by construction and was shot on sight. A
+ * disguise that gave nothing away is now one more object in the room.
+ */
+test("a hunter leaves a disguise that gave nothing away alone between probes", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intents = await run(policy, DECISIONS, () => [contact("crate-a", 6)]);
+  assert.deepEqual(kinds(intents), ["patrol"]);
+});
+
+test("a hunter due a probe shoots the nearest object in reach", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = await policy.decide(
+    observation(1, [contact("crate-far", 12), contact("crate-near", 5)], { canProbeNow: true }),
+  );
+  assert.equal(intent.kind, "shootTarget");
+  assert.equal(intent.targetId, "crate-near");
+});
+
+test("a hunter never probes the same object twice", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const room = [contact("crate-far", 12), contact("crate-near", 5)];
+  await policy.decide(observation(1, room, { canProbeNow: true }));
+  await policy.decide(observation(2, room, { canProbeNow: false, lastShotTargetId: "crate-near" }));
+  const next = await policy.decide(
+    observation(3, room, { canProbeNow: true, lastShotTargetId: "crate-near" }),
+  );
+  assert.equal(next.kind, "shootTarget");
+  assert.equal(next.targetId, "crate-far", "the one that survived a shot is furniture");
+});
+
+test("a probe cut short by a shot at a suspect is still owed", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const room = [contact("crate-far", 12), contact("crate-near", 5)];
+  await policy.decide(observation(1, room, { canProbeNow: true }));
+  await policy.decide(observation(2, [...room, suspect("prop-a", 8)], { canProbeNow: true }));
+  await policy.decide(observation(3, room, { canProbeNow: false, lastShotTargetId: "prop-a" }));
+  const next = await policy.decide(
+    observation(4, room, { canProbeNow: true, lastShotTargetId: "prop-a" }),
+  );
+  assert.equal(next.kind, "shootTarget");
+  assert.equal(next.targetId, "crate-near", "the crate it never shot is not written off");
+});
+
+test("a hunter probes nothing out of reach", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = await policy.decide(
+    observation(1, [contact("crate-far", 40)], { canProbeNow: true }),
+  );
+  assert.equal(intent.kind, "patrol");
+});
+
+test("a hunter chases a suspect before it spends a probe", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = await policy.decide(
+    observation(1, [contact("crate", 3), mover("prop-a", 8)], { canProbeNow: true }),
+  );
+  assert.equal(intent.kind, "inspect");
   assert.equal(intent.targetId, "prop-a");
 });
 
@@ -158,9 +229,9 @@ test("a hunter walks to a suspect it has not seen run", async () => {
   assert.equal(bySound.kind, "inspect");
   assert.equal(bySound.run, false, "a contact known only by sound is approached at walking pace");
 
-  const still = (await run(new ScriptedPolicy(DIFFICULTY), 1, () => [contact("prop-b", 40)]))[0];
+  const still = (await run(new ScriptedPolicy(DIFFICULTY), 1, () => [suspect("prop-b", 40)]))[0];
   assert.equal(still.kind, "inspect");
-  assert.equal(still.run, false, "a disguise standing still out of range is not run at");
+  assert.equal(still.run, false, "a suspect standing still out of range is not run at");
 });
 
 /**
@@ -197,9 +268,12 @@ test("a hunter chases the nearest disguise, not the nearest contact", async () =
   assert.equal(intent.targetId, "prop-near");
 });
 
-test("a prop flees the nearest contact wearing no disguise", async () => {
+/** Close enough that a prop in plain sight of the hunter still bolts. */
+const POINT_BLANK = PANIC_SEEN_RADIUS / 2;
+
+test("a prop flees a contact wearing no disguise that is on top of it", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const intent = (await run(policy, 1, () => [character("hunter-b", PANIC_RADIUS - 3)], asProp))[0];
+  const intent = (await run(policy, 1, () => [character("hunter-b", POINT_BLANK)], asProp))[0];
   assert.equal(intent.kind, "moveTo");
   assert.equal(intent.run, true);
   assert.ok(intent.x < 0, `the flee goes away from the hunter on +x, got x=${intent.x}`);
@@ -216,6 +290,21 @@ test("a prop freezes instead of running when the hunter is already watching", as
     )
   )[0];
   assert.equal(intent.kind, "idle");
+});
+
+/**
+ * With fair hunters, moving in view is the tell that gets a prop shot; the
+ * flee-on-sight reflex dated from bot hunters that shot any disguise they saw.
+ */
+test("a prop in plain sight of a hunter holds still rather than give itself away", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intents = await run(
+    policy,
+    DECISIONS,
+    () => [character("hunter-b", PANIC_RADIUS - 3)],
+    asProp,
+  );
+  assert.deepEqual(kinds(intents), ["idle"]);
 });
 
 /** A fellow prop is not a threat, whatever it is doing: it cannot shoot. */
@@ -297,7 +386,7 @@ test("a prop stops re-picking hide spots it can never reach", async () => {
   assert.deepEqual({ x: last.x, z: last.z }, { x: 0, z: 0 }, "it hides where it stands");
 });
 
-const THREAT_GAP = PANIC_RADIUS - 3;
+const THREAT_GAP = POINT_BLANK;
 
 /**
  * A prop panicking at a hunter that keeps drifting sideways. The hunter trails
@@ -404,7 +493,7 @@ const hiddenProp = (seq, entities, phase = "hunting") => ({
 
 test("a prop that breaks cover drops a decoy, once", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const hunterClose = [character("hunter-b", PANIC_RADIUS - 3)];
+  const hunterClose = [character("hunter-b", POINT_BLANK)];
   const hidden = await policy.decide(hiddenProp(1, []));
   const breaks = await policy.decide(hiddenProp(2, hunterClose));
   const flees = await policy.decide(hiddenProp(3, hunterClose));
@@ -517,7 +606,7 @@ test("a prop does not taunt while its taunt is cooling down", async () => {
 test("a prop never taunts with a possible hunter in sight", async () => {
   const obs = settledProp(1, [character("hunter-b", 15)]);
   const intent = await decideWithRoll(new ScriptedPolicy(DIFFICULTY), obs, 0);
-  assert.equal(intent.kind, "hideAs");
+  assert.equal(intent.kind, "idle", "it holds still in view");
   assert.equal(intent.act, undefined, "the honk would point straight at it");
 });
 

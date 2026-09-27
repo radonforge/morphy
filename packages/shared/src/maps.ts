@@ -20,31 +20,24 @@ export interface MapInfo {
  */
 export const MAP_CATALOG = [
   {
-    id: "station",
-    name: "Kepler-9 Station",
-    theme: "station",
-    tag: "Indoor",
-    blurb: "Pressurized modules and tight corridors: blend in among furniture and containers.",
-  },
-  {
-    id: "mars",
-    name: "Ares Outpost",
-    theme: "mars",
-    tag: "Open",
-    blurb: "Open-air Martian apron around a small base: little cover, long sightlines.",
-  },
-  {
     id: "urban",
     name: "North District",
     theme: "urban",
     tag: "Streets",
     blurb: "City blocks and sidewalks: blend in among planters, trees and roadworks.",
   },
+  {
+    id: "station",
+    name: "Kepler-9 Station",
+    theme: "station",
+    tag: "Indoor",
+    blurb: "Pressurized modules and tight corridors: blend in among furniture and containers.",
+  },
 ] as const satisfies readonly MapInfo[];
 
 export type MapId = (typeof MAP_CATALOG)[number]["id"];
 
-export const DEFAULT_MAP_ID: MapId = "station";
+export const DEFAULT_MAP_ID: MapId = "urban";
 
 /** Narrow an untrusted join option to a known map id (boundary validation). */
 export function isMapId(value: unknown): value is MapId {

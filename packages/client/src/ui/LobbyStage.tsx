@@ -197,7 +197,7 @@ interface StageTheme {
   hemiIntensity: number;
   ambient: number;
   dir: number;
-  sky: "stars" | "day" | "haze";
+  sky: "stars" | "day";
 }
 
 const STAGE_THEMES: Record<MapId, StageTheme> = {
@@ -213,19 +213,6 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
     ambient: 0.55,
     dir: MAP_THEME_BASE.station.directional,
     sky: "stars",
-  },
-  mars: {
-    background: MAP_THEME_BASE.mars.background,
-    fog: "#c2906c",
-    fogNear: 10,
-    fogFar: 42,
-    ground: MAP_THEME_BASE.mars.ground,
-    hemiSky: MAP_THEME_BASE.mars.hemiSky,
-    hemiGround: MAP_THEME_BASE.mars.hemiGround,
-    hemiIntensity: 1.25,
-    ambient: 0.95,
-    dir: MAP_THEME_BASE.mars.directional,
-    sky: "haze",
   },
   urban: {
     background: MAP_THEME_BASE.urban.background,
@@ -552,8 +539,8 @@ function ActorNameplate({ label, slot }: { label: string; slot: StageSlot }) {
  *
  * A piece is anchored by its own footprint, not by the origin its GLB happens to carry. Every
  * `space/exterior` model centres its geometry 2 units right and 1.5 forward of that origin, so
- * anchoring on the origin displaced each Mars piece by `(2, 1.5) * scale`: a per-piece offset,
- * since the scales run 1.5 to 3.5, which is what pulled hand-placed neighbours into each other.
+ * anchoring on the origin displaced each such piece by `(2, 1.5) * scale`: a per-piece offset,
+ * since scales differ per piece, which is what pulled hand-placed neighbours into each other.
  * Re-centring makes `position` mean where the piece stands, the same promise `FittedModel` keeps
  * in a match, so a layout can be authored by reading the numbers. Height is left alone: these
  * models already sit on y=0, and the rocket stacks on its own parts.

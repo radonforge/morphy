@@ -12,7 +12,7 @@ import {
 } from "../packages/client/src/game/movement.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
 
-const MAP_IDS = ["station", "mars", "urban"];
+const MAP_IDS = ["station", "urban"];
 const BOUNDS = { min: { x: -50, y: 0, z: -50 }, max: { x: 50, y: 0, z: 50 } };
 const WALL_Z = -4;
 const WALL_HALF_THICKNESS = 0.15;

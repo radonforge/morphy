@@ -1,13 +1,11 @@
 import { AVATAR_CATALOG, WEAPONS } from "@morphy/shared";
 import { FLOORPLAN_MODEL_PATHS } from "../server/src/maps/lib";
-import { MARS_SCENERY_MODEL_PATHS } from "../server/src/maps/mars";
 import { URBAN_SCENERY_MODEL_PATHS } from "../server/src/maps/urban";
-import { MARS_CATALOG } from "../server/src/marsCatalog";
 import { SPACE_CATALOG } from "../server/src/spaceCatalog";
 import { URBAN_CATALOG } from "../server/src/urbanCatalog";
 import { LOBBY_DIORAMA_MODEL_PATHS } from "./src/ui/lobbyDioramas";
 
-const catalogModels = [...SPACE_CATALOG, ...MARS_CATALOG, ...URBAN_CATALOG]
+const catalogModels = [...SPACE_CATALOG, ...URBAN_CATALOG]
   .map((definition) => definition.model)
   .filter((model): model is string => typeof model === "string");
 
@@ -21,7 +19,6 @@ export const RUNTIME_MODEL_PATHS = [
     ...Object.values(WEAPONS).map((weapon) => weapon.model),
     ...catalogModels,
     ...FLOORPLAN_MODEL_PATHS,
-    ...MARS_SCENERY_MODEL_PATHS,
     ...URBAN_SCENERY_MODEL_PATHS,
     ...LOBBY_DIORAMA_MODEL_PATHS,
   ]),

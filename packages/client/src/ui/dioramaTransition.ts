@@ -196,7 +196,7 @@ export function pieceScale(
 /**
  * How solid the sky veil is. `Stars` and `Sky` cannot be alpha faded, their shaders carrying no
  * opacity uniform between them, so the sky is dissolved into the scene's own fog colour and
- * reformed instead. That also covers Mars, whose sky is no component at all.
+ * reformed instead.
  *
  * It rides the departure's clock, which is the one that survives a retarget, so a step taken
  * mid-cross leaves the sky where it stands instead of snapping it back.

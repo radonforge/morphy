@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { PANIC_SEEN_RADIUS } from "../packages/bot/src/config.ts";
 import { BotDriver } from "../packages/bot/src/driver.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
@@ -18,7 +19,7 @@ const PROP_RUN_SPEED = MOVE_SPEED * RUN_MULTIPLIER_PROP;
 
 const FLEE_TICKS = 200;
 const FLEE_SETTLE_TICKS = 40;
-const FLEE_GAP = 3;
+const FLEE_GAP = PANIC_SEEN_RADIUS * 0.75;
 const MIN_FLEE_TRAVEL = 20;
 
 /**
@@ -164,11 +165,13 @@ test("two hunter bots left alone never target each other on sight", async () => 
  * breaks contact, which is the case that was never broken.
  *
  * Measured from the end of a warm-up rather than from the start: the hunter
- * spends its first second on the bootstrap patrol and one shot at a contact it
- * has not yet seen move, and losing ground before the chase begins is not what
- * this is about.
+ * spends its first second patrolling past a contact it has not yet seen move,
+ * and losing ground before the chase begins is not what this is about. The
+ * patrol goal is pinned straight down the arena, since a random one sends the
+ * hunter off the quarry's line and the result would be about that detour.
  */
-test("a hunter closes on a disguise running at a prop's top speed", async () => {
+test("a hunter closes on a disguise running at a prop's top speed", async (t) => {
+  t.mock.method(Math, "random", () => 0.5);
   const log = [];
   const driver = driverFor("Alpha", ARENA, log);
   const self = body("bot:1", { x: 0, y: 0, z: 0 });
@@ -214,7 +217,8 @@ test("a hunter closes on a disguise running at a prop's top speed", async () => 
 });
 
 /**
- * A prop running from a hunter that keeps pace three metres behind. Driver-level
+ * A prop running from a hunter that keeps pace right behind it, close enough
+ * that holding still in plain sight is no longer the better bet. Driver-level
  * rather than policy-level because the failure needs all three parts: the policy
  * re-issues the escape point it already sent, the driver reads the repeat as no
  * change and leaves the reflex alone, and the reflex is parked on a goal it has

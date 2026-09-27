@@ -12,11 +12,14 @@ import {
   HIDE_DURATION_MS,
   HUNTER_CAPTURE_HEAL,
   HUNTER_MAX_HP,
+  HUNTER_RESPAWN_MS,
   LOBBY_AUTOSTART_MS,
   MSG_SHOT_FIRED,
   MSG_SONAR_PING,
   MSG_TAUNT,
+  MSG_TELEPORT,
   RECONNECT_WINDOW_MS,
+  ROUND_END_MS,
   SONAR_RADIUS,
   START_COUNTDOWN_MS,
   TAUNT_CHECK_MS,
@@ -667,6 +670,122 @@ test("a shot that hits nothing still costs the full miss damage", () => {
   assert.equal(shooter.hp, HUNTER_MAX_HP - WEAPONS[shooter.weapon].missDamage);
 });
 
+const CHEAP_GUESSES = 12;
+
+test("a hunter can test a dozen wrong objects and still stand", () => {
+  const { room, shooter, target } = lineOfFire();
+  target.x = 30;
+  for (let guess = 0; guess < CHEAP_GUESSES; guess++) {
+    room.nextShotAt.clear();
+    shootAhead(room, shooter);
+  }
+  assert.equal(shooter.alive, true);
+  assert.ok(shooter.hp > 0, `left on ${shooter.hp} HP`);
+});
+
+test("a capture pays back more than the guesses it usually takes", () => {
+  const { room, shooter } = lineOfFire();
+  shooter.hp = HUNTER_MAX_HP / 2;
+  shootAhead(room, shooter);
+  assert.ok(
+    shooter.hp - HUNTER_MAX_HP / 2 >= (WEAPONS[shooter.weapon].missDamage * CHEAP_GUESSES) / 2,
+    "a find refunds at least half a dozen misses",
+  );
+});
+
+/** A lone hunter one miss from empty, in a room with a clock and two spawn points. */
+function lastLegs() {
+  const { room, shooter, target } = lineOfFire();
+  room.clock = fakeClock();
+  room.map.spawnPoints = {
+    props: [{ x: 0, y: 0, z: 0 }],
+    hunters: [
+      { x: 1, y: 0, z: 1 },
+      { x: 40, y: 0, z: 40 },
+    ],
+  };
+  target.x = 30;
+  shooter.hp = WEAPONS[shooter.weapon].missDamage;
+  return { room, shooter };
+}
+
+test("a hunter out of HP does not hand the props the round", () => {
+  const { room, shooter } = lastLegs();
+  shootAhead(room, shooter);
+  assert.equal(shooter.alive, false);
+  assert.equal(room.state.phase, "hunting", "props win on the clock, not on a hunter's misses");
+});
+
+test("a hunter out of HP is back in the hunt after a short wait, at reduced health", () => {
+  const { room, shooter } = lastLegs();
+  shootAhead(room, shooter);
+  const respawn = timersOf(room, HUNTER_RESPAWN_MS).at(-1);
+  assert.ok(respawn, "expected a respawn timer");
+  respawn.fn();
+  assert.equal(shooter.alive, true);
+  assert.equal(shooter.hp, CONVERTED_HUNTER_HP);
+});
+
+test("a respawned hunter is put back where no prop is, and told so", () => {
+  const { room, shooter } = lastLegs();
+  const sent = [];
+  room.clients.push({
+    sessionId: shooter.id,
+    send: (type, message) => sent.push({ type, message }),
+  });
+  shootAhead(room, shooter);
+  timersOf(room, HUNTER_RESPAWN_MS).at(-1).fn();
+  assert.deepEqual(
+    { x: shooter.x, z: shooter.z },
+    { x: 40, z: 40 },
+    "the spot furthest from props",
+  );
+  assert.deepEqual(sent.at(-1), { type: MSG_TELEPORT, message: { x: 40, z: 40 } });
+});
+
+test("a respawn still pending when the round ends never fires", () => {
+  const { room, shooter } = lastLegs();
+  shootAhead(room, shooter);
+  const respawn = timersOf(room, HUNTER_RESPAWN_MS).at(-1);
+  room.state.phase = "round_end";
+  respawn.fn();
+  assert.equal(shooter.alive, false);
+});
+
+test("the props win at once when every hunter has walked out", () => {
+  const { room, shooter } = lineOfFire();
+  room.endRound = function endRoundForTest() {
+    this.state.phase = "round_end";
+  };
+  room.onLeave({ sessionId: shooter.id });
+  assert.equal(room.state.winner, "props");
+});
+
+test("hunters are released on the hunter spawns furthest from the props", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  room.startCountdown();
+  timersOf(room, START_COUNTDOWN_MS).at(-1).fn();
+  const hunters = [];
+  const props = [];
+  room.state.players.forEach((player) => {
+    (player.role === "hunter" ? hunters : props).push(player);
+  });
+  const nearestProp = (spot) =>
+    Math.min(...props.map((prop) => Math.hypot(prop.x - spot.x, prop.z - spot.z)));
+  const best = Math.max(...room.map.spawnPoints.hunters.map(nearestProp));
+  timersOf(room, HIDE_DURATION_MS).at(-1).fn();
+  assert.equal(room.state.phase, "hunting");
+  for (const hunter of hunters) {
+    assert.ok(
+      room.map.spawnPoints.hunters.some((spot) => spot.x === hunter.x && spot.z === hunter.z),
+      "on a hunter spawn",
+    );
+    assert.equal(nearestProp(hunter), best, "the one furthest from every prop");
+  }
+});
+
 /** Replace a room-filling bot's brain with one that presses a single key once. */
 function pressOnce(room, sessionId, act) {
   let pressed = false;
@@ -946,4 +1065,85 @@ test("the weapon a player chose survives the round it was chosen in", () => {
 
   room.resetToLobby();
   assert.equal(room.state.players.get("a").weapon, "shotgun");
+});
+
+/** Close the round the way the room does, then let its result card run out. */
+function finishRound(room) {
+  room.state.winner = "hunters";
+  room.endRound();
+  const card = timersOf(room, ROUND_END_MS).at(-1);
+  assert.ok(card, "expected the result card's timer");
+  card.fn();
+}
+
+test("a public round goes straight from its result card to the next countdown", () => {
+  const room = publicRoom();
+  joinRoom(room, "human");
+  fireBotFill(room);
+  startRound(room);
+  finishRound(room);
+  assert.equal(room.state.phase, "starting");
+  room.state.players.forEach((player) => {
+    assert.equal(player.role, "prop", "every role is taken back before the next deal");
+    assert.equal(player.propType, "");
+  });
+});
+
+test("a private round returns to its lobby, where the host starts the next", () => {
+  const room = publicRoom();
+  room.state.isPrivate = true;
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  startRound(room);
+  finishRound(room);
+  assert.equal(room.state.phase, "lobby");
+});
+
+test("a public room left too thin to play on returns to its lobby", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  startRound(room);
+  room.state.players.get("b").connected = false;
+  finishRound(room);
+  assert.equal(room.state.phase, "lobby");
+});
+
+test("a player arriving at the result card is dealt into the next round", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  startRound(room);
+  room.state.winner = "hunters";
+  room.endRound();
+  joinRoom(room, "late");
+  timersOf(room, ROUND_END_MS).at(-1).fn();
+  startRound(room);
+  assert.ok(room.roundRoster.has("late"));
+});
+
+test("a human arriving between rounds takes a bot's seat", () => {
+  const room = publicRoom();
+  joinRoom(room, "first");
+  fireBotFill(room);
+  startRound(room);
+  room.state.winner = "hunters";
+  room.endRound();
+  joinRoom(room, "second");
+  assert.equal(room.state.players.size, BOT_FILL_TARGET);
+  assert.equal(botCount(room), BOT_FILL_TARGET - 2);
+});
+
+test("a round locks the room as roles are dealt, not as the countdown starts", () => {
+  const room = publicRoom();
+  let locks = 0;
+  room.lock = async () => {
+    locks++;
+  };
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  room.startCountdown();
+  assert.equal(locks, 0, "the countdown is still a window to join in");
+  timersOf(room, START_COUNTDOWN_MS).at(-1).fn();
+  assert.equal(locks, 1);
 });

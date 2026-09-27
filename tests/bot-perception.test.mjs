@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { HEARD_SOUND_MEMORY_MS } from "../packages/bot/src/config.ts";
+import {
+  BOT_PROBE_INTERVAL_MAX_MS,
+  BOT_TELL_WINDOW_MS,
+  HEARD_SOUND_MEMORY_MS,
+} from "../packages/bot/src/config.ts";
 import { Reflex } from "../packages/bot/src/reflex.ts";
 import { SONAR_HEARING_RADIUS, TAUNT_HEARING_RADIUS } from "../packages/shared/src/index.ts";
 
@@ -333,4 +337,131 @@ test("a sonar pulse carries only as far as a player hears it", () => {
   const sounds = reflex.buildObservation(world(GONE), 1, 1_100).sounds;
   assert.equal(sounds.length, 1);
   assert.equal(sounds[0].kind, "sonar");
+});
+
+test("a hunter perceives nothing while the props hide", () => {
+  const reflex = ready("limited");
+  reflex.hear("taunt", -5.9, 1.9, 1_000);
+  const blind = { ...world(IN_PLAIN_SIGHT), phase: "hiding" };
+  const obs = reflex.buildObservation(blind, 1, 1_100);
+  assert.deepEqual(obs.entities, [], "a player hunter stares at a blindout card");
+  assert.deepEqual(obs.sounds, []);
+});
+
+const CRATE = {
+  id: "crate",
+  name: "Crate",
+  parts: [
+    { kind: "box", position: { x: 0, y: 0.5, z: 0 }, size: { x: 1, y: 1, z: 1 }, color: "#000" },
+  ],
+};
+
+/** The sightline map with one crate of scenery standing on the open -x side. */
+function furnished(propAt) {
+  const reflex = new Reflex(0.6, "limited");
+  reflex.setMap({
+    ...MAP,
+    props: [{ type: "crate", position: { x: propAt.x, y: 0, z: propAt.z }, rotation: 0 }],
+    propCatalog: [CRATE],
+  });
+  reflex.syncPosition(0, 0, 0);
+  return reflex;
+}
+
+test("a scene prop in sight reads exactly as a disguised player standing still", () => {
+  const reflex = furnished({ x: -5, z: -2 });
+  const still = contact(-5, 2);
+  reflex.buildObservation(world(still), 1, 1_000);
+  const obs = reflex.buildObservation(world(still), 2, 1_200);
+  assert.equal(obs.entities.length, 2);
+  const [a, b] = obs.entities;
+  assert.deepEqual(shapeOf(a), shapeOf(b), "nothing but position tells the two apart");
+});
+
+test("a prop is shown no scenery, since it hunts nobody", () => {
+  const reflex = furnished({ x: -5, z: -2 });
+  const asProp = { ...world(GONE), self: { ...contact(0, 0), id: "self" } };
+  assert.deepEqual(reflex.buildObservation(asProp, 1, 1_000).entities, []);
+});
+
+test("handles are dealt nearest first, whatever the contact is", () => {
+  const reflex = furnished({ x: -3, z: 0 });
+  const obs = reflex.buildObservation(world(contact(-9, 0)), 1, 1_000);
+  assert.equal(obs.entities.length, 2);
+  const numbers = obs.entities.map((e) => Number(e.id.replace(/\D+/g, "")));
+  assert.ok(
+    numbers[0] < numbers[1],
+    "a handle's number follows distance, so it cannot single out the players",
+  );
+});
+
+test("a disguise seen moving stays a suspect for a few seconds, then blends back in", () => {
+  const reflex = ready("limited");
+  observeMoving(reflex, contact(-5.0, 1.0), contact(-5.9, 1.9));
+  const stopped = contact(-5.9, 1.9);
+  const soon = sole(reflex.buildObservation(world(stopped), 3, 1_200 + BOT_TELL_WINDOW_MS / 2));
+  assert.equal(soon.movedRecently, false);
+  assert.equal(soon.tellRecently, true, "the crate that just moved is still the one to watch");
+  const later = sole(reflex.buildObservation(world(stopped), 4, 1_200 + BOT_TELL_WINDOW_MS + 1));
+  assert.equal(later.tellRecently, false);
+});
+
+test("a disguise seen changing shape is a suspect", () => {
+  const reflex = ready("limited");
+  const before = contact(-5, 0);
+  reflex.buildObservation(world(before), 1, 1_000);
+  const after = sole(reflex.buildObservation(world({ ...before, propType: "barrel" }), 2, 1_200));
+  assert.equal(after.movedRecently, false);
+  assert.equal(after.tellRecently, true);
+});
+
+test("a disguise seen spinning in place has moved", () => {
+  const reflex = ready("limited");
+  const before = { ...contact(-5, 0), propRot: 0 };
+  reflex.buildObservation(world(before), 1, 1_000);
+  const spun = sole(reflex.buildObservation(world({ ...before, propRot: Math.PI / 2 }), 2, 1_200));
+  assert.equal(spun.movedRecently, true);
+  assert.equal(spun.tellRecently, true);
+});
+
+test("a honk seen coming from a disguise makes it a suspect", () => {
+  const reflex = ready("limited");
+  const still = contact(-5, 0);
+  assert.equal(sole(reflex.buildObservation(world(still), 1, 1_000)).tellRecently, false);
+  reflex.hear("taunt", -5, 0, 1_100);
+  assert.equal(sole(reflex.buildObservation(world(still), 2, 1_200)).tellRecently, true);
+});
+
+test("a disguise that stood still gives nothing away", () => {
+  const reflex = ready("limited");
+  const still = contact(-5, 0);
+  reflex.buildObservation(world(still), 1, 1_000);
+  assert.equal(sole(reflex.buildObservation(world(still), 2, 1_200)).tellRecently, false);
+});
+
+test("a hunt opens with no disguise seen moving, however far it walked to hide", () => {
+  const reflex = ready("limited");
+  reflex.buildObservation({ ...world(contact(-2, 0)), phase: "starting" }, 1, 1_000);
+  reflex.forgetContacts();
+  reflex.buildObservation({ ...world(contact(-6, 1)), phase: "hiding" }, 2, 5_000);
+  const opened = sole(reflex.buildObservation(world(contact(-6, 1)), 3, 20_000));
+  assert.equal(opened.movedRecently, false);
+  assert.equal(opened.tellRecently, false);
+});
+
+test("a hunter's probe falls due only a probe interval after its last shot", () => {
+  const reflex = ready("limited");
+  const scene = world(contact(-5, 0));
+  const handle = sole(reflex.buildObservation(scene, 1, 1_000)).id;
+  const intent = { kind: "shootTarget", targetId: handle, seq: 1 };
+  let firedAt = null;
+  for (let tick = 1; tick <= 60 && firedAt === null; tick++) {
+    const now = 1_000 + tick * 50;
+    if (reflex.executeIntent(intent, scene, 0.05, now).shoot) firedAt = now;
+  }
+  assert.ok(firedAt, "the bot fired");
+  assert.equal(reflex.buildObservation(scene, 2, firedAt + 1).self.canProbeNow, false);
+  const due = reflex.buildObservation(scene, 3, firedAt + BOT_PROBE_INTERVAL_MAX_MS);
+  assert.equal(due.self.canProbeNow, true);
+  assert.equal(due.self.lastShotTargetId, handle, "and it knows what it fired at");
 });

@@ -24,7 +24,7 @@ Flags (after `--` when invoked through the root script):
 | `--name` | built-in pool | name prefix, e.g. `--name Drone` → `Drone1`… |
 | `--ready-at` | `count + 1` | players present before bots ready up |
 | `--code` | no default | join a private party room by code instead of matchmaking |
-| `--map`, `-m` | `station` | map of a *newly created* room (`station`, `mars`, `urban`) |
+| `--map`, `-m` | `urban` | map of a *newly created* room (`urban`, `station`) |
 | `--policy` | `scripted` | which policy drives the bots |
 | `--visibility` | `full` | `full` \| `limited`: what the bot is allowed to sense |
 | `--trace` | no default | base path for per-bot JSONL traces of every applied decision |
@@ -40,14 +40,20 @@ let bots play on their own (handy as a server smoke test).
 - **Hunter**: picks a target within an engage range and fires *only when it
   predicts a server-side hit* (same raycast as `MorphyRoom`), so it never bleeds
   HP on walls. Difficulty widens its sight and shortens its reaction time. Under
-  `--visibility limited` it has no `role` to read: a contact seen to wear no
-  disguise is a teammate and is left alone, a disguise standing still is shot,
-  one still moving is chased down, and a contact known only by sound is
-  investigated whoever it turns out to be. A taunt it hears is run to, and with
-  nothing to follow for a while it sounds its sonar. A decoy in sight looks
-  like any other disguise and is shot like one.
+  `--visibility limited` it has no `role` to read and sees nothing while the
+  props hide: a contact seen to wear no disguise is a teammate and is left
+  alone, and every disguise in sight (a still prop, a decoy, or the scenery
+  itself) looks the same until it gives itself away by moving, changing shape
+  or honking. A suspect standing still is shot, one still moving is chased
+  down, and with no suspect it tests the nearest object it has not tried by
+  shooting it, every few seconds, paying the miss damage when it was furniture.
+  A contact known only by sound is investigated whoever it turns out to be. A
+  taunt it hears is run to, and with nothing to follow for a while it sounds
+  its sonar.
 - **Prop**: picks a prop type that exists in the scene, hides next to a matching
-  cluster, transforms, holds still, and bolts if a hunter gets close, dropping a
+  cluster, transforms and holds still. With a hunter in plain sight it keeps
+  holding still, since moving is what gives a disguise away, and bolts only when
+  that hunter is on top of it or when it only hears one close by, dropping a
   decoy where it stood. Once hidden it taunts for points now and then, never
   with a hunter in sight. A sonar pulse close by sends it running; one further
   off keeps it still and quiet.

@@ -8,13 +8,13 @@ export const MAX_PLAYERS = 12;
 export const MIN_PLAYERS_TO_START = 2;
 export const HUNTER_RATIO = 0.25;
 
-export const LOBBY_AUTOSTART_MS = 20_000;
-export const BOT_FILL_DELAY_MS = 10_000;
+export const LOBBY_AUTOSTART_MS = 8_000;
+export const BOT_FILL_DELAY_MS = 2_000;
 export const BOT_FILL_TARGET = 4;
-export const START_COUNTDOWN_MS = 5_000;
-export const HIDE_DURATION_MS = 20_000;
-export const ROUND_DURATION_MS = 240_000;
-export const ROUND_END_MS = 8_000;
+export const START_COUNTDOWN_MS = 3_000;
+export const HIDE_DURATION_MS = 15_000;
+export const ROUND_DURATION_MS = 180_000;
+export const ROUND_END_MS = 5_000;
 /** A prop that has not taunted for this long during the hunt is made to, for no points. */
 export const TAUNT_INTERVAL_MS = 30_000;
 /** How far apart the props' first forced taunts of a hunt are spread, so they never honk in unison. */
@@ -39,8 +39,17 @@ export const RECONNECT_WINDOW_MS = 30_000;
 export const HUNTER_MAX_HP = 100;
 /** A captured prop joins the hunt below full health, so each capture snowballs less. */
 export const CONVERTED_HUNTER_HP = 60;
-/** HP a hunter wins back per prop captured, capped at {@link HUNTER_MAX_HP}: one pistol miss refunded. */
-export const HUNTER_CAPTURE_HEAL = 20;
+/**
+ * HP a hunter wins back per prop captured, capped at {@link HUNTER_MAX_HP}: half
+ * a health bar, so a find pays for the wrong guesses that led to it.
+ */
+export const HUNTER_CAPTURE_HEAL = 50;
+/**
+ * How long a hunter who ran out of HP waits before rejoining the hunt, at
+ * {@link CONVERTED_HUNTER_HP}: long enough to sting, never long enough to
+ * spectate a round away.
+ */
+export const HUNTER_RESPAWN_MS = 6_000;
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 
