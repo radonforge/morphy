@@ -1,6 +1,7 @@
+import { uniformFitScale } from "@morphy/shared";
 import * as THREE from "three";
 
-export const MODEL_MIN_SIZE = 0.001;
+export { MODEL_MIN_SIZE } from "@morphy/shared";
 
 /** Uniform scale plus offset that seats a model's bounding box inside a prop's bounding cylinder. */
 export interface ModelFit {
@@ -25,12 +26,7 @@ export function fitModel(
 ): ModelFit {
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-  const scale =
-    Math.min(
-      width / Math.max(size.x, MODEL_MIN_SIZE),
-      height / Math.max(size.y, MODEL_MIN_SIZE),
-      width / Math.max(size.z, MODEL_MIN_SIZE),
-    ) * scaleMul;
+  const scale = uniformFitScale(size, width, height, scaleMul);
   return {
     scale,
     offset: [-center.x * scale, baseY - box.min.y * scale, -center.z * scale],

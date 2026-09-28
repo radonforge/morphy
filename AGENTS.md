@@ -18,6 +18,7 @@ pnpm typecheck          # tsc --noEmit across all packages
 pnpm check              # Biome lint + format (also: check:write, format, lint)
 pnpm test               # node:test suite under tests/
 pnpm check:ci           # the non-mutating Biome gate CI runs
+pnpm level check        # layout findings for the station document; see "packages/level" below
 pnpm tunnel             # ngrok http 5173, share a LAN/remote session
 pnpm --filter @morphy/client build   # production client bundle
 ```
@@ -61,6 +62,8 @@ The single source of truth for everything client and server must agree on. **Exp
 - `geometry.ts`: `rayAabb` and friends, shared by server hit resolution and the bot's hit prediction.
 - `async.ts`: `withTimeout`, which forces callers to dispose a value that resolves after the timeout.
 - `random.ts`: `makeRng`, the seeded mulberry32 PRNG behind every map's seeded variation.
+- `modelFit.ts`: `uniformFitScale`, the uniform scale that seats a GLB in its prop's bounding
+  cylinder; the client's `fitModel` and the level checks both call it, so they never disagree.
 
 ### `packages/level`: the level document
 
@@ -79,6 +82,34 @@ client code, three.js or Colyseus.
 - `floorplan.ts`: `emitFloorplan`, turning a region grid and its doors into floor tiles, wall tiles,
   wall colliders and gates (which keep `gate.glb`: the bot finds doorways by that name), plus
   `doorKey` (the `axis:line:cell` identity parser and emitter share) and `FLOORPLAN_MODEL_PATHS`.
+- `checks.ts`: `validateLevel(doc, { catalog, cards })` → `LevelReport` (`findings`, `unplaced`,
+  `metrics`), the spatial translator an agent edits by instead of screenshots. Objects are measured
+  by their **real rendered footprint** (`footprint.ts`: the GLB's asset card through
+  `uniformFitScale`, the same arithmetic the client's `fitModel` delegates to); passage, doorways
+  and spawns by the per-part collision boxes, rotated with the object, that the client moves
+  against (they always contain the footprint), less the parts no taller than `LEVEL_STEP_HEIGHT`,
+  which a body steps onto. Shapes whose vertical spans do not meet never overlap. Codes are listed
+  in `FINDING_CODES`; thresholds are the `LEVEL_*` constants in `shared/constants.ts`.
+  Reachability floods a `LEVEL_SAMPLE_CELL` grid from the hunter spawns with the client's body
+  radius, so a pocket under `LEVEL_UNREACHABLE_MIN_AREA` is sampling noise and is not reported, and
+  is skipped (the spawns are reported instead) when no hunter spawn is walkable. The station rooms
+  fail `LEVEL_SIGHTLINE_MAX` by design: they are oversized, which is what the editor is for, so do
+  not raise it to quiet them. Validators never move or drop an object.
+- `ops.ts`: pure edits returning `{ doc, findings, ok }` (place by `at` / `center` / `againstWall` /
+  `nextTo` / `row`, move, rotate, remove, duplicate, room add / resize / remove, door toggle).
+  Positions snap to 0.5 m and yaw to quarter turns unless `free` (a rounded yaw is reported as
+  `op.yaw-snapped`; a duplicate keeps its source's exact yaw); the model front is +Z and N is -Z.
+  An op that would collide, or place on open ground or across a room's edge, returns an
+  `op.blocked` error naming the blocker and the input document unchanged; a move or turn is
+  refused only for what the object did not already touch.
+- `views.ts` / `serialize.ts`: the text an agent reads (summary, 0.5 m ASCII room plan, one line
+  per finding, report delta) and `formatLevelDocument`, which writes JSON in the layout Biome
+  leaves alone, so a CLI edit passes `check:ci` as is.
+- `tools/level/cli.ts` is `pnpm level` (`view`, `list`, `check`, `place`, `move`, `rotate`,
+  `remove`, `duplicate`, `room add|resize|remove`, `door toggle`, `--file` for another copy): every
+  write re-parses, validates, writes atomically and prints the report delta. `check` exits 1 while
+  any finding is an error, so a script can gate on it; `--help` lists the exit codes. Negative
+  option values need the `=` form (`--by=-0.5,0`), a `node:util` `parseArgs` rule.
 
 ### `packages/server`: authoritative Colyseus room
 
