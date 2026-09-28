@@ -6,6 +6,7 @@ export * from "./constants";
 export * from "./geometry";
 export * from "./map";
 export * from "./maps";
+export * from "./modelFit";
 export * from "./party";
 export * from "./protocol";
 export * from "./random";
