@@ -1,5 +1,15 @@
-import { doorKey, type LevelDocument, TILE, WALL_HEIGHT } from "@morphy/level";
-import type { MapDefinition } from "@morphy/shared";
+import {
+  doorKey,
+  type LevelContext,
+  type LevelDocument,
+  type LevelObject,
+  type LevelOverlays,
+  objectFootprint,
+  rectCorners,
+  TILE,
+  WALL_HEIGHT,
+} from "@morphy/level";
+import { LEVEL_SIGHTLINE_MAX, type MapDefinition } from "@morphy/shared";
 import {
   Line,
   OrbitControls,
@@ -12,6 +22,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { type MutableRefObject, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { DeckLights, GAME_FOV, MapView, SUN_POSITION, type ThemePreset } from "../game/Scene";
+import type { OverlayToggles } from "./ChecksPanel";
 import type { EditorView, Preview, Selection } from "./types";
 
 const PLAN_HEIGHT = 200;
@@ -40,6 +51,12 @@ const ROOM_HUES = 12;
 const CAMERA_NEAR = 0.1;
 const CAMERA_FAR = 1000;
 const FINDING_COLOR = "#ff7a45";
+const UNREACHABLE_COLOR = "#ff5b5b";
+const UNREACHABLE_OPACITY = 0.45;
+const SIGHTLINE_OVER_COLOR = "#ff5b5b";
+const SIGHTLINE_OK_COLOR = "#9fb0d8";
+const UNIQUE_COLOR = "#d98cff";
+const UNIQUE_MARGIN = 0.35;
 
 /** Imperative handle on the canvas: the live camera, for turning a pointer into a floor point, and plan navigation. */
 export interface CanvasApi {
@@ -321,17 +338,81 @@ export interface FocusMark {
   z: number;
 }
 
+/**
+ * An object's real footprint (the rotated rect the level checks measure) as a
+ * closed outline, grown by `margin`; a circle of `fallbackRadius` when the
+ * object has no asset card to measure.
+ */
+function footprintOutline(
+  object: LevelObject,
+  context: LevelContext,
+  fallbackRadius: number,
+  y: number,
+  margin = 0,
+): [number, number, number][] {
+  const footprint = objectFootprint(object, context);
+  if (!footprint) return ring(object.x, object.z, fallbackRadius + margin, y);
+  const { rect } = footprint;
+  const corners = rectCorners({ ...rect, halfX: rect.halfX + margin, halfZ: rect.halfZ + margin });
+  return [...corners, corners[0]!].map((corner) => [corner.x, y, corner.z]);
+}
+
+function UnreachableFloor({
+  overlays,
+  y,
+  onTop,
+}: {
+  overlays: LevelOverlays;
+  y: number;
+  onTop: boolean;
+}) {
+  const positions = useMemo(() => {
+    const half = overlays.sampleCell / 2;
+    const out = new Float32Array(overlays.unreachable.length * 18);
+    overlays.unreachable.forEach((p, k) => {
+      const [x0, x1, z0, z1] = [p.x - half, p.x + half, p.z - half, p.z + half];
+      out.set([x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z0, x1, y, z1, x0, y, z1], k * 18);
+    });
+    return out;
+  }, [overlays, y]);
+  if (positions.length === 0) return null;
+  return (
+    <mesh renderOrder={OVERLAY_ORDER} key={positions.length}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <OverlayMaterial color={UNREACHABLE_COLOR} opacity={UNREACHABLE_OPACITY} onTop={onTop} />
+    </mesh>
+  );
+}
+
 interface OverlayProps {
   doc: LevelDocument;
   selection: Selection;
   highlights: ReadonlySet<string>;
   preview: Preview;
   radiusOf: (type: string) => number;
+  context: LevelContext;
   focus: FocusMark | null;
+  overlays: LevelOverlays | null;
+  overlayToggles: OverlayToggles;
+  uniqueIds: ReadonlySet<string>;
   onTop: boolean;
 }
 
-function Overlay({ doc, selection, highlights, preview, radiusOf, focus, onTop }: OverlayProps) {
+function Overlay({
+  doc,
+  selection,
+  highlights,
+  preview,
+  radiusOf,
+  context,
+  focus,
+  overlays,
+  overlayToggles,
+  uniqueIds,
+  onTop,
+}: OverlayProps) {
   const y = onTop ? OVERLAY_PLAN_Y : OVERLAY_FLOOR_Y;
   const halfW = (doc.grid.cols * TILE) / 2;
   const halfD = (doc.grid.rows * TILE) / 2;
@@ -413,7 +494,7 @@ function Overlay({ doc, selection, highlights, preview, radiusOf, focus, onTop }
         return (
           <Line
             key={`ring:${object.id}`}
-            points={ring(object.x, object.z, radiusOf(object.type), y)}
+            points={footprintOutline(object, context, radiusOf(object.type), y)}
             color={external ? EXTERNAL_COLOR : OBJECT_RING_COLOR}
             lineWidth={external ? 2.5 : 1}
             transparent
@@ -426,7 +507,7 @@ function Overlay({ doc, selection, highlights, preview, radiusOf, focus, onTop }
       {selectedObject && (
         <>
           <Line
-            points={ring(selectedObject.x, selectedObject.z, radiusOf(selectedObject.type), y)}
+            points={footprintOutline(selectedObject, context, radiusOf(selectedObject.type), y)}
             color={SELECT_COLOR}
             lineWidth={3}
             depthTest={!onTop}
@@ -518,6 +599,39 @@ function Overlay({ doc, selection, highlights, preview, radiusOf, focus, onTop }
           renderOrder={OVERLAY_ORDER + 2}
         />
       )}
+      {overlayToggles.unreachable && overlays && (
+        <UnreachableFloor overlays={overlays} y={y} onTop={onTop} />
+      )}
+      {overlayToggles.sightlines &&
+        overlays?.sightlines.map(({ room, line }) => (
+          <Line
+            key={`sight:${room}`}
+            points={[
+              [line.from.x, y, line.from.z],
+              [line.to.x, y, line.to.z],
+            ]}
+            color={line.length > LEVEL_SIGHTLINE_MAX ? SIGHTLINE_OVER_COLOR : SIGHTLINE_OK_COLOR}
+            lineWidth={3}
+            dashed={line.length <= LEVEL_SIGHTLINE_MAX}
+            dashSize={0.6}
+            gapSize={0.4}
+            depthTest={!onTop}
+            renderOrder={OVERLAY_ORDER + 2}
+          />
+        ))}
+      {overlayToggles.unique &&
+        doc.objects
+          .filter((object) => uniqueIds.has(object.id))
+          .map((object) => (
+            <Line
+              key={`unique:${object.id}`}
+              points={footprintOutline(object, context, radiusOf(object.type), y, UNIQUE_MARGIN)}
+              color={UNIQUE_COLOR}
+              lineWidth={2.5}
+              depthTest={!onTop}
+              renderOrder={OVERLAY_ORDER + 2}
+            />
+          ))}
       {focus && (
         <Line
           points={ring(focus.x, focus.z, TILE / 2, y)}

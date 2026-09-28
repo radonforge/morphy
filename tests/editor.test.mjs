@@ -4,25 +4,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
-  addObject,
-  addRoom,
+  addedObjectId,
   addRoomRect,
   changedEntities,
-  deleteRoomRect,
   deleteSpawn,
-  duplicateObject,
   edgeAt,
+  fromOp,
   isRefusal,
   moveRectEdge,
-  normalizeYaw,
+  newRoomId,
   objectAt,
-  QUARTER_TURN,
-  rectBetween,
+  opNotes,
   rectEdgeAt,
-  setRoomRect,
+  removeRoomRect,
   snapPosition,
-  toggleDoor,
-  turnYaw,
 } from "../packages/client/src/editor/edits.ts";
 import {
   canRedo,
@@ -41,10 +36,24 @@ import {
   levelSources,
   writeLevelFile,
 } from "../packages/client/viteLevelBridge.ts";
-import { formatLevelDocument, parseLevelDocument } from "../packages/level/src/index.ts";
+import {
+  formatLevelDocument,
+  levelOverlays,
+  parseLevelDocument,
+  placeObject,
+  resizeRoom,
+  validateLevel,
+} from "../packages/level/src/index.ts";
 import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
+import {
+  ASSET_CARDS,
+  LEVEL_SAMPLE_CELL,
+  LEVEL_SIGHTLINE_MAX,
+} from "../packages/shared/src/index.ts";
 
 const SOURCE = { id: "station", file: "unused", catalog: SPACE_CATALOG };
+const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS };
+const QUARTER_TURN = Math.PI / 2;
 
 /** Two rooms on a 5x3 grid with open ground in the middle column; one door between west and the open ground. */
 function fixture() {
@@ -69,6 +78,11 @@ function parses(doc) {
   return parseLevelDocument(doc, { catalog: SPACE_CATALOG, id: "station" });
 }
 
+async function stationDocument() {
+  const source = levelSources(new URL("../packages/client", import.meta.url).pathname).station;
+  return acceptLevelText(await readFile(source.file, "utf8"), source);
+}
+
 test("positions snap to half a metre unless free, which keeps millimetres", () => {
   assert.equal(snapPosition(1.26, false), 1.5);
   assert.equal(snapPosition(-0.24, false), 0);
@@ -76,32 +90,27 @@ test("positions snap to half a metre unless free, which keeps millimetres", () =
   assert.equal(snapPosition(1.23456, true), 1.235);
 });
 
-test("a quarter turn lands on the next grid direction, an off-grid yaw on the nearest one that way", () => {
-  assert.equal(turnYaw(0, 1, false), QUARTER_TURN);
-  assert.equal(turnYaw(QUARTER_TURN, 1, false), Math.PI);
-  assert.equal(turnYaw(Math.PI, 1, false), -QUARTER_TURN);
-  assert.equal(turnYaw(0, -1, false), -QUARTER_TURN);
-  assert.equal(turnYaw(0.3, 1, false), QUARTER_TURN);
-  assert.equal(turnYaw(0.3, -1, false), 0);
-});
-
-test("a free turn steps five degrees and stays in (-PI, PI]", () => {
-  const turned = turnYaw(QUARTER_TURN, -1, true);
-  assert.ok(Math.abs((turned * 180) / Math.PI - 85) < 1e-4);
-  assert.equal(normalizeYaw(-Math.PI), Math.PI);
-  assert.ok(Math.abs(normalizeYaw(3 * Math.PI) - Math.PI) < 1e-9);
-});
-
-test("toggling a door opens a wall edge, closes an open one and refuses an edge with no wall", () => {
+test("a blocked level op becomes a refusal naming the blocker, a successful one its document", () => {
   const doc = fixture();
-  const opened = toggleDoor(doc, { axis: "v", line: 3, cell: 0 });
-  assert.ok(!isRefusal(opened));
-  assert.equal(opened.doors.length, 2);
-  parses(opened);
-  const closed = toggleDoor(doc, { axis: "v", line: 2, cell: 1 });
-  assert.equal(closed.doors.length, 0);
-  assert.ok(isRefusal(toggleDoor(doc, { axis: "v", line: 1, cell: 1 })));
-  assert.ok(isRefusal(toggleDoor(doc, { axis: "v", line: 5, cell: 1 })));
+  const onTop = placeObject(doc, { type: "chair", relation: { at: { x: -7, z: -2 } } }, CONTEXT);
+  const refused = fromOp(onTop);
+  assert.ok(isRefusal(refused));
+  assert.match(refused.refused, /chair-1/);
+  const placed = placeObject(doc, { type: "chair", relation: { at: { x: -6, z: 0 } } }, CONTEXT);
+  assert.equal(fromOp(placed), placed.doc);
+  assert.equal(addedObjectId(doc, placed.doc), placed.doc.objects.at(-1).id);
+});
+
+test("an op's side effects reach the author as notes", () => {
+  const doc = fixture();
+  const widened = resizeRoom(doc, { id: "west", rect: { i0: 0, i1: 3, j0: 0, j1: 3 } });
+  assert.ok(widened.ok);
+  assert.equal(widened.doc.doors.length, 0);
+  assert.match(opNotes(widened).join(), /no longer separates/);
+  assert.deepEqual(
+    opNotes(placeObject(doc, { type: "chair", relation: { at: { x: -7, z: -2 } } }, CONTEXT)),
+    [],
+  );
 });
 
 test("the edge under the pointer is the nearest grid line within tolerance", () => {
@@ -111,28 +120,17 @@ test("the edge under the pointer is the nearest grid line within tolerance", () 
   assert.equal(edgeAt(doc, -4, -4, 0.2), null);
 });
 
-test("a new room fills free cells and refuses to overlap another room", () => {
+test("a painted room gets the first free id; an extra rect makes an L and refuses an overlap", () => {
   const doc = fixture();
-  const result = addRoom(doc, rectBetween(doc, { i: 2, j: 0 }, { i: 2, j: 1 }));
-  assert.ok(!isRefusal(result));
-  assert.equal(result.id, "room-1");
-  parses(result.doc);
-  const overlap = addRoom(doc, rectBetween(doc, { i: 1, j: 0 }, { i: 2, j: 0 }));
-  assert.ok(isRefusal(overlap));
-  assert.match(overlap.refused, /west/);
-});
-
-test("rects of one room may extend it into an L; resizing refuses an overlap and prunes stranded doors", () => {
-  const doc = fixture();
+  assert.equal(newRoomId(doc), "room-1");
+  assert.equal(newRoomId({ ...doc, rooms: [...doc.rooms, { id: "room-1", rects: [] }] }), "room-2");
   const extended = addRoomRect(doc, "west", { i0: 2, i1: 3, j0: 2, j1: 3 });
   assert.ok(!isRefusal(extended));
   assert.equal(extended.rooms[0].rects.length, 2);
   parses(extended);
-  assert.ok(isRefusal(setRoomRect(doc, "west", 0, { i0: 0, i1: 4, j0: 0, j1: 3 })));
-  const widened = setRoomRect(doc, "west", 0, moveRectEdge(doc.rooms[0].rects[0], "i1", 3));
-  assert.ok(!isRefusal(widened));
-  assert.equal(widened.doors.length, 0, "the door into open ground now sits inside west");
-  parses(widened);
+  const overlap = addRoomRect(doc, "west", { i0: 2, i1: 4, j0: 0, j1: 1 });
+  assert.ok(isRefusal(overlap));
+  assert.match(overlap.refused, /east/);
 });
 
 test("an edge handle is the nearest rect side, and a rect never shrinks below one cell", () => {
@@ -143,43 +141,17 @@ test("an edge handle is the nearest rect side, and a rect never shrinks below on
   assert.deepEqual(moveRectEdge(rect, "i1", 0), { ...rect, i1: 1 });
 });
 
-test("deleting drops one rect of an L, then the room, but never the last room", () => {
+test("one arm of an L can be deleted, a room's only rect cannot", () => {
   const doc = fixture();
   const l = addRoomRect(doc, "west", { i0: 2, i1: 3, j0: 2, j1: 3 });
-  assert.equal(deleteRoomRect(l, "west", 1).rooms[0].rects.length, 1);
-  const noWest = deleteRoomRect(doc, "west", 0);
-  assert.deepEqual(
-    noWest.rooms.map((room) => room.id),
-    ["east"],
-  );
-  assert.equal(noWest.doors.length, 0);
-  parses(noWest);
-  assert.ok(isRefusal(deleteRoomRect(noWest, "east", 0)));
+  assert.equal(removeRoomRect(l, "west", 1).rooms[0].rects.length, 1);
+  assert.ok(isRefusal(removeRoomRect(doc, "west", 0)));
 });
 
-test("new and duplicated objects get unique ids and stay inside the map", () => {
+test("an object is picked inside its real footprint, nearest first", () => {
   const doc = fixture();
-  const added = addObject(doc, "chair", 50, -50, 0);
-  assert.equal(added.id, "chair-2");
-  const placed = added.doc.objects.at(-1);
-  assert.deepEqual([placed.x, placed.z], [10, -6]);
-  parses(added.doc);
-  const copy = duplicateObject(added.doc, "table-1", 1);
-  assert.equal(copy.id, "table-2");
-  assert.equal(copy.doc.objects.at(-1).yaw, QUARTER_TURN);
-  assert.ok(isRefusal(duplicateObject(doc, "missing", 1)));
-});
-
-test("an object is picked inside its footprint radius, nearest first", () => {
-  const doc = fixture();
-  assert.equal(
-    objectAt(doc, -6.8, -2, () => 0.5),
-    "chair-1",
-  );
-  assert.equal(
-    objectAt(doc, -5, -2, () => 0.5),
-    null,
-  );
+  assert.equal(objectAt(doc, -7, -2, CONTEXT, 0.5), "chair-1");
+  assert.equal(objectAt(doc, -5, -2, CONTEXT, 0.5), null);
 });
 
 test("each team keeps at least one spawn", () => {
@@ -187,6 +159,25 @@ test("each team keeps at least one spawn", () => {
   assert.ok(isRefusal(deleteSpawn(doc, "props", 0)));
   const two = { ...doc, spawns: { ...doc.spawns, props: [...doc.spawns.props, { x: 6, z: 2 }] } };
   assert.deepEqual(deleteSpawn(two, "props", 0).spawns.props, [{ x: 6, z: 2 }]);
+});
+
+test("overlays draw what the checks measured: sealed floor and over-long sightlines", async () => {
+  const sealed = { ...fixture(), doors: [] };
+  const overlays = levelOverlays(sealed, CONTEXT);
+  const report = validateLevel(sealed, CONTEXT);
+  assert.ok(overlays.unreachable.length > 0);
+  assert.equal(
+    overlays.unreachable.length * LEVEL_SAMPLE_CELL * LEVEL_SAMPLE_CELL,
+    report.metrics["floor.unreachable.m2"],
+  );
+  const station = await stationDocument();
+  const long = levelOverlays(station, CONTEXT).sightlines.filter(
+    ({ line }) => line.length > LEVEL_SIGHTLINE_MAX,
+  );
+  const findings = validateLevel(station, CONTEXT).findings.filter(
+    (f) => f.code === "room.sightline",
+  );
+  assert.deepEqual(long.map(({ room }) => room).sort(), findings.map((f) => f.entities[0]).sort());
 });
 
 test("changed entities name what an external write touched and count what it removed", () => {
@@ -267,7 +258,7 @@ test("the bridge writes atomically and leaves no temporary file behind", async (
 test("the bridge serves the committed station document and it re-serialises byte for byte", async () => {
   const source = levelSources(new URL("../packages/client", import.meta.url).pathname).station;
   const text = await readFile(source.file, "utf8");
-  assert.equal(formatLevelDocument(acceptLevelText(text, source)), text);
+  assert.equal(formatLevelDocument(await stationDocument()), text);
 });
 
 test("the bridge answers only unrelayed requests from this machine", () => {

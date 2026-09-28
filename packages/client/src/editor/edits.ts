@@ -1,18 +1,21 @@
-import { type CellRect, doorKey, type LevelDocument, type LevelDoor, TILE } from "@morphy/level";
+import {
+  type CellRect,
+  doorKey,
+  type LevelContext,
+  type LevelDocument,
+  type LevelDoor,
+  type OpResult,
+  objectFootprint,
+  rectContains,
+  TILE,
+} from "@morphy/level";
 
 /** Grid step of a snapped object or spawn position, in metres. */
 export const POSITION_STEP = 0.5;
-/** A snapped rotation step: objects face one of the four grid directions by default. */
-export const QUARTER_TURN = Math.PI / 2;
-/** Rotation step while the free-transform modifier is held. */
-export const FREE_TURN_STEP = Math.PI / 36;
 /** Decimals kept on a free position or angle, so the document does not fill with float noise. */
 const FREE_DECIMALS = 3;
-/** Decimals kept on a free yaw: radians need more than metres to stay a round number of degrees. */
-const FREE_YAW_DECIMALS = 6;
 const TURN_EPSILON = 1e-6;
 const FULL_TURN = Math.PI * 2;
-const QUARTER_YAWS = [0, QUARTER_TURN, Math.PI, -QUARTER_TURN];
 
 export type SpawnTeam = "props" | "hunters";
 
@@ -25,6 +28,34 @@ export type EditResult = LevelDocument | EditRefusal;
 
 export function isRefusal(result: EditResult): result is EditRefusal {
   return "refused" in result;
+}
+
+/** Op finding codes worth telling the author about even when the op succeeded. */
+const NOTABLE_OP_CODES = new Set(["op.yaw-snapped", "op.door-removed"]);
+
+/**
+ * The document a `@morphy/level` op produced, or its first error as the refusal
+ * shown to the author (an `op.blocked` message names what is in the way), so the
+ * editor applies exactly the rules the `pnpm level` CLI does.
+ */
+export function fromOp(result: OpResult): EditResult {
+  if (result.ok) return result.doc;
+  const error = result.findings.find((finding) => finding.severity === "error");
+  if (!error) return { refused: "the operation failed without saying why" };
+  return { refused: error.hint ? `${error.message} (${error.hint})` : error.message };
+}
+
+/** What a successful op said that the author should see: a rounded yaw, a door it removed. */
+export function opNotes(result: OpResult): string[] {
+  return result.ok
+    ? result.findings.filter((finding) => NOTABLE_OP_CODES.has(finding.code)).map((f) => f.message)
+    : [];
+}
+
+/** The id of the object `after` has and `before` did not, as a place or duplicate op leaves it. */
+export function addedObjectId(before: LevelDocument, after: LevelDocument): string | null {
+  const known = new Set(before.objects.map((object) => object.id));
+  return after.objects.find((object) => !known.has(object.id))?.id ?? null;
 }
 
 function roundTo(value: number, decimals: number): number {
@@ -43,18 +74,6 @@ export function snapPosition(value: number, free: boolean): number {
 export function normalizeYaw(yaw: number): number {
   const wrapped = ((((yaw + Math.PI) % FULL_TURN) + FULL_TURN) % FULL_TURN) - Math.PI;
   return wrapped <= -Math.PI + TURN_EPSILON ? Math.PI : wrapped;
-}
-
-/**
- * Turn a yaw one step in `direction`: to the next quarter turn that way, so an
- * off-grid angle lands on the grid first, or by {@link FREE_TURN_STEP} when `free`.
- */
-export function turnYaw(yaw: number, direction: 1 | -1, free: boolean): number {
-  if (free) return roundTo(normalizeYaw(yaw + direction * FREE_TURN_STEP), FREE_YAW_DECIMALS);
-  const steps = yaw / QUARTER_TURN;
-  const next =
-    direction > 0 ? Math.floor(steps + TURN_EPSILON) + 1 : Math.ceil(steps - TURN_EPSILON) - 1;
-  return QUARTER_YAWS[((next % 4) + 4) % 4]!;
 }
 
 /** Half extents of the document's grid in world metres. */
@@ -138,16 +157,6 @@ export function pruneDoors(doc: LevelDocument): LevelDocument {
   return doors.length === doc.doors.length ? doc : { ...doc, doors };
 }
 
-/** Open a door on a wall edge, or close the one already there. */
-export function toggleDoor(doc: LevelDocument, door: LevelDoor): EditResult {
-  const key = doorKey(door);
-  if (doc.doors.some((existing) => doorKey(existing) === key)) {
-    return { ...doc, doors: doc.doors.filter((existing) => doorKey(existing) !== key) };
-  }
-  if (!isWallEdge(doc, door)) return { refused: "there is no wall on this edge" };
-  return { ...doc, doors: [...doc.doors, { ...door }] };
-}
-
 /** The rect spanned by two cells, inclusive of both, clipped to the grid. */
 export function rectBetween(
   doc: LevelDocument,
@@ -197,26 +206,12 @@ function overlapsOther(doc: LevelDocument, rect: CellRect, roomId: string | null
   return null;
 }
 
-function nextId(prefix: string, taken: Iterable<string>): string {
-  const used = new Set(taken);
+/** The first free `room-<n>` id, for a room the author paints. */
+export function newRoomId(doc: LevelDocument): string {
+  const used = new Set(doc.rooms.map((room) => room.id));
   let n = 1;
-  while (used.has(`${prefix}-${n}`)) n++;
-  return `${prefix}-${n}`;
-}
-
-/** Create a room covering `rect`, which must not overlap another room. Returns the new id too. */
-export function addRoom(
-  doc: LevelDocument,
-  rect: CellRect,
-): { doc: LevelDocument; id: string } | EditRefusal {
-  if (!rectFits(doc, rect)) return { refused: "the rect is off the grid" };
-  const other = overlapsOther(doc, rect, null);
-  if (other !== null) return { refused: `it overlaps room "${other}"` };
-  const id = nextId(
-    "room",
-    doc.rooms.map((room) => room.id),
-  );
-  return { doc: pruneDoors({ ...doc, rooms: [...doc.rooms, { id, rects: [{ ...rect }] }] }), id };
+  while (used.has(`room-${n}`)) n++;
+  return `room-${n}`;
 }
 
 /** Add another rect to a room, e.g. the second arm of an L. */
@@ -228,26 +223,6 @@ export function addRoomRect(doc: LevelDocument, roomId: string, rect: CellRect):
     ...doc,
     rooms: doc.rooms.map((room) =>
       room.id === roomId ? { ...room, rects: [...room.rects, { ...rect }] } : room,
-    ),
-  });
-}
-
-/** Replace one rect of a room, as dragging its edge does. */
-export function setRoomRect(
-  doc: LevelDocument,
-  roomId: string,
-  index: number,
-  rect: CellRect,
-): EditResult {
-  if (!rectFits(doc, rect)) return { refused: "the rect would be empty or off the grid" };
-  const other = overlapsOther(doc, rect, roomId);
-  if (other !== null) return { refused: `it overlaps room "${other}"` };
-  return pruneDoors({
-    ...doc,
-    rooms: doc.rooms.map((room) =>
-      room.id === roomId
-        ? { ...room, rects: room.rects.map((old, at) => (at === index ? { ...rect } : old)) }
-        : room,
     ),
   });
 }
@@ -294,22 +269,22 @@ export function moveRectEdge(rect: CellRect, edge: RectEdge, line: number): Cell
   }
 }
 
-/** Delete one rect of a room, or the whole room when it is its last rect. The map keeps at least one room. */
-export function deleteRoomRect(doc: LevelDocument, roomId: string, index: number): EditResult {
+/**
+ * Delete one rect of a room that has several, such as an arm of an L. There is no
+ * level op for this; a room's last rect goes with the room, through `removeRoom`.
+ */
+export function removeRoomRect(doc: LevelDocument, roomId: string, index: number): EditResult {
   const room = doc.rooms.find((candidate) => candidate.id === roomId);
   if (!room) return { refused: `there is no room "${roomId}"` };
-  if (room.rects.length > 1) {
-    return pruneDoors({
-      ...doc,
-      rooms: doc.rooms.map((candidate) =>
-        candidate.id === roomId
-          ? { ...candidate, rects: candidate.rects.filter((_, at) => at !== index) }
-          : candidate,
-      ),
-    });
-  }
-  if (doc.rooms.length === 1) return { refused: "a map needs at least one room" };
-  return pruneDoors({ ...doc, rooms: doc.rooms.filter((candidate) => candidate.id !== roomId) });
+  if (room.rects.length < 2) return { refused: `room "${roomId}" has a single rect` };
+  return pruneDoors({
+    ...doc,
+    rooms: doc.rooms.map((candidate) =>
+      candidate.id === roomId
+        ? { ...candidate, rects: candidate.rects.filter((_, at) => at !== index) }
+        : candidate,
+    ),
+  });
 }
 
 /** The room rect under a point, last listed first as it draws on top. */
@@ -328,64 +303,25 @@ export function roomRectAt(
   return null;
 }
 
-/** Place a catalog prop, returning the document and the new object's id. */
-export function addObject(
-  doc: LevelDocument,
-  type: string,
-  x: number,
-  z: number,
-  yaw: number,
-): { doc: LevelDocument; id: string } {
-  const id = nextId(
-    type,
-    doc.objects.map((object) => object.id),
-  );
-  const at = clampToMap(doc, x, z);
-  return { doc: { ...doc, objects: [...doc.objects, { id, type, x: at.x, z: at.z, yaw }] }, id };
-}
-
-/** Change one object's position and yaw; the position is clamped into the map. */
-export function placeObject(
-  doc: LevelDocument,
-  id: string,
-  pose: { x: number; z: number; yaw: number },
-): LevelDocument {
-  const at = clampToMap(doc, pose.x, pose.z);
-  return {
-    ...doc,
-    objects: doc.objects.map((object) =>
-      object.id === id ? { ...object, x: at.x, z: at.z, yaw: pose.yaw } : object,
-    ),
-  };
-}
-
-/** Copy an object `offset` metres along +x and +z, returning the copy's id. */
-export function duplicateObject(
-  doc: LevelDocument,
-  id: string,
-  offset: number,
-): { doc: LevelDocument; id: string } | EditRefusal {
-  const source = doc.objects.find((object) => object.id === id);
-  if (!source) return { refused: `there is no object "${id}"` };
-  return addObject(doc, source.type, source.x + offset, source.z + offset, source.yaw);
-}
-
-export function deleteObject(doc: LevelDocument, id: string): LevelDocument {
-  return { ...doc, objects: doc.objects.filter((object) => object.id !== id) };
-}
-
-/** The object whose footprint circle contains the point, nearest centre first. */
+/**
+ * The object whose real footprint (the rotated rect the checks measure) contains
+ * the point, nearest centre first; an object without an asset card falls back to
+ * a circle of `fallbackRadius`.
+ */
 export function objectAt(
   doc: LevelDocument,
   x: number,
   z: number,
-  radiusOf: (type: string) => number,
+  context: LevelContext,
+  fallbackRadius: number,
 ): string | null {
   let best: string | null = null;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const object of doc.objects) {
     const distance = Math.hypot(object.x - x, object.z - z);
-    if (distance <= radiusOf(object.type) && distance < bestDistance) {
+    const footprint = objectFootprint(object, context);
+    const inside = footprint ? rectContains(footprint.rect, x, z) : distance <= fallbackRadius;
+    if (inside && distance < bestDistance) {
       best = object.id;
       bestDistance = distance;
     }

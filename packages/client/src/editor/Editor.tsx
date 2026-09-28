@@ -1,13 +1,29 @@
 import {
+  addRoom,
   type CellRect,
   compileLevel,
   doorKey,
+  duplicateObject,
+  type Finding,
+  type LevelContext,
   type LevelDocument,
   LevelValidationError,
+  levelOverlays,
+  moveObject,
+  type OpResult,
   parseLevelDocument,
+  placeObject,
+  removeObject,
+  removeRoom,
+  resizeRoom,
+  rotateObject,
+  type Side,
   TILE,
+  toggleDoor,
+  validateLevel,
 } from "@morphy/level";
 import {
+  ASSET_CARDS,
   computePropBounds,
   MAP_CATALOG,
   type MapDefinition,
@@ -19,6 +35,7 @@ import {
   type DragEvent,
   type PointerEvent,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -28,39 +45,34 @@ import {
 import { themeFor } from "../game/Scene";
 import { SERVER_URL } from "../net/endpoints";
 import { onExternalLevelChange, saveLevel, waitForGameServerReload } from "./bridge";
-import { type CheckItem, ChecksPanel } from "./ChecksPanel";
+import { type CheckItem, ChecksPanel, type OverlayToggles } from "./ChecksPanel";
 import { type CanvasApi, EditorCanvas, type FocusMark, groundAt } from "./EditorCanvas";
 import {
-  addObject,
-  addRoom,
+  addedObjectId,
   addRoomRect,
   addSpawn,
   cellAt,
   changedEntities,
-  deleteObject,
-  deleteRoomRect,
   deleteSpawn,
-  duplicateObject,
   type EditResult,
   edgeAt,
+  fromOp,
   halfExtents,
   isRefusal,
-  isWallEdge,
   moveRectEdge,
   moveSpawn,
+  newRoomId,
   objectAt,
-  placeObject,
+  opNotes,
   type RectEdge,
   rectBetween,
   rectEdgeAt,
+  removeRoomRect,
   roomRectAt,
   type SpawnTeam,
-  setRoomRect,
   snapPosition,
   spawnAt,
   toGrid,
-  toggleDoor,
-  turnYaw,
 } from "./edits";
 import {
   canRedo,
@@ -80,7 +92,10 @@ const EDITOR_SEED = 1;
 const EDGE_TOLERANCE = 0.2;
 const RESIZE_TOLERANCE = 0.15;
 const SPAWN_PICK_RADIUS = 0.9;
-const DUPLICATE_OFFSET = 1;
+const FREE_TURN_DEGREES = 5;
+const DEGREES_PER_RADIAN = 180 / Math.PI;
+const SPAWN_ENTITY = /^spawns\.(props|hunters)\[(\d+)\]$/;
+const NO_OVERLAYS: OverlayToggles = { unreachable: false, sightlines: false, unique: false };
 const ZOOM_SENSITIVITY = 0.0015;
 const CLICK_SLOP_PX = 4;
 const NOTICE_MS = 3200;
@@ -91,7 +106,14 @@ const NO_HIGHLIGHTS: ReadonlySet<string> = new Set();
 type Gesture =
   | { kind: "pan"; x: number; y: number }
   | { kind: "click"; x: number; y: number }
-  | { kind: "move-object"; base: LevelDocument; id: string; dx: number; dz: number; yaw: number }
+  | {
+      kind: "move-object";
+      base: LevelDocument;
+      id: string;
+      dx: number;
+      dz: number;
+      blocked: string | null;
+    }
   | { kind: "move-spawn"; base: LevelDocument; team: SpawnTeam; index: number }
   | {
       kind: "resize";
@@ -136,6 +158,36 @@ function checkFromError(error: unknown, doc: LevelDocument): CheckItem {
     const rect = doc.rooms.find((candidate) => candidate.id === id)?.rects[0];
     if (rect)
       return { ...item, at: rectCentre(doc, rect), select: { kind: "room", roomId: id, index: 0 } };
+  }
+  return item;
+}
+
+/** A check finding as a line of the panel, with what clicking it selects and where it pans to. */
+function checkFromFinding(finding: Finding, doc: LevelDocument): CheckItem {
+  const item: CheckItem = {
+    severity: finding.severity,
+    code: finding.code,
+    message: finding.message,
+    ...(finding.hint !== undefined ? { hint: finding.hint } : {}),
+    ...(finding.at !== undefined ? { at: finding.at } : {}),
+  };
+  for (const entity of finding.entities) {
+    const object = doc.objects.find((candidate) => candidate.id === entity);
+    if (object) return { at: object, ...item, select: { kind: "object", id: object.id } };
+    const room = doc.rooms.find((candidate) => candidate.id === entity);
+    if (room?.rects[0]) {
+      return {
+        at: rectCentre(doc, room.rects[0]),
+        ...item,
+        select: { kind: "room", roomId: room.id, index: 0 },
+      };
+    }
+    const [, team, index] = SPAWN_ENTITY.exec(entity) ?? [];
+    if (team === "props" || team === "hunters") {
+      const point = doc.spawns[team][Number(index)];
+      if (point)
+        return { at: point, ...item, select: { kind: "spawn", team, index: Number(index) } };
+    }
   }
   return item;
 }
@@ -219,6 +271,8 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
   const theme = useMemo(() => themeFor(id), [id]);
   const mapName = MAP_CATALOG.find((entry) => entry.id === id)?.name ?? id;
   const catalogById = useMemo(() => new Map(catalog.map((def) => [def.id, def])), [catalog]);
+  const context = useMemo<LevelContext>(() => ({ catalog, cards: ASSET_CARDS }), [catalog]);
+  const [overlayToggles, setOverlayToggles] = useState<OverlayToggles>(NO_OVERLAYS);
   const radiusOf = useCallback(
     (type: string) => {
       const def = catalogById.get(type);
@@ -230,15 +284,41 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
   const lastMap = useRef<MapDefinition | null>(null);
   if (compiled.map) lastMap.current = compiled.map;
   const map = compiled.map ?? lastMap.current;
-  const items = useMemo<CheckItem[]>(
+  const checked = useDeferredValue(history.present.doc);
+  const report = useMemo(() => {
+    try {
+      return validateLevel(parseLevelDocument(checked, { catalog, id: checked.id }), context);
+    } catch {
+      return null;
+    }
+  }, [checked, catalog, context]);
+  const overlays = useMemo(() => {
+    if (!report || !(overlayToggles.unreachable || overlayToggles.sightlines)) return null;
+    return levelOverlays(checked, context);
+  }, [report, overlayToggles.unreachable, overlayToggles.sightlines, checked, context]);
+  const uniqueIds = useMemo<ReadonlySet<string>>(
     () =>
-      diskError
+      new Set(
+        (report?.findings ?? [])
+          .filter((finding) => finding.code === "object.unique-type")
+          .map((finding) => finding.entities[0]!),
+      ),
+    [report],
+  );
+  const items = useMemo<CheckItem[]>(
+    () => [
+      ...(diskError
         ? [
-            { severity: "error", message: `The file on disk does not parse: ${diskError}` },
-            ...compiled.items,
+            {
+              severity: "error" as const,
+              message: `The file on disk does not parse: ${diskError}`,
+            },
           ]
-        : compiled.items,
-    [diskError, compiled.items],
+        : []),
+      ...compiled.items,
+      ...(report?.findings ?? []).map((finding) => checkFromFinding(finding, checked)),
+    ],
+    [diskError, compiled.items, report, checked],
   );
   const highlights = useMemo<ReadonlySet<string>>(
     () =>
@@ -266,6 +346,16 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
       return true;
     },
     [commitLocal, notify],
+  );
+
+  const applyOp = useCallback(
+    (result: OpResult, label: string): boolean => {
+      if (!applyResult(fromOp(result), label)) return false;
+      const notes = opNotes(result);
+      if (notes.length > 0) notify(notes.join("; "));
+      return true;
+    },
+    [applyResult, notify],
   );
 
   const latest = useRef({ history, savedDoc, selection, view, dirty, compiled });
@@ -354,49 +444,113 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
     const current = latest.current.history.present.doc;
     const selected = latest.current.selection;
     if (!selected) return;
+    let deleted: boolean;
     if (selected.kind === "object") {
-      commitLocal(deleteObject(current, selected.id), `Delete ${selected.id}`);
+      deleted = applyOp(removeObject(current, { id: selected.id }), `Delete ${selected.id}`);
     } else if (selected.kind === "room") {
-      if (
-        !applyResult(
-          deleteRoomRect(current, selected.roomId, selected.index),
-          `Delete ${selected.roomId}`,
-        )
-      )
-        return;
-    } else if (!applyResult(deleteSpawn(current, selected.team, selected.index), "Delete spawn")) {
-      return;
+      const rects = current.rooms.find((room) => room.id === selected.roomId)?.rects.length ?? 0;
+      deleted =
+        rects > 1
+          ? applyResult(
+              removeRoomRect(current, selected.roomId, selected.index),
+              `Delete ${selected.roomId}`,
+            )
+          : applyOp(removeRoom(current, { id: selected.roomId }), `Delete ${selected.roomId}`);
+    } else {
+      deleted = applyResult(deleteSpawn(current, selected.team, selected.index), "Delete spawn");
     }
-    setSelection(null);
-  }, [applyResult, commitLocal]);
+    if (deleted) setSelection(null);
+  }, [applyOp, applyResult]);
 
-  const rotateSelection = useCallback((direction: 1 | -1, free: boolean, repeat: boolean) => {
-    const selected = latest.current.selection;
-    if (selected?.kind !== "object") return;
-    const label = `Rotate ${selected.id}`;
-    setHistory((current) => {
-      const object = current.present.doc.objects.find((candidate) => candidate.id === selected.id);
-      if (!object) return current;
-      const next = placeObject(current.present.doc, object.id, {
-        ...object,
-        yaw: turnYaw(object.yaw, direction, free),
+  const rotateSelection = useCallback(
+    (direction: 1 | -1, free: boolean, repeat: boolean) => {
+      const selected = latest.current.selection;
+      if (selected?.kind !== "object") return;
+      const base = latest.current.history.present.doc;
+      const result = rotateObject(
+        base,
+        free
+          ? { id: selected.id, degrees: direction * FREE_TURN_DEGREES }
+          : { id: selected.id, turns: direction },
+        context,
+      );
+      const next = fromOp(result);
+      if (isRefusal(next)) {
+        notify(`Cannot rotate ${selected.id}: ${next.refused}`);
+        return;
+      }
+      const label = `Rotate ${selected.id}`;
+      setHistory((current) => {
+        if (current.present.doc !== base) return current;
+        return repeat ? commitMerged(current, next, label) : commit(current, next, label, "local");
       });
-      return repeat ? commitMerged(current, next, label) : commit(current, next, label, "local");
-    });
-  }, []);
+    },
+    [context, notify],
+  );
 
   const duplicateSelection = useCallback(() => {
     const current = latest.current.history.present.doc;
     const selected = latest.current.selection;
     if (selected?.kind !== "object") return;
-    const result = duplicateObject(current, selected.id, DUPLICATE_OFFSET);
-    if ("refused" in result) {
-      notify(result.refused);
-      return;
-    }
-    commitLocal(result.doc, `Duplicate ${selected.id}`);
-    setSelection({ kind: "object", id: result.id });
-  }, [commitLocal, notify]);
+    const result = duplicateObject(current, { id: selected.id }, context);
+    if (!applyOp(result, `Duplicate ${selected.id}`)) return;
+    const copy = addedObjectId(current, result.doc);
+    if (copy) setSelection({ kind: "object", id: copy });
+  }, [applyOp, context]);
+
+  const placeAgainstWall = useCallback(
+    (objectId: string, side: Side) => {
+      const current = latest.current.history.present.doc;
+      const object = current.objects.find((candidate) => candidate.id === objectId);
+      const room = object ? roomRectAt(current, object.x, object.z)?.roomId : undefined;
+      if (!object || !room) {
+        notify(`Cannot back ${objectId} onto a wall: it is not in a room`);
+        return;
+      }
+      const removed = removeObject(current, { id: objectId });
+      applyOp(
+        placeObject(
+          removed.doc,
+          {
+            type: object.type,
+            id: object.id,
+            relation: { againstWall: { room, side }, facing: "in" },
+          },
+          context,
+        ),
+        `Back ${objectId} onto the ${side} wall`,
+      );
+    },
+    [applyOp, context, notify],
+  );
+
+  const setObjectPose = useCallback(
+    (objectId: string, pose: { x?: number; z?: number; yawDegrees?: number }) => {
+      const current = latest.current.history.present.doc;
+      const object = current.objects.find((candidate) => candidate.id === objectId);
+      if (!object) return;
+      if (pose.yawDegrees !== undefined) {
+        applyOp(
+          rotateObject(
+            current,
+            { id: objectId, degrees: pose.yawDegrees - object.yaw * DEGREES_PER_RADIAN },
+            context,
+          ),
+          `Rotate ${objectId}`,
+        );
+        return;
+      }
+      applyOp(
+        moveObject(
+          current,
+          { id: objectId, to: { x: pose.x ?? object.x, z: pose.z ?? object.z }, free: true },
+          context,
+        ),
+        `Move ${objectId}`,
+      );
+    },
+    [applyOp, context],
+  );
 
   const dropGesture = useCallback(() => {
     gestureRef.current = null;
@@ -512,7 +666,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
   const pickAt = (current: LevelDocument, x: number, z: number): Selection => {
     const spawn = spawnAt(current, x, z, SPAWN_PICK_RADIUS);
     if (spawn) return { kind: "spawn", ...spawn };
-    const objectId = objectAt(current, x, z, radiusOf);
+    const objectId = objectAt(current, x, z, context, GHOST_RADIUS);
     if (objectId) return { kind: "object", id: objectId };
     const room = roomRectAt(current, x, z);
     return room ? { kind: "room", ...room } : null;
@@ -522,9 +676,10 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
     const def = catalogById.get(type);
     if (!def) return;
     const current = latest.current.history.present.doc;
-    const result = addObject(current, type, snapPosition(x, free), snapPosition(z, free), 0);
-    commitLocal(result.doc, `Add ${def.name}`);
-    setSelection({ kind: "object", id: result.id });
+    const result = placeObject(current, { type, relation: { at: { x, z } }, free }, context);
+    if (!applyOp(result, `Add ${def.name}`)) return;
+    const added = addedObjectId(current, result.doc);
+    if (added) setSelection({ kind: "object", id: added });
   };
 
   const beginSelect = (current: LevelDocument, x: number, z: number) => {
@@ -556,7 +711,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
         id: object.id,
         dx: object.x - x,
         dz: object.z - z,
-        yaw: object.yaw,
+        blocked: null,
       };
     } else if (picked?.kind === "spawn") {
       gestureRef.current = {
@@ -608,7 +763,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
         if (!door) return;
         const key = doorKey(door);
         const open = current.doors.some((existing) => doorKey(existing) === key);
-        applyResult(toggleDoor(current, door), open ? "Close door" : "Open door");
+        applyOp(toggleDoor(current, door), open ? "Close door" : "Open door");
         return;
       }
       case "spawn": {
@@ -639,15 +794,11 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
       setDraft(isRefusal(result) ? null : result);
       return;
     }
-    const result = addRoom(gesture.base, rect);
-    setPreview({ ...EMPTY_PREVIEW, rect: { rect, valid: !("refused" in result) } });
-    if ("refused" in result) {
-      gesture.created = null;
-      setDraft(null);
-    } else {
-      gesture.created = result.id;
-      setDraft(result.doc);
-    }
+    const created = newRoomId(gesture.base);
+    const result = addRoom(gesture.base, { id: created, rect });
+    setPreview({ ...EMPTY_PREVIEW, rect: { rect, valid: result.ok } });
+    gesture.created = result.ok ? created : null;
+    setDraft(result.ok ? result.doc : null);
   };
 
   const hover = (current: LevelDocument, at: { x: number; z: number }) => {
@@ -655,7 +806,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
       const door = edgeAt(current, at.x, at.z, EDGE_TOLERANCE);
       setPreview({
         ...EMPTY_PREVIEW,
-        edge: door ? { door, valid: isWallEdge(current, door) } : null,
+        edge: door ? { door, valid: toggleDoor(current, door).ok } : null,
       });
       setCursor(door ? "pointer" : "default");
       return;
@@ -704,15 +855,24 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
     if (!at) return;
     const free = event.altKey;
     switch (gesture?.kind) {
-      case "move-object":
-        setDraft(
-          placeObject(gesture.base, gesture.id, {
-            x: snapPosition(at.x + gesture.dx, free),
-            z: snapPosition(at.z + gesture.dz, free),
-            yaw: gesture.yaw,
-          }),
+      case "move-object": {
+        const result = fromOp(
+          moveObject(
+            gesture.base,
+            { id: gesture.id, to: { x: at.x + gesture.dx, z: at.z + gesture.dz }, free },
+            context,
+          ),
         );
+        if (isRefusal(result)) {
+          gesture.blocked = result.refused;
+          setNotice(result.refused);
+          return;
+        }
+        gesture.blocked = null;
+        setNotice(null);
+        setDraft(result);
         return;
+      }
       case "move-spawn":
         setDraft(
           moveSpawn(
@@ -728,9 +888,9 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
         const { gx, gz } = toGrid(gesture.base, at.x, at.z);
         const line = Math.round(gesture.edge.startsWith("i") ? gx : gz);
         const rect = moveRectEdge(gesture.rect, gesture.edge, line);
-        const result = setRoomRect(gesture.base, gesture.roomId, gesture.index, rect);
-        setPreview({ ...EMPTY_PREVIEW, rect: { rect, valid: !isRefusal(result) } });
-        if (!isRefusal(result)) setDraft(result);
+        const result = resizeRoom(gesture.base, { id: gesture.roomId, rect, index: gesture.index });
+        setPreview({ ...EMPTY_PREVIEW, rect: { rect, valid: result.ok } });
+        if (result.ok) setDraft(result.doc);
         return;
       }
       case "paint":
@@ -758,6 +918,9 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
       return;
     }
     setPreview(EMPTY_PREVIEW);
+    if (gesture.kind === "move-object" && gesture.blocked) {
+      notify(`Move stopped short: ${gesture.blocked}`);
+    }
     const draft = draftRef.current;
     if (!draft) return;
     setDraft(null);
@@ -857,7 +1020,11 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
             highlights={highlights}
             preview={preview}
             radiusOf={radiusOf}
+            context={context}
             focus={focus}
+            overlays={overlays}
+            overlayToggles={overlayToggles}
+            uniqueIds={uniqueIds}
           />
         )}
       </div>
@@ -938,8 +1105,15 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
           selection={selection}
           catalog={catalogById}
           onChange={commitLocal}
+          onPose={setObjectPose}
+          onAgainstWall={placeAgainstWall}
         />
-        <ChecksPanel items={items} onFocus={focusItem} />
+        <ChecksPanel
+          items={items}
+          onFocus={focusItem}
+          overlays={overlayToggles}
+          onOverlays={setOverlayToggles}
+        />
       </div>
 
       <div className="ed-panel ed-history">

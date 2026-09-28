@@ -1,7 +1,7 @@
-import type { LevelDocument } from "@morphy/level";
+import { type LevelDocument, SIDES, type Side } from "@morphy/level";
 import type { PropDefinition } from "@morphy/shared";
 import { useEffect, useState } from "react";
-import { moveSpawn, normalizeYaw, placeObject } from "./edits";
+import { moveSpawn } from "./edits";
 import type { Selection } from "./types";
 
 const DEGREES = 180 / Math.PI;
@@ -48,17 +48,25 @@ function NumberField({
   );
 }
 
-/** Exact values of the selection, typed in: how an author sets an arbitrary angle or position. */
+/**
+ * Exact values of the selection, typed in: how an author sets an arbitrary angle
+ * or position. Object changes go through `onPose` and `onAgainstWall`, which run
+ * the level ops, so a typed value is refused for the same reasons a drag is.
+ */
 export function Inspector({
   doc,
   selection,
   catalog,
   onChange,
+  onPose,
+  onAgainstWall,
 }: {
   doc: LevelDocument;
   selection: Selection;
   catalog: ReadonlyMap<string, PropDefinition>;
   onChange: (doc: LevelDocument, label: string) => void;
+  onPose: (id: string, pose: { x?: number; z?: number; yawDegrees?: number }) => void;
+  onAgainstWall: (id: string, side: Side) => void;
 }) {
   if (!selection) {
     return (
@@ -73,8 +81,6 @@ export function Inspector({
   if (selection.kind === "object") {
     const object = doc.objects.find((candidate) => candidate.id === selection.id);
     if (!object) return null;
-    const set = (patch: Partial<typeof object>, label: string) =>
-      onChange(placeObject(doc, object.id, { ...object, ...patch }), label);
     return (
       <div className="ed-panel ed-inspector">
         <div className="ed-panel-head">
@@ -82,23 +88,27 @@ export function Inspector({
           <span className="ed-muted">{object.id}</span>
         </div>
         <div className="ed-num-row">
-          <NumberField
-            label="x"
-            value={object.x}
-            onCommit={(x) => set({ x }, `Move ${object.id}`)}
-          />
-          <NumberField
-            label="z"
-            value={object.z}
-            onCommit={(z) => set({ z }, `Move ${object.id}`)}
-          />
+          <NumberField label="x" value={object.x} onCommit={(x) => onPose(object.id, { x })} />
+          <NumberField label="z" value={object.z} onCommit={(z) => onPose(object.id, { z })} />
           <NumberField
             label="yaw °"
             value={object.yaw * DEGREES}
-            onCommit={(degrees) =>
-              set({ yaw: normalizeYaw(degrees / DEGREES) }, `Rotate ${object.id}`)
-            }
+            onCommit={(yawDegrees) => onPose(object.id, { yawDegrees })}
           />
+        </div>
+        <div className="ed-wall-row">
+          <span className="ed-muted">Against wall</span>
+          {SIDES.map((side) => (
+            <button
+              key={side}
+              type="button"
+              className="ed-btn"
+              title={`Back onto the room's ${side} wall, facing in`}
+              onClick={() => onAgainstWall(object.id, side)}
+            >
+              {side}
+            </button>
+          ))}
         </div>
       </div>
     );

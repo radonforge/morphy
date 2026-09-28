@@ -106,6 +106,9 @@ client code, three.js or Colyseus.
   An op that would collide, or place on open ground or across a room's edge, returns an
   `op.blocked` error naming the blocker and the input document unchanged; a move or turn is
   refused only for what the object did not already touch.
+- `overlays.ts`: `levelOverlays`, the geometry behind `floor.unreachable` and `room.sightline`
+  (unreached walkable samples, each room's longest sightline) for the editor to draw, built from
+  the same sampling as `validateLevel` so an overlay never disagrees with a finding.
 - `views.ts` / `serialize.ts`: the text an agent reads (summary, 0.5 m ASCII room plan, one line
   per finding, report delta) and `formatLevelDocument`, which writes JSON in the layout Biome
   leaves alone, so a CLI edit passes `check:ci` as is.
@@ -144,7 +147,15 @@ client code, three.js or Colyseus.
   page applies as an undoable step labelled External with its entities highlighted. Add a map to
   `levelSources` there to make it editable. The plan is an orthographic top-down view drawn by the
   game's own renderers (`MapView`, `DeckLights`, `themeFor` from `game/Scene.tsx`); `Tab` swaps to
-  an orbit view. The pure parts (`edits.ts`, `history.ts`) are tested in `tests/editor.test.mjs`.
+  an orbit view. **Every edit an op exists for goes through the `@morphy/level` op** (place, move,
+  rotate, duplicate, remove, against-wall placement, room add / resize / remove, door toggle), so the
+  editor and `pnpm level` apply the same snapping and blocking rules; a refused op shows its
+  `op.blocked` message, naming the blocker, as a toast. `edits.ts` holds only what no op covers
+  (an extra rect of an L, deleting one, spawns, picking) and the op adapters. The checks panel runs
+  `validateLevel` with `ASSET_CARDS` on every committed step and groups findings by severity;
+  clicking one selects its entity and pans to it, and the unreachable-floor, sightline and
+  unique-type overlays are toggles. The pure parts (`edits.ts`, `history.ts`) are tested in
+  `tests/editor.test.mjs`.
   **Try it** saves, waits for `tsx watch` to restart the game server (a document write always
   restarts it, since the server imports the JSON), and opens `App` with `tryMap`, i.e. a private
   room on that map; a private room needs a second player to start, so add one with
