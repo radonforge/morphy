@@ -39,6 +39,9 @@ importers:
       '@colyseus/sdk':
         specifier: ^0.17.43
         version: 0.17.43(@colyseus/core@0.17.44)(typescript@5.9.3)
+      '@morphy/level':
+        specifier: workspace:*
+        version: link:../level
       '@morphy/shared':
         specifier: workspace:*
         version: link:../shared

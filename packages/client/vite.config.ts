@@ -2,13 +2,14 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { COLYSEUS_PROXY_PATH, DEFAULT_PORT, STATS_PATH } from "../shared/src/constants";
 import { resolveBuildInfo } from "./buildInfo";
+import { levelBridgePlugin } from "./viteLevelBridge";
 import { runtimeAssetsPlugin } from "./viteRuntimeAssets";
 
 const buildInfo = resolveBuildInfo();
 const serverTarget = `http://localhost:${Number(process.env.PORT ?? DEFAULT_PORT)}`;
 
 export default defineConfig({
-  plugins: [react(), runtimeAssetsPlugin()],
+  plugins: [react(), runtimeAssetsPlugin(), levelBridgePlugin()],
   build: {
     rolldownOptions: {
       output: {
