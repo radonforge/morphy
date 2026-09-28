@@ -427,8 +427,7 @@ function Overlay({
             selection?.kind === "room" && selection.roomId === room.id && selection.index === index;
           const external = highlights.has(`room:${room.id}`);
           return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: a room's rects have no id; their index is their identity in the document
-            <group key={`${room.id}:${index}`}>
+            <group key={`${room.id}:${rect.i0},${rect.i1},${rect.j0},${rect.j1}`}>
               <RectFill
                 doc={doc}
                 rect={rect}
@@ -535,8 +534,7 @@ function Overlay({
             selection?.kind === "spawn" && selection.team === team && selection.index === index;
           const external = highlights.has(`spawn:${team}:${index}`);
           return (
-            // biome-ignore lint/suspicious/noArrayIndexKey: spawn points have no id; the index is their identity in the document
-            <group key={`${team}:${index}`}>
+            <group key={`${team}:${point.x},${point.z}`}>
               <mesh
                 position={[point.x, y, point.z]}
                 rotation-x={-Math.PI / 2}

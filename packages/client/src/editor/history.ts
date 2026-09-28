@@ -13,6 +13,8 @@ export interface HistoryEntry {
   source: ChangeSource;
   /** Entity keys the step touched, see `changedEntities`; highlighted while the step is current. */
   changed: readonly string[];
+  /** Unique among the steps of one history, so a list of them can key on it. */
+  seq: number;
 }
 
 /** An undo stack in which local edits and external file changes are ordinary, undoable steps. */
@@ -23,7 +25,11 @@ export interface History {
 }
 
 export function createHistory(doc: LevelDocument): History {
-  return { past: [], present: { doc, label: "Opened", source: "local", changed: [] }, future: [] };
+  return {
+    past: [],
+    present: { doc, label: "Opened", source: "local", changed: [], seq: 0 },
+    future: [],
+  };
 }
 
 /** Make `doc` the present state; a no-op when it already is. Clears the redo branch. */
@@ -36,7 +42,11 @@ export function commit(
 ): History {
   if (doc === history.present.doc) return history;
   const past = [...history.past, history.present].slice(-HISTORY_LIMIT);
-  return { past, present: { doc, label, source, changed }, future: [] };
+  return {
+    past,
+    present: { doc, label, source, changed, seq: history.present.seq + 1 },
+    future: [],
+  };
 }
 
 /**

@@ -1142,11 +1142,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
         </div>
         <ul className="ed-list">
           {recent.map((entry, index) => (
-            <li
-              // biome-ignore lint/suspicious/noArrayIndexKey: steps have no id; the depth from the newest is their identity here
-              key={history.past.length - index}
-              className={index === 0 ? "is-current" : undefined}
-            >
+            <li key={entry.seq} className={index === 0 ? "is-current" : undefined}>
               {entry.source === "external" && <span className="ed-badge">External</span>}
               {entry.label}
             </li>

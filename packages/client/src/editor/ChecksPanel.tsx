@@ -91,9 +91,8 @@ export function ChecksPanel({
                   {group.label} <span>{group.items.length}</span>
                 </h3>
                 <ul className="ed-list">
-                  {group.items.map((item, index) => (
-                    // biome-ignore lint/suspicious/noArrayIndexKey: findings are recomputed as a whole on every edit
-                    <li key={index}>
+                  {group.items.map((item) => (
+                    <li key={`${item.code ?? ""}:${item.message}`}>
                       <button
                         type="button"
                         className={`ed-finding is-${item.severity}`}
