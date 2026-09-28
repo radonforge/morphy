@@ -1,5 +1,6 @@
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { applyModelGlow } from "./modelGlow";
 
 interface TextureReference {
   textures?: number;
@@ -80,7 +81,8 @@ function shareKitTextures(model: LoadedModel): void {
 }
 
 /**
- * `useGLTF` for every renderable model: the cached result, with its kit textures shared.
+ * `useGLTF` for every renderable model: the cached result, with its kit textures shared
+ * and its screens and windows lit.
  *
  * The sharing runs during render on purpose. It is idempotent per model and correct
  * whether or not the render commits, and it has to land before the first frame
@@ -89,5 +91,6 @@ function shareKitTextures(model: LoadedModel): void {
 export function useSharedGLTF(url: string): ReturnType<typeof useGLTF<string>> {
   const model = useGLTF(url);
   shareKitTextures(model);
+  applyModelGlow(model.scene, url);
   return model;
 }
