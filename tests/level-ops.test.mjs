@@ -410,3 +410,74 @@ test("toggling a door closes an open one and opens a wall edge", () => {
   assert.equal(toggleDoor(doc(), { axis: "v", line: 0, cell: 0 }).ok, false);
   assert.equal(toggleDoor(doc(), { axis: "v", line: 1.5, cell: 1 }).findings[0].code, "op.invalid");
 });
+
+/** The ops fixture with a second chair west of the first, so nothing more fits on that side. */
+function hemmed() {
+  return placeObject(doc(), { type: "chair", relation: { nextTo: "west-1", side: "W" } }, CONTEXT)
+    .doc;
+}
+
+/** The ops fixture with a table backed onto the west room's north wall, too long to turn there. */
+function tableOnWall() {
+  return placeObject(
+    doc(),
+    {
+      type: "table",
+      relation: { againstWall: { room: "west", side: "N" }, facing: "in" },
+      id: "big",
+    },
+    CONTEXT,
+  ).doc;
+}
+
+const PURITY_CASES = [
+  [
+    "place",
+    doc,
+    (d) => placeObject(d, { type: "chair", relation: { at: { x: -5, z: 1 } } }, CONTEXT),
+    true,
+  ],
+  [
+    "place blocked",
+    doc,
+    (d) => placeObject(d, { type: "chair", relation: { at: { x: -7, z: -2 } } }, CONTEXT),
+    false,
+  ],
+  ["move", doc, (d) => moveObject(d, { id: "west-1", by: { x: 1, z: 0 } }, CONTEXT), true],
+  [
+    "move blocked",
+    doc,
+    (d) => moveObject(d, { id: "west-1", to: { x: -9.9, z: 0 } }, CONTEXT),
+    false,
+  ],
+  ["rotate", doc, (d) => rotateObject(d, { id: "west-1" }, CONTEXT), true],
+  ["rotate blocked", tableOnWall, (d) => rotateObject(d, { id: "big" }, CONTEXT), false],
+  ["remove", doc, (d) => removeObject(d, { id: "west-1" }), true],
+  ["duplicate", doc, (d) => duplicateObject(d, { id: "west-1" }, CONTEXT), true],
+  [
+    "duplicate blocked",
+    hemmed,
+    (d) => duplicateObject(d, { id: "west-1", side: "W" }, CONTEXT),
+    false,
+  ],
+  ["room add", doc, (d) => addRoom(d, { id: "annex", rect: { i0: 4, i1: 5, j0: 0, j1: 2 } }), true],
+  [
+    "room resize",
+    doc,
+    (d) => resizeRoom(d, { id: "east", rect: { i0: 3, i1: 5, j0: 0, j1: 2 } }),
+    true,
+  ],
+  ["room remove", doc, (d) => removeRoom(d, { id: "hall" }), true],
+  ["door toggle", doc, (d) => toggleDoor(d, { axis: "v", line: 2, cell: 1 }), true],
+];
+
+for (const [name, fixture, run, ok] of PURITY_CASES) {
+  test(`${name} leaves its input document untouched`, () => {
+    const input = fixture();
+    const before = structuredClone(input);
+    const result = run(input);
+    assert.equal(result.ok, ok, result.findings.map((f) => f.message).join("; "));
+    if (!ok) assert.equal(result.findings[0].code, "op.blocked");
+    assert.deepEqual(input, before);
+  });
+}
