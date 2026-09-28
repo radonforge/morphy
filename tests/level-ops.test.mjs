@@ -224,6 +224,15 @@ test("an object under another's span places, one level with it does not", () => 
   );
 });
 
+test("a placement on open ground or across a room's edge is refused", () => {
+  const original = doc();
+  assertBlocked(
+    placeObject(original, { type: "chair", relation: { at: { x: 8, z: 0 } } }, CONTEXT),
+    original,
+    /open ground, outside every room/,
+  );
+});
+
 test("bad placement input is an invalid op, not a crash", () => {
   const original = doc();
   for (const args of [

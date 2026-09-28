@@ -15,6 +15,7 @@ import {
   overlapDepth,
   POSITION_SNAP,
   type Rect2,
+  rectCorners,
   rectExtent,
   SNAP_EPSILON,
   snapToward,
@@ -145,6 +146,12 @@ function blockersOf(
     halfZ: extent.halfZ,
   };
   const blockers: string[] = [];
+  const room = space.regionAt(candidate.x, candidate.z);
+  if (room === null) blockers.push("open ground, outside every room");
+  if (room !== null && room !== undefined) {
+    const strays = rectCorners(rect).some((corner) => space.regionAt(corner.x, corner.z) !== room);
+    if (strays) blockers.push(`the edge of room ${room}`);
+  }
   const e = rectExtent(rect);
   if (
     e.minX < -space.halfW ||
