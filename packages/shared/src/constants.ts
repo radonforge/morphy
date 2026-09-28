@@ -99,3 +99,22 @@ export const MAX_CHAT_LENGTH = 200;
 
 export const PARTY_CODE_LENGTH = 5;
 export const PARTY_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+/** Radius of a player's body in the level checks; the client's `PLAYER_RADIUS` in `movement.ts`. */
+export const LEVEL_BODY_RADIUS = 0.4;
+/** Side of one sample cell of the level checks' reachability and sightline grid, in metres. */
+export const LEVEL_SAMPLE_CELL = 0.5;
+/** Penetration below which two footprints count as touching rather than overlapping. */
+export const LEVEL_OVERLAP_TOLERANCE = 0.05;
+/** Width, along the wall, of the floor kept clear on each side of a doorway. */
+export const LEVEL_DOOR_CLEARANCE_WIDTH = 2;
+/** Depth, away from the wall, of the floor kept clear on each side of a doorway. */
+export const LEVEL_DOOR_CLEARANCE_DEPTH = 1.5;
+/** A pocket of floor no hunter can reach is reported once it covers this many square metres. */
+export const LEVEL_UNREACHABLE_MIN_AREA = 1;
+/** An object at least this tall hides a crouching prop, so it blocks a sightline. */
+export const LEVEL_SIGHT_BLOCK_HEIGHT = 1;
+/** A room whose longest clear sightline exceeds this many metres leaves props nowhere to hide. */
+export const LEVEL_SIGHTLINE_MAX = 24;
+/** A room with fewer objects of a repeated type than this offers too few disguises. */
+export const LEVEL_MIN_DISGUISES = 3;

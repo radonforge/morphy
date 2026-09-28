@@ -7,7 +7,8 @@ export const WALL_HEIGHT = 4.25;
 export const FLOOR_THICKNESS = 1;
 
 const WALL_THICKNESS = 1;
-const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
+/** Half the thickness of a wall collider: how far its face stands off the grid line. */
+export const WALL_HALF_THICKNESS = WALL_THICKNESS / 2;
 const WALL_Y = WALL_HEIGHT / 2;
 const WALL_MODEL = "/models/space/modular/template-wall.glb";
 const GATE_MODEL = "/models/space/modular/gate.glb";
