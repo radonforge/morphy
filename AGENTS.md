@@ -37,7 +37,8 @@ pnpm-workspace monorepo, five packages with a strict runtime dependency directio
 **client → shared ← server**, plus **server → level → shared**, **client → level**, **bot → shared**
 and **server → bot/brain** (client and server still never import each other at runtime).
 `client → level` exists for the dev-only map editor, which compiles the document it edits on every
-change; `@morphy/level` is pure, and nothing the production client runs imports it.
+change, and for `pickDeckLights`, the one thing the production client (`DeckLights` in `Scene.tsx`)
+imports from it; `@morphy/level` is pure, so the rest tree-shakes out of the bundle.
 
 `server → bot` exists so the room-filling bots and the CLI bots run the *same* behaviour instead of
 two copies that drift. It is confined to the `@morphy/bot/brain` entry point: the package's
@@ -106,6 +107,9 @@ client code, three.js or Colyseus.
   An op that would collide, or place on open ground or across a room's edge, returns an
   `op.blocked` error naming the blocker and the input document unchanged; a move or turn is
   refused only for what the object did not already touch.
+- `lights.ts`: `pickDeckLights(map, roomCount)`, the pure k-means pick of a night map's point lights
+  (one per furniture cluster pushed clear of the walls, one per hunter spawn), kept here so the
+  client, the editor and the CLI propose lights with the same algorithm.
 - `overlays.ts`: `levelOverlays`, the geometry behind `floor.unreachable` and `room.sightline`
   (unreached walkable samples, each room's longest sightline) for the editor to draw, built from
   the same sampling as `validateLevel` so an overlay never disagrees with a finding.

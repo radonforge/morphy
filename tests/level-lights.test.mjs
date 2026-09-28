@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { pickDeckLights } from "../packages/client/src/game/deckLights.ts";
+import { pickDeckLights } from "../packages/level/src/lights.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
 
 const ROOM_COUNT = 14;

@@ -1,4 +1,5 @@
 import type { Room } from "@colyseus/sdk";
+import { pickDeckLights } from "@morphy/level";
 import {
   computePropBounds,
   INPUT_IDLE_EPSILON,
@@ -32,7 +33,6 @@ import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "r
 import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
-import { pickDeckLights } from "./deckLights";
 import type { BloomSettings, ShadowSettings } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
 import { fitModel, MODEL_MIN_SIZE } from "./modelFit";
