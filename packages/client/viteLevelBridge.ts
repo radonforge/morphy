@@ -14,17 +14,31 @@ import {
   type LevelChangedPayload,
 } from "./src/editor/bridgeProtocol";
 
-const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const HTTP_OK = 200;
 const HTTP_BAD_REQUEST = 400;
 const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
 const HTTP_METHOD_NOT_ALLOWED = 405;
+const HTTP_REQUEST_TIMEOUT = 408;
 const HTTP_TOO_LARGE = 413;
 const HTTP_UNPROCESSABLE = 422;
 const HTTP_SERVER_ERROR = 500;
 const LOOPBACK_ADDRESSES = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 const FORWARDING_HEADERS = ["x-forwarded-for", "forwarded", "x-real-ip"];
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const HTTP_DEFAULT_PORT = "80";
+
+/** Limits on a request body, named so a test can shrink them. */
+export interface BridgeLimits {
+  maxBodyBytes: number;
+  bodyTimeoutMs: number;
+}
+
+/** A document is well under a megabyte; the cap only stops a runaway or hostile body. */
+export const BRIDGE_LIMITS: BridgeLimits = {
+  maxBodyBytes: 4 * 1024 * 1024,
+  bodyTimeoutMs: 10_000,
+};
 
 /** A map authored as a level document: the file it lives in and the catalog its objects come from. */
 export interface LevelSource {
@@ -94,39 +108,88 @@ export async function writeLevelFile(file: string, text: string): Promise<void> 
   }
 }
 
-/**
- * Whether a request comes from this machine and was not relayed: the dev
- * server listens on the LAN (`server.host`) and `pnpm tunnel` exposes it
- * through ngrok, whose agent connects from loopback but adds a forwarding
- * header. The bridge writes into the repo, so only a local page may use it.
- */
-export function isLocalRequest(
-  remoteAddress: string | undefined,
-  headers: IncomingMessage["headers"],
-): boolean {
-  return (
-    remoteAddress !== undefined &&
-    LOOPBACK_ADDRESSES.has(remoteAddress) &&
-    FORWARDING_HEADERS.every((name) => headers[name] === undefined)
-  );
+/** The request's `Host` if it names this machine on the port the request arrived on, else null. */
+function loopbackHost(req: IncomingMessage): string | null {
+  const host = req.headers.host;
+  if (host === undefined) return null;
+  let url: URL;
+  try {
+    url = new URL(`http://${host}`);
+  } catch {
+    return null;
+  }
+  const port = url.port || HTTP_DEFAULT_PORT;
+  return LOOPBACK_HOSTNAMES.has(url.hostname) && port === String(req.socket.localPort)
+    ? host
+    : null;
 }
 
-async function readBody(req: IncomingMessage): Promise<string> {
-  if (Number(req.headers["content-length"] ?? 0) > MAX_BODY_BYTES) {
-    throw new LevelWriteError(HTTP_TOO_LARGE, `the body exceeds ${MAX_BODY_BYTES} bytes`);
-  }
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of req) {
-    const buffer = chunk as Buffer;
-    size += buffer.length;
-    if (size > MAX_BODY_BYTES) {
-      throw new LevelWriteError(HTTP_TOO_LARGE, `the body exceeds ${MAX_BODY_BYTES} bytes`);
-    }
-    chunks.push(buffer);
-  }
-  return Buffer.concat(chunks).toString("utf8");
+/**
+ * Whether a request comes from this machine and was not relayed: from a loopback
+ * address, with no forwarding header, and addressed by a `Host` that is localhost
+ * or a loopback IP on the dev port. The dev server listens on the LAN
+ * (`server.host`) and `pnpm tunnel` exposes it through ngrok, whose agent connects
+ * from loopback but adds a forwarding header; a page on another site that reaches
+ * localhost through DNS rebinding carries its own name in `Host`. A write must also
+ * come from the dev origin itself when the browser says where it comes from. The
+ * bridge writes into the repo, so only a local page may use it.
+ */
+export function isLocalRequest(req: IncomingMessage): boolean {
+  const address = req.socket.remoteAddress;
+  if (address === undefined || !LOOPBACK_ADDRESSES.has(address)) return false;
+  if (FORWARDING_HEADERS.some((name) => req.headers[name] !== undefined)) return false;
+  const host = loopbackHost(req);
+  if (host === null) return false;
+  const origin = req.headers.origin;
+  return req.method !== "PUT" || origin === undefined || origin === `http://${host}`;
 }
+
+/** Read a body up to `limits.maxBodyBytes`, failing with 408 when it takes longer than `limits.bodyTimeoutMs`. */
+function readBody(req: IncomingMessage, limits: BridgeLimits): Promise<string> {
+  const tooLarge = new LevelWriteError(
+    HTTP_TOO_LARGE,
+    `the body exceeds ${limits.maxBodyBytes} bytes`,
+  );
+  if (Number(req.headers["content-length"] ?? 0) > limits.maxBodyBytes) {
+    return Promise.reject(tooLarge);
+  }
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    const settle = (finish: () => void) => {
+      clearTimeout(timer);
+      req.off("data", onData);
+      req.off("end", onEnd);
+      req.off("error", onError);
+      finish();
+    };
+    const onData = (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > limits.maxBodyBytes) settle(() => reject(tooLarge));
+      else chunks.push(chunk);
+    };
+    const onEnd = () => settle(() => resolve(Buffer.concat(chunks).toString("utf8")));
+    const onError = (error: Error) => settle(() => reject(error));
+    const timer = setTimeout(
+      () =>
+        settle(() =>
+          reject(
+            new LevelWriteError(
+              HTTP_REQUEST_TIMEOUT,
+              `the body did not arrive within ${limits.bodyTimeoutMs} ms`,
+            ),
+          ),
+        ),
+      limits.bodyTimeoutMs,
+    );
+    req.on("data", onData);
+    req.on("end", onEnd);
+    req.on("error", onError);
+  });
+}
+
+/** Statuses after which the rest of the request body is abandoned, so the connection closes. */
+const ABANDONED_BODY_STATUSES = new Set([HTTP_REQUEST_TIMEOUT, HTTP_TOO_LARGE]);
 
 function reply(res: ServerResponse, status: number, body: unknown): void {
   res.statusCode = status;
@@ -138,13 +201,82 @@ function refuse(res: ServerResponse, status: number, error: string): void {
   reply(res, status, { error } satisfies BridgeError);
 }
 
+/** What the bridge middleware needs from its host: where to log, and the texts it wrote itself. */
+export interface BridgeHost {
+  written: Map<string, string>;
+  logError: (message: string) => void;
+}
+
+/**
+ * The bridge's request handler, relative to its mount point: `GET` and `PUT`
+ * `/<mapId>` read and write a document, `GET /<mapId>/catalog` its catalog.
+ * Exported apart from the plugin so it can be served by a plain `node:http`
+ * server in a test.
+ */
+export function levelBridgeMiddleware(
+  sources: Partial<Record<MapId, LevelSource>>,
+  host: BridgeHost,
+  limits: BridgeLimits = BRIDGE_LIMITS,
+): (req: IncomingMessage, res: ServerResponse) => void {
+  return (req, res) => {
+    if (!isLocalRequest(req)) {
+      refuse(res, HTTP_FORBIDDEN, "the level bridge only answers a page served by this machine");
+      return;
+    }
+    const [, rawId, segment, extra] = (req.url ?? "").split("?")[0]!.split("/");
+    const source = isMapId(rawId) ? sources[rawId] : undefined;
+    if (!source || extra !== undefined || (segment && segment !== LEVEL_CATALOG_SEGMENT)) {
+      refuse(res, HTTP_NOT_FOUND, `no level document at ${req.url ?? ""}`);
+      return;
+    }
+    if (segment === LEVEL_CATALOG_SEGMENT) {
+      if (req.method !== "GET") {
+        refuse(res, HTTP_METHOD_NOT_ALLOWED, "the catalog is read-only");
+        return;
+      }
+      reply(res, HTTP_OK, source.catalog);
+      return;
+    }
+    const handle = async () => {
+      if (req.method === "GET") {
+        const text = await readFile(source.file, { encoding: "utf8" });
+        reply(res, HTTP_OK, acceptLevelText(text, source));
+        return;
+      }
+      if (req.method !== "PUT") {
+        refuse(res, HTTP_METHOD_NOT_ALLOWED, "use GET or PUT");
+        return;
+      }
+      const doc = acceptLevelText(await readBody(req, limits), source);
+      const text = formatLevelDocument(doc);
+      host.written.set(source.file, text);
+      try {
+        await writeLevelFile(source.file, text);
+      } catch (error) {
+        host.written.delete(source.file);
+        throw error;
+      }
+      reply(res, HTTP_OK, doc);
+    };
+    handle().catch((error: unknown) => {
+      if (error instanceof LevelWriteError) {
+        if (ABANDONED_BODY_STATUSES.has(error.status)) res.setHeader("connection", "close");
+        refuse(res, error.status, error.message);
+        return;
+      }
+      host.logError(`[level-bridge] ${source.id}: ${String(error)}`);
+      refuse(res, HTTP_SERVER_ERROR, `the bridge failed on ${source.id}: ${String(error)}`);
+    });
+  };
+}
+
 /**
  * Dev-only bridge between the map editor page and the level documents in the
  * repo. Serves each document and its catalog, validates and atomically writes a
  * `PUT`, and pushes a {@link LEVEL_CHANGED_EVENT} over Vite's HMR socket when a
  * document changes on disk from outside the page (an agent, the CLI, a git
  * checkout), so the editor shows it live. The page's own writes are recognised
- * by their text and not echoed back.
+ * by their text and not echoed back. The catalogs are read once, when Vite starts.
  */
 export function levelBridgePlugin(): Plugin {
   return {
@@ -153,56 +285,13 @@ export function levelBridgePlugin(): Plugin {
     configureServer(server: ViteDevServer) {
       const sources = levelSources(server.config.root);
       const written = new Map<string, string>();
-
-      server.middlewares.use(LEVEL_BRIDGE_PATH, (req, res) => {
-        if (!isLocalRequest(req.socket.remoteAddress, req.headers)) {
-          refuse(res, HTTP_FORBIDDEN, "the level bridge only answers this machine");
-          return;
-        }
-        const [, rawId, segment, extra] = (req.url ?? "").split("?")[0]!.split("/");
-        const source = isMapId(rawId) ? sources[rawId] : undefined;
-        if (!source || extra !== undefined || (segment && segment !== LEVEL_CATALOG_SEGMENT)) {
-          refuse(res, HTTP_NOT_FOUND, `no level document at ${req.url ?? ""}`);
-          return;
-        }
-        if (segment === LEVEL_CATALOG_SEGMENT) {
-          if (req.method !== "GET") {
-            refuse(res, HTTP_METHOD_NOT_ALLOWED, "the catalog is read-only");
-            return;
-          }
-          reply(res, HTTP_OK, source.catalog);
-          return;
-        }
-        const handle = async () => {
-          if (req.method === "GET") {
-            const text = await readFile(source.file, { encoding: "utf8" });
-            reply(res, HTTP_OK, acceptLevelText(text, source));
-            return;
-          }
-          if (req.method !== "PUT") {
-            refuse(res, HTTP_METHOD_NOT_ALLOWED, "use GET or PUT");
-            return;
-          }
-          const doc = acceptLevelText(await readBody(req), source);
-          const text = formatLevelDocument(doc);
-          written.set(source.file, text);
-          try {
-            await writeLevelFile(source.file, text);
-          } catch (error) {
-            written.delete(source.file);
-            throw error;
-          }
-          reply(res, HTTP_OK, doc);
-        };
-        handle().catch((error: unknown) => {
-          if (error instanceof LevelWriteError) {
-            refuse(res, error.status, error.message);
-            return;
-          }
-          server.config.logger.error(`[level-bridge] ${source.id}: ${String(error)}`);
-          refuse(res, HTTP_SERVER_ERROR, `the bridge failed on ${source.id}: ${String(error)}`);
-        });
-      });
+      server.middlewares.use(
+        LEVEL_BRIDGE_PATH,
+        levelBridgeMiddleware(sources, {
+          written,
+          logError: (message) => server.config.logger.error(message),
+        }),
+      );
 
       const byFile = new Map(Object.values(sources).map((source) => [source.file, source]));
       server.watcher.add([...byFile.keys()]);

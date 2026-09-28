@@ -31,7 +31,6 @@ import {
 } from "../packages/client/src/editor/history.ts";
 import {
   acceptLevelText,
-  isLocalRequest,
   LevelWriteError,
   levelSources,
   writeLevelFile,
@@ -259,14 +258,6 @@ test("the bridge serves the committed station document and it re-serialises byte
   const source = levelSources(new URL("../packages/client", import.meta.url).pathname).station;
   const text = await readFile(source.file, "utf8");
   assert.equal(formatLevelDocument(await stationDocument()), text);
-});
-
-test("the bridge answers only unrelayed requests from this machine", () => {
-  assert.equal(isLocalRequest("127.0.0.1", {}), true);
-  assert.equal(isLocalRequest("::1", {}), true);
-  assert.equal(isLocalRequest("192.168.1.20", {}), false);
-  assert.equal(isLocalRequest("127.0.0.1", { "x-forwarded-for": "203.0.113.9" }), false);
-  assert.equal(isLocalRequest(undefined, {}), false);
 });
 
 test("a held key's repeats fold into one undo step, a different step does not", () => {
