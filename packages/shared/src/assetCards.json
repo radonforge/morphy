@@ -1,0 +1,3190 @@
+{
+  "/models/space/exterior/barrel.glb": {
+    "model": "/models/space/exterior/barrel.glb",
+    "size": {
+      "x": 0.2,
+      "y": 0.25,
+      "z": 0.173
+    },
+    "center": {
+      "x": 2,
+      "y": 0.125,
+      "z": 1.5
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.24,
+        "area": 0.026
+      }
+    ]
+  },
+  "/models/space/exterior/barrels.glb": {
+    "model": "/models/space/exterior/barrels.glb",
+    "size": {
+      "x": 0.55,
+      "y": 0.35,
+      "z": 0.496
+    },
+    "center": {
+      "x": 2,
+      "y": 0.175,
+      "z": 1.5
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.34,
+        "area": 0.104
+      },
+      {
+        "y": 0.1,
+        "area": 0.273
+      }
+    ]
+  },
+  "/models/space/exterior/desk_chair.glb": {
+    "model": "/models/space/exterior/desk_chair.glb",
+    "size": {
+      "x": 0.15,
+      "y": 0.294,
+      "z": 0.15
+    },
+    "center": {
+      "x": 2,
+      "y": 0.147,
+      "z": 1.5
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.16,
+        "area": 0.011
+      }
+    ]
+  },
+  "/models/space/exterior/desk_computer.glb": {
+    "model": "/models/space/exterior/desk_computer.glb",
+    "size": {
+      "x": 0.525,
+      "y": 0.375,
+      "z": 0.225
+    },
+    "center": {
+      "x": 2,
+      "y": 0.188,
+      "z": 1.5
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.38,
+        "area": 0.039
+      },
+      {
+        "y": 0.22,
+        "area": 0.039
+      }
+    ]
+  },
+  "/models/space/exterior/desk_computerCorner.glb": {
+    "model": "/models/space/exterior/desk_computerCorner.glb",
+    "size": {
+      "x": 0.75,
+      "y": 0.375,
+      "z": 0.75
+    },
+    "center": {
+      "x": 2,
+      "y": 0.188,
+      "z": 1.5
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.38,
+        "area": 0.118
+      },
+      {
+        "y": 0.22,
+        "area": 0.082
+      }
+    ]
+  },
+  "/models/space/exterior/machine_barrel.glb": {
+    "model": "/models/space/exterior/machine_barrel.glb",
+    "size": {
+      "x": 0.646,
+      "y": 0.6,
+      "z": 0.515
+    },
+    "center": {
+      "x": 2.1,
+      "y": 0.3,
+      "z": 1.5
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.6,
+        "area": 0.11
+      },
+      {
+        "y": 0.3,
+        "area": 0.173
+      },
+      {
+        "y": 0.2,
+        "area": 0.173
+      },
+      {
+        "y": 0.06,
+        "area": 0.04
+      }
+    ]
+  },
+  "/models/space/exterior/machine_generator.glb": {
+    "model": "/models/space/exterior/machine_generator.glb",
+    "size": {
+      "x": 0.7,
+      "y": 0.4,
+      "z": 0.525
+    },
+    "center": {
+      "x": 1.95,
+      "y": 0.2,
+      "z": 1.437
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.4,
+        "area": 0.15
+      },
+      {
+        "y": 0.34,
+        "area": 0.019
+      },
+      {
+        "y": 0.06,
+        "area": 0.239
+      }
+    ]
+  },
+  "/models/space/exterior/machine_wireless.glb": {
+    "model": "/models/space/exterior/machine_wireless.glb",
+    "size": {
+      "x": 0.75,
+      "y": 0.6,
+      "z": 0.5
+    },
+    "center": {
+      "x": 2,
+      "y": 0.3,
+      "z": 1.5
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.3,
+        "area": 0.018
+      },
+      {
+        "y": 0.24,
+        "area": 0.03
+      },
+      {
+        "y": 0.2,
+        "area": 0.01
+      },
+      {
+        "y": 0.18,
+        "area": 0.01
+      },
+      {
+        "y": 0.16,
+        "area": 0.12
+      },
+      {
+        "y": 0.06,
+        "area": 0.15
+      }
+    ]
+  },
+  "/models/space/modular/gate-door-window.glb": {
+    "model": "/models/space/modular/gate-door-window.glb",
+    "size": {
+      "x": 4.2,
+      "y": 4.621,
+      "z": 1.4
+    },
+    "center": {
+      "x": 0,
+      "y": 2.31,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 4.62,
+        "area": 0.55
+      },
+      {
+        "y": 4.52,
+        "area": 1.75
+      },
+      {
+        "y": 4.22,
+        "area": 0.012
+      },
+      {
+        "y": 4.02,
+        "area": 3.6
+      },
+      {
+        "y": 3.72,
+        "area": 3.02
+      },
+      {
+        "y": 3.48,
+        "area": 0.68
+      },
+      {
+        "y": 3.34,
+        "area": 0.32
+      },
+      {
+        "y": 3.28,
+        "area": 0.48
+      },
+      {
+        "y": 2.78,
+        "area": 0.48
+      },
+      {
+        "y": 2.62,
+        "area": 0.39
+      },
+      {
+        "y": 2.42,
+        "area": 0.33
+      },
+      {
+        "y": 1.32,
+        "area": 0.33
+      },
+      {
+        "y": 1.18,
+        "area": 0.32
+      },
+      {
+        "y": 1.12,
+        "area": 0.39
+      },
+      {
+        "y": 0.94,
+        "area": 0.48
+      },
+      {
+        "y": 0.44,
+        "area": 0.48
+      },
+      {
+        "y": 0.3,
+        "area": 0.46
+      },
+      {
+        "y": 0.24,
+        "area": 0.68
+      },
+      {
+        "y": 0,
+        "area": 3.23
+      }
+    ]
+  },
+  "/models/space/modular/gate.glb": {
+    "model": "/models/space/modular/gate.glb",
+    "size": {
+      "x": 4.2,
+      "y": 4.621,
+      "z": 1.4
+    },
+    "center": {
+      "x": 0,
+      "y": 2.31,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 4.62,
+        "area": 1.2
+      },
+      {
+        "y": 4.52,
+        "area": 3.43
+      },
+      {
+        "y": 4.22,
+        "area": 0.12
+      },
+      {
+        "y": 4.02,
+        "area": 1.2
+      },
+      {
+        "y": 3.72,
+        "area": 1.92
+      },
+      {
+        "y": 3.34,
+        "area": 0.16
+      },
+      {
+        "y": 1.18,
+        "area": 0.16
+      },
+      {
+        "y": 0.3,
+        "area": 0.46
+      },
+      {
+        "y": 0,
+        "area": 2.13
+      }
+    ]
+  },
+  "/models/space/modular/template-floor-detail-a.glb": {
+    "model": "/models/space/modular/template-floor-detail-a.glb",
+    "size": {
+      "x": 4,
+      "y": 0,
+      "z": 4
+    },
+    "center": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0,
+        "area": 16
+      }
+    ]
+  },
+  "/models/space/modular/template-floor.glb": {
+    "model": "/models/space/modular/template-floor.glb",
+    "size": {
+      "x": 4,
+      "y": 0,
+      "z": 4
+    },
+    "center": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0,
+        "area": 16
+      }
+    ]
+  },
+  "/models/space/modular/template-wall-detail-a.glb": {
+    "model": "/models/space/modular/template-wall-detail-a.glb",
+    "size": {
+      "x": 4,
+      "y": 4.25,
+      "z": 1.369
+    },
+    "center": {
+      "x": 0,
+      "y": 2.125,
+      "z": -0.684
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 4.24,
+        "area": 0.3
+      },
+      {
+        "y": 4.06,
+        "area": 1.6
+      },
+      {
+        "y": 4.04,
+        "area": 0.226
+      },
+      {
+        "y": 3.86,
+        "area": 0.412
+      },
+      {
+        "y": 3.66,
+        "area": 0.412
+      },
+      {
+        "y": 2.3,
+        "area": 0.07
+      },
+      {
+        "y": 1.8,
+        "area": 0.07
+      },
+      {
+        "y": 1.46,
+        "area": 0.412
+      },
+      {
+        "y": 1.24,
+        "area": 0.412
+      },
+      {
+        "y": 1,
+        "area": 2.29
+      },
+      {
+        "y": 0.38,
+        "area": 0.832
+      },
+      {
+        "y": 0.2,
+        "area": 4.264
+      },
+      {
+        "y": 0,
+        "area": 4.449
+      }
+    ]
+  },
+  "/models/space/modular/template-wall.glb": {
+    "model": "/models/space/modular/template-wall.glb",
+    "size": {
+      "x": 4,
+      "y": 4.25,
+      "z": 1.001
+    },
+    "center": {
+      "x": 0,
+      "y": 2.125,
+      "z": -0.5
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 4.24,
+        "area": 0.3
+      },
+      {
+        "y": 4.06,
+        "area": 1.6
+      },
+      {
+        "y": 2.3,
+        "area": 0.07
+      },
+      {
+        "y": 1.8,
+        "area": 0.07
+      },
+      {
+        "y": 1,
+        "area": 2.29
+      },
+      {
+        "y": 0.2,
+        "area": 4.264
+      },
+      {
+        "y": 0,
+        "area": 3.564
+      }
+    ]
+  },
+  "/models/space/station/bed-double.glb": {
+    "model": "/models/space/station/bed-double.glb",
+    "size": {
+      "x": 1,
+      "y": 0.35,
+      "z": 1
+    },
+    "center": {
+      "x": 0,
+      "y": 0.175,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.36,
+        "area": 0.12
+      },
+      {
+        "y": 0.3,
+        "area": 0.995
+      }
+    ]
+  },
+  "/models/space/station/bed-single.glb": {
+    "model": "/models/space/station/bed-single.glb",
+    "size": {
+      "x": 0.5,
+      "y": 0.35,
+      "z": 1
+    },
+    "center": {
+      "x": 0,
+      "y": 0.175,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.36,
+        "area": 0.06
+      },
+      {
+        "y": 0.3,
+        "area": 0.495
+      }
+    ]
+  },
+  "/models/space/station/chair-armrest.glb": {
+    "model": "/models/space/station/chair-armrest.glb",
+    "size": {
+      "x": 0.5,
+      "y": 0.55,
+      "z": 0.35
+    },
+    "center": {
+      "x": 0,
+      "y": 0.275,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.56,
+        "area": 0.03
+      },
+      {
+        "y": 0.3,
+        "area": 0.025
+      },
+      {
+        "y": 0.24,
+        "area": 0.06
+      },
+      {
+        "y": 0.06,
+        "area": 0.069
+      }
+    ]
+  },
+  "/models/space/station/chair.glb": {
+    "model": "/models/space/station/chair.glb",
+    "size": {
+      "x": 0.3,
+      "y": 0.55,
+      "z": 0.35
+    },
+    "center": {
+      "x": 0,
+      "y": 0.275,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.56,
+        "area": 0.03
+      },
+      {
+        "y": 0.24,
+        "area": 0.06
+      },
+      {
+        "y": 0.06,
+        "area": 0.069
+      }
+    ]
+  },
+  "/models/space/station/computer-system.glb": {
+    "model": "/models/space/station/computer-system.glb",
+    "size": {
+      "x": 0.9,
+      "y": 0.6,
+      "z": 0.695
+    },
+    "center": {
+      "x": 0,
+      "y": 0.3,
+      "z": -0.025
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.6,
+        "area": 0.05
+      },
+      {
+        "y": 0.5,
+        "area": 0.143
+      }
+    ]
+  },
+  "/models/space/station/computer-wide.glb": {
+    "model": "/models/space/station/computer-wide.glb",
+    "size": {
+      "x": 0.8,
+      "y": 0.497,
+      "z": 0.533
+    },
+    "center": {
+      "x": 0,
+      "y": 0.248,
+      "z": 0.03
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.1,
+        "area": 0.03
+      }
+    ]
+  },
+  "/models/space/station/computer.glb": {
+    "model": "/models/space/station/computer.glb",
+    "size": {
+      "x": 0.4,
+      "y": 0.661,
+      "z": 0.438
+    },
+    "center": {
+      "x": 0,
+      "y": 0.33,
+      "z": 0.044
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.66,
+        "area": 0.015
+      },
+      {
+        "y": 0.64,
+        "area": 0.015
+      },
+      {
+        "y": 0.44,
+        "area": 0.061
+      },
+      {
+        "y": 0.26,
+        "area": 0.013
+      },
+      {
+        "y": 0.1,
+        "area": 0.015
+      }
+    ]
+  },
+  "/models/space/station/container-flat.glb": {
+    "model": "/models/space/station/container-flat.glb",
+    "size": {
+      "x": 0.659,
+      "y": 0.6,
+      "z": 1.091
+    },
+    "center": {
+      "x": 0.03,
+      "y": 0.3,
+      "z": 0.005
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.6,
+        "area": 0.06
+      },
+      {
+        "y": 0.56,
+        "area": 0.223
+      }
+    ]
+  },
+  "/models/space/station/container-tall.glb": {
+    "model": "/models/space/station/container-tall.glb",
+    "size": {
+      "x": 0.6,
+      "y": 0.9,
+      "z": 0.6
+    },
+    "center": {
+      "x": 0,
+      "y": 0.45,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.9,
+        "area": 0.113
+      },
+      {
+        "y": 0.7,
+        "area": 0.255
+      },
+      {
+        "y": 0.3,
+        "area": 0.255
+      }
+    ]
+  },
+  "/models/space/station/container-wide.glb": {
+    "model": "/models/space/station/container-wide.glb",
+    "size": {
+      "x": 0.6,
+      "y": 0.7,
+      "z": 0.6
+    },
+    "center": {
+      "x": 0,
+      "y": 0.35,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.7,
+        "area": 0.14
+      },
+      {
+        "y": 0.6,
+        "area": 0.315
+      },
+      {
+        "y": 0.2,
+        "area": 0.315
+      }
+    ]
+  },
+  "/models/space/station/container.glb": {
+    "model": "/models/space/station/container.glb",
+    "size": {
+      "x": 0.575,
+      "y": 0.6,
+      "z": 0.575
+    },
+    "center": {
+      "x": 0,
+      "y": 0.3,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.6,
+        "area": 0.113
+      },
+      {
+        "y": 0.4,
+        "area": 0.234
+      }
+    ]
+  },
+  "/models/space/station/rail.glb": {
+    "model": "/models/space/station/rail.glb",
+    "size": {
+      "x": 1,
+      "y": 0.4,
+      "z": 0.1
+    },
+    "center": {
+      "x": 0,
+      "y": 0.2,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.4,
+        "area": 0.042
+      },
+      {
+        "y": 0.06,
+        "area": 0.018
+      }
+    ]
+  },
+  "/models/space/station/skip.glb": {
+    "model": "/models/space/station/skip.glb",
+    "size": {
+      "x": 0.7,
+      "y": 0.5,
+      "z": 1.2
+    },
+    "center": {
+      "x": 0,
+      "y": 0.25,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.5,
+        "area": 0.328
+      },
+      {
+        "y": 0.1,
+        "area": 0.45
+      }
+    ]
+  },
+  "/models/space/station/structure-barrier.glb": {
+    "model": "/models/space/station/structure-barrier.glb",
+    "size": {
+      "x": 1.1,
+      "y": 1,
+      "z": 1.1
+    },
+    "center": {
+      "x": 0,
+      "y": 0.5,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1,
+        "area": 0.36
+      },
+      {
+        "y": 0.9,
+        "area": 0.12
+      },
+      {
+        "y": 0.2,
+        "area": 0.14
+      }
+    ]
+  },
+  "/models/space/station/structure.glb": {
+    "model": "/models/space/station/structure.glb",
+    "size": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "center": {
+      "x": 0,
+      "y": 0.5,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1,
+        "area": 0.36
+      },
+      {
+        "y": 0.9,
+        "area": 0.12
+      }
+    ]
+  },
+  "/models/space/station/table-display.glb": {
+    "model": "/models/space/station/table-display.glb",
+    "size": {
+      "x": 1.241,
+      "y": 0.6,
+      "z": 0.816
+    },
+    "center": {
+      "x": 0,
+      "y": 0,
+      "z": 0.037
+    },
+    "minY": -0.3,
+    "surfaces": [
+      {
+        "y": 0.26,
+        "area": 0.013
+      },
+      {
+        "y": 0.2,
+        "area": 0.015
+      },
+      {
+        "y": 0.1,
+        "area": 0.283
+      },
+      {
+        "y": 0.06,
+        "area": 0.357
+      }
+    ]
+  },
+  "/models/space/station/table-inset.glb": {
+    "model": "/models/space/station/table-inset.glb",
+    "size": {
+      "x": 1.241,
+      "y": 0.4,
+      "z": 0.741
+    },
+    "center": {
+      "x": 0,
+      "y": -0.1,
+      "z": 0
+    },
+    "minY": -0.3,
+    "surfaces": [
+      {
+        "y": 0.1,
+        "area": 0.283
+      },
+      {
+        "y": 0.06,
+        "area": 0.357
+      }
+    ]
+  },
+  "/models/space/station/table-large.glb": {
+    "model": "/models/space/station/table-large.glb",
+    "size": {
+      "x": 1.4,
+      "y": 0.4,
+      "z": 0.9
+    },
+    "center": {
+      "x": 0,
+      "y": 0.2,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.4,
+        "area": 1.24
+      },
+      {
+        "y": 0.1,
+        "area": 1.03
+      }
+    ]
+  },
+  "/models/space/station/table.glb": {
+    "model": "/models/space/station/table.glb",
+    "size": {
+      "x": 1.1,
+      "y": 0.4,
+      "z": 0.6
+    },
+    "center": {
+      "x": 0,
+      "y": 0.2,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.4,
+        "area": 0.64
+      },
+      {
+        "y": 0.1,
+        "area": 0.49
+      }
+    ]
+  },
+  "/models/urban/building-type-a.glb": {
+    "model": "/models/urban/building-type-a.glb",
+    "size": {
+      "x": 1.3,
+      "y": 0.834,
+      "z": 1.028
+    },
+    "center": {
+      "x": 0,
+      "y": 0.417,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.3,
+        "area": 0.027
+      },
+      {
+        "y": 0.14,
+        "area": 0.024
+      },
+      {
+        "y": 0.12,
+        "area": 0.02
+      },
+      {
+        "y": 0.06,
+        "area": 0.098
+      },
+      {
+        "y": 0.04,
+        "area": 0.092
+      }
+    ]
+  },
+  "/models/urban/building-type-b.glb": {
+    "model": "/models/urban/building-type-b.glb",
+    "size": {
+      "x": 1.828,
+      "y": 1.138,
+      "z": 1.14
+    },
+    "center": {
+      "x": 0,
+      "y": 0.569,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.7,
+        "area": 0.015
+      },
+      {
+        "y": 0.56,
+        "area": 0.01
+      },
+      {
+        "y": 0.52,
+        "area": 0.019
+      },
+      {
+        "y": 0.46,
+        "area": 0.065
+      },
+      {
+        "y": 0.3,
+        "area": 0.026
+      },
+      {
+        "y": 0.18,
+        "area": 0.01
+      },
+      {
+        "y": 0.14,
+        "area": 0.026
+      },
+      {
+        "y": 0.12,
+        "area": 0.019
+      },
+      {
+        "y": 0.06,
+        "area": 0.127
+      },
+      {
+        "y": 0.04,
+        "area": 0.138
+      }
+    ]
+  },
+  "/models/urban/building-type-d.glb": {
+    "model": "/models/urban/building-type-d.glb",
+    "size": {
+      "x": 1.756,
+      "y": 1.238,
+      "z": 1.028
+    },
+    "center": {
+      "x": 0,
+      "y": 0.619,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.24,
+        "area": 0.014
+      },
+      {
+        "y": 0.7,
+        "area": 0.019
+      },
+      {
+        "y": 0.56,
+        "area": 0.012
+      },
+      {
+        "y": 0.52,
+        "area": 0.017
+      },
+      {
+        "y": 0.46,
+        "area": 0.081
+      },
+      {
+        "y": 0.3,
+        "area": 0.025
+      },
+      {
+        "y": 0.18,
+        "area": 0.01
+      },
+      {
+        "y": 0.14,
+        "area": 0.016
+      },
+      {
+        "y": 0.12,
+        "area": 0.012
+      },
+      {
+        "y": 0.06,
+        "area": 0.116
+      },
+      {
+        "y": 0.04,
+        "area": 0.093
+      }
+    ]
+  },
+  "/models/urban/building-type-f.glb": {
+    "model": "/models/urban/building-type-f.glb",
+    "size": {
+      "x": 1.428,
+      "y": 1.138,
+      "z": 1.406
+    },
+    "center": {
+      "x": 0,
+      "y": 0.569,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.7,
+        "area": 0.031
+      },
+      {
+        "y": 0.56,
+        "area": 0.024
+      },
+      {
+        "y": 0.52,
+        "area": 0.029
+      },
+      {
+        "y": 0.46,
+        "area": 0.097
+      },
+      {
+        "y": 0.4,
+        "area": 0.16
+      },
+      {
+        "y": 0.3,
+        "area": 0.033
+      },
+      {
+        "y": 0.14,
+        "area": 0.016
+      },
+      {
+        "y": 0.12,
+        "area": 0.023
+      },
+      {
+        "y": 0.06,
+        "area": 0.104
+      },
+      {
+        "y": 0.04,
+        "area": 0.099
+      }
+    ]
+  },
+  "/models/urban/building-type-n.glb": {
+    "model": "/models/urban/building-type-n.glb",
+    "size": {
+      "x": 1.784,
+      "y": 1.138,
+      "z": 1.378
+    },
+    "center": {
+      "x": 0,
+      "y": 0.569,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.7,
+        "area": 0.021
+      },
+      {
+        "y": 0.56,
+        "area": 0.016
+      },
+      {
+        "y": 0.52,
+        "area": 0.019
+      },
+      {
+        "y": 0.46,
+        "area": 0.081
+      },
+      {
+        "y": 0.4,
+        "area": 0.32
+      },
+      {
+        "y": 0.3,
+        "area": 0.031
+      },
+      {
+        "y": 0.18,
+        "area": 0.011
+      },
+      {
+        "y": 0.14,
+        "area": 0.016
+      },
+      {
+        "y": 0.12,
+        "area": 0.014
+      },
+      {
+        "y": 0.06,
+        "area": 0.105
+      },
+      {
+        "y": 0.04,
+        "area": 0.047
+      }
+    ]
+  },
+  "/models/urban/building-type-t.glb": {
+    "model": "/models/urban/building-type-t.glb",
+    "size": {
+      "x": 1.314,
+      "y": 1.156,
+      "z": 1.406
+    },
+    "center": {
+      "x": -0.007,
+      "y": 0.578,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.92,
+        "area": 0.013
+      },
+      {
+        "y": 0.7,
+        "area": 0.019
+      },
+      {
+        "y": 0.56,
+        "area": 0.012
+      },
+      {
+        "y": 0.52,
+        "area": 0.017
+      },
+      {
+        "y": 0.46,
+        "area": 0.081
+      },
+      {
+        "y": 0.4,
+        "area": 0.16
+      },
+      {
+        "y": 0.3,
+        "area": 0.026
+      },
+      {
+        "y": 0.14,
+        "area": 0.022
+      },
+      {
+        "y": 0.12,
+        "area": 0.018
+      },
+      {
+        "y": 0.06,
+        "area": 0.114
+      },
+      {
+        "y": 0.04,
+        "area": 0.092
+      }
+    ]
+  },
+  "/models/urban/commercial/building-a.glb": {
+    "model": "/models/urban/commercial/building-a.glb",
+    "size": {
+      "x": 0.884,
+      "y": 1.293,
+      "z": 0.94
+    },
+    "center": {
+      "x": 0,
+      "y": 0.646,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.28,
+        "area": 0.229
+      },
+      {
+        "y": 1.2,
+        "area": 0.543
+      },
+      {
+        "y": 1.1,
+        "area": 0.011
+      },
+      {
+        "y": 0.94,
+        "area": 0.014
+      },
+      {
+        "y": 0.86,
+        "area": 0.069
+      },
+      {
+        "y": 0.46,
+        "area": 0.069
+      },
+      {
+        "y": 0.3,
+        "area": 0.01
+      },
+      {
+        "y": 0.06,
+        "area": 0.053
+      }
+    ]
+  },
+  "/models/urban/commercial/building-c.glb": {
+    "model": "/models/urban/commercial/building-c.glb",
+    "size": {
+      "x": 0.884,
+      "y": 0.893,
+      "z": 1.09
+    },
+    "center": {
+      "x": 0,
+      "y": 0.447,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.88,
+        "area": 0.222
+      },
+      {
+        "y": 0.84,
+        "area": 0.039
+      },
+      {
+        "y": 0.8,
+        "area": 0.517
+      },
+      {
+        "y": 0.7,
+        "area": 0.015
+      },
+      {
+        "y": 0.52,
+        "area": 0.011
+      },
+      {
+        "y": 0.46,
+        "area": 0.067
+      },
+      {
+        "y": 0.06,
+        "area": 0.079
+      },
+      {
+        "y": 0.04,
+        "area": 0.084
+      }
+    ]
+  },
+  "/models/urban/commercial/building-d.glb": {
+    "model": "/models/urban/commercial/building-d.glb",
+    "size": {
+      "x": 0.84,
+      "y": 1.293,
+      "z": 0.9
+    },
+    "center": {
+      "x": 0,
+      "y": 0.646,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.28,
+        "area": 0.103
+      },
+      {
+        "y": 1.2,
+        "area": 0.09
+      },
+      {
+        "y": 0.88,
+        "area": 0.161
+      },
+      {
+        "y": 0.86,
+        "area": 0.043
+      },
+      {
+        "y": 0.84,
+        "area": 0.059
+      },
+      {
+        "y": 0.8,
+        "area": 0.367
+      },
+      {
+        "y": 0.7,
+        "area": 0.027
+      },
+      {
+        "y": 0.5,
+        "area": 0.027
+      },
+      {
+        "y": 0.46,
+        "area": 0.065
+      },
+      {
+        "y": 0.3,
+        "area": 0.01
+      },
+      {
+        "y": 0.06,
+        "area": 0.053
+      }
+    ]
+  },
+  "/models/urban/commercial/building-f.glb": {
+    "model": "/models/urban/commercial/building-f.glb",
+    "size": {
+      "x": 0.84,
+      "y": 1.693,
+      "z": 1.03
+    },
+    "center": {
+      "x": 0,
+      "y": 0.847,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.68,
+        "area": 0.215
+      },
+      {
+        "y": 1.6,
+        "area": 0.49
+      },
+      {
+        "y": 1.5,
+        "area": 0.024
+      },
+      {
+        "y": 1.36,
+        "area": 0.016
+      },
+      {
+        "y": 1.34,
+        "area": 0.066
+      },
+      {
+        "y": 1.24,
+        "area": 0.065
+      },
+      {
+        "y": 1.1,
+        "area": 0.024
+      },
+      {
+        "y": 0.94,
+        "area": 0.082
+      },
+      {
+        "y": 0.86,
+        "area": 0.065
+      },
+      {
+        "y": 0.7,
+        "area": 0.024
+      },
+      {
+        "y": 0.56,
+        "area": 0.016
+      },
+      {
+        "y": 0.52,
+        "area": 0.066
+      },
+      {
+        "y": 0.46,
+        "area": 0.065
+      },
+      {
+        "y": 0.4,
+        "area": 0.047
+      },
+      {
+        "y": 0.3,
+        "area": 0.01
+      },
+      {
+        "y": 0.06,
+        "area": 0.065
+      },
+      {
+        "y": 0.04,
+        "area": 0.046
+      }
+    ]
+  },
+  "/models/urban/commercial/building-g.glb": {
+    "model": "/models/urban/commercial/building-g.glb",
+    "size": {
+      "x": 0.97,
+      "y": 1.693,
+      "z": 0.922
+    },
+    "center": {
+      "x": 0,
+      "y": 0.847,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.68,
+        "area": 0.215
+      },
+      {
+        "y": 1.6,
+        "area": 0.492
+      },
+      {
+        "y": 1.5,
+        "area": 0.017
+      },
+      {
+        "y": 1.34,
+        "area": 0.029
+      },
+      {
+        "y": 1.3,
+        "area": 0.035
+      },
+      {
+        "y": 1.24,
+        "area": 0.065
+      },
+      {
+        "y": 1.22,
+        "area": 0.047
+      },
+      {
+        "y": 1.1,
+        "area": 0.016
+      },
+      {
+        "y": 0.94,
+        "area": 0.033
+      },
+      {
+        "y": 0.88,
+        "area": 0.035
+      },
+      {
+        "y": 0.86,
+        "area": 0.065
+      },
+      {
+        "y": 0.82,
+        "area": 0.047
+      },
+      {
+        "y": 0.7,
+        "area": 0.016
+      },
+      {
+        "y": 0.54,
+        "area": 0.013
+      },
+      {
+        "y": 0.52,
+        "area": 0.016
+      },
+      {
+        "y": 0.5,
+        "area": 0.041
+      },
+      {
+        "y": 0.46,
+        "area": 0.065
+      },
+      {
+        "y": 0.42,
+        "area": 0.047
+      },
+      {
+        "y": 0.4,
+        "area": 0.047
+      },
+      {
+        "y": 0.3,
+        "area": 0.012
+      },
+      {
+        "y": 0.06,
+        "area": 0.053
+      }
+    ]
+  },
+  "/models/urban/commercial/building-h.glb": {
+    "model": "/models/urban/commercial/building-h.glb",
+    "size": {
+      "x": 0.884,
+      "y": 1.293,
+      "z": 1.008
+    },
+    "center": {
+      "x": 0,
+      "y": 0.646,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.28,
+        "area": 0.215
+      },
+      {
+        "y": 1.2,
+        "area": 0.492
+      },
+      {
+        "y": 1.1,
+        "area": 0.015
+      },
+      {
+        "y": 0.88,
+        "area": 0.046
+      },
+      {
+        "y": 0.86,
+        "area": 0.065
+      },
+      {
+        "y": 0.7,
+        "area": 0.013
+      },
+      {
+        "y": 0.5,
+        "area": 0.056
+      },
+      {
+        "y": 0.46,
+        "area": 0.065
+      },
+      {
+        "y": 0.06,
+        "area": 0.057
+      }
+    ]
+  },
+  "/models/urban/commercial/building-i.glb": {
+    "model": "/models/urban/commercial/building-i.glb",
+    "size": {
+      "x": 1.24,
+      "y": 1.68,
+      "z": 1.302
+    },
+    "center": {
+      "x": 0,
+      "y": 0.84,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.68,
+        "area": 0.327
+      },
+      {
+        "y": 1.64,
+        "area": 0.157
+      },
+      {
+        "y": 1.6,
+        "area": 1.21
+      },
+      {
+        "y": 1.5,
+        "area": 0.069
+      },
+      {
+        "y": 1.36,
+        "area": 0.023
+      },
+      {
+        "y": 1.34,
+        "area": 0.03
+      },
+      {
+        "y": 1.24,
+        "area": 0.097
+      },
+      {
+        "y": 1.1,
+        "area": 0.062
+      },
+      {
+        "y": 0.94,
+        "area": 0.043
+      },
+      {
+        "y": 0.86,
+        "area": 0.097
+      },
+      {
+        "y": 0.7,
+        "area": 0.069
+      },
+      {
+        "y": 0.56,
+        "area": 0.023
+      },
+      {
+        "y": 0.52,
+        "area": 0.03
+      },
+      {
+        "y": 0.46,
+        "area": 0.097
+      },
+      {
+        "y": 0.4,
+        "area": 0.232
+      },
+      {
+        "y": 0.3,
+        "area": 0.019
+      },
+      {
+        "y": 0.06,
+        "area": 0.075
+      },
+      {
+        "y": 0.02,
+        "area": 0.012
+      }
+    ]
+  },
+  "/models/urban/commercial/building-j.glb": {
+    "model": "/models/urban/commercial/building-j.glb",
+    "size": {
+      "x": 2.084,
+      "y": 1.693,
+      "z": 1.34
+    },
+    "center": {
+      "x": 0,
+      "y": 0.847,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.68,
+        "area": 0.492
+      },
+      {
+        "y": 1.64,
+        "area": 0.078
+      },
+      {
+        "y": 1.6,
+        "area": 1.932
+      },
+      {
+        "y": 1.5,
+        "area": 0.034
+      },
+      {
+        "y": 1.36,
+        "area": 0.012
+      },
+      {
+        "y": 1.34,
+        "area": 0.017
+      },
+      {
+        "y": 1.32,
+        "area": 0.048
+      },
+      {
+        "y": 1.24,
+        "area": 0.178
+      },
+      {
+        "y": 1.2,
+        "area": 0.168
+      },
+      {
+        "y": 1.1,
+        "area": 0.035
+      },
+      {
+        "y": 0.94,
+        "area": 0.034
+      },
+      {
+        "y": 0.92,
+        "area": 0.048
+      },
+      {
+        "y": 0.86,
+        "area": 0.178
+      },
+      {
+        "y": 0.8,
+        "area": 0.166
+      },
+      {
+        "y": 0.7,
+        "area": 0.032
+      },
+      {
+        "y": 0.56,
+        "area": 0.012
+      },
+      {
+        "y": 0.52,
+        "area": 0.065
+      },
+      {
+        "y": 0.46,
+        "area": 0.178
+      },
+      {
+        "y": 0.4,
+        "area": 0.246
+      },
+      {
+        "y": 0.3,
+        "area": 0.044
+      },
+      {
+        "y": 0.18,
+        "area": 0.013
+      },
+      {
+        "y": 0.14,
+        "area": 0.036
+      },
+      {
+        "y": 0.12,
+        "area": 0.028
+      },
+      {
+        "y": 0.06,
+        "area": 0.232
+      },
+      {
+        "y": 0.04,
+        "area": 0.184
+      }
+    ]
+  },
+  "/models/urban/commercial/building-l.glb": {
+    "model": "/models/urban/commercial/building-l.glb",
+    "size": {
+      "x": 1.37,
+      "y": 2.27,
+      "z": 1.402
+    },
+    "center": {
+      "x": 0,
+      "y": 1.135,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 2.08,
+        "area": 0.335
+      },
+      {
+        "y": 2,
+        "area": 1.238
+      },
+      {
+        "y": 1.9,
+        "area": 0.049
+      },
+      {
+        "y": 1.76,
+        "area": 0.018
+      },
+      {
+        "y": 1.74,
+        "area": 0.023
+      },
+      {
+        "y": 1.72,
+        "area": 0.012
+      },
+      {
+        "y": 1.64,
+        "area": 0.095
+      },
+      {
+        "y": 1.6,
+        "area": 0.043
+      },
+      {
+        "y": 1.5,
+        "area": 0.041
+      },
+      {
+        "y": 1.36,
+        "area": 0.016
+      },
+      {
+        "y": 1.34,
+        "area": 0.02
+      },
+      {
+        "y": 1.24,
+        "area": 0.099
+      },
+      {
+        "y": 1.1,
+        "area": 0.047
+      },
+      {
+        "y": 0.94,
+        "area": 0.041
+      },
+      {
+        "y": 0.92,
+        "area": 0.012
+      },
+      {
+        "y": 0.86,
+        "area": 0.095
+      },
+      {
+        "y": 0.8,
+        "area": 0.042
+      },
+      {
+        "y": 0.7,
+        "area": 0.043
+      },
+      {
+        "y": 0.56,
+        "area": 0.016
+      },
+      {
+        "y": 0.52,
+        "area": 0.02
+      },
+      {
+        "y": 0.46,
+        "area": 0.099
+      },
+      {
+        "y": 0.4,
+        "area": 0.259
+      },
+      {
+        "y": 0.3,
+        "area": 0.019
+      },
+      {
+        "y": 0.06,
+        "area": 0.075
+      },
+      {
+        "y": 0.02,
+        "area": 0.012
+      }
+    ]
+  },
+  "/models/urban/commercial/building-n.glb": {
+    "model": "/models/urban/commercial/building-n.glb",
+    "size": {
+      "x": 2.32,
+      "y": 2.48,
+      "z": 1.82
+    },
+    "center": {
+      "x": 0,
+      "y": 1.24,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 2.48,
+        "area": 0.103
+      },
+      {
+        "y": 2.4,
+        "area": 0.09
+      },
+      {
+        "y": 2.08,
+        "area": 0.439
+      },
+      {
+        "y": 2.04,
+        "area": 0.107
+      },
+      {
+        "y": 2,
+        "area": 2.25
+      },
+      {
+        "y": 1.9,
+        "area": 0.058
+      },
+      {
+        "y": 1.8,
+        "area": 0.017
+      },
+      {
+        "y": 1.76,
+        "area": 0.048
+      },
+      {
+        "y": 1.74,
+        "area": 0.054
+      },
+      {
+        "y": 1.64,
+        "area": 0.132
+      },
+      {
+        "y": 1.5,
+        "area": 0.058
+      },
+      {
+        "y": 1.36,
+        "area": 0.048
+      },
+      {
+        "y": 1.34,
+        "area": 0.054
+      },
+      {
+        "y": 1.24,
+        "area": 0.129
+      },
+      {
+        "y": 1.1,
+        "area": 0.058
+      },
+      {
+        "y": 0.94,
+        "area": 0.102
+      },
+      {
+        "y": 0.86,
+        "area": 0.129
+      },
+      {
+        "y": 0.7,
+        "area": 0.058
+      },
+      {
+        "y": 0.56,
+        "area": 0.048
+      },
+      {
+        "y": 0.52,
+        "area": 0.054
+      },
+      {
+        "y": 0.5,
+        "area": 0.076
+      },
+      {
+        "y": 0.46,
+        "area": 0.893
+      },
+      {
+        "y": 0.4,
+        "area": 0.671
+      },
+      {
+        "y": 0.36,
+        "area": 0.109
+      },
+      {
+        "y": 0.3,
+        "area": 0.058
+      },
+      {
+        "y": 0.14,
+        "area": 0.036
+      },
+      {
+        "y": 0.12,
+        "area": 0.042
+      },
+      {
+        "y": 0.06,
+        "area": 0.115
+      }
+    ]
+  },
+  "/models/urban/commercial/building-skyscraper-a.glb": {
+    "model": "/models/urban/commercial/building-skyscraper-a.glb",
+    "size": {
+      "x": 1.36,
+      "y": 2.88,
+      "z": 1.36
+    },
+    "center": {
+      "x": 0,
+      "y": 1.44,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 2.88,
+        "area": 0.319
+      },
+      {
+        "y": 2.84,
+        "area": 0.078
+      },
+      {
+        "y": 2.8,
+        "area": 1.207
+      },
+      {
+        "y": 2.74,
+        "area": 0.072
+      },
+      {
+        "y": 2.54,
+        "area": 0.257
+      },
+      {
+        "y": 2.5,
+        "area": 0.128
+      },
+      {
+        "y": 2.18,
+        "area": 0.257
+      },
+      {
+        "y": 2.14,
+        "area": 0.128
+      },
+      {
+        "y": 1.84,
+        "area": 0.257
+      },
+      {
+        "y": 1.8,
+        "area": 0.128
+      },
+      {
+        "y": 1.5,
+        "area": 0.257
+      },
+      {
+        "y": 1.46,
+        "area": 0.128
+      },
+      {
+        "y": 1.14,
+        "area": 0.257
+      },
+      {
+        "y": 1.1,
+        "area": 0.128
+      },
+      {
+        "y": 0.96,
+        "area": 0.059
+      },
+      {
+        "y": 0.94,
+        "area": 0.064
+      },
+      {
+        "y": 0.4,
+        "area": 0.12
+      },
+      {
+        "y": 0.3,
+        "area": 0.017
+      },
+      {
+        "y": 0.06,
+        "area": 0.105
+      }
+    ]
+  },
+  "/models/urban/commercial/building-skyscraper-c.glb": {
+    "model": "/models/urban/commercial/building-skyscraper-c.glb",
+    "size": {
+      "x": 1.28,
+      "y": 4.08,
+      "z": 1.388
+    },
+    "center": {
+      "x": 0,
+      "y": 2.04,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 4.08,
+        "area": 0.103
+      },
+      {
+        "y": 4,
+        "area": 0.09
+      },
+      {
+        "y": 3.68,
+        "area": 0.327
+      },
+      {
+        "y": 3.64,
+        "area": 0.029
+      },
+      {
+        "y": 3.6,
+        "area": 1.21
+      },
+      {
+        "y": 3.54,
+        "area": 0.082
+      },
+      {
+        "y": 3.16,
+        "area": 0.299
+      },
+      {
+        "y": 3.12,
+        "area": 0.128
+      },
+      {
+        "y": 2.8,
+        "area": 0.299
+      },
+      {
+        "y": 2.76,
+        "area": 0.128
+      },
+      {
+        "y": 2.44,
+        "area": 0.299
+      },
+      {
+        "y": 2.4,
+        "area": 0.128
+      },
+      {
+        "y": 2.08,
+        "area": 0.299
+      },
+      {
+        "y": 2.04,
+        "area": 0.128
+      },
+      {
+        "y": 1.72,
+        "area": 0.299
+      },
+      {
+        "y": 1.68,
+        "area": 0.128
+      },
+      {
+        "y": 1.38,
+        "area": 0.299
+      },
+      {
+        "y": 1.34,
+        "area": 0.128
+      },
+      {
+        "y": 1,
+        "area": 0.128
+      },
+      {
+        "y": 0.94,
+        "area": 0.075
+      },
+      {
+        "y": 0.8,
+        "area": 0.097
+      },
+      {
+        "y": 0.54,
+        "area": 0.022
+      },
+      {
+        "y": 0.4,
+        "area": 0.12
+      },
+      {
+        "y": 0.3,
+        "area": 0.019
+      },
+      {
+        "y": 0.06,
+        "area": 0.091
+      },
+      {
+        "y": 0.02,
+        "area": 0.012
+      }
+    ]
+  },
+  "/models/urban/commercial/detail-parasol-a.glb": {
+    "model": "/models/urban/commercial/detail-parasol-a.glb",
+    "size": {
+      "x": 0.346,
+      "y": 0.45,
+      "z": 0.4
+    },
+    "center": {
+      "x": 0,
+      "y": 0.225,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.12,
+        "area": 0.072
+      },
+      {
+        "y": 0.02,
+        "area": 0.018
+      }
+    ]
+  },
+  "/models/urban/commercial/detail-parasol-b.glb": {
+    "model": "/models/urban/commercial/detail-parasol-b.glb",
+    "size": {
+      "x": 0.346,
+      "y": 0.45,
+      "z": 0.4
+    },
+    "center": {
+      "x": 0,
+      "y": 0.225,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.12,
+        "area": 0.072
+      },
+      {
+        "y": 0.02,
+        "area": 0.018
+      }
+    ]
+  },
+  "/models/urban/fence-1x2.glb": {
+    "model": "/models/urban/fence-1x2.glb",
+    "size": {
+      "x": 0.875,
+      "y": 0.27,
+      "z": 0.438
+    },
+    "center": {
+      "x": 0,
+      "y": 0.135,
+      "z": 0.019
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.24,
+        "area": 0.04
+      },
+      {
+        "y": 0.1,
+        "area": 0.016
+      }
+    ]
+  },
+  "/models/urban/fence-2x2.glb": {
+    "model": "/models/urban/fence-2x2.glb",
+    "size": {
+      "x": 0.875,
+      "y": 0.27,
+      "z": 0.837
+    },
+    "center": {
+      "x": 0,
+      "y": 0.135,
+      "z": 0.019
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.26,
+        "area": 0.013
+      },
+      {
+        "y": 0.24,
+        "area": 0.06
+      },
+      {
+        "y": 0.1,
+        "area": 0.027
+      }
+    ]
+  },
+  "/models/urban/industrial/building-a.glb": {
+    "model": "/models/urban/industrial/building-a.glb",
+    "size": {
+      "x": 2.084,
+      "y": 1.47,
+      "z": 1.242
+    },
+    "center": {
+      "x": 0.001,
+      "y": 0.735,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.28,
+        "area": 0.556
+      },
+      {
+        "y": 1.2,
+        "area": 2.092
+      },
+      {
+        "y": 1.1,
+        "area": 0.036
+      },
+      {
+        "y": 0.94,
+        "area": 0.06
+      },
+      {
+        "y": 0.86,
+        "area": 0.129
+      },
+      {
+        "y": 0.7,
+        "area": 0.029
+      },
+      {
+        "y": 0.56,
+        "area": 0.026
+      },
+      {
+        "y": 0.52,
+        "area": 0.027
+      },
+      {
+        "y": 0.46,
+        "area": 0.129
+      },
+      {
+        "y": 0.4,
+        "area": 0.48
+      },
+      {
+        "y": 0.3,
+        "area": 0.022
+      },
+      {
+        "y": 0.06,
+        "area": 0.104
+      }
+    ]
+  },
+  "/models/urban/industrial/building-c.glb": {
+    "model": "/models/urban/industrial/building-c.glb",
+    "size": {
+      "x": 1.876,
+      "y": 1.25,
+      "z": 2.108
+    },
+    "center": {
+      "x": 0.096,
+      "y": 0.625,
+      "z": 0.143
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.24,
+        "area": 0.037
+      },
+      {
+        "y": 1.18,
+        "area": 0.04
+      },
+      {
+        "y": 0.98,
+        "area": 0.103
+      },
+      {
+        "y": 0.9,
+        "area": 0.09
+      },
+      {
+        "y": 0.58,
+        "area": 0.513
+      },
+      {
+        "y": 0.56,
+        "area": 0.029
+      },
+      {
+        "y": 0.5,
+        "area": 1.633
+      },
+      {
+        "y": 0.44,
+        "area": 0.034
+      },
+      {
+        "y": 0.4,
+        "area": 0.288
+      },
+      {
+        "y": 0.3,
+        "area": 0.018
+      },
+      {
+        "y": 0.24,
+        "area": 0.011
+      },
+      {
+        "y": 0.08,
+        "area": 0.014
+      },
+      {
+        "y": 0.06,
+        "area": 0.109
+      }
+    ]
+  },
+  "/models/urban/industrial/building-f.glb": {
+    "model": "/models/urban/industrial/building-f.glb",
+    "size": {
+      "x": 1.79,
+      "y": 1.925,
+      "z": 1.28
+    },
+    "center": {
+      "x": -0.453,
+      "y": 0.962,
+      "z": 0.254
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.92,
+        "area": 0.041
+      },
+      {
+        "y": 1.86,
+        "area": 0.045
+      },
+      {
+        "y": 0.98,
+        "area": 0.271
+      },
+      {
+        "y": 0.94,
+        "area": 0.058
+      },
+      {
+        "y": 0.9,
+        "area": 0.77
+      },
+      {
+        "y": 0.58,
+        "area": 0.189
+      },
+      {
+        "y": 0.56,
+        "area": 0.077
+      },
+      {
+        "y": 0.5,
+        "area": 0.508
+      },
+      {
+        "y": 0.4,
+        "area": 0.322
+      },
+      {
+        "y": 0.3,
+        "area": 0.017
+      },
+      {
+        "y": 0.22,
+        "area": 0.011
+      },
+      {
+        "y": 0.12,
+        "area": 0.176
+      },
+      {
+        "y": 0.06,
+        "area": 0.121
+      }
+    ]
+  },
+  "/models/urban/industrial/building-l.glb": {
+    "model": "/models/urban/industrial/building-l.glb",
+    "size": {
+      "x": 2.084,
+      "y": 1.925,
+      "z": 1.87
+    },
+    "center": {
+      "x": -0.422,
+      "y": 0.962,
+      "z": 0.224
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.92,
+        "area": 0.041
+      },
+      {
+        "y": 1.86,
+        "area": 0.045
+      },
+      {
+        "y": 0.88,
+        "area": 0.327
+      },
+      {
+        "y": 0.86,
+        "area": 0.058
+      },
+      {
+        "y": 0.8,
+        "area": 1.212
+      },
+      {
+        "y": 0.7,
+        "area": 0.02
+      },
+      {
+        "y": 0.62,
+        "area": 0.011
+      },
+      {
+        "y": 0.56,
+        "area": 0.012
+      },
+      {
+        "y": 0.52,
+        "area": 0.049
+      },
+      {
+        "y": 0.48,
+        "area": 0.163
+      },
+      {
+        "y": 0.46,
+        "area": 0.097
+      },
+      {
+        "y": 0.44,
+        "area": 0.041
+      },
+      {
+        "y": 0.4,
+        "area": 0.732
+      },
+      {
+        "y": 0.36,
+        "area": 0.194
+      },
+      {
+        "y": 0.3,
+        "area": 0.032
+      },
+      {
+        "y": 0.14,
+        "area": 0.01
+      },
+      {
+        "y": 0.12,
+        "area": 0.176
+      },
+      {
+        "y": 0.06,
+        "area": 0.125
+      }
+    ]
+  },
+  "/models/urban/industrial/building-q.glb": {
+    "model": "/models/urban/industrial/building-q.glb",
+    "size": {
+      "x": 2.14,
+      "y": 0.88,
+      "z": 1.77
+    },
+    "center": {
+      "x": -0.228,
+      "y": 0.44,
+      "z": 0.011
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.88,
+        "area": 0.349
+      },
+      {
+        "y": 0.8,
+        "area": 0.773
+      },
+      {
+        "y": 0.7,
+        "area": 0.014
+      },
+      {
+        "y": 0.58,
+        "area": 0.329
+      },
+      {
+        "y": 0.56,
+        "area": 0.146
+      },
+      {
+        "y": 0.5,
+        "area": 1.848
+      },
+      {
+        "y": 0.46,
+        "area": 0.081
+      },
+      {
+        "y": 0.4,
+        "area": 0.794
+      },
+      {
+        "y": 0.3,
+        "area": 0.016
+      },
+      {
+        "y": 0.18,
+        "area": 0.078
+      },
+      {
+        "y": 0.06,
+        "area": 0.151
+      }
+    ]
+  },
+  "/models/urban/industrial/building-r.glb": {
+    "model": "/models/urban/industrial/building-r.glb",
+    "size": {
+      "x": 2.484,
+      "y": 1.393,
+      "z": 1.272
+    },
+    "center": {
+      "x": 0,
+      "y": 0.697,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.28,
+        "area": 0.215
+      },
+      {
+        "y": 1.2,
+        "area": 0.492
+      },
+      {
+        "y": 1.1,
+        "area": 0.015
+      },
+      {
+        "y": 0.94,
+        "area": 0.025
+      },
+      {
+        "y": 0.86,
+        "area": 0.073
+      },
+      {
+        "y": 0.58,
+        "area": 0.334
+      },
+      {
+        "y": 0.56,
+        "area": 0.033
+      },
+      {
+        "y": 0.5,
+        "area": 1.053
+      },
+      {
+        "y": 0.46,
+        "area": 0.073
+      },
+      {
+        "y": 0.4,
+        "area": 0.324
+      },
+      {
+        "y": 0.3,
+        "area": 0.019
+      },
+      {
+        "y": 0.18,
+        "area": 0.039
+      },
+      {
+        "y": 0.06,
+        "area": 0.123
+      }
+    ]
+  },
+  "/models/urban/industrial/chimney-basic.glb": {
+    "model": "/models/urban/industrial/chimney-basic.glb",
+    "size": {
+      "x": 0.2,
+      "y": 1,
+      "z": 0.2
+    },
+    "center": {
+      "x": 0,
+      "y": 0.5,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": []
+  },
+  "/models/urban/industrial/chimney-small.glb": {
+    "model": "/models/urban/industrial/chimney-small.glb",
+    "size": {
+      "x": 0.3,
+      "y": 0.75,
+      "z": 0.3
+    },
+    "center": {
+      "x": 0,
+      "y": 0.375,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.76,
+        "area": 0.018
+      },
+      {
+        "y": 0.68,
+        "area": 0.02
+      },
+      {
+        "y": 0.08,
+        "area": 0.013
+      }
+    ]
+  },
+  "/models/urban/industrial/detail-tank.glb": {
+    "model": "/models/urban/industrial/detail-tank.glb",
+    "size": {
+      "x": 0.848,
+      "y": 0.415,
+      "z": 0.515
+    },
+    "center": {
+      "x": 0,
+      "y": 0.208,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": []
+  },
+  "/models/urban/planter.glb": {
+    "model": "/models/urban/planter.glb",
+    "size": {
+      "x": 0.4,
+      "y": 0.177,
+      "z": 0.3
+    },
+    "center": {
+      "x": 0,
+      "y": 0.089,
+      "z": -0.001
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.06,
+        "area": 0.025
+      },
+      {
+        "y": 0.04,
+        "area": 0.092
+      }
+    ]
+  },
+  "/models/urban/roads/bridge-pillar-wide.glb": {
+    "model": "/models/urban/roads/bridge-pillar-wide.glb",
+    "size": {
+      "x": 0.14,
+      "y": 0.5,
+      "z": 0.14
+    },
+    "center": {
+      "x": 0,
+      "y": 0.25,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.5,
+        "area": 0.013
+      },
+      {
+        "y": 0.1,
+        "area": 0.013
+      }
+    ]
+  },
+  "/models/urban/roads/bridge-pillar.glb": {
+    "model": "/models/urban/roads/bridge-pillar.glb",
+    "size": {
+      "x": 0.1,
+      "y": 0.5,
+      "z": 0.1
+    },
+    "center": {
+      "x": 0,
+      "y": 0.25,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": []
+  },
+  "/models/urban/roads/construction-barrier.glb": {
+    "model": "/models/urban/roads/construction-barrier.glb",
+    "size": {
+      "x": 0.105,
+      "y": 0.119,
+      "z": 0.225
+    },
+    "center": {
+      "x": 0,
+      "y": 0.059,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.12,
+        "area": 0.014
+      }
+    ]
+  },
+  "/models/urban/roads/construction-cone.glb": {
+    "model": "/models/urban/roads/construction-cone.glb",
+    "size": {
+      "x": 0.075,
+      "y": 0.094,
+      "z": 0.075
+    },
+    "center": {
+      "x": 0,
+      "y": 0.047,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": []
+  },
+  "/models/urban/roads/construction-light.glb": {
+    "model": "/models/urban/roads/construction-light.glb",
+    "size": {
+      "x": 0.075,
+      "y": 0.234,
+      "z": 0.075
+    },
+    "center": {
+      "x": 0,
+      "y": 0.117,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": []
+  },
+  "/models/urban/roads/light-curved.glb": {
+    "model": "/models/urban/roads/light-curved.glb",
+    "size": {
+      "x": 0.05,
+      "y": 0.675,
+      "z": 0.225
+    },
+    "center": {
+      "x": 0,
+      "y": 0.337,
+      "z": -0.088
+    },
+    "minY": 0,
+    "surfaces": []
+  },
+  "/models/urban/roads/road-crossroad.glb": {
+    "model": "/models/urban/roads/road-crossroad.glb",
+    "size": {
+      "x": 1,
+      "y": 0.02,
+      "z": 1
+    },
+    "center": {
+      "x": 0,
+      "y": 0.01,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.02,
+        "area": 0.04
+      },
+      {
+        "y": 0,
+        "area": 0.96
+      }
+    ]
+  },
+  "/models/urban/roads/road-side.glb": {
+    "model": "/models/urban/roads/road-side.glb",
+    "size": {
+      "x": 1,
+      "y": 0.02,
+      "z": 1.31
+    },
+    "center": {
+      "x": 0,
+      "y": 0.01,
+      "z": -0.155
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.02,
+        "area": 0.2
+      },
+      {
+        "y": 0,
+        "area": 1.11
+      }
+    ]
+  },
+  "/models/urban/roads/road-straight.glb": {
+    "model": "/models/urban/roads/road-straight.glb",
+    "size": {
+      "x": 1,
+      "y": 0.02,
+      "z": 1
+    },
+    "center": {
+      "x": 0,
+      "y": 0.01,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.02,
+        "area": 0.2
+      },
+      {
+        "y": 0,
+        "area": 0.8
+      }
+    ]
+  },
+  "/models/urban/tree-large.glb": {
+    "model": "/models/urban/tree-large.glb",
+    "size": {
+      "x": 0.21,
+      "y": 0.767,
+      "z": 0.243
+    },
+    "center": {
+      "x": 0,
+      "y": 0.383,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": []
+  },
+  "/models/urban/tree-small.glb": {
+    "model": "/models/urban/tree-small.glb",
+    "size": {
+      "x": 0.21,
+      "y": 0.567,
+      "z": 0.243
+    },
+    "center": {
+      "x": 0,
+      "y": 0.284,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": []
+  }
+}
