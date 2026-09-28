@@ -146,6 +146,15 @@ test("compiling carries the document lights and adds no field without them", () 
   assert.equal("lights" in parseMapDefinition(JSON.parse(JSON.stringify(without))), false);
 });
 
+test("a map definition with a repeated light id is refused and extra light fields are dropped", () => {
+  const map = compileLevel(parse(undefined), { catalog: SPACE_CATALOG, seed: 1 });
+  assert.throws(
+    () => parseMapDefinition({ ...map, lights: [LAMP, { ...LAMP, x: -5 }] }),
+    /duplicate id/,
+  );
+  assert.deepEqual(parseMapDefinition({ ...map, lights: [{ ...LAMP, extra: 1 }] }).lights, [LAMP]);
+});
+
 test("a map definition with malformed lights is refused", () => {
   const map = compileLevel(parse(undefined), { catalog: SPACE_CATALOG, seed: 1 });
   for (const lights of [
@@ -227,6 +236,22 @@ test("adding a light snaps it, names it by kind and refuses walls and repeated i
   assert.equal(addLight(third.doc, { at: { x: 11, z: 0 } }, CONTEXT).ok, false);
 });
 
+test("adding or moving a light to a non-finite spot or with an empty id is refused by the op", () => {
+  const doc = parse([LAMP]);
+  assert.equal(
+    addLight(doc, { at: { x: Number.NaN, z: 0 } }, CONTEXT).findings[0].code,
+    "op.invalid",
+  );
+  assert.equal(
+    addLight(doc, { at: { x: 1, z: 1 }, id: "" }, CONTEXT).findings[0].code,
+    "op.invalid",
+  );
+  assert.equal(
+    moveLight(doc, { id: "light-1", to: { x: Number.POSITIVE_INFINITY, z: 0 } }, CONTEXT).ok,
+    false,
+  );
+});
+
 test("moving a light needs exactly one target and refuses a wall", () => {
   const doc = parse([LAMP]);
   const moved = moveLight(doc, { id: "light-1", by: { x: 1, z: 0.5 } }, CONTEXT);
@@ -253,6 +278,16 @@ test("proposing replaces the lights with the picker's and rejects a bad count", 
     proposed.doc,
   );
   assert.equal(proposeLights(doc, CONTEXT, { roomCount: -1 }).ok, false);
+});
+
+test("proposing refuses a proposal that would put a light inside a wall", () => {
+  const raw = hall(undefined);
+  raw.spawns.hunters = [{ x: -2, z: -4 }];
+  const doc = parseLevelDocument(raw, { catalog: SPACE_CATALOG });
+  const result = proposeLights(doc, CONTEXT, { roomCount: 1 });
+  assert.equal(result.ok, false);
+  assert.equal(result.findings[0].code, "op.blocked");
+  assert.equal(result.doc, doc);
 });
 
 test("an edit that would raise a wall over a light is refused", () => {

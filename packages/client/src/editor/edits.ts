@@ -1,4 +1,5 @@
 import {
+  buriedLight,
   type CellRect,
   doorKey,
   type LevelContext,
@@ -215,17 +216,27 @@ export function newRoomId(doc: LevelDocument): string {
   return `room-${n}`;
 }
 
+/** `doc`, or a refusal naming the light a room edit would leave inside a wall the parser rejects. */
+function keepLightsOutOfWalls(doc: LevelDocument): EditResult {
+  const buried = buriedLight(doc);
+  return buried === undefined
+    ? doc
+    : { refused: `light ${buried.id} would end up inside a wall, move it first` };
+}
+
 /** Add another rect to a room, e.g. the second arm of an L. */
 export function addRoomRect(doc: LevelDocument, roomId: string, rect: CellRect): EditResult {
   if (!rectFits(doc, rect)) return { refused: "the rect is off the grid" };
   const other = overlapsOther(doc, rect, roomId);
   if (other !== null) return { refused: `it overlaps room "${other}"` };
-  return pruneDoors({
-    ...doc,
-    rooms: doc.rooms.map((room) =>
-      room.id === roomId ? { ...room, rects: [...room.rects, { ...rect }] } : room,
-    ),
-  });
+  return keepLightsOutOfWalls(
+    pruneDoors({
+      ...doc,
+      rooms: doc.rooms.map((room) =>
+        room.id === roomId ? { ...room, rects: [...room.rects, { ...rect }] } : room,
+      ),
+    }),
+  );
 }
 
 /** Which side of `rect` lies within `tolerance` cells of a grid point, the handle an edge drag moves. */
@@ -278,14 +289,16 @@ export function removeRoomRect(doc: LevelDocument, roomId: string, index: number
   const room = doc.rooms.find((candidate) => candidate.id === roomId);
   if (!room) return { refused: `there is no room "${roomId}"` };
   if (room.rects.length < 2) return { refused: `room "${roomId}" has a single rect` };
-  return pruneDoors({
-    ...doc,
-    rooms: doc.rooms.map((candidate) =>
-      candidate.id === roomId
-        ? { ...candidate, rects: candidate.rects.filter((_, at) => at !== index) }
-        : candidate,
-    ),
-  });
+  return keepLightsOutOfWalls(
+    pruneDoors({
+      ...doc,
+      rooms: doc.rooms.map((candidate) =>
+        candidate.id === roomId
+          ? { ...candidate, rects: candidate.rects.filter((_, at) => at !== index) }
+          : candidate,
+      ),
+    }),
+  );
 }
 
 /** The room rect under a point, last listed first as it draws on top. */

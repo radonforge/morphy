@@ -75,6 +75,10 @@ export function addLight(
   if ((doc.lights ?? []).some((light) => light.id === id)) {
     return fail(doc, `id "${id}" is already used`, "pick another id", [id]);
   }
+  if (id === "") return fail(doc, "a light needs a non-empty id", "pass --id with a name", []);
+  if (!Number.isFinite(args.at.x) || !Number.isFinite(args.at.z)) {
+    return fail(doc, "a light needs a finite position", "pass numeric x, z", [id]);
+  }
   const free = args.free === true;
   const light: LevelLight = { id, kind, x: snap(args.at.x, free), z: snap(args.at.z, free) };
   const blocker = refusal(doc, context, light.x, light.z);
@@ -110,6 +114,9 @@ export function moveLight(
     ]);
   }
   const target = args.to ?? { x: light.x + args.by!.x, z: light.z + args.by!.z };
+  if (!Number.isFinite(target.x) || !Number.isFinite(target.z)) {
+    return fail(doc, "a light needs a finite position", "pass numeric x, z", [args.id]);
+  }
   const free = args.free === true;
   const next: LevelLight = { ...light, x: snap(target.x, free), z: snap(target.z, free) };
   const blocker = refusal(doc, context, next.x, next.z);
@@ -171,6 +178,15 @@ export function proposeLights(
     { catalog: context.catalog, seed: PROPOSAL_SEED },
   );
   const lights = pickDeckLights(map, roomCount);
+  const buried = buriedLight({ ...doc, lights });
+  if (buried !== undefined) {
+    return blocked(
+      doc,
+      buried,
+      "a wall",
+      "move the hunter spawn or the prop it hangs by out of the wall, then propose again",
+    );
+  }
   const findings: Finding[] = [
     {
       code: "op.lights-proposed",
@@ -182,16 +198,20 @@ export function proposeLights(
   return { doc: { ...doc, lights }, ok: true, findings };
 }
 
+/** The first light of `doc` standing inside one of its walls, which the parser rejects. */
+export function buriedLight(doc: LevelDocument): LevelLight | undefined {
+  if (doc.lights === undefined) return undefined;
+  const walls = wallRects(doc, []);
+  return doc.lights.find((light) => walls.some((wall) => rectContains(wall, light.x, light.z)));
+}
+
 /**
  * Refuse an edit that leaves a light inside a wall, which the document parser would
  * reject: `next` when every light still stands clear, else a failure on `doc`.
  */
 export function keepLightsClear(doc: LevelDocument, next: OpResult): OpResult {
-  if (!next.ok || next.doc.lights === undefined) return next;
-  const walls = wallRects(next.doc, []);
-  const buried = next.doc.lights.find((light) =>
-    walls.some((wall) => rectContains(wall, light.x, light.z)),
-  );
+  if (!next.ok) return next;
+  const buried = buriedLight(next.doc);
   if (buried === undefined) return next;
   return blocked(
     doc,

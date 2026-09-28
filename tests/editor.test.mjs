@@ -214,6 +214,33 @@ test("light picking, ids and kind changes read the document's lights", () => {
   assert.ok(isRefusal(setLightKind(doc, "nope", "room")));
 });
 
+test("extending or trimming a room is refused when it would bury a light in a wall", () => {
+  const open = parses({ ...fixture(), lights: [{ id: "light-1", x: 0, z: -2, kind: "corridor" }] });
+  const grown = addRoomRect(open, "west", { i0: 2, i1: 3, j0: 0, j1: 1 });
+  assert.equal(
+    isRefusal(grown) ? grown.refused : null,
+    "light light-1 would end up inside a wall, move it first",
+  );
+  const merged = parses({
+    ...fixture(),
+    rooms: [
+      {
+        id: "west",
+        rects: [
+          { i0: 0, i1: 2, j0: 0, j1: 3 },
+          { i0: 2, i1: 3, j0: 0, j1: 1 },
+        ],
+      },
+      { id: "east", rects: [{ i0: 3, i1: 5, j0: 0, j1: 3 }] },
+    ],
+    doors: [],
+    lights: [{ id: "light-1", x: -2, z: -4, kind: "corridor" }],
+  });
+  assert.ok(isRefusal(removeRoomRect(merged, "west", 1)));
+  const clear = parses({ ...fixture(), lights: [{ id: "light-1", x: -6, z: 0, kind: "room" }] });
+  assert.ok(!isRefusal(addRoomRect(clear, "west", { i0: 2, i1: 3, j0: 0, j1: 1 })));
+});
+
 test("changed entities name moved and added lights and count removed ones", () => {
   const before = parses({
     ...fixture(),

@@ -279,7 +279,14 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
     if (!Array.isArray(raw.lights) || !raw.lights.every(isMapLight)) {
       throw new MapValidationError(id, "field 'lights' must be MapLight[]");
     }
-    lights = raw.lights;
+    const lightIds = new Set<string>();
+    for (const light of raw.lights) {
+      if (lightIds.has(light.id)) {
+        throw new MapValidationError(id, `lights contain duplicate id '${light.id}'`);
+      }
+      lightIds.add(light.id);
+    }
+    lights = raw.lights.map(({ id: lightId, x, z, kind }) => ({ id: lightId, x, z, kind }));
   }
   if (!Array.isArray(raw.props) || !raw.props.every(isPropInstance)) {
     throw new MapValidationError(id, "field 'props' must be PropInstance[]");
