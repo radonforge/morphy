@@ -46,6 +46,7 @@ import { Vector3, type WebGLRenderer } from "three";
 import type { Connection } from "../net/connection";
 import {
   isMuted,
+  playCatch,
   playDeath,
   playDecoyBreak,
   playHitConfirm,
@@ -57,6 +58,7 @@ import {
   playSonar,
   playTaunt,
   playWeaponShot,
+  playYouHuntNow,
   preloadSamples,
   toggleMuted,
 } from "./audio";
@@ -84,10 +86,22 @@ import { useGuardedFrame } from "./guardedFrame";
 import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
 import { graphicsPreference, isPerfHudEnabled } from "./prefs";
-import { DEFAULT_PITCH, GAME_FOV, Scene } from "./Scene";
+import {
+  type CaptureRecord,
+  nextStartingRoles,
+  phaseLabel,
+  propsLeftLabel,
+  resultStatus,
+  type StartingRoles,
+  storyLine,
+  wonRound,
+} from "./roundStory";
+import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene } from "./Scene";
 import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
 import type {
   BreaksRef,
+  CatchMomentRef,
+  CaughtCam,
   DecoyView,
   LookRef,
   MetaMap,
@@ -118,6 +132,11 @@ const RENDER_GATE_PRIORITY = 1;
 const RENDER_INTERVAL_S = 1 / MAX_RENDER_FPS;
 const RENDER_INTERVAL_SLACK_S = 0.002;
 const GFX_LOW_CLASS = "gfx-low";
+const ROLE_CARD_MS = 2_500;
+const PHASE_BANNER_MS = 1_600;
+const CATCH_BANNER_MS = 1_400;
+const HIT_MARKER_MS = 320;
+const CATCH_SOUND_MAX_DISTANCE = 40;
 const MS_PER_S = 1000;
 const BYTES_PER_MB = 1024 * 1024;
 /**
@@ -213,14 +232,6 @@ function killText(event: KillEvent): string {
   }
 }
 
-const PHASE_LABEL: Record<Phase, string> = {
-  lobby: "Waiting for players",
-  starting: "Starting…",
-  hiding: "Hide!",
-  hunting: "Hunt!",
-  round_end: "Round over",
-};
-
 const ROLE_LABEL: Record<Role, string> = {
   hunter: "Hunter",
   prop: "Prop",
@@ -276,54 +287,92 @@ function sceneMetaOf(meta: MetaMap, prev: SceneMetaMap): SceneMetaMap {
   return next;
 }
 
-/** What a player is ranked on within their side: captures for a hunter, taunt points for a prop. */
-function standing(player: PlayerMeta): number {
-  return player.role === "hunter" ? player.kills : player.score;
+interface StandingRow {
+  id: string;
+  player: PlayerMeta;
+  role: Role;
 }
 
-function sortStandings(ids: string[], meta: MetaMap): { id: string; player: PlayerMeta }[] {
+/** What a player is ranked on within their side: captures for a hunter, taunt points for a prop. */
+function standing(row: StandingRow): number {
+  return row.role === "hunter" ? row.player.kills : row.player.score;
+}
+
+function sortStandings(
+  ids: string[],
+  meta: MetaMap,
+  roleOf: (id: string, player: PlayerMeta) => Role,
+): StandingRow[] {
   return ids
-    .map((id) => ({ id, player: meta[id] }))
-    .filter((row): row is { id: string; player: PlayerMeta } => row.player !== undefined)
+    .flatMap((id) => {
+      const player = meta[id];
+      return player ? [{ id, player, role: roleOf(id, player) }] : [];
+    })
     .sort((a, b) => {
-      if (a.player.role !== b.player.role) return a.player.role === "hunter" ? -1 : 1;
-      if (standing(b.player) !== standing(a.player)) return standing(b.player) - standing(a.player);
+      if (a.role !== b.role) return a.role === "hunter" ? -1 : 1;
+      if (standing(b) !== standing(a)) return standing(b) - standing(a);
       return a.player.name.localeCompare(b.player.name);
     });
 }
 
-function StandingsTable({ ids, meta, localId }: { ids: string[]; meta: MetaMap; localId: string }) {
+/**
+ * What the round-end card needs to tell each player's round rather than its last frame:
+ * the role they started with and, for a prop, when it was caught.
+ */
+interface RoundStory {
+  startingRoles: StartingRoles;
+  captures: Readonly<Record<string, CaptureRecord>>;
+}
+
+function liveStatus(player: PlayerMeta): string {
+  if (!player.connected) return "Reconnecting…";
+  if (!player.alive) return "Eliminated";
+  return player.role === "hunter" ? `Alive · ${player.hp} HP` : "Alive";
+}
+
+/**
+ * The standings, live by default: current role, status and ping. Given a `story`, it is the
+ * round-end version instead, which ranks and labels everyone by the role they started with,
+ * says how each prop's round ended, and leaves out ping, which says nothing about a round.
+ */
+function StandingsTable({
+  ids,
+  meta,
+  localId,
+  story,
+}: {
+  ids: string[];
+  meta: MetaMap;
+  localId: string;
+  story?: RoundStory;
+}) {
+  const roleOf = (id: string, player: PlayerMeta): Role => story?.startingRoles[id] ?? player.role;
+  const rowClass = story ? "scoreboard-row scoreboard-row-result" : "scoreboard-row";
   return (
     <>
-      <div className="scoreboard-row scoreboard-head">
+      <div className={`${rowClass} scoreboard-head`}>
         <span>Player</span>
-        <span>Role</span>
-        <span>Status</span>
+        <span>{story ? "Started as" : "Role"}</span>
+        <span>{story ? "Result" : "Status"}</span>
         <span>Kills</span>
         <span>Points</span>
-        <span>Ping</span>
+        {!story && <span>Ping</span>}
       </div>
-      {sortStandings(ids, meta).map(({ id, player }) => (
+      {sortStandings(ids, meta, roleOf).map(({ id, player, role }) => (
         <div
           key={id}
-          className={`scoreboard-row${id === localId ? " scoreboard-self" : ""}${
+          className={`${rowClass}${id === localId ? " scoreboard-self" : ""}${
             player.alive ? "" : " scoreboard-dead"
           }`}
         >
           <span>{player.name}</span>
-          <span className={`role-${player.role}`}>{ROLE_LABEL[player.role]}</span>
+          <span className={`role-${role}`}>{ROLE_LABEL[role]}</span>
           <span>
-            {!player.connected
-              ? "Reconnecting…"
-              : player.alive
-                ? player.role === "hunter"
-                  ? `Alive · ${player.hp} HP`
-                  : "Alive"
-                : "Eliminated"}
+            {story ? resultStatus(role, story.captures[id], player.alive) : liveStatus(player)}
           </span>
           <span>{player.role === "hunter" ? player.kills : "-"}</span>
           <span>{player.role === "prop" || player.score > 0 ? player.score : "-"}</span>
-          <span>{player.ping} ms</span>
+          {!story && <span>{player.ping} ms</span>}
         </div>
       ))}
     </>
@@ -524,6 +573,7 @@ function ResultScreen({
   ids,
   meta,
   localId,
+  story,
   onLeave,
 }: {
   winner: Winner;
@@ -531,17 +581,22 @@ function ResultScreen({
   ids: string[];
   meta: MetaMap;
   localId: string;
+  story: RoundStory;
   onLeave: () => void;
 }) {
   const mvp = topHunter(ids, meta);
-  const role = meta[localId]?.role ?? "prop";
-  const won =
-    (role === "hunter" && winner === "hunters") || (role === "prop" && winner === "props");
+  const local = meta[localId];
+  const startingRole = story.startingRoles[localId] ?? local?.role ?? "prop";
+  const won = wonRound(startingRole, winner);
   return (
     <div className="result">
       <div className="result-card panel">
+        <div className="result-winner">{WINNER_LABEL[winner]}</div>
         <div className={`result-title ${won ? "result-win" : "result-lose"}`}>
-          {WINNER_LABEL[winner]}
+          {won ? "You win" : "You lose"}
+        </div>
+        <div className="result-story">
+          {storyLine(startingRole, story.captures[localId], local?.kills ?? 0)}
         </div>
         {mvp && (
           <div className="result-mvp">
@@ -549,7 +604,7 @@ function ResultScreen({
           </div>
         )}
         <div className="result-standings">
-          <StandingsTable ids={ids} meta={meta} localId={localId} />
+          <StandingsTable ids={ids} meta={meta} localId={localId} story={story} />
         </div>
         <div className="result-next">
           New round
@@ -581,6 +636,96 @@ function formatClock(ms: number): string {
   const minutes = Math.floor(total / 60);
   const seconds = total % 60;
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+/**
+ * A value that shows for `durationMs` and then clears itself. Showing it again restarts
+ * the clock, so two moments in quick succession each get their full time on screen.
+ */
+function useTransient<T>(durationMs: number): [T | null, (value: T) => void] {
+  const [entry, setEntry] = useState<{ value: T } | null>(null);
+  useEffect(() => {
+    if (!entry) return;
+    const timer = setTimeout(() => setEntry(null), durationMs);
+    return () => clearTimeout(timer);
+  }, [entry, durationMs]);
+  const show = useCallback((value: T) => setEntry({ value }), []);
+  return [entry?.value ?? null, show];
+}
+
+function LiveClock({ endsAt }: { endsAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), COUNTDOWN_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+  return <span className="live-clock">{formatClock(endsAt - now)}</span>;
+}
+
+const ROLE_CARD_COPY: Record<Role, { title: string; goal: string; release: string }> = {
+  prop: {
+    title: "You're a prop",
+    goal: "Look like you belong here, then freeze.",
+    release: "Hunters get out in",
+  },
+  hunter: {
+    title: "You're a hunter",
+    goal: "Find the fakes. Missing a shot costs you HP.",
+    release: "You get out in",
+  },
+};
+
+/**
+ * The round's opening card: which side you are on and what that side is for. `inline`
+ * places it in the flow of the hunter's blindout, where it stands in for the blindout's
+ * own title and countdown instead of stacking over them.
+ */
+function RoleCard({
+  role,
+  endsAt,
+  inline = false,
+}: {
+  role: Role;
+  endsAt: number;
+  inline?: boolean;
+}) {
+  const copy = ROLE_CARD_COPY[role];
+  return (
+    <div
+      className={`role-card role-card-${role}${inline ? " role-card-inline" : ""}`}
+      role="status"
+    >
+      <div className="role-card-band">
+        <div className="role-card-title">{copy.title}</div>
+        <div className="role-card-goal">{copy.goal}</div>
+        <div className="role-card-release">
+          {copy.release} <LiveClock endsAt={endsAt} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface BannerCopy {
+  title: string;
+  hint: string;
+}
+
+const RELEASE_COPY: Record<Role, BannerCopy> = {
+  prop: { title: "Hunters released", hint: "Hold still. They can hear you move." },
+  hunter: { title: "Go", hint: "Find the props." },
+};
+
+const HUNT_NOW_COPY: BannerCopy = { title: "You hunt now", hint: "Find the rest of the props." };
+
+/** A big centre call for a turn in the round, tinted by the side it speaks to. */
+function PhaseBanner({ side, copy }: { side: Role; copy: BannerCopy }) {
+  return (
+    <div className={`phase-banner phase-banner-${side}`} role="status">
+      <div className="phase-banner-title">{copy.title}</div>
+      <div className="phase-banner-hint">{copy.hint}</div>
+    </div>
+  );
 }
 
 function RingTimer({ endsAt, total }: { endsAt: number; total: number }) {
@@ -664,6 +809,16 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const longTasksRef = useRef<LongTaskTally>({ count: 0, longestMs: 0 });
   const contextLossesRef = useRef(0);
   const prevPhaseRef = useRef<Phase>("lobby");
+  const [roleCard, showRoleCard] = useTransient<true>(ROLE_CARD_MS);
+  const [releaseBanner, showReleaseBanner] = useTransient<true>(PHASE_BANNER_MS);
+  const [huntNowBanner, showHuntNowBanner] = useTransient<true>(PHASE_BANNER_MS);
+  const [catchBanner, showCatchBanner] = useTransient<string>(CATCH_BANNER_MS);
+  const [hitMarker, showHitMarker] = useTransient<number>(HIT_MARKER_MS);
+  const [caught, setCaught] = useState<(CaughtCam & { byName: string }) | null>(null);
+  const catchRef: CatchMomentRef = useRef(null);
+  const [startingRoles, setStartingRoles] = useState<StartingRoles>({});
+  const [captures, setCaptures] = useState<Readonly<Record<string, CaptureRecord>>>({});
+  const huntStartRef = useRef(0);
 
   chatOpenRef.current = chatOpen;
 
@@ -924,12 +1079,27 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         const event = message as KillEvent;
         if (typeof event.victimName !== "string" || typeof event.reason !== "string") return;
         pushFeed(killText(event));
-        if (event.victimId === sessionId) {
-          if (event.reason === "converted") {
-            playRoundStart();
-          } else {
-            playDeath();
+        if (event.reason === "converted") {
+          const capture = { byName: event.byName, atMs: Date.now() - huntStartRef.current };
+          setCaptures((prev) => ({ ...prev, [event.victimId]: capture }));
+          const now = performance.now();
+          if (event.victimId === sessionId) {
+            setCaught({ byId: event.byId, byName: event.byName, at: now });
+          } else if (event.byId === sessionId) {
+            catchRef.current = { victimId: event.victimId, at: now };
+            showCatchBanner(event.victimName);
+            showHitMarker(fxSeq.current++);
           }
+          const victim = playersRef.current.get(event.victimId);
+          if (victim) {
+            const listener = listenerRef.current;
+            playCatch(
+              falloff(listener, victim.x, victim.z, CATCH_SOUND_MAX_DISTANCE),
+              stereoPan(listener, victim.x, victim.z),
+            );
+          }
+        } else if (event.victimId === sessionId) {
+          playDeath();
         } else if (event.byId !== sessionId) {
           playKill();
         }
@@ -949,7 +1119,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       playerMetaUnsubscribers.clear();
       playersRef.current.clear();
     };
-  }, [room, sessionId, pushFeed]);
+  }, [room, sessionId, pushFeed, showCatchBanner, showHitMarker]);
 
   const localScore = meta[sessionId]?.score ?? 0;
   useEffect(() => {
@@ -958,6 +1128,17 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     if (gained <= 0) return;
     pushFeed(gained >= TAUNT_DARING_POINTS ? `Daring taunt +${gained}` : `Taunt +${gained}`);
   }, [localScore, pushFeed]);
+
+  useEffect(() => {
+    if (!caught) return;
+    const timer = setTimeout(() => {
+      setCaught(null);
+      if (prevPhaseRef.current !== "hunting") return;
+      showHuntNowBanner(true);
+      playYouHuntNow();
+    }, CAUGHT_CAM_MS);
+    return () => clearTimeout(timer);
+  }, [caught, showHuntNowBanner]);
 
   useEffect(() => {
     if (!shotFx) return;
@@ -1005,13 +1186,27 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       playRoundStart();
       setTauntReadyAt(0);
       setSonarReadyAt(0);
+      setCaptures({});
+      showRoleCard(true);
+    } else if (phase === "hunting") {
+      showReleaseBanner(true);
     } else if (phase === "round_end") {
-      const role = meta[sessionId]?.role ?? "prop";
-      const won =
-        (role === "hunter" && winner === "hunters") || (role === "prop" && winner === "props");
-      playRoundEnd(won);
+      const role = startingRoles[sessionId] ?? meta[sessionId]?.role ?? "prop";
+      playRoundEnd(wonRound(role, winner));
     }
-  }, [phase, winner, meta, sessionId]);
+  }, [phase, winner, meta, sessionId, startingRoles, showRoleCard, showReleaseBanner]);
+
+  useEffect(() => {
+    if (phase === "hunting") huntStartRef.current = phaseEndsAt - ROUND_DURATION_MS;
+  }, [phase, phaseEndsAt]);
+
+  useEffect(() => {
+    const roles: Record<string, Role> = {};
+    for (const [id, player] of Object.entries(meta)) roles[id] = player.role;
+    setStartingRoles((prev) => nextStartingRoles(prev, phase, roles));
+  }, [phase, meta]);
+
+  const story = useMemo<RoundStory>(() => ({ startingRoles, captures }), [startingRoles, captures]);
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
@@ -1108,7 +1303,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const canTransform =
     localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
-  const showCrosshair = (canTransform || canShoot) && !inputBlocked;
+  const showCrosshair = (canTransform || canShoot) && !inputBlocked && !caught;
   const blinded = localRole === "hunter" && phase === "hiding";
 
   const closeChat = () => {
@@ -1233,6 +1428,8 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           inputBlocked={inputBlocked}
           onShoot={onShoot}
           shadows={tierSettings.shadows}
+          catchRef={catchRef}
+          caughtCam={caught}
         />
         <RenderGate skip={blinded} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
@@ -1328,15 +1525,44 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         </div>
       )}
 
+      {hitMarker !== null && (
+        <div key={hitMarker} className="hitmarker">
+          <i />
+          <i />
+          <i />
+          <i />
+        </div>
+      )}
+
+      {catchBanner !== null && (
+        <div className="catch-banner" role="status">
+          <span className="catch-banner-label">Caught</span>
+          <span className="catch-banner-name">{catchBanner}</span>
+        </div>
+      )}
+
+      {caught && phase === "hunting" && (
+        <div className="caught-card" role="status">
+          <div className="caught-title">Caught</div>
+          <div className="caught-by">by {caught.byName}</div>
+        </div>
+      )}
+
       {shotFx?.kind === "miss" && <div className="vignette" />}
 
       {blinded && (
         <div className="blindout">
-          <div className="blindout-title">The props are hiding</div>
-          <div className="blindout-timer">
-            The hunt begins
-            <Countdown endsAt={phaseEndsAt} />
-          </div>
+          {roleCard ? (
+            <RoleCard role={localRole} endsAt={phaseEndsAt} inline />
+          ) : (
+            <>
+              <div className="blindout-title">The props are hiding</div>
+              <div className="blindout-timer">
+                The hunt begins
+                <Countdown endsAt={phaseEndsAt} />
+              </div>
+            </>
+          )}
           <div className="weapon-picker">
             {WEAPON_IDS.map((id, index) => {
               const spec = WEAPONS[id];
@@ -1358,6 +1584,14 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         </div>
       )}
 
+      {roleCard && phase === "hiding" && !blinded && (
+        <RoleCard role={localRole} endsAt={phaseEndsAt} />
+      )}
+      {releaseBanner && phase === "hunting" && (
+        <PhaseBanner side={localRole} copy={RELEASE_COPY[localRole]} />
+      )}
+      {huntNowBanner && phase === "hunting" && <PhaseBanner side="hunter" copy={HUNT_NOW_COPY} />}
+
       {phase === "round_end" && winner !== "" && (
         <ResultScreen
           winner={winner}
@@ -1365,6 +1599,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           ids={ids}
           meta={meta}
           localId={sessionId}
+          story={story}
           onLeave={onLeaveMatch}
         />
       )}
@@ -1402,15 +1637,15 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         <div className="topbar hud-surface">
           <div className="topbar-phase">
             <span className="eyebrow">Round</span>
-            <span className="topbar-phase-name">{PHASE_LABEL[phase]}</span>
+            <span className="topbar-phase-name">{phaseLabel(phase, localRole)}</span>
           </div>
           {phaseEndsAt > 0 && <RingTimer endsAt={phaseEndsAt} total={PHASE_DURATION_MS[phase]} />}
           <div className="topbar-meta">
             <span className={`badge badge-${localRole}`}>{ROLE_LABEL[localRole]}</span>
             {(phase === "hiding" || phase === "hunting") && (
-              <span className="targets" title="Props still in play">
+              <span className="targets">
                 <span className="targets-dot" />
-                {aliveProps}
+                {propsLeftLabel(aliveProps)}
               </span>
             )}
           </div>
@@ -1426,7 +1661,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         </div>
       )}
 
-      {phase !== "lobby" && (
+      {phase !== "lobby" && !caught && (
         <div className="hud-bottom">
           {localRole === "hunter" && localAlive && (
             <div className={`vitals hud-surface${localHp <= HP_LOW_THRESHOLD ? " hp-low" : ""}`}>

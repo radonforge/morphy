@@ -443,9 +443,9 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           </div>
           <span
             className="menu-build"
-            title="Version and build of this client. A trailing + means the build is past that release."
+            title="Version of this client. A trailing + means the build is past that release."
           >
-            {__MORPHY_VERSION__} · {__MORPHY_BUILD__}
+            v{__MORPHY_VERSION__}
           </span>
           <a className="menu-legal" href={STUDIO_URL} target="_blank" rel="noreferrer">
             © {STUDIO_NAME}

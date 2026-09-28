@@ -55,6 +55,8 @@ import { StaticModels } from "./staticModels";
 import { snapToTexels, sunBasis } from "./sunShadow";
 import type {
   BreaksRef,
+  CatchMomentRef,
+  CaughtCam,
   DecoyBreakFx,
   DecoyView,
   LookRef,
@@ -69,6 +71,21 @@ import { useControls } from "./useControls";
 
 function wrapAngle(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
+}
+
+function sinceCatch(moment: CatchMomentRef): number {
+  const current = moment.current;
+  return current ? performance.now() - current.at : Number.POSITIVE_INFINITY;
+}
+
+/** Whether the frame is inside the local hunter's hitstop, optionally only for `victimId`. */
+function inHitstop(moment: CatchMomentRef, victimId?: string): boolean {
+  if (victimId !== undefined && moment.current?.victimId !== victimId) return false;
+  return sinceCatch(moment) < CATCH_HITSTOP_MS;
+}
+
+function easeOutCubic(progress: number): number {
+  return 1 - (1 - progress) ** 3;
 }
 
 function applyTauntPulse(group: THREE.Group, pulses: TauntPulseRef, id: string): void {
@@ -103,6 +120,7 @@ const NAMEPLATE_FONT_SIZE = 0.34;
 const NAMEPLATE_COLOR = "#eef4ff";
 const NAMEPLATE_OUTLINE_COLOR = "#11161f";
 const NAMEPLATE_OUTLINE_WIDTH = 0.03;
+const NAMEPLATE_MIN_DISTANCE = 4;
 
 const CAMERA_DISTANCE = 8;
 const CAMERA_TARGET_Y = 1.2;
@@ -187,6 +205,19 @@ const WEAPON_SWAY_MAX = 0.06;
 const WEAPON_SWAY_DAMP = 1e-5;
 const WEAPON_KICK_Z = 0.11;
 const WEAPON_KICK_ROT = 0.12;
+const CATCH_HITSTOP_MS = 90;
+const CATCH_SHAKE_MS = 320;
+const CATCH_SHAKE_RAD = 0.035;
+const CATCH_SHAKE_FREQ_X = 57;
+const CATCH_SHAKE_FREQ_Y = 43;
+/** How long a caught prop's camera pulls back to show the hunter who got it. */
+export const CAUGHT_CAM_MS = 1_200;
+const CAUGHT_CAM_START_DISTANCE = 1.2;
+const CAUGHT_CAM_END_DISTANCE = 4.8;
+const CAUGHT_CAM_START_RISE = 0.3;
+const CAUGHT_CAM_END_RISE = 1.6;
+const CAUGHT_CAM_LOOK_AHEAD_RATIO = 0.6;
+const DIRECTION_EPSILON = 1e-3;
 
 /** Per-theme sky/light/ground preset, keyed by `MapInfo.theme`; falls back to {@link DEFAULT_THEME}. */
 interface ThemePreset {
@@ -411,6 +442,8 @@ interface SceneProps {
   inputBlocked: boolean;
   onShoot: () => void;
   shadows: ShadowSettings | null;
+  catchRef: CatchMomentRef;
+  caughtCam: CaughtCam | null;
 }
 
 export const Scene = memo(function Scene({
@@ -431,6 +464,8 @@ export const Scene = memo(function Scene({
   inputBlocked,
   onShoot,
   shadows,
+  catchRef,
+  caughtCam,
 }: SceneProps) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
@@ -468,6 +503,14 @@ export const Scene = memo(function Scene({
       const propType = meta[id]?.propType ?? "";
       const before = seen.get(id);
       seen.set(id, propType);
+      if (before && !propType && meta[id]?.role === "hunter") {
+        const pose =
+          id === localId
+            ? localGroundRef.current
+            : (renderPosesRef.current.get(id) ?? playersRef.current.get(id));
+        if (pose) breaksRef.current.push({ x: pose.x, y: pose.y, z: pose.z, propType: before });
+        continue;
+      }
       if (before === undefined || before === propType || !propType) continue;
       const def = catalog.get(propType);
       if (!def) continue;
@@ -497,13 +540,14 @@ export const Scene = memo(function Scene({
         renderPosesRef.current.delete(id);
       }
     }
-  }, [meta, ids, localId, catalog, playersRef]);
+  }, [meta, ids, localId, catalog, playersRef, breaksRef]);
   const canTransform =
     localRole === "prop" &&
     localAlive &&
     !inputBlocked &&
     (phase === "hiding" || phase === "hunting");
-  const canShoot = localRole === "hunter" && localAlive && !inputBlocked && phase === "hunting";
+  const canShoot =
+    localRole === "hunter" && localAlive && !inputBlocked && phase === "hunting" && !caughtCam;
 
   return (
     <>
@@ -544,9 +588,10 @@ export const Scene = memo(function Scene({
       <MorphEffects morphsRef={morphsRef} />
       <DecoyBreakEffects breaksRef={breaksRef} catalog={catalog} />
       <HunterViewmodel
-        enabled={localRole === "hunter" && localAlive}
+        enabled={localRole === "hunter" && localAlive && !caughtCam}
         weapon={weapon}
         motionRef={motionRef}
+        catchRef={catchRef}
       />
       <LocalPlayer
         room={room}
@@ -567,6 +612,8 @@ export const Scene = memo(function Scene({
         avatar={localMeta?.avatar ?? ""}
         playerPos={localGroundRef}
         motionRef={motionRef}
+        catchRef={catchRef}
+        caughtCam={caughtCam}
       />
       {ids
         .filter((id) => id !== localId && (meta[id]?.alive ?? true))
@@ -582,6 +629,7 @@ export const Scene = memo(function Scene({
             tauntPulseRef={tauntPulseRef}
             localPos={localGroundRef}
             renderPoses={renderPosesRef}
+            catchRef={catchRef}
           />
         ))}
     </>
@@ -1427,10 +1475,12 @@ function HunterViewmodel({
   enabled,
   weapon,
   motionRef,
+  catchRef,
 }: {
   enabled: boolean;
   weapon: WeaponId;
   motionRef: LocalMotionRef;
+  catchRef: CatchMomentRef;
 }) {
   const camera = useThree((state) => state.camera);
   const groupRef = useRef<THREE.Group>(null);
@@ -1439,7 +1489,7 @@ function HunterViewmodel({
 
   useGuardedFrame((_, delta) => {
     const group = groupRef.current;
-    if (!group) return;
+    if (!group || inHitstop(catchRef)) return;
     const motion = motionRef.current;
     if (motion.grounded) bobPhase.current += motion.speed * delta * WEAPON_BOB_FREQ;
     const bobAmount = Math.min(motion.speed / (MOVE_SPEED * RUN_MULTIPLIER_HUNTER), 1);
@@ -1698,6 +1748,8 @@ interface LocalPlayerProps {
   avatar: string;
   playerPos: PlayerPosRef;
   motionRef: LocalMotionRef;
+  catchRef: CatchMomentRef;
+  caughtCam: CaughtCam | null;
 }
 
 function LocalPlayer({
@@ -1719,6 +1771,8 @@ function LocalPlayer({
   avatar,
   playerPos,
   motionRef,
+  catchRef,
+  caughtCam,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!inputBlocked);
@@ -1757,7 +1811,19 @@ function LocalPlayer({
   const lastTurnDir = useRef(0);
   const prevPropType = useRef("");
 
-  const frozen = !alive || (role === "hunter" && phase === "hiding");
+  const frozen = !alive || (role === "hunter" && phase === "hiding") || caughtCam !== null;
+
+  useEffect(() => {
+    if (!caughtCam) return;
+    const hunter = playersRef.current.get(caughtCam.byId);
+    if (!hunter) return;
+    const dx = hunter.x - body.x;
+    const dz = hunter.z - body.z;
+    if (Math.hypot(dx, dz) < DIRECTION_EPSILON) return;
+    body.heading = Math.atan2(dx, dz);
+    lookRef.current.yaw = Math.atan2(-dx, -dz);
+    lookRef.current.pitch = 0;
+  }, [caughtCam, playersRef, body, lookRef]);
   const runMultiplier = role === "hunter" ? RUN_MULTIPLIER_HUNTER : RUN_MULTIPLIER_PROP;
   const world = useMemo(
     () => ({ colliders, bounds: map.bounds, runMultiplier }),
@@ -1873,7 +1939,7 @@ function LocalPlayer({
     }
 
     const motion = motionRef.current;
-    motion.recoil *= RECOIL_DAMP ** delta;
+    if (!inHitstop(catchRef)) motion.recoil *= RECOIL_DAMP ** delta;
     motion.landing *= LAND_DAMP ** delta;
     motion.speed = horizSpeed;
     motion.sprinting = sprinting;
@@ -1888,7 +1954,15 @@ function LocalPlayer({
       perspective.updateProjectionMatrix();
     }
 
-    if (role === "hunter") {
+    if (caughtCam) {
+      placeCaughtCamera(
+        camera,
+        body,
+        playersRef.current.get(caughtCam.byId),
+        (performance.now() - caughtCam.at) / CAUGHT_CAM_MS,
+        walls,
+      );
+    } else if (role === "hunter") {
       const aimPitch = pitch - motion.recoil * RECOIL_MAX_PITCH;
       const cosPitch = Math.cos(aimPitch);
       const eyeY = body.y + PLAYER_EYE_HEIGHT - motion.landing * LAND_DIP_Y;
@@ -1898,6 +1972,13 @@ function LocalPlayer({
         eyeY - Math.sin(aimPitch),
         body.z - Math.cos(yaw) * cosPitch,
       );
+      const shakeAge = sinceCatch(catchRef);
+      if (shakeAge < CATCH_SHAKE_MS) {
+        const amplitude = CATCH_SHAKE_RAD * (1 - shakeAge / CATCH_SHAKE_MS) ** 2;
+        const seconds = shakeAge / 1000;
+        camera.rotateX(amplitude * Math.sin(seconds * CATCH_SHAKE_FREQ_X));
+        camera.rotateY(amplitude * Math.cos(seconds * CATCH_SHAKE_FREQ_Y));
+      }
     } else {
       const localPitch = THREE.MathUtils.clamp(pitch, TP_PITCH_MIN, TP_PITCH_MAX);
       const cosPitch = Math.cos(localPitch);
@@ -1961,8 +2042,45 @@ function LocalPlayer({
       {alive && role !== "hunter" && (
         <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
       )}
+      {caughtCam && role === "hunter" && <AnimalAvatar id={avatar} role={role} />}
     </group>
   );
+}
+
+/**
+ * The caught prop's camera: it starts at the prop and eases back and up, away from the
+ * hunter who got it and looking past the prop toward them, so the shatter sits in the lower
+ * frame and the catcher above it. It pulls in short of a wall rather than through one, and
+ * aims nearer the prop when it does, so the prop stays in frame.
+ */
+function placeCaughtCamera(
+  camera: THREE.Camera,
+  body: MovementBody,
+  hunter: RemotePlayerView | undefined,
+  progress: number,
+  walls: Wall[],
+): void {
+  const hx = hunter?.x ?? body.x - Math.sin(body.heading);
+  const hz = hunter?.z ?? body.z - Math.cos(body.heading);
+  let dirX = body.x - hx;
+  let dirZ = body.z - hz;
+  const length = Math.hypot(dirX, dirZ);
+  if (length < DIRECTION_EPSILON) {
+    dirX = Math.sin(body.heading);
+    dirZ = Math.cos(body.heading);
+  } else {
+    dirX /= length;
+    dirZ /= length;
+  }
+  const ease = easeOutCubic(THREE.MathUtils.clamp(progress, 0, 1));
+  let distance = THREE.MathUtils.lerp(CAUGHT_CAM_START_DISTANCE, CAUGHT_CAM_END_DISTANCE, ease);
+  const wall = nearestWallDistanceXZ(body.x, body.z, dirX, dirZ, distance, walls);
+  if (wall < distance) distance = Math.max(wall - CAMERA_WALL_MARGIN, CAMERA_MIN_DISTANCE);
+  const pivotY = body.y + CAMERA_TARGET_Y;
+  const rise = THREE.MathUtils.lerp(CAUGHT_CAM_START_RISE, CAUGHT_CAM_END_RISE, ease);
+  camera.position.set(body.x + dirX * distance, pivotY + rise, body.z + dirZ * distance);
+  const ahead = Math.min(length, distance * CAUGHT_CAM_LOOK_AHEAD_RATIO);
+  camera.lookAt(body.x - dirX * ahead, pivotY, body.z - dirZ * ahead);
 }
 
 function AllyNameplate({ name, y }: { name: string; y: number }) {
@@ -1992,6 +2110,7 @@ interface RemotePlayerProps {
   tauntPulseRef: TauntPulseRef;
   localPos: PlayerPosRef;
   renderPoses: RenderPosesRef;
+  catchRef: CatchMomentRef;
 }
 
 function RemotePlayer({
@@ -2004,8 +2123,10 @@ function RemotePlayer({
   tauntPulseRef,
   localPos,
   renderPoses,
+  catchRef,
 }: RemotePlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
+  const nameplateRef = useRef<THREE.Group>(null);
   const stepAccum = useRef(0);
   const lastStepPos = useRef<{ x: number; z: number } | null>(null);
 
@@ -2021,7 +2142,7 @@ function RemotePlayer({
 
   useGuardedFrame((_, delta) => {
     const group = groupRef.current;
-    if (!group || !view) {
+    if (!group || !view || inHitstop(catchRef, view.id)) {
       return;
     }
     const t = 1 - REMOTE_DAMP ** delta;
@@ -2030,6 +2151,11 @@ function RemotePlayer({
     group.position.z += (view.z - group.position.z) * t;
     group.rotation.y = role === "prop" && propType ? view.propRot : view.rot;
     applyTauntPulse(group, tauntPulseRef, view.id);
+    if (nameplateRef.current) {
+      nameplateRef.current.visible =
+        Math.hypot(group.position.x - localPos.current.x, group.position.z - localPos.current.z) >
+        NAMEPLATE_MIN_DISTANCE;
+    }
 
     const pose = renderPoses.current.get(view.id);
     if (pose) {
@@ -2074,7 +2200,11 @@ function RemotePlayer({
   return (
     <group ref={groupRef}>
       <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
-      {showName ? <AllyNameplate name={view.name} y={nameplateY} /> : null}
+      {showName ? (
+        <group ref={nameplateRef}>
+          <AllyNameplate name={view.name} y={nameplateY} />
+        </group>
+      ) : null}
     </group>
   );
 }
