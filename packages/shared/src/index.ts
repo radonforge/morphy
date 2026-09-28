@@ -8,4 +8,5 @@ export * from "./map";
 export * from "./maps";
 export * from "./party";
 export * from "./protocol";
+export * from "./random";
 export * from "./weapons";
