@@ -52,6 +52,7 @@ export interface LevelDocument {
 }
 
 const LEVEL_DOCUMENT_VERSION = 1;
+const MAX_GRID_SIDE = 128;
 
 /** A level document failed validation; names the document, the offending entity and a fix. */
 export class LevelValidationError extends Error {
@@ -91,9 +92,10 @@ function doorKey(door: LevelDoor): string {
 
 /**
  * Parse and validate a level document read from a file or sent by a tool.
- * Checks shape, that rects stay on the grid and rooms never overlap, that ids
- * are unique, that every object type is in `catalog`, that every door sits on
- * an edge between two different regions (open ground counts as one) and that
+ * Checks shape, that rects stay on the grid and different rooms never overlap
+ * (rects of one room may), that ids are unique, that every object type is in
+ * `catalog`, that every door sits on an inner edge between two different
+ * regions (open ground counts as one) and that
  * objects and spawns lie inside the map. Throws {@link LevelValidationError}.
  */
 export function parseLevelDocument(input: unknown, options: LevelParseOptions): LevelDocument {
@@ -121,16 +123,24 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
     !Number.isInteger(grid.cols) ||
     !Number.isInteger(grid.rows) ||
     (grid.cols as number) < 1 ||
-    (grid.rows as number) < 1
+    (grid.rows as number) < 1 ||
+    (grid.cols as number) > MAX_GRID_SIDE ||
+    (grid.rows as number) > MAX_GRID_SIDE
   ) {
-    return fail("grid", "cols and rows must be positive integers", 'write "grid": { cols, rows }');
+    return fail(
+      "grid",
+      `cols and rows must be integers from 1 to ${MAX_GRID_SIDE}`,
+      'write "grid": { cols, rows }',
+    );
   }
   const cols = grid.cols as number;
   const rows = grid.rows as number;
   const halfW = (cols * TILE) / 2;
   const halfD = (rows * TILE) / 2;
 
-  if (!Array.isArray(input.rooms)) return fail("rooms", "must be an array", 'write "rooms": []');
+  if (!Array.isArray(input.rooms) || input.rooms.length === 0) {
+    return fail("rooms", "must be a non-empty array", "add at least one room");
+  }
   const owner: (string | null)[][] = Array.from({ length: cols }, () =>
     new Array<string | null>(rows).fill(null),
   );
@@ -197,11 +207,11 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
     const door: LevelDoor = { axis: raw.axis, line: raw.line as number, cell: raw.cell as number };
     const entity = `door ${doorKey(door)}`;
     const [lines, cells] = door.axis === "v" ? [cols, rows] : [rows, cols];
-    if (door.line < 0 || door.line > lines || door.cell < 0 || door.cell >= cells) {
+    if (door.line <= 0 || door.line >= lines || door.cell < 0 || door.cell >= cells) {
       return fail(
         entity,
-        "lies off the grid",
-        `keep 0 <= line <= ${lines} and 0 <= cell < ${cells}`,
+        "lies on the grid border or off the grid, so it would open the map's outer wall",
+        `keep 0 < line < ${lines} and 0 <= cell < ${cells}`,
       );
     }
     if (doorKeys.has(doorKey(door))) return fail(entity, "is listed twice", "remove the duplicate");

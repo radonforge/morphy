@@ -50,6 +50,8 @@ const INVALID = [
   ["an unknown map id", edit((d) => Object.assign(d, { id: "mars" })), "document"],
   ["an unsupported version", edit((d) => Object.assign(d, { version: 2 })), "document"],
   ["a non-integer grid", edit((d) => Object.assign(d, { grid: { cols: 2.5, rows: 3 } })), "grid"],
+  ["an oversized grid", edit((d) => Object.assign(d, { grid: { cols: 1e9, rows: 3 } })), "grid"],
+  ["no rooms", edit((d) => Object.assign(d, { rooms: [] })), "rooms"],
   ["a room without rects", edit((d) => Object.assign(d.rooms[0], { rects: [] })), 'room "west"'],
   [
     "a rect off the grid",
@@ -66,6 +68,11 @@ const INVALID = [
     "a door inside one room",
     edit((d) => d.doors.push({ axis: "v", line: 1, cell: 0 })),
     "door v:1:0",
+  ],
+  [
+    "a door in the outer wall",
+    edit((d) => d.doors.push({ axis: "v", line: 0, cell: 0 })),
+    "door v:0:0",
   ],
   ["a door off the grid", edit((d) => d.doors.push({ axis: "h", line: 4, cell: 0 })), "door h:4:0"],
   ["a duplicate door", edit((d) => d.doors.push({ axis: "v", line: 2, cell: 1 })), "door v:2:1"],

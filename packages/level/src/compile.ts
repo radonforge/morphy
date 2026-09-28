@@ -11,7 +11,7 @@ import {
 } from "./floorplan";
 
 export interface CompileOptions {
-  catalog: PropDefinition[];
+  catalog: readonly PropDefinition[];
   seed: number;
 }
 
@@ -61,6 +61,6 @@ export function compileLevel(doc: LevelDocument, { catalog, seed }: CompileOptio
       position: { x: object.x, y: 0, z: object.z },
       rotation: object.yaw,
     })),
-    propCatalog: catalog,
+    propCatalog: [...catalog],
   };
 }
