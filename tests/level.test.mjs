@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   compileLevel,
@@ -47,7 +48,7 @@ const edit = (change) => (doc) => {
 
 const INVALID = [
   ["a non-object root", () => 42, "document"],
-  ["an unknown map id", edit((d) => Object.assign(d, { id: "mars" })), "document"],
+  ["an unknown map id", edit((d) => Object.assign(d, { id: "no-such-map" })), "document"],
   ["an unsupported version", edit((d) => Object.assign(d, { version: 2 })), "document"],
   ["a non-integer grid", edit((d) => Object.assign(d, { grid: { cols: 2.5, rows: 3 } })), "grid"],
   ["an oversized grid", edit((d) => Object.assign(d, { grid: { cols: 1e9, rows: 3 } })), "grid"],
@@ -108,7 +109,7 @@ for (const [label, build, entity] of INVALID) {
         assert.ok(error instanceof LevelValidationError, `${label}: ${error}`);
         assert.equal(error.entityId, entity);
         assert.ok(error.hint.length > 0, `${label}: no hint`);
-        assert.match(error.message, /^invalid level "(station|mars|\?)", .+\. Fix: .+/);
+        assert.match(error.message, /^invalid level "(station|no-such-map|\?)", .+\. Fix: .+/);
         return true;
       },
     );
@@ -120,6 +121,26 @@ test("parse rejects a document that is not the map the caller asked for", () => 
     () => parseLevelDocument(fixture(), { ...OPTIONS, id: "urban" }),
     (error) => error instanceof LevelValidationError && error.entityId === "document",
   );
+});
+
+test("a door between a room and open ground is valid and compiles to a gate", () => {
+  const doc = fixture();
+  doc.rooms = doc.rooms.filter((room) => room.id !== "hall");
+  doc.spawns.hunters = [{ x: -6, z: 0 }];
+  const parsed = parseLevelDocument(doc, OPTIONS);
+  const map = compileLevel(parsed, { catalog: SPACE_CATALOG, seed: 0 });
+  assert.equal(map.tiles.filter((tile) => tile.model === GATE_MODEL).length, doc.doors.length);
+});
+
+test("the committed station document parses as it stands", async () => {
+  const raw = JSON.parse(
+    await readFile(
+      new URL("../packages/server/src/maps/station.level.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const doc = parseLevelDocument(raw, { catalog: SPACE_CATALOG, id: "station" });
+  assert.deepEqual(doc, raw);
 });
 
 test("a compiled level is a valid map", () => {
