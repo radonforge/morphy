@@ -99,9 +99,18 @@ const NO_OVERLAYS: OverlayToggles = { unreachable: false, sightlines: false, uni
 const ZOOM_SENSITIVITY = 0.0015;
 const CLICK_SLOP_PX = 4;
 const NOTICE_MS = 3200;
+const WARNING_NOTICE_MS = 9000;
 const RECENT_STEPS = 6;
 const GHOST_RADIUS = 0.5;
 const NO_HIGHLIGHTS: ReadonlySet<string> = new Set();
+
+type NoticeTone = "info" | "warning";
+
+/** The transient line over the plan: an op's refusal, a save, or a warning that stays up longer. */
+interface Notice {
+  message: string;
+  tone: NoticeTone;
+}
 
 type Gesture =
   | { kind: "pan"; x: number; y: number }
@@ -247,7 +256,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
   const [tool, setTool] = useState<Tool>({ kind: "select" });
   const [view, setView] = useState<EditorView>("plan");
   const [preview, setPreview] = useState<Preview>(EMPTY_PREVIEW);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [diskError, setDiskError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [focus, setFocus] = useState<FocusMark | null>(null);
@@ -326,10 +335,13 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
     [history.present],
   );
 
-  const notify = useCallback((message: string) => {
+  const notify = useCallback((message: string, tone: NoticeTone = "info") => {
     window.clearTimeout(noticeTimer.current);
-    setNotice(message);
-    noticeTimer.current = window.setTimeout(() => setNotice(null), NOTICE_MS);
+    setNotice({ message, tone });
+    noticeTimer.current = window.setTimeout(
+      () => setNotice(null),
+      tone === "warning" ? WARNING_NOTICE_MS : NOTICE_MS,
+    );
   }, []);
 
   const commitLocal = useCallback((next: LevelDocument, label: string) => {
@@ -390,7 +402,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
     if (latest.current.dirty && !(await save())) return;
     if (reloadPending.current) {
       setSaving(true);
-      setNotice("Waiting for the game server to load the saved map");
+      setNotice({ message: "Waiting for the game server to load the saved map", tone: "info" });
       try {
         await waitForGameServerReload(SERVER_URL);
       } catch (error) {
@@ -426,8 +438,16 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
           const { keys, removed } = changedEntities(current.present.doc, external);
           return commit(current, external, externalLabel(keys.length, removed), "external", keys);
         });
+        const superseded = latest.current.dirty;
         setSavedDoc(external);
-        notify("The document changed on disk: applied as an external step");
+        if (superseded) {
+          notify(
+            "The file changed on disk and replaced your unsaved edits. Press Undo to get them back.",
+            "warning",
+          );
+        } else {
+          notify("The document changed on disk: applied as an external step");
+        }
       }),
     [id, notify, setDraft],
   );
@@ -865,7 +885,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
         );
         if (isRefusal(result)) {
           gesture.blocked = result.refused;
-          setNotice(result.refused);
+          setNotice({ message: result.refused, tone: "info" });
           return;
         }
         gesture.blocked = null;
@@ -1134,8 +1154,8 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
         </ul>
       </div>
 
-      <div className="ed-hint">
-        {notice ??
+      <div className={notice?.tone === "warning" ? "ed-hint is-warning" : "ed-hint"} role="status">
+        {notice?.message ??
           "Drag props in from the palette. Q / E turn, Alt for free placement and rotation. Right-drag pans, wheel zooms."}
       </div>
     </div>

@@ -424,3 +424,9 @@
   text-align: center;
   pointer-events: none;
 }
+
+.ed-hint.is-warning {
+  border-color: var(--amber);
+  color: var(--amber);
+  font-weight: 600;
+}
