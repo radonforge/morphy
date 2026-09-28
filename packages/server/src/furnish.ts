@@ -1,3 +1,4 @@
+import type { Doorway } from "@morphy/level";
 import { computePropBounds, type PropDefinition, type PropInstance } from "@morphy/shared";
 
 /** Interior rectangle of a room in world space (boundaries lie on wall lines). */
@@ -6,11 +7,6 @@ export interface RoomRect {
   x1: number;
   z0: number;
   z1: number;
-}
-
-export interface Doorway {
-  x: number;
-  z: number;
 }
 
 type Rng = () => number;

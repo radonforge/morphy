@@ -1,8 +1,6 @@
-import type { BoxCollider, MapDefinition, PropInstance, TileInstance, Vec3 } from "@morphy/shared";
-import { ARCHETYPE, type Doorway, furnishRoom, type RoomRect } from "../furnish";
-import { SPACE_CATALOG } from "../spaceCatalog";
 import {
   type Cell,
+  type Doorway,
   emitFloorplan,
   FLOOR_THICKNESS,
   type FloorplanDoor,
@@ -12,7 +10,10 @@ import {
   makeRng,
   TILE,
   WALL_HEIGHT,
-} from "./lib";
+} from "@morphy/level";
+import type { BoxCollider, MapDefinition, PropInstance, TileInstance, Vec3 } from "@morphy/shared";
+import { ARCHETYPE, furnishRoom, type RoomRect } from "../furnish";
+import { SPACE_CATALOG } from "../spaceCatalog";
 
 const GX = 22;
 const GZ = 18;

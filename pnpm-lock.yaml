@@ -80,6 +80,16 @@ importers:
         specifier: ^8.1.0
         version: 8.1.0(@types/node@24.13.2)(esbuild@0.28.1)(tsx@4.22.4)
 
+  packages/level:
+    dependencies:
+      '@morphy/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   packages/server:
     dependencies:
       '@colyseus/better-call':
@@ -97,6 +107,9 @@ importers:
       '@morphy/bot':
         specifier: workspace:*
         version: link:../bot
+      '@morphy/level':
+        specifier: workspace:*
+        version: link:../level
       '@morphy/shared':
         specifier: workspace:*
         version: link:../shared

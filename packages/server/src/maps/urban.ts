@@ -1,3 +1,4 @@
+import { makeRng } from "@morphy/level";
 import {
   type BoxCollider,
   computePropBounds,
@@ -8,7 +9,7 @@ import {
   type Vec3,
 } from "@morphy/shared";
 import { URBAN_CATALOG } from "../urbanCatalog";
-import { makeRng, pick, randRange } from "./lib";
+import { pick, randRange } from "./lib";
 
 const CELL = 12;
 const G = 9;
