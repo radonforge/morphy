@@ -24,32 +24,42 @@ export interface ShadowSettings {
   refreshHz: number;
 }
 
+/** A theme's bloom over bright pixels, see `UnrealBloomPass` for the three parameters. */
+export interface BloomSettings {
+  strength: number;
+  radius: number;
+  threshold: number;
+}
+
 export interface TierSettings {
   dpr: [number, number];
   antialias: boolean;
   shadows: ShadowSettings | null;
   glass: boolean;
+  bloom: boolean;
 }
 
 /**
  * What each tier turns on. Low drops everything a weak integrated GPU pays for
- * per pixel or per frame (supersampling, MSAA, the shadow pass, backdrop blur on
- * the HUD); Medium keeps the look at a quarter of the shadow texels and half the
+ * per pixel or per frame (supersampling, MSAA, the shadow pass, bloom, backdrop blur
+ * on the HUD); Medium keeps the look at a quarter of the shadow texels and half the
  * refresh; High is the full look with a wider, sharper shadow area.
  */
 export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
-  low: { dpr: [1, 1], antialias: false, shadows: null, glass: false },
+  low: { dpr: [1, 1], antialias: false, shadows: null, glass: false, bloom: false },
   medium: {
     dpr: [1, 1],
     antialias: true,
     shadows: { mapSize: 1024, radius: 25, refreshHz: 15 },
     glass: true,
+    bloom: true,
   },
   high: {
     dpr: [1, 1.25],
     antialias: true,
     shadows: { mapSize: 2048, radius: 40, refreshHz: 30 },
     glass: true,
+    bloom: true,
   },
 };
 

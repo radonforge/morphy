@@ -62,6 +62,7 @@ import {
   preloadSamples,
   toggleMuted,
 } from "./audio";
+import { useBloomComposer } from "./bloom";
 import { ControlsBar, ControlsDialog } from "./Controls";
 import { CopyDiagnostics } from "./CopyDiagnostics";
 import { deviceHints } from "./deviceProbe";
@@ -75,6 +76,7 @@ import {
   recordFrame,
 } from "./diagnostics";
 import {
+  type BloomSettings,
   type GraphicsTier,
   MAX_RENDER_FPS,
   nextRoundTier,
@@ -96,7 +98,7 @@ import {
   storyLine,
   wonRound,
 } from "./roundStory";
-import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene } from "./Scene";
+import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene, themeBloom } from "./Scene";
 import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
 import type {
   BreaksRef,
@@ -427,15 +429,25 @@ function PerfProbe({
  * carry on unchanged underneath. It also caps drawing at {@link MAX_RENDER_FPS},
  * keeping the phase of the cap so a 144 Hz display lands near 60 rather than 48.
  */
-function RenderGate({ skip }: { skip: boolean }) {
+function RenderGate({
+  skip,
+  bloom,
+  antialias,
+}: {
+  skip: boolean;
+  bloom: BloomSettings | null;
+  antialias: boolean;
+}) {
   const lastRender = useRef(Number.NEGATIVE_INFINITY);
+  const composer = useBloomComposer(bloom, antialias);
   useGuardedFrame(({ gl, scene, camera, clock }) => {
     if (skip) return;
     const now = clock.elapsedTime;
     const since = now - lastRender.current;
     if (since < RENDER_INTERVAL_S - RENDER_INTERVAL_SLACK_S) return;
     lastRender.current = Number.isFinite(since) ? now - (since % RENDER_INTERVAL_S) : now;
-    gl.render(scene, camera);
+    if (composer) composer.render(scene, camera);
+    else gl.render(scene, camera);
   }, RENDER_GATE_PRIORITY);
   return null;
 }
@@ -1431,7 +1443,11 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           catchRef={catchRef}
           caughtCam={caught}
         />
-        <RenderGate skip={blinded} />
+        <RenderGate
+          skip={blinded}
+          bloom={tierSettings.bloom ? themeBloom(map.id) : null}
+          antialias={tierSettings.antialias}
+        />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
         <PropFootsteps playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
         <PerfProbe

@@ -26,13 +26,14 @@ import {
   WEAPONS,
   type WeaponId,
 } from "@morphy/shared";
-import { Billboard, Sky, Text } from "@react-three/drei";
+import { Billboard, Sky, Stars, Text } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
-import type { ShadowSettings } from "./graphicsTier";
+import { pickDeckLights } from "./deckLights";
+import type { BloomSettings, ShadowSettings } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
 import { fitModel, MODEL_MIN_SIZE } from "./modelFit";
 import { enableShadows } from "./modelShading";
@@ -176,6 +177,10 @@ const TP_PITCH_MIN = -0.15;
 const TP_PITCH_MAX = 1.2;
 export const DEFAULT_PITCH = 0.5;
 const SUN_POSITION: [number, number, number] = [14, 26, 10];
+const STARS_RADIUS = 120;
+const STARS_DEPTH = 40;
+const STARS_COUNT = 2400;
+const STARS_FACTOR = 4;
 const SHADOW_MARGIN = 4;
 const SHADOW_LEAD = 10;
 const SHADOW_LIGHT_DISTANCE = 60;
@@ -219,6 +224,23 @@ const CAUGHT_CAM_END_RISE = 1.6;
 const CAUGHT_CAM_LOOK_AHEAD_RATIO = 0.6;
 const DIRECTION_EPSILON = 1e-3;
 
+interface FogPreset {
+  color: string;
+  near: number;
+  far: number;
+}
+
+/** The few point lights a night map hangs over its deck, see {@link pickDeckLights}. */
+interface DeckLightPreset {
+  roomCount: number;
+  roomColor: string;
+  corridorColor: string;
+  roomIntensity: number;
+  corridorIntensity: number;
+  distance: number;
+  height: number;
+}
+
 /** Per-theme sky/light/ground preset, keyed by `MapInfo.theme`; falls back to {@link DEFAULT_THEME}. */
 interface ThemePreset {
   ground: string;
@@ -228,9 +250,13 @@ interface ThemePreset {
   hemiIntensity: number;
   ambient: number;
   dir: number;
-  sky: boolean;
+  dirColor: string;
+  sky: "day" | "stars";
   turbidity: number;
   rayleigh: number;
+  fog: FogPreset | null;
+  deckLights: DeckLightPreset | null;
+  bloom: BloomSettings | null;
 }
 
 const DEFAULT_THEME: ThemePreset = {
@@ -241,9 +267,13 @@ const DEFAULT_THEME: ThemePreset = {
   hemiIntensity: 1.0,
   ambient: 0.7,
   dir: 1.4,
-  sky: true,
+  dirColor: "#ffffff",
+  sky: "day",
   turbidity: 6,
   rayleigh: 1.2,
+  fog: null,
+  deckLights: null,
+  bloom: null,
 };
 
 const THEMES: Record<string, ThemePreset> = {
@@ -252,12 +282,24 @@ const THEMES: Record<string, ThemePreset> = {
     background: MAP_THEME_BASE.station.background,
     hemiSky: MAP_THEME_BASE.station.hemiSky,
     hemiGround: MAP_THEME_BASE.station.hemiGround,
-    hemiIntensity: 1.05,
-    ambient: 0.85,
-    dir: MAP_THEME_BASE.station.directional,
-    sky: true,
+    hemiIntensity: 0.3,
+    ambient: 0.18,
+    dir: 0.22,
+    dirColor: "#8fa6e0",
+    sky: "stars",
     turbidity: 9,
     rayleigh: 0.5,
+    fog: { color: MAP_THEME_BASE.station.background, near: 16, far: 62 },
+    deckLights: {
+      roomCount: 14,
+      roomColor: "#ffc27a",
+      corridorColor: "#8ad8ff",
+      roomIntensity: 32,
+      corridorIntensity: 16,
+      distance: 20,
+      height: 3.6,
+    },
+    bloom: { strength: 0.6, radius: 0.45, threshold: 0.85 },
   },
   urban: {
     ground: MAP_THEME_BASE.urban.ground,
@@ -267,11 +309,20 @@ const THEMES: Record<string, ThemePreset> = {
     hemiIntensity: 1.0,
     ambient: 0.8,
     dir: MAP_THEME_BASE.urban.directional,
-    sky: true,
+    dirColor: "#ffffff",
+    sky: "day",
     turbidity: 4,
     rayleigh: 1.4,
+    fog: null,
+    deckLights: null,
+    bloom: null,
   },
 };
+
+/** The bloom a map's theme asks for, or null when it draws without post-processing. */
+export function themeBloom(mapId: string): BloomSettings | null {
+  return themeFor(mapId).bloom;
+}
 
 function themeFor(mapId: string): ThemePreset {
   const theme = MAP_CATALOG.find((m) => m.id === mapId)?.theme;
@@ -552,11 +603,22 @@ export const Scene = memo(function Scene({
   return (
     <>
       <color attach="background" args={[theme.background]} />
-      {theme.sky && (
+      {theme.fog && <fog attach="fog" args={[theme.fog.color, theme.fog.near, theme.fog.far]} />}
+      {theme.sky === "day" ? (
         <Sky sunPosition={SUN_POSITION} turbidity={theme.turbidity} rayleigh={theme.rayleigh} />
+      ) : (
+        <Stars
+          radius={STARS_RADIUS}
+          depth={STARS_DEPTH}
+          count={STARS_COUNT}
+          factor={STARS_FACTOR}
+          fade
+          speed={0}
+        />
       )}
       <hemisphereLight args={[theme.hemiSky, theme.hemiGround, theme.hemiIntensity]} />
       <ambientLight intensity={theme.ambient} />
+      {theme.deckLights && <DeckLights map={map} preset={theme.deckLights} />}
       {shadows && (
         <ShadowRefresh
           playersRef={playersRef}
@@ -570,6 +632,7 @@ export const Scene = memo(function Scene({
       )}
       <SunLight
         intensity={theme.dir}
+        color={theme.dirColor}
         playerPos={localGroundRef}
         motionRef={motionRef}
         shadows={shadows}
@@ -748,6 +811,24 @@ function ShadowRefresh({
   return null;
 }
 
+/** Unshadowed point lights over a night deck: warm pools in the rooms, cool ones down the spine. */
+function DeckLights({ map, preset }: { map: MapDefinition; preset: DeckLightPreset }) {
+  const lights = useMemo(() => pickDeckLights(map, preset.roomCount), [map, preset.roomCount]);
+  return (
+    <>
+      {lights.map((light) => (
+        <pointLight
+          key={`${light.kind}:${light.x}:${light.z}`}
+          position={[light.x, preset.height, light.z]}
+          color={light.kind === "room" ? preset.roomColor : preset.corridorColor}
+          intensity={light.kind === "room" ? preset.roomIntensity : preset.corridorIntensity}
+          distance={preset.distance}
+        />
+      ))}
+    </>
+  );
+}
+
 /**
  * The shadowed sun, with its shadow camera kept on the local player rather than
  * stretched over the whole map: three culls casters against that camera, so most
@@ -759,11 +840,13 @@ function ShadowRefresh({
  */
 function SunLight({
   intensity,
+  color,
   playerPos,
   motionRef,
   shadows,
 }: {
   intensity: number;
+  color: string;
   playerPos: PlayerPosRef;
   motionRef: LocalMotionRef;
   shadows: ShadowSettings | null;
@@ -799,6 +882,7 @@ function SunLight({
         ref={lightRef}
         target={target}
         intensity={intensity}
+        color={color}
         castShadow={shadows !== null}
         shadow-mapSize={[mapSize, mapSize]}
         shadow-camera-near={1}
