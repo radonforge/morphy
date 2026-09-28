@@ -19,6 +19,14 @@ test("all map builders remain deterministic and valid across 1,000 seeds", () =>
   }
 });
 
+test("the station's furniture and spawns stay put whatever the seed", () => {
+  const { tiles: _tiles, ...base } = buildMap("station", 0);
+  for (let seed = 1; seed < 100; seed++) {
+    const { tiles: _seeded, ...map } = buildMap("station", seed);
+    assert.deepEqual(map, base, `seed ${seed}`);
+  }
+});
+
 const ROAD_STRAIGHT = "/models/urban/roads/road-straight.glb";
 const ROAD_CROSS = "/models/urban/roads/road-crossroad.glb";
 

@@ -1,4 +1,5 @@
 import type { BoxCollider, TileInstance } from "@morphy/shared";
+import type { LevelDoor } from "./document";
 
 /** World size of one grid cell (and of every modular floor/wall tile). */
 export const TILE = 4;
@@ -74,11 +75,11 @@ function cellCenterZ(grid: Grid, j: number): number {
   return -grid.halfD + (j + 0.5) * TILE;
 }
 
-export function lineX(grid: Grid, cell: number): number {
+function lineX(grid: Grid, cell: number): number {
   return -grid.halfW + cell * TILE;
 }
 
-export function lineZ(grid: Grid, cell: number): number {
+function lineZ(grid: Grid, cell: number): number {
   return -grid.halfD + cell * TILE;
 }
 
@@ -180,21 +181,8 @@ function pushGate(
   }
 }
 
-/** World position of a doorway gap, at the middle of the gate's cell edge. */
-export interface Doorway {
-  x: number;
-  z: number;
-}
-
 /** Region id per grid cell, or `null` for open ground (no floor, no walls). */
 export type Cell = string | null;
-
-/** A wall gap. `axis: "v"` = vertical grid line at column `line`; `"h"` = horizontal at row `line`. */
-export interface FloorplanDoor {
-  axis: "v" | "h";
-  line: number;
-  cell: number;
-}
 
 /**
  * Compile a region grid into aligned floor tiles, wall colliders, wall tiles and
@@ -207,13 +195,13 @@ export interface FloorplanDoor {
 export function emitFloorplan(
   grid: Grid,
   region: Cell[][],
-  doors: FloorplanDoor[],
+  doors: LevelDoor[],
   rng: () => number,
-  out: { tiles: TileInstance[]; colliders: BoxCollider[]; doorways: Doorway[] },
+  out: { tiles: TileInstance[]; colliders: BoxCollider[] },
 ): void {
   const { gx, gz } = grid;
   const doorSet = new Set(doors.map((d) => `${d.axis}:${d.line}:${d.cell}`));
-  const { tiles, colliders, doorways } = out;
+  const { tiles, colliders } = out;
 
   for (let i = 0; i < gx; i++) {
     for (let j = 0; j < gz; j++) {
@@ -236,7 +224,6 @@ export function emitFloorplan(
       if (left === right) continue;
       if (doorSet.has(`v:${c}:${j}`)) {
         pushGate(grid, "z", lineX(grid, c), j, tiles);
-        doorways.push({ x: lineX(grid, c), z: cellCenterZ(grid, j) });
         continue;
       }
       present[j] = true;
@@ -259,7 +246,6 @@ export function emitFloorplan(
       if (top === bottom) continue;
       if (doorSet.has(`h:${r}:${i}`)) {
         pushGate(grid, "x", lineZ(grid, r), i, tiles);
-        doorways.push({ x: cellCenterX(grid, i), z: lineZ(grid, r) });
         continue;
       }
       present[i] = true;

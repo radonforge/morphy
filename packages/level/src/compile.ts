@@ -2,7 +2,6 @@ import type { BoxCollider, MapDefinition, PropDefinition, TileInstance } from "@
 import type { LevelDocument } from "./document";
 import {
   type Cell,
-  type Doorway,
   emitFloorplan,
   FLOOR_THICKNESS,
   type Grid,
@@ -42,8 +41,7 @@ export function compileLevel(doc: LevelDocument, { catalog, seed }: CompileOptio
       size: { x: cols * TILE, y: FLOOR_THICKNESS, z: rows * TILE },
     },
   ];
-  const doorways: Doorway[] = [];
-  emitFloorplan(grid, region, doc.doors, makeRng(seed), { tiles, colliders, doorways });
+  emitFloorplan(grid, region, doc.doors, makeRng(seed), { tiles, colliders });
 
   return {
     id: doc.id,

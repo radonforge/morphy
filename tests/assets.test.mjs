@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { RUNTIME_MODEL_PATHS } from "../packages/client/runtimeAssets.ts";
 import { runtimePublicAssetPaths } from "../packages/client/viteRuntimeAssets.ts";
+import { buildMap } from "../packages/server/src/maps/index.ts";
 
 const GLB_MAGIC = 0x46546c67;
 const GLB_JSON_CHUNK = 0x4e4f534a;
@@ -29,6 +30,25 @@ test("every allow-listed runtime model and its declared dependencies exist", asy
   const publicDir = new URL("../packages/client/public/", import.meta.url).pathname;
   const assets = await runtimePublicAssetPaths(publicDir);
   assert.ok(assets.length > RUNTIME_MODEL_PATHS.length);
+});
+
+test("every model a map emits is on the runtime allow-list", () => {
+  const allowed = new Set(RUNTIME_MODEL_PATHS);
+  for (const mapId of ["station", "urban"]) {
+    for (let seed = 0; seed < 50; seed++) {
+      const map = buildMap(mapId, seed);
+      const models = new Map(
+        map.propCatalog.map((definition) => [definition.id, definition.model]),
+      );
+      for (const model of [
+        ...map.tiles.map((tile) => tile.model),
+        ...map.scenery.map((piece) => piece.model),
+        ...map.props.map((prop) => models.get(prop.type)).filter(Boolean),
+      ]) {
+        assert.ok(allowed.has(model), `${mapId}/${seed}: ${model} is not allow-listed`);
+      }
+    }
+  }
 });
 
 test("no allow-listed runtime model is skinned", async () => {
