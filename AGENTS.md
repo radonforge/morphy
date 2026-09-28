@@ -144,8 +144,13 @@ client code, three.js or Colyseus.
   through `formatLevelDocument`) and `GET /__morphy/levels/<mapId>/catalog`, answering only unrelayed
   loopback requests (the dev server is on the LAN and behind `pnpm tunnel`), and pushes a
   `morphy:level-changed` HMR event when the file changes on disk from anywhere else, which the
-  page applies as an undoable step labelled External with its entities highlighted. Add a map to
-  `levelSources` there to make it editable. The plan is an orthographic top-down view drawn by the
+  page applies as an undoable step labelled External with its entities highlighted (with a
+  warning when that replaced unsaved edits, which Undo brings back). Add a map to `levelSources`
+  there to make it editable. The bridge reads the prop catalogs once, when Vite starts, so a
+  catalog edit (`spaceCatalog.ts` and friends) needs a dev server restart before the editor sees
+  it. It also checks that `Host` is localhost or a loopback IP on the dev port and that a `PUT`'s
+  `Origin`, when present, is the dev origin, and answers 408 to a body slower than
+  `BRIDGE_LIMITS.bodyTimeoutMs`; its atomic-write temp files are gitignored. The plan is an orthographic top-down view drawn by the
   game's own renderers (`MapView`, `DeckLights`, `themeFor` from `game/Scene.tsx`); `Tab` swaps to
   an orbit view. **Every edit an op exists for goes through the `@morphy/level` op** (place, move,
   rotate, duplicate, remove, against-wall placement, room add / resize / remove, door toggle), so the
@@ -158,8 +163,8 @@ client code, three.js or Colyseus.
   `tests/editor.test.mjs`.
   **Try it** saves, waits for `tsx watch` to restart the game server (a document write always
   restarts it, since the server imports the JSON), and opens `App` with `tryMap`, i.e. a private
-  room on that map; a private room needs a second player to start, so add one with
-  `pnpm bot -- --code <party code> -n 1`.
+  room on that map; a private room needs a second player to start, so a dev-only card over the room
+  (`TryHint.tsx`) spells out `pnpm bot -- --code <party code> -n 1` and offers Back to editor.
 - `game/audio.ts`: **hybrid audio**: weapon shots / hit impacts (Kenney Sci-fi Sounds, `public/sounds/sci-fi/`) and lobby UI cues (Kenney UI Audio, `public/sounds/ui/`) play cached OGG samples; the lobby loops a licensed theme (`public/sounds/music/lobby-theme.ogg`, own gain, fade in/out); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers all; volume / music / UI-sound prefs persist to localStorage (`morphy:*` keys). Positional cues (taunts, sonar, prop rustles) pan by the camera's facing through `spatialAudio.ts`; a remote prop on the move rustles (`PropFootsteps.tsx`) out to `FOOTSTEP_HEARING_RADIUS`, the very radius a bot hears a mover at, so keep the two on the one constant.
 
 ### Two facts that span files
