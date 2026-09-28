@@ -20,7 +20,7 @@ import {
   snapToward,
   spansMeet,
 } from "./geometry";
-import { DECK_LIGHT_CLEARANCE_SLACK, DECK_LIGHT_WALL_CLEARANCE } from "./lights";
+import { DECK_LIGHT_CLEARANCE_SLACK, DECK_LIGHT_WALL_CLEARANCE, wallClearance } from "./lights";
 import {
   components,
   floodReach,
@@ -235,32 +235,21 @@ function spawnFindings(space: LevelSpace, findings: Finding[]): void {
 }
 
 function lightFindings(space: LevelSpace, findings: Finding[]): void {
+  const bounds = { halfW: space.halfW, halfD: space.halfD };
   for (const light of space.doc.lights ?? []) {
     if (light.kind !== "room") continue;
-    let nearest = { distance: Infinity, dx: 0, dz: 0 };
-    for (const wall of space.walls) {
-      const dx = Math.max(Math.abs(light.x - wall.x) - wall.halfX, 0);
-      const dz = Math.max(Math.abs(light.z - wall.z) - wall.halfZ, 0);
-      const distance = Math.hypot(dx, dz);
-      if (distance < nearest.distance) {
-        nearest = {
-          distance,
-          dx: Math.sign(light.x - wall.x) * dx,
-          dz: Math.sign(light.z - wall.z) * dz,
-        };
-      }
-    }
-    if (nearest.distance >= DECK_LIGHT_WALL_CLEARANCE - DECK_LIGHT_CLEARANCE_SLACK) continue;
-    const push = nearest.distance === 0 ? 0 : DECK_LIGHT_WALL_CLEARANCE / nearest.distance;
-    const x = snapToward(light.x + nearest.dx * (push - 1), nearest.dx);
-    const z = snapToward(light.z + nearest.dz * (push - 1), nearest.dz);
+    const { distance, target } = wallClearance(space.walls, bounds, light);
+    if (distance >= DECK_LIGHT_WALL_CLEARANCE - DECK_LIGHT_CLEARANCE_SLACK) continue;
     findings.push({
       code: "light.wall-clearance",
       severity: "warning",
-      message: `light ${light.id} at ${point(light)} is ${num(nearest.distance)} m from a wall, under ${DECK_LIGHT_WALL_CLEARANCE} m, so it burns a hotspot into it`,
+      message: `light ${light.id} at ${point(light)} is ${num(distance)} m from a wall, under ${DECK_LIGHT_WALL_CLEARANCE} m, so it burns a hotspot into it`,
       entities: [light.id],
       at: { x: light.x, z: light.z },
-      hint: `pnpm level light move ${light.id} --to=${num(x)},${num(z)}`,
+      hint:
+        target === null
+          ? `move it at least ${num(DECK_LIGHT_WALL_CLEARANCE - distance)} m away from the wall`
+          : `pnpm level light move ${light.id} --to=${num(target.x)},${num(target.z)}`,
     });
   }
 }

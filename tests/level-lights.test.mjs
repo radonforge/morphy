@@ -204,13 +204,64 @@ test("a map with an empty lights list hangs none instead of falling back", () =>
   assert.deepEqual(deckLightsFor(map, DEFAULT_ROOM_LIGHT_COUNT), []);
 });
 
-test("a room light hung against a wall is reported with a move that clears it", () => {
-  const doc = parse([{ ...LAMP, x: -6, z: -5 }]);
-  const [finding] = validateLevel(doc, CONTEXT).findings.filter(
+function clearance(doc) {
+  return validateLevel(doc, CONTEXT).findings.filter(
     (entry) => entry.code === "light.wall-clearance",
   );
+}
+
+/** Two 12 x 20 m rooms side by side on a 6 x 5 grid: one wall on x = 0, far from the outer ones. */
+function wide(lights) {
+  return parseLevelDocument(
+    {
+      version: 1,
+      id: "station",
+      grid: { cols: 6, rows: 5 },
+      rooms: [
+        { id: "west", rects: [{ i0: 0, i1: 3, j0: 0, j1: 5 }] },
+        { id: "east", rects: [{ i0: 3, i1: 6, j0: 0, j1: 5 }] },
+      ],
+      doors: [],
+      objects: [],
+      spawns: { props: [{ x: -6, z: 2 }], hunters: [{ x: 6, z: 2 }] },
+      ...(lights === undefined ? {} : { lights }),
+    },
+    { catalog: SPACE_CATALOG },
+  );
+}
+
+test("a room light hung near a wall is reported with a move that clears every wall", () => {
+  const doc = parse([{ ...LAMP, x: -6, z: -5 }]);
+  const [finding] = clearance(doc);
   assert.deepEqual(finding.entities, ["light-1"]);
-  assert.match(finding.hint, /^pnpm level light move light-1 --to=/);
+  assert.equal(finding.hint, "pnpm level light move light-1 --to=-6,-2.5");
+  const moved = moveLight(doc, { id: "light-1", to: { x: -6, z: -2.5 } });
+  assert.deepEqual(clearance(moved.doc), []);
+});
+
+test("a room light on a wall face is pushed out through that face, not back into the wall", () => {
+  const base = wide(undefined);
+  const west = { ...base, lights: [{ ...LAMP, x: -0.5, z: 0 }] };
+  const [finding] = clearance(west);
+  assert.match(finding.message, /is 0 m from a wall/);
+  assert.equal(finding.hint, "pnpm level light move light-1 --to=-3.5,0");
+  assert.deepEqual(clearance(moveLight(west, { id: "light-1", to: { x: -3.5, z: 0 } }).doc), []);
+  const east = { ...base, lights: [{ ...LAMP, x: 0.5, z: 3 }] };
+  assert.equal(clearance(east)[0].hint, "pnpm level light move light-1 --to=3.5,3");
+});
+
+test("a room light a hair off a wall face gets the same push", () => {
+  const doc = parseLevelDocument(
+    { ...wide(undefined), lights: [{ ...LAMP, x: -0.5001, z: 0 }] },
+    { catalog: SPACE_CATALOG },
+  );
+  assert.equal(clearance(doc)[0].hint, "pnpm level light move light-1 --to=-3.5,0");
+});
+
+test("when the push would land near another wall the hint gives a distance instead of a spot", () => {
+  const doc = parse([{ ...LAMP, x: -2.5001, z: -4 }]);
+  const [finding] = clearance(doc);
+  assert.equal(finding.hint, "move it at least 3 m away from the wall");
 });
 
 test("a corridor light is not held to the wall clearance", () => {

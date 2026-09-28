@@ -1,4 +1,5 @@
 import type { BoxCollider, MapDefinition, MapLight, Vec3 } from "@morphy/shared";
+import { POSITION_SNAP, type Rect2, snapToward } from "./geometry";
 
 /** Ids run `light-1..n`, never `room-<n>`, which a painted room may already be called. */
 export const LIGHT_ID_PREFIX = "light-";
@@ -41,6 +42,87 @@ export function pickDeckLights(map: MapDefinition, roomCount: number): MapLight[
     ...centres.map((c) => ({ x: c.x, z: c.z, kind: "room" as const })),
     ...corridor,
   ]);
+}
+
+/** How a spot stands to the walls: the distance to the nearest one and, when a snapped spot clears every wall, where to hang the light instead. */
+export interface WallClearance {
+  distance: number;
+  target: Point2 | null;
+}
+
+interface NearestFace {
+  distance: number;
+  face: Point2;
+  away: Point2;
+}
+
+function nearestFace(walls: readonly Rect2[], p: Point2): NearestFace | null {
+  let best: NearestFace | null = null;
+  for (const wall of walls) {
+    const face = {
+      x: clamp(p.x, wall.x - wall.halfX, wall.x + wall.halfX),
+      z: clamp(p.z, wall.z - wall.halfZ, wall.z + wall.halfZ),
+    };
+    const distance = Math.hypot(p.x - face.x, p.z - face.z);
+    if (best !== null && distance >= best.distance) continue;
+    if (distance > 0) {
+      best = {
+        distance,
+        face,
+        away: { x: (p.x - face.x) / distance, z: (p.z - face.z) / distance },
+      };
+      continue;
+    }
+    const dx = p.x - wall.x;
+    const dz = p.z - wall.z;
+    best =
+      wall.halfX - Math.abs(dx) <= wall.halfZ - Math.abs(dz)
+        ? {
+            distance,
+            face: { x: wall.x + Math.sign(dx || 1) * wall.halfX, z: p.z },
+            away: { x: Math.sign(dx || 1), z: 0 },
+          }
+        : {
+            distance,
+            face: { x: p.x, z: wall.z + Math.sign(dz || 1) * wall.halfZ },
+            away: { x: 0, z: Math.sign(dz || 1) },
+          };
+  }
+  return best;
+}
+
+function snapAway(value: number, direction: number): number {
+  return direction === 0
+    ? Math.round(value / POSITION_SNAP) * POSITION_SNAP
+    : snapToward(value, direction);
+}
+
+function distanceToWalls(walls: readonly Rect2[], p: Point2): number {
+  return nearestFace(walls, p)?.distance ?? Infinity;
+}
+
+/**
+ * How far a spot is from the nearest wall and, when it is nearer than
+ * {@link DECK_LIGHT_WALL_CLEARANCE}, a spot to move the light to: straight away from the
+ * wall face it is closest to (for a spot on or in a wall, out through the nearer face
+ * of that wall), snapped outward to the position grid. The target is null unless it stays
+ * inside the map and clear of every wall, not only the one it was pushed from.
+ */
+export function wallClearance(
+  walls: readonly Rect2[],
+  bounds: { halfW: number; halfD: number },
+  light: Point2,
+): WallClearance {
+  const nearest = nearestFace(walls, light);
+  if (nearest === null) return { distance: Infinity, target: null };
+  const target = {
+    x: snapAway(nearest.face.x + nearest.away.x * DECK_LIGHT_WALL_CLEARANCE, nearest.away.x),
+    z: snapAway(nearest.face.z + nearest.away.z * DECK_LIGHT_WALL_CLEARANCE, nearest.away.z),
+  };
+  const inside = Math.abs(target.x) <= bounds.halfW && Math.abs(target.z) <= bounds.halfD;
+  const clear =
+    distanceToWalls(walls, target) >= DECK_LIGHT_WALL_CLEARANCE - DECK_LIGHT_CLEARANCE_SLACK;
+  return { distance: nearest.distance, target: inside && clear ? target : null };
 }
 
 /** The lights a map hangs: its own authored `lights` when it has any, else {@link pickDeckLights} from its layout. */
