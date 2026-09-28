@@ -60,6 +60,8 @@ export interface PlaceArgs {
   id?: string;
   /** Yaw in degrees, snapped to quarter turns unless `free`. Ignored by `againstWall`, which faces in. */
   yawDegrees?: number;
+  /** Yaw in radians kept exactly, never snapped, over `yawDegrees`: how a copy keeps its source's turn. */
+  exactYaw?: number;
   /** Keep the exact position and yaw instead of snapping them. */
   free?: boolean;
 }
@@ -92,6 +94,30 @@ function normalizeYaw(yaw: number): number {
 
 function snapYaw(yaw: number, free: boolean): number {
   return normalizeYaw(free ? yaw : Math.round(yaw / QUARTER_TURN) * QUARTER_TURN);
+}
+
+/** An info finding when snapping turned `wanted` into a different `applied` yaw, so the rounding is never silent. */
+function yawNote(id: string, wanted: number, applied: number): Finding[] {
+  if (Math.abs(normalizeYaw(wanted - applied)) < SNAP_EPSILON) return [];
+  return [
+    {
+      code: "op.yaw-snapped",
+      severity: "info",
+      message: `${id} yaw ${degrees(normalizeYaw(wanted))} was rounded to the quarter turn ${degrees(applied)}`,
+      entities: [id],
+      hint: "pass free to keep the exact yaw",
+    },
+  ];
+}
+
+function requestedYaw(args: PlaceArgs): number {
+  if ("againstWall" in args.relation) return FACING_IN[args.relation.againstWall.side];
+  return args.exactYaw ?? ((args.yawDegrees ?? 0) * Math.PI) / 180;
+}
+
+function placedYaw(args: PlaceArgs): number {
+  if ("againstWall" in args.relation || args.exactYaw !== undefined) return requestedYaw(args);
+  return snapYaw(requestedYaw(args), args.free === true);
 }
 
 function largestRect(doc: LevelDocument, roomId: string): CellRect | undefined {
@@ -228,7 +254,7 @@ function candidates(
   extent: ShapeExtent,
 ): LevelPoint[][] | OpResult {
   const free = args.free === true;
-  const yaw = snapYaw(((args.yawDegrees ?? 0) * Math.PI) / 180, free);
+  const yaw = placedYaw(args);
   const { relation } = args;
   if ("at" in relation) return [[{ x: snap(relation.at.x, free), z: snap(relation.at.z, free) }]];
   if ("center" in relation) {
@@ -395,11 +421,7 @@ export function placeObject(doc: LevelDocument, args: PlaceArgs, context: LevelC
       "pick a longer wall or a smaller type",
     );
   }
-  const free = args.free === true;
-  const yaw =
-    "againstWall" in args.relation
-      ? FACING_IN[args.relation.againstWall.side]
-      : snapYaw(((args.yawDegrees ?? 0) * Math.PI) / 180, free);
+  const yaw = placedYaw(args);
   const taken = new Set(doc.objects.map((object) => object.id));
   const regions = regionGrid(doc);
   const space = buildSpace(doc, context);
@@ -432,16 +454,16 @@ export function placeObject(doc: LevelDocument, args: PlaceArgs, context: LevelC
       placed.push(object);
     }
     if (clear) {
-      return done(
-        { ...doc, objects: [...doc.objects, ...placed] },
-        placed.map((object) => ({
+      return done({ ...doc, objects: [...doc.objects, ...placed] }, [
+        ...placed.map((object) => ({
           code: "op.placed",
           severity: "info" as const,
           message: `placed ${describe(object)}`,
           entities: [object.id],
           at: { x: object.x, z: object.z },
         })),
-      );
+        ...yawNote(placed[0]!.id, requestedYaw(args), yaw),
+      ]);
     }
     for (const object of placed) taken.delete(object.id);
   }
@@ -469,6 +491,7 @@ function replaceObject(
   previous: LevelObject,
   next: LevelObject,
   verb: string,
+  notes: Finding[] = [],
 ): OpResult {
   const extent = measure(doc, context, next.type);
   if ("doc" in extent) return extent;
@@ -488,6 +511,7 @@ function replaceObject(
         entities: [next.id],
         at: next,
       },
+      ...notes,
     ],
   );
 }
@@ -531,11 +555,19 @@ export function rotateObject(
 ): OpResult {
   const object = findObject(doc, args.id);
   if ("doc" in object) return object;
-  const yaw =
+  const wanted =
     args.degrees !== undefined
-      ? normalizeYaw(object.yaw + (args.degrees * Math.PI) / 180)
-      : snapYaw(object.yaw + (args.turns ?? 1) * QUARTER_TURN, false);
-  return replaceObject(doc, context, object, { ...object, yaw }, "rotate");
+      ? object.yaw + (args.degrees * Math.PI) / 180
+      : object.yaw + (args.turns ?? 1) * QUARTER_TURN;
+  const yaw = args.degrees !== undefined ? normalizeYaw(wanted) : snapYaw(wanted, false);
+  return replaceObject(
+    doc,
+    context,
+    object,
+    { ...object, yaw },
+    "rotate",
+    yawNote(object.id, wanted, yaw),
+  );
 }
 
 /** Remove an object. */
@@ -554,11 +586,11 @@ export function removeObject(doc: LevelDocument, args: { id: string }): OpResult
 
 /**
  * Copy an object to the side of it given, or to the first clear one of E, W, S, N,
- * with the same type and yaw.
+ * with the same type and exactly the same yaw; the position snaps unless `free`.
  */
 export function duplicateObject(
   doc: LevelDocument,
-  args: { id: string; side?: Side; newId?: string },
+  args: { id: string; side?: Side; newId?: string; free?: boolean },
   context: LevelContext,
 ): OpResult {
   const object = findObject(doc, args.id);
@@ -571,8 +603,8 @@ export function duplicateObject(
       {
         type: object.type,
         relation: { nextTo: object.id, side },
-        yawDegrees: (object.yaw * 180) / Math.PI,
-        free: true,
+        exactYaw: object.yaw,
+        free: args.free === true,
         ...(args.newId !== undefined ? { id: args.newId } : {}),
       },
       context,

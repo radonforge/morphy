@@ -233,6 +233,39 @@ test("a placement on open ground or across a room's edge is refused", () => {
   );
 });
 
+test("a yaw rounded to a quarter turn is reported, an exact one is not", () => {
+  const snapped = placeObject(
+    doc(),
+    { type: "chair", relation: { at: { x: -5, z: 1 } }, yawDegrees: 100 },
+    CONTEXT,
+  );
+  assert.deepEqual(
+    snapped.findings.map((f) => f.code),
+    ["op.placed", "op.yaw-snapped"],
+  );
+  assert.match(snapped.findings[1].message, /yaw 100 was rounded to the quarter turn 90/);
+  const exact = placeObject(
+    doc(),
+    { type: "chair", relation: { at: { x: -5, z: 1 } }, yawDegrees: 90 },
+    CONTEXT,
+  );
+  assert.deepEqual(
+    exact.findings.map((f) => f.code),
+    ["op.placed"],
+  );
+  const odd = parseLevelDocument(
+    { ...structuredClone(doc()), objects: [{ id: "west-1", type: "chair", x: -7, z: -2, yaw: 1 }] },
+    { catalog: SPACE_CATALOG },
+  );
+  const turned = rotateObject(odd, { id: "west-1" }, CONTEXT);
+  assert.equal(
+    turned.doc.objects[0].yaw,
+    Math.PI,
+    "1 rad plus a quarter turn rounds to a half turn",
+  );
+  assert.ok(turned.findings.some((f) => f.code === "op.yaw-snapped"));
+});
+
 test("an object already touching something can still move, but not into something new", () => {
   const crowded = parseLevelDocument(
     {
@@ -318,6 +351,21 @@ test("remove drops exactly one object", () => {
   assert.equal(result.ok, true);
   assert.deepEqual(result.doc.objects, []);
   assert.equal(removeObject(doc(), { id: "nope" }).ok, false);
+});
+
+test("duplicate keeps the exact yaw of the original and snaps its own position", () => {
+  const odd = parseLevelDocument(
+    {
+      ...structuredClone(doc()),
+      objects: [{ id: "west-1", type: "chair", x: -7.13, z: -2.07, yaw: 1.07 }],
+    },
+    { catalog: SPACE_CATALOG },
+  );
+  const copy = placed(duplicateObject(odd, { id: "west-1" }, CONTEXT));
+  assert.equal(copy.yaw, 1.07);
+  assert.ok(Number.isInteger(copy.x * 2) && Number.isInteger(copy.z * 2), `${copy.x}, ${copy.z}`);
+  const free = placed(duplicateObject(odd, { id: "west-1", free: true }, CONTEXT));
+  assert.equal(free.z, -2.07);
 });
 
 test("duplicate copies type and yaw beside the original", () => {
