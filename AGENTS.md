@@ -18,6 +18,7 @@ pnpm typecheck          # tsc --noEmit across all packages
 pnpm check              # Biome lint + format (also: check:write, format, lint)
 pnpm test               # node:test suite under tests/
 pnpm check:ci           # the non-mutating Biome gate CI runs
+pnpm level check        # layout findings for the station document; see "packages/level" below
 pnpm tunnel             # ngrok http 5173, share a LAN/remote session
 pnpm --filter @morphy/client build   # production client bundle
 ```
@@ -79,6 +80,27 @@ client code, three.js or Colyseus.
 - `floorplan.ts`: `emitFloorplan`, turning a region grid and its doors into floor tiles, wall tiles,
   wall colliders and gates (which keep `gate.glb`: the bot finds doorways by that name), plus
   `doorKey` (the `axis:line:cell` identity parser and emitter share) and `FLOORPLAN_MODEL_PATHS`.
+- `checks.ts`: `validateLevel(doc, { catalog, cards })` → `LevelReport` (`findings`, `unplaced`,
+  `metrics`), the spatial translator an agent edits by instead of screenshots. Objects are measured
+  by their **real rendered footprint** (`footprint.ts`: the GLB's asset card through
+  `uniformFitScale`, the same arithmetic the client's `fitModel` delegates to), passage and spawns by
+  the square collision boxes the client moves against, which always contain that footprint. Codes are listed in
+  `FINDING_CODES`; thresholds are the `LEVEL_*` constants in `shared/constants.ts`. Reachability
+  floods a `LEVEL_SAMPLE_CELL` grid from the hunter spawns with the client's body radius, so a
+  pocket under `LEVEL_UNREACHABLE_MIN_AREA` is sampling noise and is not reported. Validators never
+  move or drop an object.
+- `ops.ts`: pure edits returning `{ doc, findings, ok }` (place by `at` / `center` / `againstWall` /
+  `nextTo` / `row`, move, rotate, remove, duplicate, room add / resize / remove, door toggle).
+  Positions snap to 0.5 m and yaw to quarter turns unless `free`; the model front is +Z and N is
+  -Z. An op that would collide returns an `op.blocked` error naming the blocker and the input
+  document unchanged.
+- `views.ts` / `serialize.ts`: the text an agent reads (summary, 0.5 m ASCII room plan, one line
+  per finding, report delta) and `formatLevelDocument`, which writes JSON in the layout Biome
+  leaves alone, so a CLI edit passes `check:ci` as is.
+- `tools/level/cli.ts` is `pnpm level` (`view`, `list`, `check`, `place`, `move`, `rotate`,
+  `remove`, `duplicate`, `room add|resize|remove`, `door toggle`, `--file` for another copy): every
+  write re-parses, validates, writes atomically and prints the report delta. Negative option values
+  need the `=` form (`--by=-0.5,0`), a `node:util` `parseArgs` rule.
 
 ### `packages/server`: authoritative Colyseus room
 
