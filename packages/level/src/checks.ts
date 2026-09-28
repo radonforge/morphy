@@ -20,6 +20,7 @@ import {
   snapToward,
   spansMeet,
 } from "./geometry";
+import { DECK_LIGHT_CLEARANCE_SLACK, DECK_LIGHT_WALL_CLEARANCE, wallClearance } from "./lights";
 import {
   components,
   floodReach,
@@ -67,6 +68,7 @@ export const FINDING_CODES = [
   "room.sightline",
   "room.few-disguises",
   "object.unique-type",
+  "light.wall-clearance",
 ] as const;
 
 /** Label for the region with no room, where the checks name one. */
@@ -232,6 +234,26 @@ function spawnFindings(space: LevelSpace, findings: Finding[]): void {
   }
 }
 
+function lightFindings(space: LevelSpace, findings: Finding[]): void {
+  const bounds = { halfW: space.halfW, halfD: space.halfD };
+  for (const light of space.doc.lights ?? []) {
+    if (light.kind !== "room") continue;
+    const { distance, target } = wallClearance(space.walls, bounds, light);
+    if (distance >= DECK_LIGHT_WALL_CLEARANCE - DECK_LIGHT_CLEARANCE_SLACK) continue;
+    findings.push({
+      code: "light.wall-clearance",
+      severity: "warning",
+      message: `light ${light.id} at ${point(light)} is ${num(distance)} m from a wall, under ${DECK_LIGHT_WALL_CLEARANCE} m, so it burns a hotspot into it`,
+      entities: [light.id],
+      at: { x: light.x, z: light.z },
+      hint:
+        target === null
+          ? `move it at least ${num(DECK_LIGHT_WALL_CLEARANCE - distance)} m away from the wall`
+          : `pnpm level light move ${light.id} --to=${num(target.x)},${num(target.z)}`,
+    });
+  }
+}
+
 function reachFindings(
   space: LevelSpace,
   findings: Finding[],
@@ -374,8 +396,8 @@ function compareFindings(a: Finding, b: Finding): number {
 /**
  * Check a parsed document for layout problems an agent can fix without looking at
  * it: objects cutting into walls or each other (real rendered footprints), objects
- * off their room, blocked doorways, spawns inside geometry, floor a hunter cannot
- * reach, and per room the longest clear sightline and how well a disguise blends
+ * off their room, blocked doorways, spawns inside geometry, room lights hung against a
+ * wall, floor a hunter cannot reach, and per room the longest clear sightline and how well a disguise blends
  * in. Pure: it neither drops nor moves anything.
  */
 export function validateLevel(doc: LevelDocument, context: LevelContext): LevelReport {
@@ -390,6 +412,7 @@ export function validateLevel(doc: LevelDocument, context: LevelContext): LevelR
   objectFindings(space, findings, unplaced);
   doorFindings(space, findings);
   spawnFindings(space, findings);
+  lightFindings(space, findings);
   const grid = reachFindings(space, findings, metrics);
   roomFindings(space, grid, findings, metrics);
   findings.sort(compareFindings);

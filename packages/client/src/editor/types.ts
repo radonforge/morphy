@@ -1,19 +1,21 @@
 import type { CellRect, LevelDoor } from "@morphy/level";
 import type { SpawnTeam } from "./edits";
 
-/** What the author has selected: one object, one rect of a room, or one spawn point. */
+/** What the author has selected: one object, one rect of a room, one spawn point or one light. */
 export type Selection =
   | { kind: "object"; id: string }
   | { kind: "room"; roomId: string; index: number }
   | { kind: "spawn"; team: SpawnTeam; index: number }
+  | { kind: "light"; id: string }
   | null;
 
-/** The active pointer tool. `place` stamps the palette prop picked last. */
+/** The active pointer tool. `place` stamps the palette prop picked last; `light` adds, drags and deletes point lights. */
 export type Tool =
   | { kind: "select" }
   | { kind: "room" }
   | { kind: "door" }
   | { kind: "spawn"; team: SpawnTeam }
+  | { kind: "light" }
   | { kind: "place"; type: string };
 
 export type EditorView = "plan" | "orbit";

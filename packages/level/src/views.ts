@@ -48,7 +48,7 @@ export function summarizeLevel(doc: LevelDocument, context: LevelContext): strin
   const space = buildSpace(doc, context);
   const { cols, rows } = doc.grid;
   const lines = [
-    `${doc.id}: ${cols}x${rows} cells of ${TILE} m (${cols * TILE} x ${rows * TILE} m), ${doc.rooms.length} rooms, ${doc.doors.length} doors, ${doc.objects.length} objects, spawns ${doc.spawns.props.length} props / ${doc.spawns.hunters.length} hunters`,
+    `${doc.id}: ${cols}x${rows} cells of ${TILE} m (${cols * TILE} x ${rows * TILE} m), ${doc.rooms.length} rooms, ${doc.doors.length} doors, ${doc.objects.length} objects, spawns ${doc.spawns.props.length} props / ${doc.spawns.hunters.length} hunters, ${doc.lights?.length ?? 0} lights`,
     "rooms:",
   ];
   for (const room of doc.rooms) {
@@ -82,6 +82,16 @@ export function listObjects(doc: LevelDocument, context: LevelContext, room?: st
     );
   }
   return lines.length > 0 ? lines.join("\n") : "no objects";
+}
+
+/** One line per light: id, kind, position and the room it hangs in. */
+export function listLights(doc: LevelDocument, context: LevelContext): string {
+  const space = buildSpace(doc, context);
+  const lines = (doc.lights ?? []).map(
+    (light) =>
+      `${light.id} ${light.kind} ${point(light)} in ${space.regionAt(light.x, light.z) ?? OPEN_GROUND}`,
+  );
+  return lines.length > 0 ? lines.join("\n") : "no lights";
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { Room } from "@colyseus/sdk";
+import { DEFAULT_ROOM_LIGHT_COUNT, deckLightsFor } from "@morphy/level";
 import {
   computePropBounds,
   INPUT_IDLE_EPSILON,
@@ -32,7 +33,6 @@ import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "r
 import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
-import { pickDeckLights } from "./deckLights";
 import type { BloomSettings, ShadowSettings } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
 import { fitModel, MODEL_MIN_SIZE } from "./modelFit";
@@ -230,7 +230,7 @@ interface FogPreset {
   far: number;
 }
 
-/** The few point lights a night map hangs over its deck, see {@link pickDeckLights}. */
+/** The few point lights a night map hangs over its deck, see {@link deckLightsFor}. */
 export interface DeckLightPreset {
   roomCount: number;
   roomColor: string;
@@ -291,7 +291,7 @@ const THEMES: Record<string, ThemePreset> = {
     rayleigh: 0.5,
     fog: { color: MAP_THEME_BASE.station.background, near: 16, far: 62 },
     deckLights: {
-      roomCount: 14,
+      roomCount: DEFAULT_ROOM_LIGHT_COUNT,
       roomColor: "#ffc27a",
       corridorColor: "#8ad8ff",
       roomIntensity: 32,
@@ -812,14 +812,17 @@ function ShadowRefresh({
   return null;
 }
 
-/** Unshadowed point lights over a night deck: warm pools in the rooms, cool ones down the spine. */
+/**
+ * Unshadowed point lights over a night deck: warm pools in the rooms, cool ones down the
+ * spine, as {@link deckLightsFor} says.
+ */
 export function DeckLights({ map, preset }: { map: MapDefinition; preset: DeckLightPreset }) {
-  const lights = useMemo(() => pickDeckLights(map, preset.roomCount), [map, preset.roomCount]);
+  const lights = useMemo(() => deckLightsFor(map, preset.roomCount), [map, preset.roomCount]);
   return (
     <>
       {lights.map((light) => (
         <pointLight
-          key={`${light.kind}:${light.x}:${light.z}`}
+          key={light.id}
           position={[light.x, preset.height, light.z]}
           color={light.kind === "room" ? preset.roomColor : preset.corridorColor}
           intensity={light.kind === "room" ? preset.roomIntensity : preset.corridorIntensity}

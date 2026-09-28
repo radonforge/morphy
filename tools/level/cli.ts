@@ -3,6 +3,7 @@ import { relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
+  addLight,
   addRoom,
   type CellRect,
   duplicateObject,
@@ -13,13 +14,17 @@ import {
   type LevelContext,
   type LevelDocument,
   LevelValidationError,
+  listLights,
   listObjects,
+  moveLight,
   moveObject,
   type OpResult,
   type Placement,
   parseLevelDocument,
   placeObject,
   planRoom,
+  proposeLights,
+  removeLight,
   removeObject,
   removeRoom,
   reportForRoom,
@@ -56,6 +61,11 @@ const USAGE = `usage: pnpm level <command> [--file <level.json>] [--help]
   rotate <id> [--turns n | --degrees d]
   remove <id>
   duplicate <id> [--side N|S|E|W] [--id new-id] [--free]
+  light list
+  light add --at x,z [--kind room|corridor] [--id id] [--free]
+  light move <id> --to x,z | --by dx,dz [--free]
+  light remove <id>
+  light propose [--rooms n]       replace the lights with the pickDeckLights proposal
   room add <id> i0,i1,j0,j1
   room resize <id> i0,i1,j0,j1 [--rect n]
   room remove <id>
@@ -75,6 +85,7 @@ const COMMAND_FLAGS: Readonly<Record<string, readonly string[]>> = {
   duplicate: ["side", "id", "free"],
   room: ["rect"],
   door: [],
+  light: ["at", "kind", "id", "to", "by", "free", "rooms"],
 };
 const GLOBAL_FLAGS = ["file", "help"];
 const DOOR_PARTS = ["axis", "line", "cell"];
@@ -221,6 +232,49 @@ function write(
   return checked;
 }
 
+function lightEdit(
+  action: string | undefined,
+  id: string | undefined,
+  values: Record<string, string | boolean | undefined>,
+  doc: LevelDocument,
+): OpResult {
+  const free = values.free === true;
+  switch (action) {
+    case "add": {
+      const kind = values.kind ?? "room";
+      if (kind !== "room" && kind !== "corridor") {
+        throw new UsageError("--kind must be room or corridor");
+      }
+      const [x, z] = numbers(values.at as string | undefined, 2, "--at");
+      return addLight(doc, {
+        at: { x: x!, z: z! },
+        kind,
+        free,
+        ...(values.id !== undefined ? { id: values.id as string } : {}),
+      });
+    }
+    case "move": {
+      const given = ["to", "by"].filter((k) => values[k] !== undefined);
+      const [key] = given;
+      if (key === undefined || given.length > 1) {
+        throw new UsageError("light move needs exactly one of --to x,z or --by dx,dz");
+      }
+      const [x, z] = numbers(values[key] as string, 2, `--${key}`);
+      return moveLight(doc, { id: required(id, "light id"), [key]: { x: x!, z: z! }, free });
+    }
+    case "remove":
+      return removeLight(doc, { id: required(id, "light id") });
+    case "propose":
+      return proposeLights(doc, {
+        ...(values.rooms !== undefined
+          ? { roomCount: numbers(values.rooms as string, 1, "--rooms")[0]! }
+          : {}),
+      });
+    default:
+      throw new UsageError("light needs list, add, move, remove or propose");
+  }
+}
+
 function edit(
   args: string[],
   values: Record<string, string | boolean | undefined>,
@@ -284,6 +338,8 @@ function edit(
         },
         context,
       );
+    case "light":
+      return lightEdit(first, second, values, doc);
     case "room": {
       const id = required(second, "room id");
       if (first === "add") return addRoom(doc, { id, rect: cellRect(args[3]) });
@@ -334,6 +390,8 @@ function run(argv: string[]): number {
       degrees: { type: "string" },
       side: { type: "string" },
       rect: { type: "string" },
+      kind: { type: "string" },
+      rooms: { type: "string" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -363,6 +421,10 @@ function run(argv: string[]): number {
     }
     return id;
   };
+  if (command === "light" && positionals[1] === "list") {
+    console.log(listLights(doc, context));
+    return 0;
+  }
   switch (command) {
     case "view": {
       const id = hasRoom(room);

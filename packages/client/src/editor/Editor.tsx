@@ -1,4 +1,5 @@
 import {
+  addLight,
   addRoom,
   type CellRect,
   compileLevel,
@@ -9,10 +10,13 @@ import {
   type LevelDocument,
   LevelValidationError,
   levelOverlays,
+  moveLight,
   moveObject,
   type OpResult,
   parseLevelDocument,
   placeObject,
+  proposeLights,
+  removeLight,
   removeObject,
   removeRoom,
   resizeRoom,
@@ -46,8 +50,15 @@ import { themeFor } from "../game/Scene";
 import { SERVER_URL } from "../net/endpoints";
 import { onExternalLevelChange, saveLevel, waitForGameServerReload } from "./bridge";
 import { type CheckItem, ChecksPanel, type OverlayToggles } from "./ChecksPanel";
-import { type CanvasApi, EditorCanvas, type FocusMark, groundAt } from "./EditorCanvas";
 import {
+  type CanvasApi,
+  EditorCanvas,
+  type FocusMark,
+  groundAt,
+  type LightStyle,
+} from "./EditorCanvas";
+import {
+  addedLightId,
   addedObjectId,
   addRoomRect,
   addSpawn,
@@ -59,6 +70,7 @@ import {
   fromOp,
   halfExtents,
   isRefusal,
+  lightAt,
   moveRectEdge,
   moveSpawn,
   newRoomId,
@@ -92,6 +104,7 @@ const EDITOR_SEED = 1;
 const EDGE_TOLERANCE = 0.2;
 const RESIZE_TOLERANCE = 0.15;
 const SPAWN_PICK_RADIUS = 0.9;
+const LIGHT_PICK_RADIUS = 0.9;
 const FREE_TURN_DEGREES = 5;
 const DEGREES_PER_RADIAN = 180 / Math.PI;
 const SPAWN_ENTITY = /^spawns\.(props|hunters)\[(\d+)\]$/;
@@ -124,6 +137,14 @@ type Gesture =
       blocked: string | null;
     }
   | { kind: "move-spawn"; base: LevelDocument; team: SpawnTeam; index: number }
+  | {
+      kind: "move-light";
+      base: LevelDocument;
+      id: string;
+      dx: number;
+      dz: number;
+      blocked: string | null;
+    }
   | {
       kind: "resize";
       base: LevelDocument;
@@ -158,10 +179,14 @@ function checkFromError(error: unknown, doc: LevelDocument): CheckItem {
     return { severity: "error", message: error instanceof Error ? error.message : String(error) };
   }
   const item: CheckItem = { severity: "error", message: error.message, hint: error.hint };
-  const [, kind, id] = /^(object|room) "(.*)"$/.exec(error.entityId) ?? [];
+  const [, kind, id] = /^(object|room|light) "(.*)"$/.exec(error.entityId) ?? [];
   if (kind === "object") {
     const object = doc.objects.find((candidate) => candidate.id === id);
     if (object) return { ...item, at: object, select: { kind: "object", id: object.id } };
+  }
+  if (kind === "light") {
+    const light = doc.lights?.find((candidate) => candidate.id === id);
+    if (light) return { ...item, at: light, select: { kind: "light", id: light.id } };
   }
   if (kind === "room" && id !== undefined) {
     const rect = doc.rooms.find((candidate) => candidate.id === id)?.rects[0];
@@ -180,6 +205,10 @@ function checkFromFinding(finding: Finding, doc: LevelDocument): CheckItem {
     ...(finding.hint !== undefined ? { hint: finding.hint } : {}),
     ...(finding.at !== undefined ? { at: finding.at } : {}),
   };
+  if (finding.code.startsWith("light.")) {
+    const light = doc.lights?.find((candidate) => candidate.id === finding.entities[0]);
+    if (light) return { at: light, ...item, select: { kind: "light", id: light.id } };
+  }
   for (const entity of finding.entities) {
     const object = doc.objects.find((candidate) => candidate.id === entity);
     if (object) return { at: object, ...item, select: { kind: "object", id: object.id } };
@@ -228,6 +257,7 @@ const TOOLS: { tool: Tool; label: string; key: string }[] = [
   { tool: { kind: "door" }, label: "Door", key: "D" },
   { tool: { kind: "spawn", team: "props" }, label: "Prop spawn", key: "P" },
   { tool: { kind: "spawn", team: "hunters" }, label: "Hunter spawn", key: "H" },
+  { tool: { kind: "light" }, label: "Lights", key: "L" },
 ];
 
 export interface EditorProps {
@@ -278,6 +308,17 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
   const doc = draft ?? history.present.doc;
   const dirty = history.present.doc !== savedDoc;
   const theme = useMemo(() => themeFor(id), [id]);
+  const lightStyle = useMemo<LightStyle | null>(
+    () =>
+      theme.deckLights
+        ? {
+            room: theme.deckLights.roomColor,
+            corridor: theme.deckLights.corridorColor,
+            reach: theme.deckLights.distance,
+          }
+        : null,
+    [theme],
+  );
   const mapName = MAP_CATALOG.find((entry) => entry.id === id)?.name ?? id;
   const catalogById = useMemo(() => new Map(catalog.map((def) => [def.id, def])), [catalog]);
   const context = useMemo<LevelContext>(() => ({ catalog, cards: ASSET_CARDS }), [catalog]);
@@ -476,6 +517,8 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
               `Delete ${selected.roomId}`,
             )
           : applyOp(removeRoom(current, { id: selected.roomId }), `Delete ${selected.roomId}`);
+    } else if (selected.kind === "light") {
+      deleted = applyOp(removeLight(current, { id: selected.id }), `Delete ${selected.id}`);
     } else {
       deleted = applyResult(deleteSpawn(current, selected.team, selected.index), "Delete spawn");
     }
@@ -572,6 +615,28 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
     [applyOp, context],
   );
 
+  const setLightPose = useCallback(
+    (lightId: string, pose: { x?: number; z?: number }) => {
+      const current = latest.current.history.present.doc;
+      const light = current.lights?.find((candidate) => candidate.id === lightId);
+      if (!light) return;
+      applyOp(
+        moveLight(current, {
+          id: lightId,
+          to: { x: pose.x ?? light.x, z: pose.z ?? light.z },
+          free: true,
+        }),
+        `Move ${lightId}`,
+      );
+    },
+    [applyOp],
+  );
+
+  const proposeAllLights = useCallback(() => {
+    const current = latest.current.history.present.doc;
+    if (applyOp(proposeLights(current), "Propose lights")) setSelection(null);
+  }, [applyOp]);
+
   const dropGesture = useCallback(() => {
     gestureRef.current = null;
     setDraft(null);
@@ -657,6 +722,9 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
           return;
         case "KeyH":
           setTool({ kind: "spawn", team: "hunters" });
+          return;
+        case "KeyL":
+          setTool({ kind: "light" });
           return;
       }
     };
@@ -797,6 +865,31 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
         setSelection({ kind: "spawn", team: tool.team, index: result.index });
         return;
       }
+      case "light": {
+        const hit = lightAt(current, at.x, at.z, LIGHT_PICK_RADIUS);
+        const light = hit === null ? undefined : current.lights?.find((entry) => entry.id === hit);
+        if (light) {
+          setSelection({ kind: "light", id: light.id });
+          gestureRef.current = {
+            kind: "move-light",
+            base: current,
+            id: light.id,
+            dx: light.x - at.x,
+            dz: light.z - at.z,
+            blocked: null,
+          };
+          return;
+        }
+        const result = addLight(current, {
+          at,
+          kind: event.shiftKey ? "corridor" : "room",
+          free,
+        });
+        if (!applyOp(result, "Add light")) return;
+        const added = addedLightId(current, result.doc);
+        if (added) setSelection({ kind: "light", id: added });
+        return;
+      }
       case "place":
         place(tool.type, at.x, at.z, free);
         if (!event.shiftKey) setTool({ kind: "select" });
@@ -843,6 +936,21 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
       setCursor("copy");
       return;
     }
+    if (tool.kind === "light") {
+      const near = lightAt(current, at.x, at.z, LIGHT_PICK_RADIUS) !== null;
+      setPreview({
+        ...EMPTY_PREVIEW,
+        ghost: near
+          ? null
+          : {
+              x: snapPosition(at.x, false),
+              z: snapPosition(at.z, false),
+              radius: lightStyle?.reach ?? GHOST_RADIUS,
+            },
+      });
+      setCursor(near ? "move" : "crosshair");
+      return;
+    }
     if (tool.kind === "room" || tool.kind === "spawn") {
       setCursor("crosshair");
       return;
@@ -882,6 +990,24 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
             { id: gesture.id, to: { x: at.x + gesture.dx, z: at.z + gesture.dz }, free },
             context,
           ),
+        );
+        if (isRefusal(result)) {
+          gesture.blocked = result.refused;
+          setNotice({ message: result.refused, tone: "info" });
+          return;
+        }
+        gesture.blocked = null;
+        setNotice(null);
+        setDraft(result);
+        return;
+      }
+      case "move-light": {
+        const result = fromOp(
+          moveLight(gesture.base, {
+            id: gesture.id,
+            to: { x: at.x + gesture.dx, z: at.z + gesture.dz },
+            free,
+          }),
         );
         if (isRefusal(result)) {
           gesture.blocked = result.refused;
@@ -938,7 +1064,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
       return;
     }
     setPreview(EMPTY_PREVIEW);
-    if (gesture.kind === "move-object" && gesture.blocked) {
+    if ((gesture.kind === "move-object" || gesture.kind === "move-light") && gesture.blocked) {
       notify(`Move stopped short: ${gesture.blocked}`);
     }
     const draft = draftRef.current;
@@ -946,6 +1072,9 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
     setDraft(null);
     switch (gesture.kind) {
       case "move-object":
+        commitLocal(draft, `Move ${gesture.id}`);
+        return;
+      case "move-light":
         commitLocal(draft, `Move ${gesture.id}`);
         return;
       case "move-spawn":
@@ -1045,6 +1174,8 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
             overlays={overlays}
             overlayToggles={overlayToggles}
             uniqueIds={uniqueIds}
+            lightStyle={lightStyle}
+            lightsTool={tool.kind === "light"}
           />
         )}
       </div>
@@ -1124,9 +1255,12 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
           doc={history.present.doc}
           selection={selection}
           catalog={catalogById}
+          lightsTool={tool.kind === "light"}
           onChange={commitLocal}
           onPose={setObjectPose}
           onAgainstWall={placeAgainstWall}
+          onLightPose={setLightPose}
+          onProposeLights={proposeAllLights}
         />
         <ChecksPanel
           items={items}

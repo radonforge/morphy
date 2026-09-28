@@ -1,9 +1,11 @@
 import {
+  buriedLight,
   type CellRect,
   doorKey,
   type LevelContext,
   type LevelDocument,
   type LevelDoor,
+  type LevelLight,
   type OpResult,
   objectFootprint,
   rectContains,
@@ -214,17 +216,27 @@ export function newRoomId(doc: LevelDocument): string {
   return `room-${n}`;
 }
 
+/** `doc`, or a refusal naming the light a room edit would leave inside a wall the parser rejects. */
+function keepLightsOutOfWalls(doc: LevelDocument): EditResult {
+  const buried = buriedLight(doc);
+  return buried === undefined
+    ? doc
+    : { refused: `light ${buried.id} would end up inside a wall, move it first` };
+}
+
 /** Add another rect to a room, e.g. the second arm of an L. */
 export function addRoomRect(doc: LevelDocument, roomId: string, rect: CellRect): EditResult {
   if (!rectFits(doc, rect)) return { refused: "the rect is off the grid" };
   const other = overlapsOther(doc, rect, roomId);
   if (other !== null) return { refused: `it overlaps room "${other}"` };
-  return pruneDoors({
-    ...doc,
-    rooms: doc.rooms.map((room) =>
-      room.id === roomId ? { ...room, rects: [...room.rects, { ...rect }] } : room,
-    ),
-  });
+  return keepLightsOutOfWalls(
+    pruneDoors({
+      ...doc,
+      rooms: doc.rooms.map((room) =>
+        room.id === roomId ? { ...room, rects: [...room.rects, { ...rect }] } : room,
+      ),
+    }),
+  );
 }
 
 /** Which side of `rect` lies within `tolerance` cells of a grid point, the handle an edge drag moves. */
@@ -277,14 +289,16 @@ export function removeRoomRect(doc: LevelDocument, roomId: string, index: number
   const room = doc.rooms.find((candidate) => candidate.id === roomId);
   if (!room) return { refused: `there is no room "${roomId}"` };
   if (room.rects.length < 2) return { refused: `room "${roomId}" has a single rect` };
-  return pruneDoors({
-    ...doc,
-    rooms: doc.rooms.map((candidate) =>
-      candidate.id === roomId
-        ? { ...candidate, rects: candidate.rects.filter((_, at) => at !== index) }
-        : candidate,
-    ),
-  });
+  return keepLightsOutOfWalls(
+    pruneDoors({
+      ...doc,
+      rooms: doc.rooms.map((candidate) =>
+        candidate.id === roomId
+          ? { ...candidate, rects: candidate.rects.filter((_, at) => at !== index) }
+          : candidate,
+      ),
+    }),
+  );
 }
 
 /** The room rect under a point, last listed first as it draws on top. */
@@ -380,10 +394,37 @@ export function spawnAt(
   return best;
 }
 
+/** The id of the light `after` has and `before` did not, as an add op leaves it. */
+export function addedLightId(before: LevelDocument, after: LevelDocument): string | null {
+  const known = new Set((before.lights ?? []).map((light) => light.id));
+  return (after.lights ?? []).find((light) => !known.has(light.id))?.id ?? null;
+}
+
+/** The light within `radius` of a point, nearest first. */
+export function lightAt(doc: LevelDocument, x: number, z: number, radius: number): string | null {
+  let best: string | null = null;
+  let bestDistance = radius;
+  for (const light of doc.lights ?? []) {
+    const distance = Math.hypot(light.x - x, light.z - z);
+    if (distance <= bestDistance) {
+      best = light.id;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/** Give a light another kind; no level op covers this, and the position is untouched. */
+export function setLightKind(doc: LevelDocument, id: string, kind: LevelLight["kind"]): EditResult {
+  const lights = doc.lights ?? [];
+  if (!lights.some((light) => light.id === id)) return { refused: `there is no light "${id}"` };
+  return { ...doc, lights: lights.map((light) => (light.id === id ? { ...light, kind } : light)) };
+}
+
 /**
  * Keys of what differs from `before` to `after` and still exists in `after`,
  * the entities an external change highlights: `object:<id>`, `room:<id>`,
- * `door:<key>` and `spawn:<team>:<index>`. `removed` counts what went away.
+ * `door:<key>`, `spawn:<team>:<index>` and `light:<id>`. `removed` counts what went away.
  */
 export function changedEntities(
   before: LevelDocument,
@@ -418,6 +459,13 @@ export function changedEntities(
     });
     removed += Math.max(0, before.spawns[team].length - after.spawns[team].length);
   }
+  const lightsBefore = new Map((before.lights ?? []).map((light) => [light.id, light]));
+  for (const light of after.lights ?? []) {
+    if (!same(lightsBefore.get(light.id), light)) keys.push(`light:${light.id}`);
+  }
+  const lightIds = new Set((after.lights ?? []).map((light) => light.id));
+  removed += (before.lights ?? []).filter((light) => !lightIds.has(light.id)).length;
+
   if (!same(before.grid, after.grid)) keys.push("grid");
   return { keys, removed };
 }

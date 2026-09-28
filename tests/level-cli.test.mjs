@@ -146,6 +146,54 @@ test("an edit chain writes the document, keeps it valid and prints the report de
   assert.deepEqual(byKey(final.doors), byKey(original.doors));
 });
 
+test("a light chain adds, moves, lists, removes and re-proposes lights, leaving a valid document", async () => {
+  const original = JSON.parse(await readFile(file, "utf8")).lights;
+  assert.equal(original.length, 23);
+  assert.match(level("view").out, /23 lights/);
+  assert.equal(level("light", "list").out.trim().split("\n").length, 23);
+  assert.match(level("light", "list").out, /^light-1 room \(11\.19, 12\.94\) in hangar$/m);
+
+  const added = level("light", "add", "--at", "10,10", "--kind", "corridor", "--id", "probe");
+  assert.equal(added.code, 0, added.out + added.err);
+  assert.match(added.out, /added light probe \(corridor\) at \(10, 10\)/);
+  assert.match(level("light", "move", "probe", "--by=-1,0.5").out, /moved light probe/);
+  assert.deepEqual(
+    (await current()).lights.find((light) => light.id === "probe"),
+    { id: "probe", x: 9, z: 10.5, kind: "corridor" },
+  );
+  assert.equal(level("light", "remove", "probe").code, 0);
+  assert.equal(level("light", "remove", "probe").code, EXIT_INVALID);
+
+  const proposed = level("light", "propose", "--rooms", "3");
+  assert.equal(proposed.code, 0, proposed.out + proposed.err);
+  assert.match(proposed.out, /replaced 23 lights with 12 proposed \(3 room, 9 corridor\)/);
+  assert.equal(level("light", "propose").code, 0);
+
+  const text = await readFile(file, "utf8");
+  assert.equal(formatLevelDocument(JSON.parse(text)), text, "written in the formatter's layout");
+  assert.deepEqual(JSON.parse(text).lights, original);
+});
+
+test("a light edit into a wall or with bad input exits non-zero and writes nothing", async () => {
+  const before = await readFile(file, "utf8");
+  const cases = [
+    [["light", "add", "--at=-44,0"], EXIT_INVALID, /op\.blocked .*inside a wall/],
+    [["light", "move", "light-1", "--to=-44,0"], EXIT_INVALID, /op\.blocked/],
+    [["light", "move", "light-1"], EXIT_USAGE, /exactly one of --to/],
+    [["light", "add", "--at", "0,0", "--kind", "spot"], EXIT_USAGE, /--kind must be/],
+    [["light", "add"], EXIT_USAGE, /--at needs 2 comma-separated numbers/],
+    [["light", "propose", "--rooms=-1"], EXIT_INVALID, /whole number/],
+    [["light", "shine"], EXIT_USAGE, /light needs list, add, move, remove or propose/],
+    [["move", "command-1", "--kind", "room"], EXIT_USAGE, /move does not take --kind/],
+  ];
+  for (const [args, code, message] of cases) {
+    const result = level(...args);
+    assert.equal(result.code, code, `${args.join(" ")}: ${result.out}${result.err}`);
+    assert.match(result.out + result.err, message);
+  }
+  assert.equal(await readFile(file, "utf8"), before);
+});
+
 test("a blocked edit exits non-zero, names the blocker and writes nothing", async () => {
   const before = await readFile(file, "utf8");
   const [target] = (await current()).objects;

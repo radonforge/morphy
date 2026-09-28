@@ -108,6 +108,21 @@ export interface SpawnPoints {
   hunters: Vec3[];
 }
 
+export type MapLightKind = "room" | "corridor";
+
+const MAP_LIGHT_KINDS: readonly MapLightKind[] = ["room", "corridor"];
+
+/**
+ * A point light hung over a night map's deck. `room` lights pool warm over
+ * furniture, `corridor` lights mark a route; the theme decides colour and reach.
+ */
+export interface MapLight {
+  id: string;
+  x: number;
+  z: number;
+  kind: MapLightKind;
+}
+
 export interface MapDefinition {
   id: string;
   bounds: MapBounds;
@@ -117,6 +132,8 @@ export interface MapDefinition {
   scenery: SceneryInstance[];
   props: PropInstance[];
   propCatalog: PropDefinition[];
+  /** Authored point lights; a map without them has its lights picked from its layout. */
+  lights?: MapLight[];
 }
 
 export class MapValidationError extends Error {
@@ -206,6 +223,16 @@ function isSceneryInstance(value: unknown): value is SceneryInstance {
   );
 }
 
+function isMapLight(value: unknown): value is MapLight {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    isFiniteNumber(value.x) &&
+    isFiniteNumber(value.z) &&
+    MAP_LIGHT_KINDS.includes(value.kind as MapLightKind)
+  );
+}
+
 /**
  * Parse and validate a map loaded from an untrusted source (file / bundle).
  * Throws {@link MapValidationError} with an actionable message on malformed input.
@@ -246,6 +273,20 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
       throw new MapValidationError(id, "field 'scenery' must be SceneryInstance[]");
     }
     scenery = raw.scenery;
+  }
+  let lights: MapLight[] | undefined;
+  if (raw.lights !== undefined) {
+    if (!Array.isArray(raw.lights) || !raw.lights.every(isMapLight)) {
+      throw new MapValidationError(id, "field 'lights' must be MapLight[]");
+    }
+    const lightIds = new Set<string>();
+    for (const light of raw.lights) {
+      if (lightIds.has(light.id)) {
+        throw new MapValidationError(id, `lights contain duplicate id '${light.id}'`);
+      }
+      lightIds.add(light.id);
+    }
+    lights = raw.lights.map(({ id: lightId, x, z, kind }) => ({ id: lightId, x, z, kind }));
   }
   if (!Array.isArray(raw.props) || !raw.props.every(isPropInstance)) {
     throw new MapValidationError(id, "field 'props' must be PropInstance[]");
@@ -293,5 +334,6 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
     scenery,
     props: raw.props,
     propCatalog: raw.propCatalog,
+    ...(lights !== undefined ? { lights } : {}),
   };
 }
