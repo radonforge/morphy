@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { copyFile, mkdtemp, readFile, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
@@ -36,11 +36,15 @@ after(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-function level(...args) {
-  const result = spawnSync(process.execPath, ["--import", "tsx", CLI, ...args, "--file", file], {
+function levelOn(path, ...args) {
+  const result = spawnSync(process.execPath, ["--import", "tsx", CLI, ...args, "--file", path], {
     encoding: "utf8",
   });
   return { code: result.status, out: result.stdout, err: result.stderr };
+}
+
+function level(...args) {
+  return levelOn(file, ...args);
 }
 
 async function current() {
@@ -164,6 +168,14 @@ test("bad input exits non-zero and says what to fix", async () => {
     [["room", "resize", "lab", "0,22,0,4"], EXIT_INVALID, /overlaps room/],
     [["door", "toggle", "v:0:0"], EXIT_INVALID, /grid border/],
     [["view", "nowhere"], EXIT_USAGE, /no room "nowhere"/],
+    [["view", "--at", "0,0"], EXIT_USAGE, /view does not take --at/],
+    [
+      ["rotate", "command-1", "--to=1,1"],
+      EXIT_USAGE,
+      /rotate does not take --to; it takes --turns, --degrees/,
+    ],
+    [["door", "toggle", "v:10"], EXIT_USAGE, /missing cell/],
+    [["door", "toggle", "h"], EXIT_USAGE, /missing line and cell/],
     [["fly"], EXIT_USAGE, /unknown command/],
   ];
   for (const [args, code, message] of cases) {
@@ -172,4 +184,49 @@ test("bad input exits non-zero and says what to fix", async () => {
     assert.match(result.out + result.err, message);
   }
   assert.equal(await readFile(file, "utf8"), before);
+});
+
+test("--help prints the usage, the exit codes and exits 0", () => {
+  for (const args of [["--help"], ["-h"], ["help"], ["place", "--help"]]) {
+    const result = level(...args);
+    assert.equal(result.code, 0, result.err);
+    assert.match(result.out, /^usage: pnpm level <command>/);
+    assert.match(result.out, /check \[room\] .*exits 1 when any finding is an error/);
+  }
+});
+
+test("an unusable document file exits 1 with its path and what to fix", async () => {
+  const cases = [
+    [join(dir, "missing.json"), null, /cannot read .*missing\.json \(ENOENT\); pass --file/],
+    [join(dir, "broken.json"), "{ not json", /broken\.json is not valid JSON .*fix the syntax/],
+    [
+      join(dir, "urban.json"),
+      '{ "id": "urban" }',
+      /urban\.json has id "urban", which has no level catalog/,
+    ],
+    [
+      join(dir, "invalid.json"),
+      '{ "id": "station", "version": 9 }',
+      /invalid\.json: invalid level "station"/,
+    ],
+  ];
+  for (const [path, content, message] of cases) {
+    if (content !== null) await writeFile(path, content, "utf8");
+    const result = levelOn(path, "check");
+    assert.equal(result.code, EXIT_INVALID, result.out + result.err);
+    assert.match(result.err, message);
+    assert.doesNotMatch(result.err, /\n\s+at /, "no stack trace");
+  }
+});
+
+test("check exits 1 while the report holds an error finding and 0 once it is clean", async () => {
+  const path = join(dir, "blocked-spawn.json");
+  const doc = JSON.parse(await readFile(STATION, "utf8"));
+  const [chair] = doc.objects;
+  doc.spawns.props[0] = { x: chair.x, z: chair.z };
+  await writeFile(path, formatLevelDocument(doc), "utf8");
+  const failing = levelOn(path, "check");
+  assert.equal(failing.code, EXIT_INVALID);
+  assert.match(failing.out, /^error spawn\.blocked/m);
+  assert.equal(level("check").code, 0);
 });

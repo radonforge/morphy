@@ -46,27 +46,47 @@ const CATALOGS: Partial<Record<MapId, readonly PropDefinition[]>> = { station: S
 const EXIT_INVALID = 1;
 const EXIT_USAGE = 2;
 
-const USAGE = `usage: pnpm level <command> [--file <level.json>]
+const USAGE = `usage: pnpm level <command> [--file <level.json>] [--help]
   view [room]                     summary, or an ASCII plan of one room
   list [room]                     one line per object
-  check [room]                    findings and metrics
+  check [room]                    findings and metrics; exits 1 when any finding is an error
   place <type> --at x,z | --center room | --wall room:N|S|E|W | --next-to id:N|S|E|W
                | --row room:x|z:count:gap   [--id id] [--yaw degrees] [--free]
   move <id> --to x,z | --by dx,dz [--free]
   rotate <id> [--turns n | --degrees d]
   remove <id>
-  duplicate <id> [--side N|S|E|W] [--id new-id]
+  duplicate <id> [--side N|S|E|W] [--id new-id] [--free]
   room add <id> i0,i1,j0,j1
   room resize <id> i0,i1,j0,j1 [--rect n]
   room remove <id>
   door toggle v|h:line:cell
-negative values need the = form: --by=-0.5,0`;
+negative values need the = form: --by=-0.5,0
+exit codes: 0 done, 1 refused edit, error finding or unusable document, 2 bad command line`;
+
+/** The flags each command takes, besides \`--file\` and \`--help\`. */
+const COMMAND_FLAGS: Readonly<Record<string, readonly string[]>> = {
+  view: [],
+  list: [],
+  check: [],
+  place: ["at", "center", "wall", "next-to", "row", "id", "yaw", "free"],
+  move: ["to", "by", "free"],
+  rotate: ["turns", "degrees"],
+  remove: [],
+  duplicate: ["side", "id", "free"],
+  room: ["rect"],
+  door: [],
+};
+const GLOBAL_FLAGS = ["file", "help"];
+const DOOR_PARTS = ["axis", "line", "cell"];
 
 /** Bad command-line input: printed with the usage and a non-zero exit. */
 class UsageError extends Error {}
 
 /** The document file changed under an edit; nothing was written. */
 class ConflictError extends Error {}
+
+/** The document file is missing, unreadable, not JSON or not a valid level. */
+class DocumentError extends Error {}
 
 function numbers(text: string | undefined, count: number, what: string): number[] {
   const tokens = (text ?? "").split(",");
@@ -141,17 +161,37 @@ function placement(values: Record<string, string | boolean | undefined>): Placem
 }
 
 function load(file: string): { text: string; doc: LevelDocument; context: LevelContext } {
-  const text = readFileSync(file, "utf8");
-  const raw: unknown = JSON.parse(text);
+  let text: string;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch (error) {
+    const code = (error as { code?: unknown }).code ?? "unreadable";
+    throw new DocumentError(
+      `cannot read ${file} (${String(code)}); pass --file with the path of a level document`,
+    );
+  }
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    throw new DocumentError(
+      `${file} is not valid JSON (${(error as Error).message}); fix the syntax or restore it with git`,
+    );
+  }
   const id = typeof raw === "object" && raw !== null ? (raw as { id?: unknown }).id : undefined;
   const catalog = isMapId(id) ? CATALOGS[id] : undefined;
   if (catalog === undefined) {
-    throw new UsageError(
-      `${file} is not a level document with a known catalog (id ${JSON.stringify(id)})`,
+    throw new DocumentError(
+      `${file} has id ${JSON.stringify(id)}, which has no level catalog; the CLI edits ${Object.keys(CATALOGS).join(", ")} documents`,
     );
   }
   const context = { catalog, cards: ASSET_CARDS };
-  return { text, doc: parseLevelDocument(raw, { catalog, id: id as MapId }), context };
+  try {
+    return { text, doc: parseLevelDocument(raw, { catalog, id: id as MapId }), context };
+  } catch (error) {
+    if (error instanceof LevelValidationError) throw new DocumentError(`${file}: ${error.message}`);
+    throw error;
+  }
 }
 
 /**
@@ -240,6 +280,7 @@ function edit(
           id: required(first, "object id"),
           ...(values.side !== undefined ? { side: side(values.side as string, "--side") } : {}),
           ...(values.id !== undefined ? { newId: values.id as string } : {}),
+          free,
         },
         context,
       );
@@ -256,7 +297,14 @@ function edit(
     }
     case "door": {
       if (first !== "toggle") throw new UsageError("door needs toggle");
-      const [axis, line, cell] = required(second, "door as v|h:line:cell").split(":");
+      const parts = required(second, "door as v|h:line:cell").split(":");
+      const missing = DOOR_PARTS.filter((_, k) => (parts[k] ?? "") === "");
+      if (missing.length > 0 || parts.length > DOOR_PARTS.length) {
+        throw new UsageError(
+          `door needs v|h:line:cell, ${missing.length > 0 ? `missing ${missing.join(" and ")}` : "got extra parts"} in ${JSON.stringify(second)}`,
+        );
+      }
+      const [axis, line, cell] = parts;
       if (axis !== "v" && axis !== "h") throw new UsageError("door axis must be v or h");
       const [l, c] = numbers(`${line},${cell}`, 2, "door line and cell");
       return toggleDoor(doc, { axis, line: l!, cell: c! });
@@ -286,11 +334,27 @@ function run(argv: string[]): number {
       degrees: { type: "string" },
       side: { type: "string" },
       rect: { type: "string" },
+      help: { type: "boolean", short: "h" },
     },
   });
+  const [command, room] = positionals;
+  if (values.help === true || command === "help") {
+    console.log(USAGE);
+    return 0;
+  }
+  if (command === undefined) throw new UsageError("missing command");
+  const allowed = COMMAND_FLAGS[command];
+  if (allowed === undefined) throw new UsageError(`unknown command ${JSON.stringify(command)}`);
+  const stray = Object.keys(values).filter(
+    (flag) => !GLOBAL_FLAGS.includes(flag) && !allowed.includes(flag),
+  );
+  if (stray.length > 0) {
+    throw new UsageError(
+      `${command} does not take ${stray.map((flag) => `--${flag}`).join(", ")}${allowed.length > 0 ? `; it takes ${allowed.map((flag) => `--${flag}`).join(", ")}` : ""}`,
+    );
+  }
   const file = values.file ?? DEFAULT_FILE;
   const { text, doc, context } = load(file);
-  const [command, room] = positionals;
   const hasRoom = (id: string | undefined): string | undefined => {
     if (id !== undefined && !doc.rooms.some((entry) => entry.id === id)) {
       throw new UsageError(
@@ -310,14 +374,11 @@ function run(argv: string[]): number {
       return 0;
     case "check": {
       const id = hasRoom(room);
-      const report = validateLevel(doc, context);
-      console.log(
-        formatReport(id === undefined ? report : reportForRoom(report, doc, context, id)),
-      );
-      return 0;
+      const full = validateLevel(doc, context);
+      const report = id === undefined ? full : reportForRoom(full, doc, context, id);
+      console.log(formatReport(report));
+      return report.findings.some((finding) => finding.severity === "error") ? EXIT_INVALID : 0;
     }
-    case undefined:
-      throw new UsageError("missing command");
   }
   const before = validateLevel(doc, context);
   const result = edit(positionals, values, doc, context);
@@ -340,7 +401,11 @@ try {
   if (error instanceof UsageError || isParseArgsError(error)) {
     console.error(`${(error as Error).message}\n${USAGE}`);
     process.exitCode = EXIT_USAGE;
-  } else if (error instanceof LevelValidationError || error instanceof ConflictError) {
+  } else if (
+    error instanceof DocumentError ||
+    error instanceof ConflictError ||
+    error instanceof LevelValidationError
+  ) {
     console.error(error.message);
     process.exitCode = EXIT_INVALID;
   } else {
