@@ -246,6 +246,14 @@ test("objects whose vertical spans do not meet never overlap", () => {
   assert.deepEqual(overlaps, []);
 });
 
+test("a room with no objects is not short of disguises", () => {
+  const raw = edited((d) => {
+    d.objects = d.objects.filter((object) => object.id.startsWith("west-"));
+  });
+  const found = report(raw).findings.filter((f) => f.code === "room.few-disguises");
+  assert.deepEqual(found, []);
+});
+
 test("findings are silent on other codes for a single change", () => {
   assert.deepEqual([...codes(CASES[1][1])], ["object.wall"]);
 });

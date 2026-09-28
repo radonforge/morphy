@@ -316,7 +316,7 @@ function roomFindings(
       });
     }
     metrics[key("disguises")] = disguises;
-    if (disguises < LEVEL_MIN_DISGUISES) {
+    if (inside.length > 0 && disguises < LEVEL_MIN_DISGUISES) {
       findings.push({
         code: "room.few-disguises",
         severity: "warning",
