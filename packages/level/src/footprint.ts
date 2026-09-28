@@ -1,6 +1,7 @@
 import {
   type AssetCard,
   computePropBounds,
+  LEVEL_STEP_HEIGHT,
   type PropDefinition,
   uniformFitScale,
 } from "@morphy/shared";
@@ -71,14 +72,18 @@ export function objectFootprint(object: LevelObject, context: LevelContext): Foo
 }
 
 /**
- * The boxes a player's body collides with around a placed object: one per primitive
- * part, rotated with the object, exactly as the client builds its movement colliders.
+ * The boxes that stop a player's body around a placed object: one per primitive part,
+ * rotated with the object, exactly as the client builds its movement colliders, less
+ * the parts whose top is at most {@link LEVEL_STEP_HEIGHT}, which a body steps onto.
  * The uniform fit keeps the rendered model inside them.
  */
 export function objectHitboxes(object: LevelObject, context: LevelContext): Rect2[] {
   const def = context.catalog.find((entry) => entry.id === object.type);
   if (def === undefined) return [];
-  return def.parts.map((part) => {
+  const blocking = def.parts.filter(
+    (part) => part.position.y + part.size.y / 2 > LEVEL_STEP_HEIGHT,
+  );
+  return blocking.map((part) => {
     const offset = rotateOffset(part.position.x, part.position.z, object.yaw);
     return {
       x: object.x + offset.x,

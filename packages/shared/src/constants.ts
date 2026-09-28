@@ -102,6 +102,8 @@ export const PARTY_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 
 /** Radius of a player's body in the level checks; the client's `PLAYER_RADIUS` in `movement.ts`. */
 export const LEVEL_BODY_RADIUS = 0.4;
+/** Tallest collision box a body walks over in the level checks; the client's `STEP_HEIGHT`. */
+export const LEVEL_STEP_HEIGHT = 0.35;
 /** Side of one sample cell of the level checks' reachability and sightline grid, in metres. */
 export const LEVEL_SAMPLE_CELL = 0.5;
 /** Penetration below which two footprints count as touching rather than overlapping. */

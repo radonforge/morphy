@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fitModel } from "../packages/client/src/game/modelFit.ts";
-import { PLAYER_RADIUS } from "../packages/client/src/game/movement.ts";
+import { PLAYER_RADIUS, STEP_HEIGHT } from "../packages/client/src/game/movement.ts";
 import {
   FINDING_CODES,
   objectFootprint,
@@ -15,6 +15,7 @@ import {
   ASSET_CARDS,
   computePropBounds,
   LEVEL_BODY_RADIUS,
+  LEVEL_STEP_HEIGHT,
   uniformFitScale,
 } from "../packages/shared/src/index.ts";
 
@@ -59,8 +60,39 @@ function edited(change) {
   return raw;
 }
 
-test("the level checks use the client's body radius", () => {
+test("the level checks use the client's body radius and step height", () => {
   assert.equal(LEVEL_BODY_RADIUS, PLAYER_RADIUS);
+  assert.equal(LEVEL_STEP_HEIGHT, STEP_HEIGHT);
+});
+
+/** A flat slab across the doorway, first too low to stop a body and then too tall to step onto. */
+function slabContext(height) {
+  const slab = {
+    id: "slab",
+    name: "Slab",
+    parts: [
+      {
+        kind: "box",
+        position: { x: 0, y: height / 2, z: 0 },
+        size: { x: 3, y: height, z: 4 },
+        color: "#888888",
+      },
+    ],
+  };
+  return { ...CONTEXT, catalog: [...SPACE_CATALOG, slab] };
+}
+
+test("a box a body steps onto blocks neither a doorway nor the flood", () => {
+  const raw = edited((d) => d.objects.push({ id: "slab-1", type: "slab", x: 0, z: 2, yaw: 0 }));
+  const codesAt = (height) => {
+    const context = slabContext(height);
+    const doc = parseLevelDocument(raw, { catalog: context.catalog });
+    return new Set(validateLevel(doc, context).findings.map((finding) => finding.code));
+  };
+  const low = codesAt(LEVEL_STEP_HEIGHT);
+  assert.ok(!low.has("door.blocked") && !low.has("floor.unreachable"));
+  const tall = codesAt(1);
+  assert.ok(tall.has("door.blocked") && tall.has("floor.unreachable"));
 });
 
 test("a footprint is the client's uniform fit of the model into the catalog box", () => {
