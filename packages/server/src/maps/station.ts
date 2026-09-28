@@ -4,7 +4,10 @@ import { SPACE_CATALOG } from "../spaceCatalog";
 import stationLevel from "./station.level.json" with { type: "json" };
 
 /** The committed Kepler-9 document, validated once when the server loads the map registry. */
-const STATION_LEVEL = parseLevelDocument(stationLevel, { catalog: SPACE_CATALOG });
+const STATION_LEVEL = parseLevelDocument(stationLevel, {
+  catalog: SPACE_CATALOG,
+  id: "station",
+});
 
 /**
  * Kepler-9 Station: six themed compartments around a `+`-shaped corridor, each

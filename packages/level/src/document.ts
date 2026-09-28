@@ -69,9 +69,10 @@ export class LevelValidationError extends Error {
   }
 }
 
-/** What a document is checked against: the prop catalog its objects must come from. */
+/** What a document is checked against: the prop catalog its objects must come from and, when given, the map it must be. */
 export interface LevelParseOptions {
   catalog: readonly PropDefinition[];
+  id?: MapId;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -109,6 +110,13 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
     return fail("document", `id ${JSON.stringify(input.id)} is not a map id`, "use a MapId");
   }
   const id = input.id;
+  if (options.id !== undefined && id !== options.id) {
+    return fail(
+      "document",
+      `id "${id}" is not the expected "${options.id}"`,
+      `set "id": "${options.id}"`,
+    );
+  }
   if (input.version !== LEVEL_DOCUMENT_VERSION) {
     return fail(
       "document",

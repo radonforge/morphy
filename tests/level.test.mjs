@@ -115,6 +115,13 @@ for (const [label, build, entity] of INVALID) {
   });
 }
 
+test("parse rejects a document that is not the map the caller asked for", () => {
+  assert.throws(
+    () => parseLevelDocument(fixture(), { ...OPTIONS, id: "urban" }),
+    (error) => error instanceof LevelValidationError && error.entityId === "document",
+  );
+});
+
 test("a compiled level is a valid map", () => {
   const doc = parseLevelDocument(fixture(), OPTIONS);
   const map = compileLevel(doc, { catalog: SPACE_CATALOG, seed: 3 });
