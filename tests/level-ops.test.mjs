@@ -196,6 +196,34 @@ test("a blocked placement names what blocks it and places nothing", () => {
   );
 });
 
+test("an object under another's span places, one level with it does not", () => {
+  const shelf = {
+    id: "shelf",
+    name: "Shelf",
+    parts: [
+      {
+        kind: "box",
+        position: { x: 0, y: 1.75, z: 0 },
+        size: { x: 1, y: 0.5, z: 1 },
+        color: "#888888",
+      },
+    ],
+  };
+  const context = { ...CONTEXT, catalog: [...SPACE_CATALOG, shelf] };
+  const base = parseLevelDocument(
+    { ...structuredClone(doc()), objects: [{ id: "west-1", type: "shelf", x: -7, z: -2, yaw: 0 }] },
+    { catalog: context.catalog },
+  );
+  assert.equal(
+    placeObject(base, { type: "chair", relation: { at: { x: -7, z: -2 } } }, context).ok,
+    true,
+  );
+  assert.equal(
+    placeObject(base, { type: "shelf", relation: { at: { x: -7, z: -2 } } }, context).ok,
+    false,
+  );
+});
+
 test("bad placement input is an invalid op, not a crash", () => {
   const original = doc();
   for (const args of [

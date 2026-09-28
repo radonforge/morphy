@@ -33,6 +33,14 @@ export interface Extent2 {
   maxZ: number;
 }
 
+/** Whether two vertical spans share more than a boundary, so the shapes can collide at all. */
+export function spansMeet(
+  a: { yMin: number; yMax: number },
+  b: { yMin: number; yMax: number },
+): boolean {
+  return a.yMin < b.yMax && b.yMin < a.yMax;
+}
+
 /** Rotate a local offset by `yaw` into world axes. */
 export function rotateOffset(lx: number, lz: number, yaw: number): { x: number; z: number } {
   const cos = Math.cos(yaw);

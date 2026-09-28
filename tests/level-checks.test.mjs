@@ -225,6 +225,27 @@ test("a room with no door is unreachable as a whole", () => {
   assert.equal(result.metrics["floor.unreachable.m2"], result.metrics["floor.reachable.m2"]);
 });
 
+test("objects whose vertical spans do not meet never overlap", () => {
+  const context = slabContext(0.3);
+  const shelf = {
+    id: "shelf",
+    name: "Shelf",
+    parts: [
+      {
+        kind: "box",
+        position: { x: 0, y: 1.75, z: 0 },
+        size: { x: 1, y: 0.5, z: 1 },
+        color: "#888888",
+      },
+    ],
+  };
+  context.catalog.push(shelf);
+  const raw = edited((d) => d.objects.push({ id: "west-4", type: "shelf", x: -6, z: -2, yaw: 0 }));
+  const doc = parseLevelDocument(raw, { catalog: context.catalog });
+  const overlaps = validateLevel(doc, context).findings.filter((f) => f.code === "object.overlap");
+  assert.deepEqual(overlaps, []);
+});
+
 test("findings are silent on other codes for a single change", () => {
   assert.deepEqual([...codes(CASES[1][1])], ["object.wall"]);
 });

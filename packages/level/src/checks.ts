@@ -18,6 +18,7 @@ import {
   rectCorners,
   rectExtent,
   snapToward,
+  spansMeet,
 } from "./geometry";
 import {
   components,
@@ -156,15 +157,18 @@ function objectFindings(space: LevelSpace, findings: Finding[], unplaced: string
   const placed = doc.objects.filter((object) => space.footprints.has(object.id));
   for (let i = 0; i < placed.length; i++) {
     const a = placed[i]!;
-    const ra = space.footprints.get(a.id)!.rect;
+    const fa = space.footprints.get(a.id)!;
+    const ra = fa.rect;
     const ea = rectExtent(ra);
     for (let k = i + 1; k < placed.length; k++) {
       const b = placed[k]!;
-      const rb = space.footprints.get(b.id)!.rect;
+      const fb = space.footprints.get(b.id)!;
+      const rb = fb.rect;
       const eb = rectExtent(rb);
       if (eb.minX >= ea.maxX || eb.maxX <= ea.minX || eb.minZ >= ea.maxZ || eb.maxZ <= ea.minZ) {
         continue;
       }
+      if (!spansMeet(fa, fb)) continue;
       const hit = penetration(ra, rb);
       if (hit.depth <= LEVEL_OVERLAP_TOLERANCE) continue;
       findings.push({

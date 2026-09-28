@@ -18,6 +18,7 @@ import {
   rectExtent,
   SNAP_EPSILON,
   snapToward,
+  spansMeet,
 } from "./geometry";
 import { buildSpace, doorRegions, type LevelSpace, lineX, lineZ, regionGrid } from "./space";
 
@@ -159,6 +160,7 @@ function blockersOf(
   for (const object of [...doc.objects, ...extra]) {
     if (ignore.has(object.id)) continue;
     const footprint = space.footprints.get(object.id) ?? objectFootprint(object, context);
+    if (footprint !== null && !spansMeet(footprint, extent)) continue;
     const shapes = footprint === null ? objectHitboxes(object, context) : [footprint.rect];
     if (shapes.some((shape) => overlapDepth(shape, rect) > LEVEL_OVERLAP_TOLERANCE)) {
       blockers.push(`${object.id} (${object.type})`);
