@@ -621,21 +621,21 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
       const light = current.lights?.find((candidate) => candidate.id === lightId);
       if (!light) return;
       applyOp(
-        moveLight(
-          current,
-          { id: lightId, to: { x: pose.x ?? light.x, z: pose.z ?? light.z }, free: true },
-          context,
-        ),
+        moveLight(current, {
+          id: lightId,
+          to: { x: pose.x ?? light.x, z: pose.z ?? light.z },
+          free: true,
+        }),
         `Move ${lightId}`,
       );
     },
-    [applyOp, context],
+    [applyOp],
   );
 
   const proposeAllLights = useCallback(() => {
     const current = latest.current.history.present.doc;
-    if (applyOp(proposeLights(current, context), "Propose lights")) setSelection(null);
-  }, [applyOp, context]);
+    if (applyOp(proposeLights(current), "Propose lights")) setSelection(null);
+  }, [applyOp]);
 
   const dropGesture = useCallback(() => {
     gestureRef.current = null;
@@ -880,11 +880,11 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
           };
           return;
         }
-        const result = addLight(
-          current,
-          { at, kind: event.shiftKey ? "corridor" : "room", free },
-          context,
-        );
+        const result = addLight(current, {
+          at,
+          kind: event.shiftKey ? "corridor" : "room",
+          free,
+        });
         if (!applyOp(result, "Add light")) return;
         const added = addedLightId(current, result.doc);
         if (added) setSelection({ kind: "light", id: added });
@@ -1003,11 +1003,11 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
       }
       case "move-light": {
         const result = fromOp(
-          moveLight(
-            gesture.base,
-            { id: gesture.id, to: { x: at.x + gesture.dx, z: at.z + gesture.dz }, free },
-            context,
-          ),
+          moveLight(gesture.base, {
+            id: gesture.id,
+            to: { x: at.x + gesture.dx, z: at.z + gesture.dz },
+            free,
+          }),
         );
         if (isRefusal(result)) {
           gesture.blocked = result.refused;

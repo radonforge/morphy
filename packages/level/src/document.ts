@@ -306,7 +306,7 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
   };
   if (input.lights === undefined) return parsed;
   if (!Array.isArray(input.lights)) return fail("lights", "must be an array", 'write "lights": []');
-  const walls = wallRects(parsed, options.catalog);
+  const walls = wallRects(parsed);
   const lightIds = new Set<string>();
   const lights: LevelLight[] = [];
   for (const [index, raw] of input.lights.entries()) {

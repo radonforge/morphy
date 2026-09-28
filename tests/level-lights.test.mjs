@@ -15,6 +15,7 @@ import {
   toggleDoor,
   validateLevel,
 } from "../packages/level/src/index.ts";
+import { wallRects } from "../packages/level/src/walls.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
 import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
 import { ASSET_CARDS, parseMapDefinition } from "../packages/shared/src/index.ts";
@@ -221,44 +222,38 @@ test("a corridor light is not held to the wall clearance", () => {
 });
 
 test("adding a light snaps it, names it by kind and refuses walls and repeated ids", () => {
-  const first = addLight(parse(undefined), { at: { x: -6.2, z: 0.1 } }, CONTEXT);
+  const first = addLight(parse(undefined), { at: { x: -6.2, z: 0.1 } });
   assert.ok(first.ok);
   assert.deepEqual(first.doc.lights, [LAMP]);
-  const second = addLight(first.doc, { at: { x: 0, z: -4 }, kind: "corridor" }, CONTEXT);
+  const second = addLight(first.doc, { at: { x: 0, z: -4 }, kind: "corridor" });
   assert.equal(second.doc.lights[1].id, "light-2");
-  const third = addLight(second.doc, { at: { x: -5, z: 0 } }, CONTEXT);
+  const third = addLight(second.doc, { at: { x: -5, z: 0 } });
   assert.equal(third.doc.lights[2].id, "light-3");
-  assert.equal(addLight(third.doc, { at: { x: 1, z: 1 }, id: "light-1" }, CONTEXT).ok, false);
-  const walled = addLight(third.doc, { at: { x: -2, z: -4 } }, CONTEXT);
+  assert.equal(addLight(third.doc, { at: { x: 1, z: 1 }, id: "light-1" }).ok, false);
+  const walled = addLight(third.doc, { at: { x: -2, z: -4 } });
   assert.equal(walled.ok, false);
   assert.equal(walled.findings[0].code, "op.blocked");
   assert.equal(walled.doc, third.doc);
-  assert.equal(addLight(third.doc, { at: { x: 11, z: 0 } }, CONTEXT).ok, false);
+  assert.equal(addLight(third.doc, { at: { x: 11, z: 0 } }).ok, false);
 });
 
 test("adding or moving a light to a non-finite spot or with an empty id is refused by the op", () => {
   const doc = parse([LAMP]);
+  assert.equal(addLight(doc, { at: { x: Number.NaN, z: 0 } }).findings[0].code, "op.invalid");
+  assert.equal(addLight(doc, { at: { x: 1, z: 1 }, id: "" }).findings[0].code, "op.invalid");
   assert.equal(
-    addLight(doc, { at: { x: Number.NaN, z: 0 } }, CONTEXT).findings[0].code,
-    "op.invalid",
-  );
-  assert.equal(
-    addLight(doc, { at: { x: 1, z: 1 }, id: "" }, CONTEXT).findings[0].code,
-    "op.invalid",
-  );
-  assert.equal(
-    moveLight(doc, { id: "light-1", to: { x: Number.POSITIVE_INFINITY, z: 0 } }, CONTEXT).ok,
+    moveLight(doc, { id: "light-1", to: { x: Number.POSITIVE_INFINITY, z: 0 } }).ok,
     false,
   );
 });
 
 test("moving a light needs exactly one target and refuses a wall", () => {
   const doc = parse([LAMP]);
-  const moved = moveLight(doc, { id: "light-1", by: { x: 1, z: 0.5 } }, CONTEXT);
+  const moved = moveLight(doc, { id: "light-1", by: { x: 1, z: 0.5 } });
   assert.deepEqual(moved.doc.lights, [{ ...LAMP, x: -5, z: 0.5 }]);
-  assert.equal(moveLight(doc, { id: "light-1" }, CONTEXT).ok, false);
-  assert.equal(moveLight(doc, { id: "nope", to: { x: 0, z: 0 } }, CONTEXT).ok, false);
-  assert.equal(moveLight(doc, { id: "light-1", to: { x: -2, z: -4 } }, CONTEXT).ok, false);
+  assert.equal(moveLight(doc, { id: "light-1" }).ok, false);
+  assert.equal(moveLight(doc, { id: "nope", to: { x: 0, z: 0 } }).ok, false);
+  assert.equal(moveLight(doc, { id: "light-1", to: { x: -2, z: -4 } }).ok, false);
 });
 
 test("removing a light drops it and names a missing one", () => {
@@ -269,7 +264,7 @@ test("removing a light drops it and names a missing one", () => {
 
 test("proposing replaces the lights with the picker's and rejects a bad count", () => {
   const doc = parse([LAMP]);
-  const proposed = proposeLights(doc, CONTEXT, { roomCount: 2 });
+  const proposed = proposeLights(doc, { roomCount: 2 });
   assert.ok(proposed.ok);
   assert.equal(proposed.doc.lights.filter((light) => light.kind === "room").length, 2);
   assert.equal(proposed.doc.lights.filter((light) => light.kind === "corridor").length, 1);
@@ -277,14 +272,14 @@ test("proposing replaces the lights with the picker's and rejects a bad count", 
     parseLevelDocument(JSON.parse(JSON.stringify(proposed.doc)), { catalog: SPACE_CATALOG }),
     proposed.doc,
   );
-  assert.equal(proposeLights(doc, CONTEXT, { roomCount: -1 }).ok, false);
+  assert.equal(proposeLights(doc, { roomCount: -1 }).ok, false);
 });
 
 test("proposing refuses a proposal that would put a light inside a wall", () => {
   const raw = hall(undefined);
   raw.spawns.hunters = [{ x: -2, z: -4 }];
   const doc = parseLevelDocument(raw, { catalog: SPACE_CATALOG });
-  const result = proposeLights(doc, CONTEXT, { roomCount: 1 });
+  const result = proposeLights(doc, { roomCount: 1 });
   assert.equal(result.ok, false);
   assert.equal(result.findings[0].code, "op.blocked");
   assert.equal(result.doc, doc);
@@ -296,4 +291,13 @@ test("an edit that would raise a wall over a light is refused", () => {
   assert.equal(closed.ok, false);
   assert.equal(closed.findings[0].code, "op.blocked");
   assert.equal(closed.doc, doc);
+});
+
+test("walls are kept while only lights or objects change and rebuilt when a room or door does", () => {
+  const doc = parse([LAMP]);
+  const walls = wallRects(doc);
+  assert.equal(wallRects(moveLight(doc, { id: "light-1", by: { x: 1, z: 0 } }).doc), walls);
+  assert.equal(wallRects({ ...doc, objects: [] }), walls);
+  assert.notEqual(wallRects(toggleDoor(doc, { axis: "v", line: 2, cell: 1 }).doc), walls);
+  assert.equal(wallRects(parse([LAMP])).length, walls.length);
 });

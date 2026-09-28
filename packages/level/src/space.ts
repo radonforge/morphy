@@ -30,7 +30,7 @@ export interface LevelSpace {
   context: LevelContext;
   halfW: number;
   halfD: number;
-  walls: Rect2[];
+  walls: readonly Rect2[];
   footprints: Map<string, Footprint>;
   hitboxes: Map<string, Rect2[]>;
   doors: DoorZone[];
@@ -123,7 +123,7 @@ export function buildSpace(doc: LevelDocument, context: LevelContext): LevelSpac
   const halfD = (doc.grid.rows * TILE) / 2;
   const cellRegion = regionGrid(doc);
 
-  const walls = wallRects(doc, context.catalog);
+  const walls = wallRects(doc);
 
   const footprints = new Map<string, Footprint>();
   const hitboxes = new Map<string, Rect2[]>();

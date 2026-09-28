@@ -237,7 +237,6 @@ function lightEdit(
   id: string | undefined,
   values: Record<string, string | boolean | undefined>,
   doc: LevelDocument,
-  context: LevelContext,
 ): OpResult {
   const free = values.free === true;
   switch (action) {
@@ -247,16 +246,12 @@ function lightEdit(
         throw new UsageError("--kind must be room or corridor");
       }
       const [x, z] = numbers(values.at as string | undefined, 2, "--at");
-      return addLight(
-        doc,
-        {
-          at: { x: x!, z: z! },
-          kind,
-          free,
-          ...(values.id !== undefined ? { id: values.id as string } : {}),
-        },
-        context,
-      );
+      return addLight(doc, {
+        at: { x: x!, z: z! },
+        kind,
+        free,
+        ...(values.id !== undefined ? { id: values.id as string } : {}),
+      });
     }
     case "move": {
       const given = ["to", "by"].filter((k) => values[k] !== undefined);
@@ -265,16 +260,12 @@ function lightEdit(
         throw new UsageError("light move needs exactly one of --to x,z or --by dx,dz");
       }
       const [x, z] = numbers(values[key] as string, 2, `--${key}`);
-      return moveLight(
-        doc,
-        { id: required(id, "light id"), [key]: { x: x!, z: z! }, free },
-        context,
-      );
+      return moveLight(doc, { id: required(id, "light id"), [key]: { x: x!, z: z! }, free });
     }
     case "remove":
       return removeLight(doc, { id: required(id, "light id") });
     case "propose":
-      return proposeLights(doc, context, {
+      return proposeLights(doc, {
         ...(values.rooms !== undefined
           ? { roomCount: numbers(values.rooms as string, 1, "--rooms")[0]! }
           : {}),
@@ -348,7 +339,7 @@ function edit(
         context,
       );
     case "light":
-      return lightEdit(first, second, values, doc, context);
+      return lightEdit(first, second, values, doc);
     case "room": {
       const id = required(second, "room id");
       if (first === "add") return addRoom(doc, { id, rect: cellRect(args[3]) });

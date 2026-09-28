@@ -205,7 +205,7 @@ test("light picking, ids and kind changes read the document's lights", () => {
   assert.equal(lightAt(doc, -5.5, 0.4, 0.9), "light-1");
   assert.equal(lightAt(doc, 0, 0, 0.9), null);
   assert.equal(lightAt(parses(fixture()), -6, 0, 0.9), null);
-  const added = addLight(doc, { at: { x: -5, z: 2 } }, CONTEXT);
+  const added = addLight(doc, { at: { x: -5, z: 2 } });
   assert.equal(addedLightId(doc, added.doc), "light-2");
   assert.equal(addedLightId(added.doc, added.doc), null);
   const corridor = setLightKind(doc, "light-1", "corridor");
@@ -249,12 +249,8 @@ test("changed entities name moved and added lights and count removed ones", () =
       { id: "light-2", x: -5, z: 2, kind: "room" },
     ],
   });
-  const moved = moveLight(before, { id: "light-1", to: { x: -5, z: 0 } }, CONTEXT).doc;
-  const after = addLight(
-    removeLight(moved, { id: "light-2" }).doc,
-    { at: { x: -4, z: -2 } },
-    CONTEXT,
-  ).doc;
+  const moved = moveLight(before, { id: "light-1", to: { x: -5, z: 0 } }).doc;
+  const after = addLight(removeLight(moved, { id: "light-2" }).doc, { at: { x: -4, z: -2 } }).doc;
   const { keys, removed } = changedEntities(before, after);
   assert.deepEqual(keys.sort(), ["light:light-1", "light:light-2"]);
   assert.equal(removed, 0);
@@ -267,9 +263,9 @@ test("changed entities name moved and added lights and count removed ones", () =
 test("adding, proposing and removing lights are undoable steps", () => {
   const start = parses(fixture());
   let history = createHistory(start);
-  const added = addLight(start, { at: { x: -6, z: 0 } }, CONTEXT);
+  const added = addLight(start, { at: { x: -6, z: 0 } });
   history = commit(history, fromOp(added), "Add light", "local");
-  const proposed = proposeLights(history.present.doc, CONTEXT, { roomCount: 1 });
+  const proposed = proposeLights(history.present.doc, { roomCount: 1 });
   history = commit(history, fromOp(proposed), "Propose lights", "local");
   assert.equal(history.present.doc.lights.filter((light) => light.kind === "room").length, 1);
   history = undo(history);

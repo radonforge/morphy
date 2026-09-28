@@ -2,7 +2,6 @@ import type { Finding } from "./checks";
 import { compileLevel } from "./compile";
 import type { LevelDocument, LevelLight, LevelPoint } from "./document";
 import { TILE } from "./floorplan";
-import type { LevelContext } from "./footprint";
 import { point } from "./format";
 import { POSITION_SNAP, rectContains } from "./geometry";
 import { DEFAULT_ROOM_LIGHT_COUNT, LIGHT_ID_PREFIX, pickDeckLights } from "./lights";
@@ -28,11 +27,11 @@ function describe(light: LevelLight): string {
 }
 
 /** Why a light cannot stand at (`x`, `z`) in `doc`, or null when it can. */
-function refusal(doc: LevelDocument, context: LevelContext, x: number, z: number): string | null {
+function refusal(doc: LevelDocument, x: number, z: number): string | null {
   const halfW = (doc.grid.cols * TILE) / 2;
   const halfD = (doc.grid.rows * TILE) / 2;
   if (x < -halfW || x > halfW || z < -halfD || z > halfD) return "the map edge";
-  if (wallRects(doc, context.catalog).some((wall) => rectContains(wall, x, z))) return "a wall";
+  if (wallRects(doc).some((wall) => rectContains(wall, x, z))) return "a wall";
   return null;
 }
 
@@ -68,7 +67,6 @@ function blocked(doc: LevelDocument, light: LevelLight, blocker: string, hint: s
 export function addLight(
   doc: LevelDocument,
   args: { at: LevelPoint; kind?: LevelLight["kind"]; id?: string; free?: boolean },
-  context: LevelContext,
 ): OpResult {
   const kind = args.kind ?? "room";
   const id = args.id ?? nextLightId(doc);
@@ -81,7 +79,7 @@ export function addLight(
   }
   const free = args.free === true;
   const light: LevelLight = { id, kind, x: snap(args.at.x, free), z: snap(args.at.z, free) };
-  const blocker = refusal(doc, context, light.x, light.z);
+  const blocker = refusal(doc, light.x, light.z);
   if (blocker !== null) {
     return blocked(doc, light, blocker, "hang it over a room or a doorway instead");
   }
@@ -104,7 +102,6 @@ export function addLight(
 export function moveLight(
   doc: LevelDocument,
   args: { id: string; to?: LevelPoint; by?: LevelPoint; free?: boolean },
-  context: LevelContext,
 ): OpResult {
   const light = findLight(doc, args.id);
   if ("doc" in light) return light;
@@ -119,7 +116,7 @@ export function moveLight(
   }
   const free = args.free === true;
   const next: LevelLight = { ...light, x: snap(target.x, free), z: snap(target.z, free) };
-  const blocker = refusal(doc, context, next.x, next.z);
+  const blocker = refusal(doc, next.x, next.z);
   if (blocker !== null) {
     return blocked(doc, next, blocker, "move it over a room or a doorway instead");
   }
@@ -164,19 +161,12 @@ export function removeLight(doc: LevelDocument, args: { id: string }): OpResult 
  * layout: `roomCount` room lights (default {@link DEFAULT_ROOM_LIGHT_COUNT}) and one
  * corridor light per hunter spawn. Positions are the picker's own, not snapped.
  */
-export function proposeLights(
-  doc: LevelDocument,
-  context: LevelContext,
-  args: { roomCount?: number } = {},
-): OpResult {
+export function proposeLights(doc: LevelDocument, args: { roomCount?: number } = {}): OpResult {
   const roomCount = args.roomCount ?? DEFAULT_ROOM_LIGHT_COUNT;
   if (!Number.isInteger(roomCount) || roomCount < 0) {
     return fail(doc, "the room light count must be a whole number, 0 or more", "fix --rooms", []);
   }
-  const map = compileLevel(
-    { ...doc, lights: [] },
-    { catalog: context.catalog, seed: PROPOSAL_SEED },
-  );
+  const map = compileLevel({ ...doc, lights: [] }, { catalog: [], seed: PROPOSAL_SEED });
   const lights = pickDeckLights(map, roomCount);
   const buried = buriedLight({ ...doc, lights });
   if (buried !== undefined) {
@@ -201,7 +191,7 @@ export function proposeLights(
 /** The first light of `doc` standing inside one of its walls, which the parser rejects. */
 export function buriedLight(doc: LevelDocument): LevelLight | undefined {
   if (doc.lights === undefined) return undefined;
-  const walls = wallRects(doc, []);
+  const walls = wallRects(doc);
   return doc.lights.find((light) => walls.some((wall) => rectContains(wall, light.x, light.z)));
 }
 
