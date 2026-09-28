@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   addLight,
+  addRoom,
   compileLevel,
   DEFAULT_ROOM_LIGHT_COUNT,
   deckLightsFor,
@@ -12,6 +13,8 @@ import {
   pickDeckLights,
   proposeLights,
   removeLight,
+  removeRoom,
+  resizeRoom,
   toggleDoor,
   validateLevel,
 } from "../packages/level/src/index.ts";
@@ -351,4 +354,60 @@ test("walls are kept while only lights or objects change and rebuilt when a room
   assert.equal(wallRects({ ...doc, objects: [] }), walls);
   assert.notEqual(wallRects(toggleDoor(doc, { axis: "v", line: 2, cell: 1 }).doc), walls);
   assert.equal(wallRects(parse([LAMP])).length, walls.length);
+});
+
+/** A west and an east room with a column of open ground between them; the ground has no walls of its own. */
+function gap(lights) {
+  return parseLevelDocument(
+    {
+      version: 1,
+      id: "station",
+      grid: { cols: 5, rows: 3 },
+      rooms: [
+        { id: "west", rects: [{ i0: 0, i1: 2, j0: 0, j1: 3 }] },
+        { id: "east", rects: [{ i0: 3, i1: 5, j0: 0, j1: 3 }] },
+      ],
+      doors: [],
+      objects: [],
+      spawns: { props: [{ x: -6, z: 2 }], hunters: [{ x: 6, z: 2 }] },
+      lights,
+    },
+    { catalog: SPACE_CATALOG },
+  );
+}
+
+function refusedFor(result, doc) {
+  assert.equal(result.ok, false);
+  assert.equal(result.doc, doc);
+  assert.equal(result.findings[0].code, "op.blocked");
+  assert.match(result.findings[0].message, /light-1 .* inside a wall the edit would raise/);
+}
+
+test("adding a room is refused when its walls would bury a light and allowed otherwise", () => {
+  const doc = gap([{ id: "light-1", x: 0, z: -2, kind: "corridor" }]);
+  const rect = { i0: 2, i1: 3, j0: 0, j1: 1 };
+  refusedFor(addRoom(doc, { id: "mid", rect }), doc);
+  const away = gap([{ id: "light-1", x: 0, z: 2, kind: "corridor" }]);
+  const added = addRoom(away, { id: "mid", rect });
+  assert.ok(added.ok);
+  assert.deepEqual(added.doc.lights, away.lights);
+});
+
+test("resizing a room is refused when its new wall would bury a light and allowed otherwise", () => {
+  const doc = gap([{ id: "light-1", x: -6, z: 0, kind: "room" }]);
+  refusedFor(resizeRoom(doc, { id: "west", rect: { i0: 0, i1: 1, j0: 0, j1: 3 } }), doc);
+  const shrunk = resizeRoom(doc, { id: "west", rect: { i0: 0, i1: 2, j0: 1, j1: 3 } });
+  assert.ok(shrunk.ok);
+  assert.deepEqual(shrunk.doc.lights, doc.lights);
+});
+
+test("removing a room never raises a wall, so a light stays valid and the document parses", () => {
+  const doc = gap([{ id: "light-1", x: -6, z: 0, kind: "room" }]);
+  const removed = removeRoom(doc, { id: "east" });
+  assert.ok(removed.ok);
+  assert.deepEqual(removed.doc.lights, doc.lights);
+  assert.deepEqual(
+    parseLevelDocument(JSON.parse(JSON.stringify(removed.doc)), { catalog: SPACE_CATALOG }),
+    removed.doc,
+  );
 });
