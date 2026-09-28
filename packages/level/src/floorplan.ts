@@ -38,18 +38,6 @@ export const FLOORPLAN_MODEL_PATHS = [
   ),
 ];
 
-/** Deterministic mulberry32 PRNG seeded by `seed`. */
-export function makeRng(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = s;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 function pickModel(rng: () => number, variants: WeightedModel[]): string {
   const total = variants.reduce((sum, v) => sum + v.weight, 0);
   let roll = rng() * total;

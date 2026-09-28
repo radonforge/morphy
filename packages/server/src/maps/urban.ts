@@ -1,8 +1,8 @@
-import { makeRng } from "@morphy/level";
 import {
   type BoxCollider,
   computePropBounds,
   type MapDefinition,
+  makeRng,
   type PropInstance,
   type SceneryInstance,
   type TileInstance,
