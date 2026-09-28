@@ -813,7 +813,6 @@ function ShadowRefresh({
 }
 
 /** Unshadowed point lights over a night deck: warm pools in the rooms, cool ones down the spine. */
-/** The night deck's point lights, placed by {@link pickDeckLights}. */
 export function DeckLights({ map, preset }: { map: MapDefinition; preset: DeckLightPreset }) {
   const lights = useMemo(() => pickDeckLights(map, preset.roomCount), [map, preset.roomCount]);
   return (
