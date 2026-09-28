@@ -34,6 +34,8 @@ const OVERLAY_FLOOR_Y = 0.04;
 const OVERLAY_ORDER = 10;
 const RING_SEGMENTS = 40;
 const SPAWN_RADIUS = 0.6;
+const LIGHT_MARK_RADIUS = 0.45;
+const LIGHT_REACH_OPACITY = 0.35;
 const DOOR_MARK_HALF = 0.9;
 const LABEL_SIZE = 1.1;
 const GRID_COLOR = "#35e0ff";
@@ -386,6 +388,13 @@ function UnreachableFloor({
   );
 }
 
+/** How the theme draws a night light: its colour per kind and how far it reaches, in metres. */
+export interface LightStyle {
+  room: string;
+  corridor: string;
+  reach: number;
+}
+
 interface OverlayProps {
   doc: LevelDocument;
   selection: Selection;
@@ -397,6 +406,8 @@ interface OverlayProps {
   overlays: LevelOverlays | null;
   overlayToggles: OverlayToggles;
   uniqueIds: ReadonlySet<string>;
+  lightStyle: LightStyle | null;
+  lightsTool: boolean;
   onTop: boolean;
 }
 
@@ -411,6 +422,8 @@ function Overlay({
   overlays,
   overlayToggles,
   uniqueIds,
+  lightStyle,
+  lightsTool,
   onTop,
 }: OverlayProps) {
   const y = onTop ? OVERLAY_PLAN_Y : OVERLAY_FLOOR_Y;
@@ -560,6 +573,43 @@ function Overlay({
           );
         }),
       )}
+      {(doc.lights ?? []).map((light) => {
+        const selected = selection?.kind === "light" && selection.id === light.id;
+        const external = highlights.has(`light:${light.id}`);
+        const color = lightStyle?.[light.kind] ?? OBJECT_RING_COLOR;
+        return (
+          <group key={`light:${light.id}`}>
+            <mesh
+              position={[light.x, y, light.z]}
+              rotation-x={-Math.PI / 2}
+              renderOrder={OVERLAY_ORDER + 1}
+            >
+              <circleGeometry args={[LIGHT_MARK_RADIUS, RING_SEGMENTS]} />
+              <OverlayMaterial color={color} opacity={0.95} onTop={onTop} />
+            </mesh>
+            {lightStyle && (lightsTool || selected) && (
+              <Line
+                points={ring(light.x, light.z, lightStyle.reach, y)}
+                color={selected ? SELECT_COLOR : color}
+                lineWidth={selected ? 2.5 : 1}
+                transparent
+                opacity={selected ? 1 : LIGHT_REACH_OPACITY}
+                depthTest={!onTop}
+                renderOrder={OVERLAY_ORDER}
+              />
+            )}
+            {(selected || external) && (
+              <Line
+                points={ring(light.x, light.z, LIGHT_MARK_RADIUS * 1.8, y)}
+                color={selected ? SELECT_COLOR : EXTERNAL_COLOR}
+                lineWidth={2.5}
+                depthTest={!onTop}
+                renderOrder={OVERLAY_ORDER + 2}
+              />
+            )}
+          </group>
+        );
+      })}
       {preview.rect && (
         <>
           <RectFill

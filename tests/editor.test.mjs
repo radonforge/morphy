@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
+  addedLightId,
   addedObjectId,
   addRoomRect,
   changedEntities,
@@ -11,12 +12,14 @@ import {
   edgeAt,
   fromOp,
   isRefusal,
+  lightAt,
   moveRectEdge,
   newRoomId,
   objectAt,
   opNotes,
   rectEdgeAt,
   removeRoomRect,
+  setLightKind,
   snapPosition,
 } from "../packages/client/src/editor/edits.ts";
 import {
@@ -36,10 +39,14 @@ import {
   writeLevelFile,
 } from "../packages/client/viteLevelBridge.ts";
 import {
+  addLight,
   formatLevelDocument,
   levelOverlays,
+  moveLight,
   parseLevelDocument,
   placeObject,
+  proposeLights,
+  removeLight,
   resizeRoom,
   validateLevel,
 } from "../packages/level/src/index.ts";
@@ -191,6 +198,59 @@ test("changed entities name what an external write touched and count what it rem
   assert.deepEqual(keys.sort(), ["door:v:3:0", "object:chair-1", "spawn:hunters:0"].sort());
   assert.equal(removed, 2);
   assert.deepEqual(changedEntities(before, fixture()), { keys: [], removed: 0 });
+});
+
+test("light picking, ids and kind changes read the document's lights", () => {
+  const doc = parses({ ...fixture(), lights: [{ id: "light-1", x: -6, z: 0, kind: "room" }] });
+  assert.equal(lightAt(doc, -5.5, 0.4, 0.9), "light-1");
+  assert.equal(lightAt(doc, 0, 0, 0.9), null);
+  assert.equal(lightAt(parses(fixture()), -6, 0, 0.9), null);
+  const added = addLight(doc, { at: { x: -5, z: 2 } }, CONTEXT);
+  assert.equal(addedLightId(doc, added.doc), "light-2");
+  assert.equal(addedLightId(added.doc, added.doc), null);
+  const corridor = setLightKind(doc, "light-1", "corridor");
+  assert.equal(corridor.lights[0].kind, "corridor");
+  assert.equal(corridor.lights[0].x, -6);
+  assert.ok(isRefusal(setLightKind(doc, "nope", "room")));
+});
+
+test("changed entities name moved and added lights and count removed ones", () => {
+  const before = parses({
+    ...fixture(),
+    lights: [
+      { id: "light-1", x: -6, z: 0, kind: "room" },
+      { id: "light-2", x: -5, z: 2, kind: "room" },
+    ],
+  });
+  const moved = moveLight(before, { id: "light-1", to: { x: -5, z: 0 } }, CONTEXT).doc;
+  const after = addLight(
+    removeLight(moved, { id: "light-2" }).doc,
+    { at: { x: -4, z: -2 } },
+    CONTEXT,
+  ).doc;
+  const { keys, removed } = changedEntities(before, after);
+  assert.deepEqual(keys.sort(), ["light:light-1", "light:light-2"]);
+  assert.equal(removed, 0);
+  assert.deepEqual(changedEntities(before, removeLight(before, { id: "light-2" }).doc), {
+    keys: [],
+    removed: 1,
+  });
+});
+
+test("adding, proposing and removing lights are undoable steps", () => {
+  const start = parses(fixture());
+  let history = createHistory(start);
+  const added = addLight(start, { at: { x: -6, z: 0 } }, CONTEXT);
+  history = commit(history, fromOp(added), "Add light", "local");
+  const proposed = proposeLights(history.present.doc, CONTEXT, { roomCount: 1 });
+  history = commit(history, fromOp(proposed), "Propose lights", "local");
+  assert.equal(history.present.doc.lights.filter((light) => light.kind === "room").length, 1);
+  history = undo(history);
+  assert.deepEqual(history.present.doc.lights, [{ id: "light-1", x: -6, z: 0, kind: "room" }]);
+  history = undo(history);
+  assert.equal(history.present.doc.lights, undefined);
+  history = redo(history);
+  assert.equal(history.present.doc.lights.length, 1);
 });
 
 test("history undoes and redoes local and external steps alike, and a new step drops the redo branch", () => {

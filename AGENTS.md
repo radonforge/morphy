@@ -168,9 +168,14 @@ client code, three.js or Colyseus.
   `BRIDGE_LIMITS.bodyTimeoutMs`; its atomic-write temp files are gitignored. The plan is an orthographic top-down view drawn by the
   game's own renderers (`MapView`, `DeckLights`, `themeFor` from `game/Scene.tsx`); `Tab` swaps to
   an orbit view. **Every edit an op exists for goes through the `@morphy/level` op** (place, move,
-  rotate, duplicate, remove, against-wall placement, room add / resize / remove, door toggle), so the
+  rotate, duplicate, remove, against-wall placement, room add / resize / remove, door toggle, light
+  add / move / remove / propose), so the
   editor and `pnpm level` apply the same snapping and blocking rules; a refused op shows its
-  `op.blocked` message, naming the blocker, as a toast. `edits.ts` holds only what no op covers
+  `op.blocked` message, naming the blocker, as a toast. The **Lights tool** (`L`) adds a room light on
+  click (Shift for a corridor light), drags and deletes lights, draws each light's reach (the theme
+  preset's `distance`) in plan view and offers **Propose lights**, which replaces them with the
+  `pickDeckLights` proposal as one undoable step; a light's kind is the one edit with no op
+  (`setLightKind` in `edits.ts`). `edits.ts` holds only what no op covers
   (an extra rect of an L, deleting one, spawns, picking) and the op adapters. The checks panel runs
   `validateLevel` with `ASSET_CARDS` on every committed step and groups findings by severity;
   clicking one selects its entity and pans to it, and the unreachable-floor, sightline and

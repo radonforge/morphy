@@ -4,6 +4,7 @@ import {
   type LevelContext,
   type LevelDocument,
   type LevelDoor,
+  type LevelLight,
   type OpResult,
   objectFootprint,
   rectContains,
@@ -380,10 +381,37 @@ export function spawnAt(
   return best;
 }
 
+/** The id of the light `after` has and `before` did not, as an add op leaves it. */
+export function addedLightId(before: LevelDocument, after: LevelDocument): string | null {
+  const known = new Set((before.lights ?? []).map((light) => light.id));
+  return (after.lights ?? []).find((light) => !known.has(light.id))?.id ?? null;
+}
+
+/** The light within `radius` of a point, nearest first. */
+export function lightAt(doc: LevelDocument, x: number, z: number, radius: number): string | null {
+  let best: string | null = null;
+  let bestDistance = radius;
+  for (const light of doc.lights ?? []) {
+    const distance = Math.hypot(light.x - x, light.z - z);
+    if (distance <= bestDistance) {
+      best = light.id;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/** Give a light another kind; no level op covers this, and the position is untouched. */
+export function setLightKind(doc: LevelDocument, id: string, kind: LevelLight["kind"]): EditResult {
+  const lights = doc.lights ?? [];
+  if (!lights.some((light) => light.id === id)) return { refused: `there is no light "${id}"` };
+  return { ...doc, lights: lights.map((light) => (light.id === id ? { ...light, kind } : light)) };
+}
+
 /**
  * Keys of what differs from `before` to `after` and still exists in `after`,
  * the entities an external change highlights: `object:<id>`, `room:<id>`,
- * `door:<key>` and `spawn:<team>:<index>`. `removed` counts what went away.
+ * `door:<key>`, `spawn:<team>:<index>` and `light:<id>`. `removed` counts what went away.
  */
 export function changedEntities(
   before: LevelDocument,
@@ -418,6 +446,13 @@ export function changedEntities(
     });
     removed += Math.max(0, before.spawns[team].length - after.spawns[team].length);
   }
+  const lightsBefore = new Map((before.lights ?? []).map((light) => [light.id, light]));
+  for (const light of after.lights ?? []) {
+    if (!same(lightsBefore.get(light.id), light)) keys.push(`light:${light.id}`);
+  }
+  const lightIds = new Set((after.lights ?? []).map((light) => light.id));
+  removed += (before.lights ?? []).filter((light) => !lightIds.has(light.id)).length;
+
   if (!same(before.grid, after.grid)) keys.push("grid");
   return { keys, removed };
 }
