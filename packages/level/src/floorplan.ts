@@ -169,6 +169,11 @@ function pushGate(
   }
 }
 
+/** Stable identity of a door's edge, `axis:line:cell`, as the parser reports it and the emitter matches it. */
+export function doorKey(door: LevelDoor): string {
+  return `${door.axis}:${door.line}:${door.cell}`;
+}
+
 /** Region id per grid cell, or `null` for open ground (no floor, no walls). */
 export type Cell = string | null;
 
@@ -188,7 +193,7 @@ export function emitFloorplan(
   out: { tiles: TileInstance[]; colliders: BoxCollider[] },
 ): void {
   const { gx, gz } = grid;
-  const doorSet = new Set(doors.map((d) => `${d.axis}:${d.line}:${d.cell}`));
+  const doorSet = new Set(doors.map(doorKey));
   const { tiles, colliders } = out;
 
   for (let i = 0; i < gx; i++) {
@@ -210,7 +215,7 @@ export function emitFloorplan(
       const left: Cell = c > 0 ? (region[c - 1]![j] ?? null) : null;
       const right: Cell = c < gx ? (region[c]![j] ?? null) : null;
       if (left === right) continue;
-      if (doorSet.has(`v:${c}:${j}`)) {
+      if (doorSet.has(doorKey({ axis: "v", line: c, cell: j }))) {
         pushGate(grid, "z", lineX(grid, c), j, tiles);
         continue;
       }
@@ -232,7 +237,7 @@ export function emitFloorplan(
       const top: Cell = r > 0 ? (region[i]![r - 1] ?? null) : null;
       const bottom: Cell = r < gz ? (region[i]![r] ?? null) : null;
       if (top === bottom) continue;
-      if (doorSet.has(`h:${r}:${i}`)) {
+      if (doorSet.has(doorKey({ axis: "h", line: r, cell: i }))) {
         pushGate(grid, "x", lineZ(grid, r), i, tiles);
         continue;
       }

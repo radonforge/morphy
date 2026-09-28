@@ -1,5 +1,5 @@
 import { isMapId, type MapId, type PropDefinition } from "@morphy/shared";
-import { TILE } from "./floorplan";
+import { doorKey, TILE } from "./floorplan";
 
 /** Half-open cell range: columns [i0, i1), rows [j0, j1). */
 export interface CellRect {
@@ -85,10 +85,6 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
-}
-
-function doorKey(door: LevelDoor): string {
-  return `${door.axis}:${door.line}:${door.cell}`;
 }
 
 /**
