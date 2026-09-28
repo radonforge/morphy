@@ -140,7 +140,7 @@ export function sampleSpace(space: LevelSpace): SampleGrid {
  * The walkable sample holding `p`, or else the nearest walkable one next to it, so a
  * spawn whose body fits is never lost to where the sample grid happens to fall. -1 if none.
  */
-function nearestWalkable(grid: SampleGrid, p: LevelPoint): number {
+export function nearestWalkable(grid: SampleGrid, p: LevelPoint): number {
   const index = grid.indexAt(p.x, p.z);
   if (index < 0 || grid.walkable[index]) return index;
   let best = -1;
@@ -156,13 +156,12 @@ function nearestWalkable(grid: SampleGrid, p: LevelPoint): number {
   return best;
 }
 
-/** Flood the walkable samples from `seeds` through edge-adjacent steps; returns the reached set. */
-export function floodReach(grid: SampleGrid, seeds: readonly LevelPoint[]): Uint8Array {
+/** Flood the walkable samples from the `seeds` indices through edge-adjacent steps; returns the reached set. */
+export function floodReach(grid: SampleGrid, seeds: readonly number[]): Uint8Array {
   const reached = new Uint8Array(grid.nx * grid.nz);
   const queue: number[] = [];
-  for (const seed of seeds) {
-    const index = nearestWalkable(grid, seed);
-    if (index < 0 || reached[index]) continue;
+  for (const index of seeds) {
+    if (reached[index]) continue;
     reached[index] = 1;
     queue.push(index);
   }

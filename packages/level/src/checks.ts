@@ -24,6 +24,7 @@ import {
   components,
   floodReach,
   longestSightline,
+  nearestWalkable,
   neighbours,
   type SampleGrid,
   sampleSpace,
@@ -237,7 +238,27 @@ function reachFindings(
   metrics: Record<string, number>,
 ): SampleGrid {
   const grid = sampleSpace(space);
-  const reached = floodReach(grid, space.doc.spawns.hunters);
+  const hunters = space.doc.spawns.hunters;
+  const seeds = hunters.map((spawn) => nearestWalkable(grid, spawn));
+  if (seeds.every((index) => index < 0)) {
+    hunters.forEach((spawn, index) => {
+      const id = `spawns.hunters[${index}]`;
+      if (findings.some((f) => f.code === "spawn.blocked" && f.entities[0] === id)) return;
+      findings.push({
+        code: "spawn.blocked",
+        severity: "error",
+        message: `${id} at ${point(spawn)} leaves no room for a body on the ${num(LEVEL_SAMPLE_CELL)} m sample grid`,
+        entities: [id],
+        at: spawn,
+        hint: `move the spawn at least ${num(LEVEL_BODY_RADIUS + LEVEL_SAMPLE_CELL)} m clear of walls and objects`,
+      });
+    });
+    return grid;
+  }
+  const reached = floodReach(
+    grid,
+    seeds.filter((index) => index >= 0),
+  );
   let reachable = 0;
   for (const value of reached) reachable += value;
   metrics["floor.reachable.m2"] = reachable * SAMPLE_AREA;

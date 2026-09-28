@@ -254,6 +254,15 @@ test("a room with no objects is not short of disguises", () => {
   assert.deepEqual(found, []);
 });
 
+test("with no walkable hunter spawn only the spawns are reported, not the whole map", () => {
+  const raw = edited((d) => Object.assign(d.spawns.hunters[0], { x: -6, z: -2 }));
+  const result = report(raw);
+  const found = new Set(result.findings.map((f) => f.code));
+  assert.ok(found.has("spawn.blocked"));
+  assert.ok(!found.has("floor.unreachable"));
+  assert.equal(result.metrics["floor.reachable.m2"], undefined);
+});
+
 test("findings are silent on other codes for a single change", () => {
   assert.deepEqual([...codes(CASES[1][1])], ["object.wall"]);
 });
