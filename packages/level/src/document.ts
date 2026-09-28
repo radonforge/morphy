@@ -1,5 +1,7 @@
-import { isMapId, type MapId, type PropDefinition } from "@morphy/shared";
+import { isMapId, type MapId, type MapLight, type PropDefinition } from "@morphy/shared";
 import { doorKey, TILE } from "./floorplan";
+import { rectContains } from "./geometry";
+import { wallRects } from "./walls";
 
 /** Half-open cell range: columns [i0, i1), rows [j0, j1). */
 export interface CellRect {
@@ -31,6 +33,9 @@ export interface LevelObject {
   yaw: number;
 }
 
+/** A point light over the deck; `room` pools over furniture, `corridor` marks a route. */
+export type LevelLight = MapLight;
+
 export interface LevelPoint {
   x: number;
   z: number;
@@ -38,7 +43,7 @@ export interface LevelPoint {
 
 /**
  * A hand-authored map as a document of intents: a grid of rooms, the doors
- * between them, placed objects and spawn points. {@link compileLevel} turns it
+ * between them, placed objects, spawn points and, optionally, the night lights. {@link compileLevel} turns it
  * into a `MapDefinition`; object positions are fixed, a seed only varies tiles.
  */
 export interface LevelDocument {
@@ -49,6 +54,7 @@ export interface LevelDocument {
   doors: LevelDoor[];
   objects: LevelObject[];
   spawns: { props: LevelPoint[]; hunters: LevelPoint[] };
+  lights?: LevelLight[];
 }
 
 const LEVEL_DOCUMENT_VERSION = 1;
@@ -93,7 +99,7 @@ function isNonEmptyString(value: unknown): value is string {
  * (rects of one room may), that ids are unique, that every object type is in
  * `catalog`, that every door sits on an inner edge between two different
  * regions (open ground counts as one) and that
- * objects and spawns lie inside the map. Throws {@link LevelValidationError}.
+ * objects, spawns and lights lie inside the map, and lights outside every wall. Throws {@link LevelValidationError}.
  */
 export function parseLevelDocument(input: unknown, options: LevelParseOptions): LevelDocument {
   const docId = isRecord(input) && isNonEmptyString(input.id) ? input.id : "?";
@@ -289,7 +295,7 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
     });
   };
 
-  return {
+  const parsed: LevelDocument = {
     version: LEVEL_DOCUMENT_VERSION,
     id,
     grid: { cols, rows },
@@ -298,4 +304,41 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
     objects,
     spawns: { props: points("props"), hunters: points("hunters") },
   };
+  if (input.lights === undefined) return parsed;
+  if (!Array.isArray(input.lights)) return fail("lights", "must be an array", 'write "lights": []');
+  const walls = wallRects(parsed, options.catalog);
+  const lightIds = new Set<string>();
+  const lights: LevelLight[] = [];
+  for (const [index, raw] of input.lights.entries()) {
+    if (!isRecord(raw) || !isNonEmptyString(raw.id)) {
+      return fail(`lights[${index}]`, "missing string id", "give the light a non-empty id");
+    }
+    const entity = `light "${raw.id}"`;
+    if (lightIds.has(raw.id)) {
+      return fail(entity, "id is used by another light", "give each light its own id");
+    }
+    if (raw.kind !== "room" && raw.kind !== "corridor") {
+      return fail(
+        entity,
+        `kind ${JSON.stringify(raw.kind)} is not a light kind`,
+        'use "room" or "corridor"',
+      );
+    }
+    if (!isFiniteNumber(raw.x) || !isFiniteNumber(raw.z)) {
+      return fail(entity, "x and z must be finite numbers", "write numeric coordinates");
+    }
+    if (!inside(raw.x, raw.z)) {
+      return fail(entity, `(${raw.x}, ${raw.z}) is outside the map`, `keep ${bounds}`);
+    }
+    if (walls.some((wall) => rectContains(wall, raw.x as number, raw.z as number))) {
+      return fail(
+        entity,
+        `(${raw.x}, ${raw.z}) is inside a wall`,
+        "move it into a room or a doorway",
+      );
+    }
+    lightIds.add(raw.id);
+    lights.push({ id: raw.id, x: raw.x, z: raw.z, kind: raw.kind });
+  }
+  return { ...parsed, lights };
 }

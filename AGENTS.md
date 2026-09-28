@@ -59,7 +59,7 @@ The single source of truth for everything client and server must agree on. **Exp
 
 - `constants.ts`: all gameplay tuning (durations, ratios, speeds, ranges, limits). No gameplay magic numbers live anywhere else.
 - `protocol.ts`: network message **name constants** (`MSG_INPUT`, `MSG_SHOOT`, …) plus the payload interfaces. Messages are individual Colyseus channels keyed by these string constants, **not** a single tagged union.
-- `map.ts`: the `MapDefinition` data model (its `spawnPoints` split into `props`, where everyone waits for a round, and `hunters`, where hunters are released as the hunt opens and respawn), `parseMapDefinition` (boundary validation, throws `MapValidationError`), and `computePropBounds` (derives a prop's bounding cylinder from its primitive parts, **shared by server hit detection and client mesh fitting**, so they always agree on hitboxes).
+- `map.ts`: the `MapDefinition` data model (its `spawnPoints` split into `props`, where everyone waits for a round, and `hunters`, where hunters are released as the hunt opens and respawn), `parseMapDefinition` (boundary validation, throws `MapValidationError`; the optional `lights` a night map carries are validated when present and left off when absent, which is urban), and `computePropBounds` (derives a prop's bounding cylinder from its primitive parts, **shared by server hit detection and client mesh fitting**, so they always agree on hitboxes).
 - `maps.ts`: `MAP_CATALOG` (the two selectable maps and their lobby metadata: name, theme, `tag`, blurb), `MapId`, `isMapId`, and `DEFAULT_MAP_ID` (North District, the first-run pick). The client renders the picker straight from it; the server keys `MAP_BUILDERS` on the same ids as a `Record<MapId, …>`, so a half-added map fails `typecheck`. Adding a map is one entry here plus four `Record<MapId, …>` the compiler then demands: the builder (`server/maps/index.ts`), `MAP_CHROME` and `MAP_GLASS` / `MAP_THEME_BASE` (`client/theme.ts`), `STAGE_THEMES` (`client/ui/LobbyStage.tsx`) and a lobby diorama (`client/ui/lobbyDioramas.ts`, ~20 hand-placed set pieces and the only part with no compiler to catch a bad job). Editorial copy belongs here; CSS accents and glyphs belong in `MAP_CHROME`, never in this package.
 - `weapons.ts`, `avatars.ts`: the selectable weapon and avatar catalogs, same catalog-plus-validator shape.
 - `party.ts`: private-room codes over a look-alike-free alphabet; the code **is** the Colyseus roomId, so joining a party is a plain `joinById(code)`.
@@ -76,14 +76,15 @@ Raw TypeScript like `@morphy/shared` and depending only on it: it must never imp
 client code, three.js or Colyseus.
 
 - `document.ts`: `LevelDocument`, a map as a document of intents on the `TILE` grid (rooms as cell
-  rects, doors on grid edges, placed catalog objects, spawn points), and `parseLevelDocument(input,
+  rects, doors on grid edges, placed catalog objects, spawn points, optional night `lights`), and `parseLevelDocument(input,
   { catalog, id? })`, the file boundary: it throws `LevelValidationError` naming the document, the
   offending entity and a fix hint (a different map id than asked for, overlapping rooms, duplicate
   ids, unknown types, a door with the same region on both sides or in the outer wall, anything
-  outside the map).
+  outside the map, a light inside a wall).
 - `compile.ts`: `compileLevel(doc, { catalog, seed })` → `MapDefinition`. **Positions in a document
   are fixed**: the seed only picks floor and wall tile variants, so a document-authored map has the
-  same furniture every round by design.
+  same furniture every round by design, and the same lights (`MapDefinition.lights` is the
+  document's, copied).
 - `floorplan.ts`: `emitFloorplan`, turning a region grid and its doors into floor tiles, wall tiles,
   wall colliders and gates (which keep `gate.glb`: the bot finds doorways by that name), plus
   `doorKey` (the `axis:line:cell` identity parser and emitter share) and `FLOORPLAN_MODEL_PATHS`.
@@ -109,7 +110,16 @@ client code, three.js or Colyseus.
   refused only for what the object did not already touch.
 - `lights.ts`: `pickDeckLights(map, roomCount)`, the pure k-means pick of a night map's point lights
   (one per furniture cluster pushed clear of the walls, one per hunter spawn), kept here so the
-  client, the editor and the CLI propose lights with the same algorithm.
+  client, the editor and the CLI propose lights with the same algorithm, and `deckLightsFor`, what
+  the client hangs: the map's own `lights` when it has any (an empty list means none), else the pick.
+  Kepler-9's document was seeded with exactly the pick it used to get on the client, so the night
+  looks the same; from there the lights are edited, not generated. Kinds stay `room` and
+  `corridor`, the theme preset (`DeckLightPreset` in `Scene.tsx`) owns colour, intensity and reach.
+  `lightOps.ts`: `addLight` / `moveLight` / `removeLight` / `proposeLights` (replaces the lights
+  with the pick), snapped to 0.5 m unless `free`, refused in a wall or off the map; a room or door
+  edit that would raise a wall over a light is refused too, since the parser would reject the
+  result. `checks.ts` reports a room light nearer a wall than `DECK_LIGHT_WALL_CLEARANCE`
+  (`light.wall-clearance`, corridor lights are exempt: they hang where the hunters stand).
 - `overlays.ts`: `levelOverlays`, the geometry behind `floor.unreachable` and `room.sightline`
   (unreached walkable samples, each room's longest sightline) for the editor to draw, built from
   the same sampling as `validateLevel` so an overlay never disagrees with a finding.
@@ -117,7 +127,8 @@ client code, three.js or Colyseus.
   per finding, report delta) and `formatLevelDocument`, which writes JSON in the layout Biome
   leaves alone, so a CLI edit passes `check:ci` as is.
 - `tools/level/cli.ts` is `pnpm level` (`view`, `list`, `check`, `place`, `move`, `rotate`,
-  `remove`, `duplicate`, `room add|resize|remove`, `door toggle`, `--file` for another copy): every
+  `remove`, `duplicate`, `room add|resize|remove`, `door toggle`, `light list|add|move|remove|propose`,
+  `--file` for another copy): every
   write re-parses, validates, writes atomically and prints the report delta. `check` exits 1 while
   any finding is an error, so a script can gate on it; `--help` lists the exit codes. Negative
   option values need the `=` form (`--by=-0.5,0`), a `node:util` `parseArgs` rule.

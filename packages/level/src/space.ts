@@ -1,11 +1,9 @@
 import { LEVEL_DOOR_CLEARANCE_DEPTH, LEVEL_DOOR_CLEARANCE_WIDTH } from "@morphy/shared";
-import { compileLevel } from "./compile";
 import type { LevelDocument, LevelDoor } from "./document";
 import { doorKey, TILE, WALL_HALF_THICKNESS } from "./floorplan";
 import { type Footprint, type LevelContext, objectFootprint, objectHitboxes } from "./footprint";
 import { type Rect2, rectFromExtent } from "./geometry";
-
-const LAYOUT_SEED = 0;
+import { wallRects } from "./walls";
 
 /** The floor kept clear on one side of a doorway, and the region that side belongs to. */
 export interface DoorSide {
@@ -125,16 +123,7 @@ export function buildSpace(doc: LevelDocument, context: LevelContext): LevelSpac
   const halfD = (doc.grid.rows * TILE) / 2;
   const cellRegion = regionGrid(doc);
 
-  const walls = compileLevel(doc, { catalog: context.catalog, seed: LAYOUT_SEED })
-    .colliders.filter((collider) => collider.position.y > 0)
-    .map((collider) =>
-      rectFromExtent({
-        minX: collider.position.x - collider.size.x / 2,
-        maxX: collider.position.x + collider.size.x / 2,
-        minZ: collider.position.z - collider.size.z / 2,
-        maxZ: collider.position.z + collider.size.z / 2,
-      }),
-    );
+  const walls = wallRects(doc, context.catalog);
 
   const footprints = new Map<string, Footprint>();
   const hitboxes = new Map<string, Rect2[]>();

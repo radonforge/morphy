@@ -4,6 +4,7 @@ export * from "./document";
 export { doorKey, FLOORPLAN_MODEL_PATHS, TILE, WALL_HEIGHT } from "./floorplan";
 export * from "./footprint";
 export * from "./geometry";
+export * from "./lightOps";
 export * from "./lights";
 export * from "./ops";
 export * from "./overlays";

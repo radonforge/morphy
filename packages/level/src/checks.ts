@@ -20,6 +20,7 @@ import {
   snapToward,
   spansMeet,
 } from "./geometry";
+import { DECK_LIGHT_CLEARANCE_SLACK, DECK_LIGHT_WALL_CLEARANCE } from "./lights";
 import {
   components,
   floodReach,
@@ -67,6 +68,7 @@ export const FINDING_CODES = [
   "room.sightline",
   "room.few-disguises",
   "object.unique-type",
+  "light.wall-clearance",
 ] as const;
 
 /** Label for the region with no room, where the checks name one. */
@@ -232,6 +234,37 @@ function spawnFindings(space: LevelSpace, findings: Finding[]): void {
   }
 }
 
+function lightFindings(space: LevelSpace, findings: Finding[]): void {
+  for (const light of space.doc.lights ?? []) {
+    if (light.kind !== "room") continue;
+    let nearest = { distance: Infinity, dx: 0, dz: 0 };
+    for (const wall of space.walls) {
+      const dx = Math.max(Math.abs(light.x - wall.x) - wall.halfX, 0);
+      const dz = Math.max(Math.abs(light.z - wall.z) - wall.halfZ, 0);
+      const distance = Math.hypot(dx, dz);
+      if (distance < nearest.distance) {
+        nearest = {
+          distance,
+          dx: Math.sign(light.x - wall.x) * dx,
+          dz: Math.sign(light.z - wall.z) * dz,
+        };
+      }
+    }
+    if (nearest.distance >= DECK_LIGHT_WALL_CLEARANCE - DECK_LIGHT_CLEARANCE_SLACK) continue;
+    const push = nearest.distance === 0 ? 0 : DECK_LIGHT_WALL_CLEARANCE / nearest.distance;
+    const x = snapToward(light.x + nearest.dx * (push - 1), nearest.dx);
+    const z = snapToward(light.z + nearest.dz * (push - 1), nearest.dz);
+    findings.push({
+      code: "light.wall-clearance",
+      severity: "warning",
+      message: `light ${light.id} at ${point(light)} is ${num(nearest.distance)} m from a wall, under ${DECK_LIGHT_WALL_CLEARANCE} m, so it burns a hotspot into it`,
+      entities: [light.id],
+      at: { x: light.x, z: light.z },
+      hint: `pnpm level light move ${light.id} --to=${num(x)},${num(z)}`,
+    });
+  }
+}
+
 function reachFindings(
   space: LevelSpace,
   findings: Finding[],
@@ -374,8 +407,8 @@ function compareFindings(a: Finding, b: Finding): number {
 /**
  * Check a parsed document for layout problems an agent can fix without looking at
  * it: objects cutting into walls or each other (real rendered footprints), objects
- * off their room, blocked doorways, spawns inside geometry, floor a hunter cannot
- * reach, and per room the longest clear sightline and how well a disguise blends
+ * off their room, blocked doorways, spawns inside geometry, room lights hung against a
+ * wall, floor a hunter cannot reach, and per room the longest clear sightline and how well a disguise blends
  * in. Pure: it neither drops nor moves anything.
  */
 export function validateLevel(doc: LevelDocument, context: LevelContext): LevelReport {
@@ -390,6 +423,7 @@ export function validateLevel(doc: LevelDocument, context: LevelContext): LevelR
   objectFindings(space, findings, unplaced);
   doorFindings(space, findings);
   spawnFindings(space, findings);
+  lightFindings(space, findings);
   const grid = reachFindings(space, findings, metrics);
   roomFindings(space, grid, findings, metrics);
   findings.sort(compareFindings);

@@ -21,6 +21,7 @@ import {
   snapToward,
   spansMeet,
 } from "./geometry";
+import { keepLightsClear } from "./lightOps";
 import { buildSpace, doorRegions, type LevelSpace, lineX, lineZ, regionGrid } from "./space";
 
 /** Yaw snaps to quarter turns unless an operation is asked to rotate freely. */
@@ -685,7 +686,10 @@ export function addRoom(doc: LevelDocument, args: { id: string; rect: CellRect }
   }
   const bad = checkRect(doc, args.id, args.rect);
   if (bad !== null) return bad;
-  return pruneDoors({ ...doc, rooms: [...doc.rooms, { id: args.id, rects: [{ ...args.rect }] }] });
+  return keepLightsClear(
+    doc,
+    pruneDoors({ ...doc, rooms: [...doc.rooms, { id: args.id, rects: [{ ...args.rect }] }] }),
+  );
 }
 
 /** Replace rect `index` (default 0) of a room; doors left without a wall are removed. */
@@ -710,10 +714,13 @@ export function resizeRoom(
   const bad = checkRect(doc, args.id, args.rect);
   if (bad !== null) return bad;
   const rects = room.rects.map((rect, k) => (k === index ? { ...args.rect } : rect));
-  return pruneDoors({
-    ...doc,
-    rooms: doc.rooms.map((entry) => (entry === room ? { ...room, rects } : entry)),
-  });
+  return keepLightsClear(
+    doc,
+    pruneDoors({
+      ...doc,
+      rooms: doc.rooms.map((entry) => (entry === room ? { ...room, rects } : entry)),
+    }),
+  );
 }
 
 /** Remove a room, leaving its cells open ground; its objects stay for the checks to flag. */
@@ -726,16 +733,27 @@ export function removeRoom(doc: LevelDocument, args: { id: string }): OpResult {
       args.id,
     ]);
   }
-  return pruneDoors({ ...doc, rooms: doc.rooms.filter((room) => room.id !== args.id) });
+  return keepLightsClear(
+    doc,
+    pruneDoors({ ...doc, rooms: doc.rooms.filter((room) => room.id !== args.id) }),
+  );
 }
 
 /** Open a doorway on a wall edge, or close it when it is already a doorway. */
 export function toggleDoor(doc: LevelDocument, door: LevelDoor): OpResult {
   const key = doorKey(door);
   if (doc.doors.some((entry) => doorKey(entry) === key)) {
-    return done({ ...doc, doors: doc.doors.filter((entry) => doorKey(entry) !== key) }, [
-      { code: "op.door-closed", severity: "info", message: `closed door ${key}`, entities: [key] },
-    ]);
+    return keepLightsClear(
+      doc,
+      done({ ...doc, doors: doc.doors.filter((entry) => doorKey(entry) !== key) }, [
+        {
+          code: "op.door-closed",
+          severity: "info",
+          message: `closed door ${key}`,
+          entities: [key],
+        },
+      ]),
+    );
   }
   const [lines, cells] =
     door.axis === "v" ? [doc.grid.cols, doc.grid.rows] : [doc.grid.rows, doc.grid.cols];

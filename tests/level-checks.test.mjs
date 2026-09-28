@@ -181,6 +181,10 @@ const CASES = [
   ],
   ["room.few-disguises", edited((d) => d.objects.splice(0, 1))],
   ["object.unique-type", edited((d) => Object.assign(d.objects[0], { type: "barrel" }))],
+  [
+    "light.wall-clearance",
+    edited((d) => Object.assign(d, { lights: [{ id: "light-1", x: -6, z: 0, kind: "room" }] })),
+  ],
 ];
 
 test("every finding code has a case", () => {

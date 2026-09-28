@@ -24,7 +24,8 @@ export interface CompileOptions {
  * Compile a validated level document into the `MapDefinition` the room and the
  * client consume: a floor slab under the whole grid, walls, gates and floor
  * tiles from the floorplan emitter, and one prop per object at `y = 0`. `seed`
- * only picks floor and wall tile variants; nothing moves with it.
+ * only picks floor and wall tile variants; nothing moves with it. The document's
+ * lights, when it has any, are carried over as they are.
  */
 export function compileLevel(doc: LevelDocument, { catalog, seed }: CompileOptions): MapDefinition {
   const { cols, rows } = doc.grid;
@@ -67,5 +68,6 @@ export function compileLevel(doc: LevelDocument, { catalog, seed }: CompileOptio
       rotation: object.yaw,
     })),
     propCatalog: [...catalog],
+    ...(doc.lights !== undefined ? { lights: doc.lights.map((light) => ({ ...light })) } : {}),
   };
 }
