@@ -233,6 +233,26 @@ test("a placement on open ground or across a room's edge is refused", () => {
   );
 });
 
+test("an object already touching something can still move, but not into something new", () => {
+  const crowded = parseLevelDocument(
+    {
+      ...structuredClone(doc()),
+      objects: [
+        { id: "west-1", type: "chair", x: -7, z: -2, yaw: 0 },
+        { id: "west-2", type: "chair", x: -7, z: -1.5, yaw: 0 },
+      ],
+    },
+    { catalog: SPACE_CATALOG },
+  );
+  const nudged = moveObject(crowded, { id: "west-2", by: { x: 0.1, z: 0 }, free: true }, CONTEXT);
+  assert.equal(nudged.ok, true, "still on west-1, which it already touched");
+  assertBlocked(
+    moveObject(crowded, { id: "west-2", to: { x: -9.9, z: -1.5 } }, CONTEXT),
+    crowded,
+    /a wall/,
+  );
+});
+
 test("bad placement input is an invalid op, not a crash", () => {
   const original = doc();
   for (const args of [

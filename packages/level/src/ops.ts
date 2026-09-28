@@ -459,15 +459,23 @@ function findObject(doc: LevelDocument, id: string): LevelObject | OpResult {
   return object ?? fail(doc, "op.invalid", `no object "${id}"`, "use pnpm level list", [id]);
 }
 
+/**
+ * Swap `previous` for `next` in place. Refused only for what `next` would collide with
+ * that `previous` did not, so an object already touching something can still be edited.
+ */
 function replaceObject(
   doc: LevelDocument,
   context: LevelContext,
+  previous: LevelObject,
   next: LevelObject,
   verb: string,
 ): OpResult {
   const extent = measure(doc, context, next.type);
   if ("doc" in extent) return extent;
-  const blockers = blockersOf(buildSpace(doc, context), next, extent, new Set([next.id]));
+  const space = buildSpace(doc, context);
+  const self = new Set([next.id]);
+  const before = new Set(blockersOf(space, previous, extent, self));
+  const blockers = blockersOf(space, next, extent, self).filter((b) => !before.has(b));
   if (blockers.length > 0)
     return blocked(doc, next, blockers, `${verb} it somewhere clear instead`);
   return done(
@@ -506,6 +514,7 @@ export function moveObject(
   return replaceObject(
     doc,
     context,
+    object,
     { ...object, x: snap(target.x, free), z: snap(target.z, free) },
     "move",
   );
@@ -526,7 +535,7 @@ export function rotateObject(
     args.degrees !== undefined
       ? normalizeYaw(object.yaw + (args.degrees * Math.PI) / 180)
       : snapYaw(object.yaw + (args.turns ?? 1) * QUARTER_TURN, false);
-  return replaceObject(doc, context, { ...object, yaw }, "rotate");
+  return replaceObject(doc, context, object, { ...object, yaw }, "rotate");
 }
 
 /** Remove an object. */
