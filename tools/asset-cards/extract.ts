@@ -10,7 +10,7 @@ const COMPONENT_FLOAT = 5126;
 const COMPONENT_UNSIGNED_BYTE = 5121;
 const COMPONENT_UNSIGNED_SHORT = 5123;
 const COMPONENT_UNSIGNED_INT = 5125;
-const DECIMALS = 1000;
+const ROUND_SCALE = 1000;
 const SURFACE_NORMAL_MIN_Y = 0.98;
 const SURFACE_HEIGHT_STEP = 0.02;
 const SURFACE_MIN_AREA = 0.01;
@@ -59,6 +59,7 @@ interface Gltf {
   bufferViews?: GltfBufferView[];
   buffers?: { uri?: string }[];
   skins?: unknown[];
+  extensionsRequired?: string[];
 }
 
 interface Glb {
@@ -78,14 +79,17 @@ const TYPE_COMPONENTS: Record<string, number> = { SCALAR: 1, VEC2: 2, VEC3: 3, V
 const IDENTITY: Matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
 function round(value: number): number {
-  const rounded = Math.round(value * DECIMALS) / DECIMALS;
+  const rounded = Math.round(value * ROUND_SCALE) / ROUND_SCALE;
   return rounded === 0 ? 0 : rounded;
 }
 
+/**
+ * Round half to even. A chair seat averages to exactly 12.5 steps, and rounding it up would
+ * put it in the 0.26 bucket instead of the 0.24 one the contract's reference values use.
+ */
 function roundHalfEven(value: number): number {
   const floor = Math.floor(value);
-  const diff = value - floor;
-  if (diff === 0.5) return floor % 2 === 0 ? floor : floor + 1;
+  if (value - floor === 0.5) return floor % 2 === 0 ? floor : floor + 1;
   return Math.round(value);
 }
 
@@ -143,6 +147,15 @@ function multiply(a: Matrix, b: Matrix): Matrix {
     }
   }
   return out;
+}
+
+function determinant3(m: Matrix): number {
+  const at = (i: number) => m[i] ?? 0;
+  return (
+    at(0) * (at(5) * at(10) - at(9) * at(6)) -
+    at(4) * (at(1) * at(10) - at(9) * at(2)) +
+    at(8) * (at(1) * at(6) - at(5) * at(2))
+  );
 }
 
 function transform(m: Matrix, [x, y, z]: Vec3Tuple): Vec3Tuple {
@@ -209,6 +222,9 @@ function visitPrimitives(glb: Glb, model: string): MeshVisit[] {
   const { gltf } = glb;
   if (gltf.skins && gltf.skins.length > 0)
     throw new Error(`${model}: skinned models are unsupported`);
+  if (gltf.extensionsRequired && gltf.extensionsRequired.length > 0) {
+    throw new Error(`${model}: required extensions are unsupported: ${gltf.extensionsRequired}`);
+  }
   const sceneIndex = gltf.scene ?? 0;
   const scene = required(gltf.scenes?.[sceneIndex], model, `scene ${sceneIndex}`);
   const visits: MeshVisit[] = [];
@@ -216,6 +232,9 @@ function visitPrimitives(glb: Glb, model: string): MeshVisit[] {
     const node = required(gltf.nodes?.[index], model, `node ${index}`);
     const matrix = multiply(parent, nodeMatrix(node));
     if (node.mesh !== undefined) {
+      if (determinant3(matrix) < 0) {
+        throw new Error(`${model}: node ${index} has a mirrored transform (negative determinant)`);
+      }
       const mesh = required(gltf.meshes?.[node.mesh], model, `mesh ${node.mesh}`);
       for (const primitive of mesh.primitives) visits.push({ matrix, primitive });
     }
