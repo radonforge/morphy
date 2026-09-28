@@ -28,6 +28,8 @@ Thumbs.db
 *.swp
 
 # Tooling / local
+# Atomic-write temp files of level documents (editor bridge, pnpm level), left only by a crash
+*.level.json.*.tmp
 .playwright-mcp/
 .claude/worktrees/
 

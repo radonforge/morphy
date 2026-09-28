@@ -176,7 +176,7 @@ const PITCH_MAX = 1.4;
 const TP_PITCH_MIN = -0.15;
 const TP_PITCH_MAX = 1.2;
 export const DEFAULT_PITCH = 0.5;
-const SUN_POSITION: [number, number, number] = [14, 26, 10];
+export const SUN_POSITION: [number, number, number] = [14, 26, 10];
 const STARS_RADIUS = 120;
 const STARS_DEPTH = 40;
 const STARS_COUNT = 2400;
@@ -231,7 +231,7 @@ interface FogPreset {
 }
 
 /** The few point lights a night map hangs over its deck, see {@link pickDeckLights}. */
-interface DeckLightPreset {
+export interface DeckLightPreset {
   roomCount: number;
   roomColor: string;
   corridorColor: string;
@@ -242,7 +242,7 @@ interface DeckLightPreset {
 }
 
 /** Per-theme sky/light/ground preset, keyed by `MapInfo.theme`; falls back to {@link DEFAULT_THEME}. */
-interface ThemePreset {
+export interface ThemePreset {
   ground: string;
   background: string;
   hemiSky: string;
@@ -324,7 +324,8 @@ export function themeBloom(mapId: string): BloomSettings | null {
   return themeFor(mapId).bloom;
 }
 
-function themeFor(mapId: string): ThemePreset {
+/** The sky, light and ground preset a map renders with. */
+export function themeFor(mapId: string): ThemePreset {
   const theme = MAP_CATALOG.find((m) => m.id === mapId)?.theme;
   return (theme && THEMES[theme]) || DEFAULT_THEME;
 }
@@ -812,7 +813,7 @@ function ShadowRefresh({
 }
 
 /** Unshadowed point lights over a night deck: warm pools in the rooms, cool ones down the spine. */
-function DeckLights({ map, preset }: { map: MapDefinition; preset: DeckLightPreset }) {
+export function DeckLights({ map, preset }: { map: MapDefinition; preset: DeckLightPreset }) {
   const lights = useMemo(() => pickDeckLights(map, preset.roomCount), [map, preset.roomCount]);
   return (
     <>
@@ -1513,7 +1514,8 @@ function InstancedTiles({ url, tiles }: { url: string; tiles: TileInstance[] }) 
   );
 }
 
-function PropMesh({ def }: { def: PropDefinition }) {
+/** One catalog prop, as its fitted GLB or, without a model, its primitive parts. */
+export function PropMesh({ def }: { def: PropDefinition }) {
   const bounds = useMemo(() => computePropBounds(def), [def]);
   if (def.model) {
     return (
@@ -1615,7 +1617,8 @@ function HunterViewmodel({
   );
 }
 
-const MapView = memo(function MapView({
+/** The static map: base plane, instanced tiles, fitted props and scenery. */
+export const MapView = memo(function MapView({
   map,
   groundColor,
 }: {

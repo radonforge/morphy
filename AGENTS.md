@@ -34,8 +34,10 @@ Single-package typecheck: `pnpm --filter @morphy/server typecheck` (or `@morphy/
 ## Architecture
 
 pnpm-workspace monorepo, five packages with a strict runtime dependency direction:
-**client → shared ← server**, plus **server → level → shared**, **bot → shared** and
-**server → bot/brain** (client and server still never import each other at runtime).
+**client → shared ← server**, plus **server → level → shared**, **client → level**, **bot → shared**
+and **server → bot/brain** (client and server still never import each other at runtime).
+`client → level` exists for the dev-only map editor, which compiles the document it edits on every
+change; `@morphy/level` is pure, and nothing the production client runs imports it.
 
 `server → bot` exists so the room-filling bots and the CLI bots run the *same* behaviour instead of
 two copies that drift. It is confined to the `@morphy/bot/brain` entry point: the package's
@@ -46,7 +48,9 @@ two copies that drift. It is confined to the `@morphy/bot/brain` entry point: th
 The other deliberate exception is build-time: `packages/client/runtimeAssets.ts` imports the map
 builders and prop catalogs from `../server/src/…` and the floorplan tile paths from `../level/src`,
 so the production GLB allow-list is derived from the same data the server emits. Nothing of it
-reaches the browser: the Vite plugin consuming it is `apply: "build"`.
+reaches the browser: the Vite plugin consuming it is `apply: "build"`. The level bridge
+(`packages/client/viteLevelBridge.ts`) does the same at dev time for the editor: it imports the
+server's prop catalogs in Node and is `apply: "serve"`.
 
 ### `packages/shared`: the contract layer
 
@@ -102,6 +106,9 @@ client code, three.js or Colyseus.
   An op that would collide, or place on open ground or across a room's edge, returns an
   `op.blocked` error naming the blocker and the input document unchanged; a move or turn is
   refused only for what the object did not already touch.
+- `overlays.ts`: `levelOverlays`, the geometry behind `floor.unreachable` and `room.sightline`
+  (unreached walkable samples, each room's longest sightline) for the editor to draw, built from
+  the same sampling as `validateLevel` so an overlay never disagrees with a finding.
 - `views.ts` / `serialize.ts`: the text an agent reads (summary, 0.5 m ASCII room plan, one line
   per finding, report delta) and `formatLevelDocument`, which writes JSON in the layout Biome
   leaves alone, so a CLI edit passes `check:ci` as is.
@@ -129,6 +136,35 @@ client code, three.js or Colyseus.
 - `game/movement.ts`: the **client-side movement + collision core**, lifted out of `Scene.tsx` so it is testable without a browser: `advanceMovement` (accel/decel, air control, gravity, jump buffering), `resolveColliders` (walls, obstacles, step-up, player separation), `supportHeightAt`, `clampToBounds` and `cappedFrameSeconds`, which bounds the frame a backgrounded tab would otherwise integrate in one step.
 - `game/useControls.ts`: the key-code → action map plus `movementFromHeld`, which projects held codes onto actions so aliases (W / ArrowUp, either Shift) read as one, and releases everything when the window blurs. `game/Controls.tsx` renders the in-game legend and the controls dialog from the same key names, so a rebind that misses one of the two shows the player the wrong key.
 - `game/pointerLock.ts`: `lockPointer`, the only path to `requestPointerLock`. The browser refuses the lock routinely (too soon after an exit, no fresh gesture) and the refusal is a promise rejection, so both callers go through here rather than leaking an `Uncaught (in promise)`.
+- `editor/`: the **dev-only map editor**, opened at `#editor` (or `#editor/<mapId>`) on the Vite dev
+  server. `main.tsx` lazy-loads it behind `import.meta.env.DEV`, so the production bundle carries
+  none of it (a build adds ~100 bytes for the gate and `App`'s `tryMap`; grep `dist` for
+  `__morphy/levels` to confirm). It needs no game server: `viteLevelBridge.ts` serves
+  `GET`/`PUT /__morphy/levels/<mapId>` (validated by `parseLevelDocument`, written atomically
+  through `formatLevelDocument`) and `GET /__morphy/levels/<mapId>/catalog`, answering only unrelayed
+  loopback requests (the dev server is on the LAN and behind `pnpm tunnel`), and pushes a
+  `morphy:level-changed` HMR event when the file changes on disk from anywhere else, which the
+  page applies as an undoable step labelled External with its entities highlighted (with a
+  warning when that replaced unsaved edits, which Undo brings back). Add a map to `levelSources`
+  there to make it editable. The bridge reads the prop catalogs once, when Vite starts, so a
+  catalog edit (`spaceCatalog.ts` and friends) needs a dev server restart before the editor sees
+  it. It also checks that `Host` is localhost or a loopback IP on the dev port and that a `PUT`'s
+  `Origin`, when present, is the dev origin, and answers 408 to a body slower than
+  `BRIDGE_LIMITS.bodyTimeoutMs`; its atomic-write temp files are gitignored. The plan is an orthographic top-down view drawn by the
+  game's own renderers (`MapView`, `DeckLights`, `themeFor` from `game/Scene.tsx`); `Tab` swaps to
+  an orbit view. **Every edit an op exists for goes through the `@morphy/level` op** (place, move,
+  rotate, duplicate, remove, against-wall placement, room add / resize / remove, door toggle), so the
+  editor and `pnpm level` apply the same snapping and blocking rules; a refused op shows its
+  `op.blocked` message, naming the blocker, as a toast. `edits.ts` holds only what no op covers
+  (an extra rect of an L, deleting one, spawns, picking) and the op adapters. The checks panel runs
+  `validateLevel` with `ASSET_CARDS` on every committed step and groups findings by severity;
+  clicking one selects its entity and pans to it, and the unreachable-floor, sightline and
+  unique-type overlays are toggles. The pure parts (`edits.ts`, `history.ts`) are tested in
+  `tests/editor.test.mjs`.
+  **Try it** saves, waits for `tsx watch` to restart the game server (a document write always
+  restarts it, since the server imports the JSON), and opens `App` with `tryMap`, i.e. a private
+  room on that map; a private room needs a second player to start, so a dev-only card over the room
+  (`TryHint.tsx`) spells out `pnpm bot -- --code <party code> -n 1` and offers Back to editor.
 - `game/audio.ts`: **hybrid audio**: weapon shots / hit impacts (Kenney Sci-fi Sounds, `public/sounds/sci-fi/`) and lobby UI cues (Kenney UI Audio, `public/sounds/ui/`) play cached OGG samples; the lobby loops a licensed theme (`public/sounds/music/lobby-theme.ogg`, own gain, fade in/out); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers all; volume / music / UI-sound prefs persist to localStorage (`morphy:*` keys). Positional cues (taunts, sonar, prop rustles) pan by the camera's facing through `spatialAudio.ts`; a remote prop on the move rustles (`PropFootsteps.tsx`) out to `FOOTSTEP_HEARING_RADIUS`, the very radius a bot hears a mover at, so keep the two on the one constant.
 
 ### Two facts that span files
