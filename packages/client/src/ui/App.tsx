@@ -50,9 +50,16 @@ function Reconnecting({ onLeave }: { onLeave: () => void }) {
 
 /**
  * The game shell. `tryMap`, set only by the dev map editor, opens straight into
- * a private room on that map instead of the menu.
+ * a private room on that map instead of the menu, and `onTryRoom` then hears the
+ * room's party code (null while there is no room).
  */
-export function App({ tryMap }: { tryMap?: MapId }) {
+export function App({
+  tryMap,
+  onTryRoom,
+}: {
+  tryMap?: MapId;
+  onTryRoom?: (code: string | null) => void;
+}) {
   const [connection, setConnection] = useState<Connection | null>(null);
   const [status, setStatus] = useState<ConnectStatus>({ kind: "idle" });
   const [view, setView] = useState<View>("menu");
@@ -195,6 +202,10 @@ export function App({ tryMap }: { tryMap?: MapId }) {
     const prefs = loadPrefs();
     void handleCreateParty(prefs.name || TRY_NAME, tryMap, prefs.avatar);
   }, [tryMap, handleCreateParty]);
+
+  useEffect(() => {
+    if (tryMap) onTryRoom?.(connection?.room.roomId ?? null);
+  }, [tryMap, onTryRoom, connection]);
 
   const handleBackToParty = useCallback(() => setView("party"), []);
   const restartMatch = useCallback(() => setMatchSeq((seq) => seq + 1), []);

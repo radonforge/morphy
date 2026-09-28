@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { App } from "../ui/App";
 import { fetchCatalog, fetchLevel } from "./bridge";
 import { Editor } from "./Editor";
+import { TryHint } from "./TryHint";
 import "./editor.css";
 
 const DEFAULT_EDITOR_MAP: MapId = "station";
@@ -22,12 +23,13 @@ function mapFromHash(hash: string): MapId {
  * Dev-only entry of the map editor (`#editor`, or `#editor/<mapId>`): loads
  * the document and its catalog through the dev server's level bridge, and on
  * "Try it" hands over to the game, opened straight into a private room on the
- * saved map.
+ * saved map, with a {@link TryHint} over it.
  */
 export default function EditorRoot() {
   const [id] = useState(() => mapFromHash(window.location.hash));
   const [loaded, setLoaded] = useState<Loaded>({ kind: "loading" });
   const [trying, setTrying] = useState(false);
+  const [tryCode, setTryCode] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([fetchLevel(id), fetchCatalog(id)])
@@ -40,7 +42,14 @@ export default function EditorRoot() {
       );
   }, [id]);
 
-  if (trying) return <App tryMap={id} />;
+  if (trying) {
+    return (
+      <>
+        <App tryMap={id} onTryRoom={setTryCode} />
+        <TryHint code={tryCode} />
+      </>
+    );
+  }
   if (loaded.kind === "loading") return <div className="game-loading">Loading level…</div>;
   if (loaded.kind === "failed") {
     return (
