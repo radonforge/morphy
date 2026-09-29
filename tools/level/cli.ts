@@ -39,6 +39,7 @@ import {
 import { SPACE_CATALOG } from "../../packages/server/src/spaceCatalog";
 import {
   ASSET_CARDS,
+  ASSET_TAGS,
   isMapId,
   type MapId,
   type PropDefinition,
@@ -196,7 +197,7 @@ function load(file: string): { text: string; doc: LevelDocument; context: LevelC
       `${file} has id ${JSON.stringify(id)}, which has no level catalog; the CLI edits ${Object.keys(CATALOGS).join(", ")} documents`,
     );
   }
-  const context = { catalog, cards: ASSET_CARDS };
+  const context = { catalog, cards: ASSET_CARDS, tags: ASSET_TAGS };
   try {
     return { text, doc: parseLevelDocument(raw, { catalog, id: id as MapId }), context };
   } catch (error) {

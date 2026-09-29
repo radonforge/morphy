@@ -21,7 +21,7 @@ import {
 import { wallRects } from "../packages/level/src/walls.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
 import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
-import { ASSET_CARDS, parseMapDefinition } from "../packages/shared/src/index.ts";
+import { ASSET_CARDS, ASSET_TAGS, parseMapDefinition } from "../packages/shared/src/index.ts";
 
 const ROOM_COUNT = DEFAULT_ROOM_LIGHT_COUNT;
 const SEEDS = [1, 7, 42];
@@ -67,7 +67,7 @@ test("a map with no furniture gets its corridor lights only", () => {
   assert.ok(pickDeckLights(map, ROOM_COUNT).every((light) => light.kind === "corridor"));
 });
 
-const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS };
+const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS, tags: ASSET_TAGS };
 
 /** Two rooms either side of a one-column hall, one door into each; the walls stand on x = -2 and x = 2. */
 function hall(lights) {

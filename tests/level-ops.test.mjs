@@ -16,9 +16,9 @@ import {
   validateLevel,
 } from "../packages/level/src/index.ts";
 import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
-import { ASSET_CARDS } from "../packages/shared/src/index.ts";
+import { ASSET_CARDS, ASSET_TAGS } from "../packages/shared/src/index.ts";
 
-const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS };
+const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS, tags: ASSET_TAGS };
 const QUARTER = Math.PI / 2;
 
 /** A west room, a one-column hall and an east room in a row, a door into each; column 4 is open ground. */
@@ -143,6 +143,45 @@ test("each wall side faces a different way", () => {
       ).yaw,
   );
   assert.deepEqual(yaws, [0, Math.PI, -QUARTER, QUARTER]);
+});
+
+test("against a wall a model turns its tagged front into the room, not its +Z", () => {
+  const facing = (type, side) =>
+    placed(
+      placeObject(
+        doc(),
+        { type, relation: { againstWall: { room: "west", side }, facing: "in" } },
+        CONTEXT,
+      ),
+    ).yaw;
+  assert.equal(facing("desk_computer", "N"), Math.PI);
+  assert.equal(facing("machine_wireless", "W"), 0);
+});
+
+test("a model turned to face in from a wall still backs onto the wall face", () => {
+  const result = placeObject(
+    doc(),
+    {
+      type: "machine_wireless",
+      relation: { againstWall: { room: "west", side: "N" }, facing: "in" },
+    },
+    CONTEXT,
+  );
+  const object = placed(result);
+  assert.equal(object.yaw, -QUARTER);
+  const extent = rectExtent(objectFootprint(object, CONTEXT).rect);
+  assert.ok(extent.minZ >= -3.5 && extent.minZ < -3, `touches the wall face, minZ ${extent.minZ}`);
+  noLayoutErrors(result);
+});
+
+test("against a wall a model with no tags is refused, not guessed", () => {
+  const result = placeObject(
+    doc(),
+    { type: "chair", relation: { againstWall: { room: "west", side: "N" }, facing: "in" } },
+    { ...CONTEXT, tags: {} },
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.findings[0].message, /no asset tags/);
 });
 
 test("place next to an object touches it on that side", () => {
