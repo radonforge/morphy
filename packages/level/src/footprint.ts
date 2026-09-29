@@ -1,5 +1,6 @@
 import {
   type AssetCard,
+  type AssetTags,
   computePropBounds,
   LEVEL_STEP_HEIGHT,
   type PropDefinition,
@@ -12,6 +13,7 @@ import { type Rect2, rotateOffset } from "./geometry";
 export interface LevelContext {
   catalog: readonly PropDefinition[];
   cards: Readonly<Record<string, AssetCard>>;
+  tags: Readonly<Record<string, AssetTags>>;
 }
 
 /** The shape an object occupies: its rotated XZ rectangle and its vertical span. */

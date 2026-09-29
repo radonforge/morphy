@@ -28,6 +28,7 @@ import {
 } from "@morphy/level";
 import {
   ASSET_CARDS,
+  ASSET_TAGS,
   computePropBounds,
   MAP_CATALOG,
   type MapDefinition,
@@ -321,7 +322,10 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
   );
   const mapName = MAP_CATALOG.find((entry) => entry.id === id)?.name ?? id;
   const catalogById = useMemo(() => new Map(catalog.map((def) => [def.id, def])), [catalog]);
-  const context = useMemo<LevelContext>(() => ({ catalog, cards: ASSET_CARDS }), [catalog]);
+  const context = useMemo<LevelContext>(
+    () => ({ catalog, cards: ASSET_CARDS, tags: ASSET_TAGS }),
+    [catalog],
+  );
   const [overlayToggles, setOverlayToggles] = useState<OverlayToggles>(NO_OVERLAYS);
   const radiusOf = useCallback(
     (type: string) => {

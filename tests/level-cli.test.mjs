@@ -13,13 +13,13 @@ import {
   summarizeLevel,
 } from "../packages/level/src/index.ts";
 import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
-import { ASSET_CARDS } from "../packages/shared/src/index.ts";
+import { ASSET_CARDS, ASSET_TAGS } from "../packages/shared/src/index.ts";
 
 const STATION = fileURLToPath(
   new URL("../packages/server/src/maps/station.level.json", import.meta.url),
 );
 const CLI = fileURLToPath(new URL("../tools/level/cli.ts", import.meta.url));
-const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS };
+const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS, tags: ASSET_TAGS };
 const EXIT_INVALID = 1;
 const EXIT_USAGE = 2;
 

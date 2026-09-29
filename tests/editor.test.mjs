@@ -53,12 +53,13 @@ import {
 import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
 import {
   ASSET_CARDS,
+  ASSET_TAGS,
   LEVEL_SAMPLE_CELL,
   LEVEL_SIGHTLINE_MAX,
 } from "../packages/shared/src/index.ts";
 
 const SOURCE = { id: "station", file: "unused", catalog: SPACE_CATALOG };
-const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS };
+const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS, tags: ASSET_TAGS };
 const QUARTER_TURN = Math.PI / 2;
 
 /** Two rooms on a 5x3 grid with open ground in the middle column; one door between west and the open ground. */

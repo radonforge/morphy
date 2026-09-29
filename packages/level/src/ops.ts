@@ -1,4 +1,4 @@
-import { LEVEL_BODY_RADIUS, LEVEL_OVERLAP_TOLERANCE } from "@morphy/shared";
+import { FRONT_YAW, LEVEL_BODY_RADIUS, LEVEL_OVERLAP_TOLERANCE } from "@morphy/shared";
 import type { Finding } from "./checks";
 import type { CellRect, LevelDocument, LevelDoor, LevelObject, LevelPoint } from "./document";
 import { doorKey, TILE, WALL_HALF_THICKNESS } from "./floorplan";
@@ -44,7 +44,7 @@ export const SIDES: readonly Side[] = ["N", "S", "E", "W"];
 /**
  * Where {@link placeObject} puts an object. `center` is the middle of the room's largest
  * rect; `againstWall` backs the object onto that wall, sliding along it to the first free
- * spot, with its front (+Z of the model) facing into the room; `nextTo` sets it touching
+ * spot, with its tagged front (`ASSET_TAGS`) facing into the room; `nextTo` sets it touching
  * another object on one side; `row` lines `count` copies up across the room's middle.
  */
 export type Placement =
@@ -111,14 +111,13 @@ function yawNote(id: string, wanted: number, applied: number): Finding[] {
   ];
 }
 
-function requestedYaw(args: PlaceArgs): number {
-  if ("againstWall" in args.relation) return FACING_IN[args.relation.againstWall.side];
-  return args.exactYaw ?? ((args.yawDegrees ?? 0) * Math.PI) / 180;
+function requestedYaw(args: PlaceArgs, wallYaw: number | undefined): number {
+  return wallYaw ?? args.exactYaw ?? ((args.yawDegrees ?? 0) * Math.PI) / 180;
 }
 
-function placedYaw(args: PlaceArgs): number {
-  if ("againstWall" in args.relation || args.exactYaw !== undefined) return requestedYaw(args);
-  return snapYaw(requestedYaw(args), args.free === true);
+function placedYaw(args: PlaceArgs, wallYaw: number | undefined): number {
+  if (wallYaw !== undefined || args.exactYaw !== undefined) return requestedYaw(args, wallYaw);
+  return snapYaw(requestedYaw(args, wallYaw), args.free === true);
 }
 
 function largestRect(doc: LevelDocument, roomId: string): CellRect | undefined {
@@ -236,6 +235,27 @@ function blocked(
   );
 }
 
+/** The yaw that turns a type's tagged front into the room from `side`; a model-less shape fronts +Z. */
+function facingIn(
+  doc: LevelDocument,
+  context: LevelContext,
+  type: string,
+  side: Side,
+): number | OpResult {
+  const model = context.catalog.find((entry) => entry.id === type)?.model;
+  if (model === undefined) return FACING_IN[side];
+  const tags = context.tags[model];
+  if (tags === undefined) {
+    return fail(
+      doc,
+      "op.invalid",
+      `type "${type}" has no asset tags, so its front is unknown`,
+      "add its model to ASSET_TAGS in packages/shared/src/assetTags.ts",
+    );
+  }
+  return normalizeYaw(FACING_IN[side] - FRONT_YAW[tags.front]);
+}
+
 function measure(doc: LevelDocument, context: LevelContext, type: string): ShapeExtent | OpResult {
   const def = context.catalog.find((entry) => entry.id === type);
   if (def === undefined) {
@@ -253,9 +273,9 @@ function candidates(
   context: LevelContext,
   args: PlaceArgs,
   extent: ShapeExtent,
+  yaw: number,
 ): LevelPoint[][] | OpResult {
   const free = args.free === true;
-  const yaw = placedYaw(args);
   const { relation } = args;
   if ("at" in relation) return [[{ x: snap(relation.at.x, free), z: snap(relation.at.z, free) }]];
   if ("center" in relation) {
@@ -334,8 +354,7 @@ function candidates(
   const { room, side } = relation.againstWall;
   const roomDef = doc.rooms.find((entry) => entry.id === room);
   if (roomDef === undefined) return fail(doc, "op.invalid", `no room "${room}"`, "use a room id");
-  const wallYaw = FACING_IN[side];
-  const own = extentOf(extent, wallYaw);
+  const own = extentOf(extent, yaw);
   const outer = (r: CellRect): number =>
     side === "N" ? -r.j0 : side === "S" ? r.j1 : side === "W" ? -r.i0 : r.i1;
   const rect = roomDef.rects.reduce((best, r) => (outer(r) > outer(best) ? r : best));
@@ -412,7 +431,13 @@ function candidates(
 export function placeObject(doc: LevelDocument, args: PlaceArgs, context: LevelContext): OpResult {
   const extent = measure(doc, context, args.type);
   if ("doc" in extent) return extent;
-  const options = candidates(doc, context, args, extent);
+  const wallYaw =
+    "againstWall" in args.relation
+      ? facingIn(doc, context, args.type, args.relation.againstWall.side)
+      : undefined;
+  if (typeof wallYaw === "object") return wallYaw;
+  const yaw = placedYaw(args, wallYaw);
+  const options = candidates(doc, context, args, extent, yaw);
   if ("doc" in options) return options;
   if (options.length === 0) {
     return fail(
@@ -422,7 +447,6 @@ export function placeObject(doc: LevelDocument, args: PlaceArgs, context: LevelC
       "pick a longer wall or a smaller type",
     );
   }
-  const yaw = placedYaw(args);
   const taken = new Set(doc.objects.map((object) => object.id));
   const regions = regionGrid(doc);
   const space = buildSpace(doc, context);
@@ -463,7 +487,7 @@ export function placeObject(doc: LevelDocument, args: PlaceArgs, context: LevelC
           entities: [object.id],
           at: { x: object.x, z: object.z },
         })),
-        ...yawNote(placed[0]!.id, requestedYaw(args), yaw),
+        ...yawNote(placed[0]!.id, requestedYaw(args, wallYaw), yaw),
       ]);
     }
     for (const object of placed) taken.delete(object.id);

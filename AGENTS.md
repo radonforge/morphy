@@ -69,6 +69,11 @@ The single source of truth for everything client and server must agree on. **Exp
 - `random.ts`: `makeRng`, the seeded mulberry32 PRNG behind every map's seeded variation.
 - `modelFit.ts`: `uniformFitScale`, the uniform scale that seats a GLB in its prop's bounding
   cylinder; the client's `fitModel` and the level checks both call it, so they never disagree.
+- `assetTags.ts`: `ASSET_TAGS`, what geometry cannot settle about each catalog prop's model: its
+  front, its symmetry (how many quarter turns leave it looking the same: 1, 2 or 4) and its mount
+  (floor, wall, surface), each marked `auto` (a proposal the owner kept on review) or `human`. A
+  typed literal, not JSON, so the compiler checks every value and the production bundle drops it; a new
+  catalog prop fails `tests/asset-cards.test.mjs` until it is tagged.
 
 ### `packages/level`: the level document
 
@@ -104,7 +109,8 @@ client code, three.js or Colyseus.
 - `ops.ts`: pure edits returning `{ doc, findings, ok }` (place by `at` / `center` / `againstWall` /
   `nextTo` / `row`, move, rotate, remove, duplicate, room add / resize / remove, door toggle).
   Positions snap to 0.5 m and yaw to quarter turns unless `free` (a rounded yaw is reported as
-  `op.yaw-snapped`; a duplicate keeps its source's exact yaw); the model front is +Z and N is -Z.
+  `op.yaw-snapped`; a duplicate keeps its source's exact yaw); N is -Z, and `againstWall` turns
+  the model's tagged front, not its +Z, into the room.
   An op that would collide, or place on open ground or across a room's edge, returns an
   `op.blocked` error naming the blocker and the input document unchanged; a move or turn is
   refused only for what the object did not already touch.

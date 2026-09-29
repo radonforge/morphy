@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { RUNTIME_MODEL_PATHS } from "../packages/client/runtimeAssets.ts";
-import { ASSET_CARDS } from "../packages/shared/src/index.ts";
+import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
+import { URBAN_CATALOG } from "../packages/server/src/urbanCatalog.ts";
+import { ASSET_CARDS, ASSET_TAGS } from "../packages/shared/src/index.ts";
 import { buildAssetCards } from "../tools/asset-cards/build.ts";
 import { extractAssetCard } from "../tools/asset-cards/extract.ts";
 
@@ -108,4 +110,11 @@ test("a rotated node, an index-less primitive and an interleaved stride yield th
     minY: 1,
     surfaces: [{ y: 1, area: 4 }],
   });
+});
+
+test("every catalog prop's model is tagged, and nothing else is", () => {
+  const models = [
+    ...new Set([...SPACE_CATALOG, ...URBAN_CATALOG].map((prop) => prop.model)),
+  ].sort();
+  assert.deepEqual(Object.keys(ASSET_TAGS).sort(), models);
 });

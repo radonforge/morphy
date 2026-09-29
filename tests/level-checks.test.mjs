@@ -13,13 +13,14 @@ import {
 import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
 import {
   ASSET_CARDS,
+  ASSET_TAGS,
   computePropBounds,
   LEVEL_BODY_RADIUS,
   LEVEL_STEP_HEIGHT,
   uniformFitScale,
 } from "../packages/shared/src/index.ts";
 
-const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS };
+const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS, tags: ASSET_TAGS };
 const TABLE = SPACE_CATALOG.find((def) => def.id === "table");
 const NEAR = 1e-9;
 
