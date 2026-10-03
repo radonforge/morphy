@@ -21,6 +21,7 @@ import {
 import { Canvas, useThree } from "@react-three/fiber";
 import { type MutableRefObject, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { CeilingView } from "../game/CeilingView";
 import { DeckLights, GAME_FOV, MapView, SUN_POSITION, type ThemePreset } from "../game/Scene";
 import type { OverlayToggles } from "./ChecksPanel";
 import type { EditorView, Preview, Selection } from "./types";
@@ -718,6 +719,7 @@ export interface EditorCanvasProps extends Omit<OverlayProps, "onTop"> {
   map: MapDefinition;
   theme: ThemePreset;
   view: EditorView;
+  ceilingShown: boolean;
   apiRef: MutableRefObject<CanvasApi>;
 }
 
@@ -725,9 +727,17 @@ export interface EditorCanvasProps extends Omit<OverlayProps, "onTop"> {
  * The editor's scene: the compiled map drawn by the game's own renderers
  * (tiles, fitted props, the theme's lights) under a plan overlay of rooms,
  * doors, footprints and spawns. The plan view is an orthographic camera looking
- * straight down; the orbit view is a free perspective camera over the same scene.
+ * straight down and never draws the ceiling; the orbit view is a free
+ * perspective camera over the same scene, with the ceiling when `ceilingShown`.
  */
-export function EditorCanvas({ map, theme, view, apiRef, ...overlay }: EditorCanvasProps) {
+export function EditorCanvas({
+  map,
+  theme,
+  view,
+  ceilingShown,
+  apiRef,
+  ...overlay
+}: EditorCanvasProps) {
   return (
     <Canvas dpr={[1, 2]} gl={{ antialias: true }}>
       <CameraProbe apiRef={apiRef} />
@@ -740,6 +750,7 @@ export function EditorCanvas({ map, theme, view, apiRef, ...overlay }: EditorCan
       <Suspense fallback={null}>
         <MapView map={map} groundColor={theme.ground} />
       </Suspense>
+      {view === "orbit" && ceilingShown && map.ceiling && <CeilingView panels={map.ceiling} />}
       <Suspense fallback={null}>
         <Overlay {...overlay} onTop={view === "plan"} />
       </Suspense>
