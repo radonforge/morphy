@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   capUnderCeiling,
+  ceilingBetween,
   ceilingHeightAt,
   glassRibs,
 } from "../packages/client/src/game/ceiling.ts";
@@ -22,6 +23,14 @@ test("the ceiling height is the panel over the spot, the lowest where panels mee
   assert.equal(ceilingHeightAt(panels, 7, 1), 8.5);
   assert.equal(ceilingHeightAt(panels, 9, 2), null);
   assert.equal(ceilingHeightAt([], 0, 0), null);
+});
+
+test("the ceiling over a camera's reach is the lower of the pivot's and the far end's", () => {
+  const panels = [panel(2, 2, "glass", 8.5), panel(6, 2, "solid")];
+  assert.equal(ceilingBetween(panels, 2, 2, 6, 2), HEIGHT);
+  assert.equal(ceilingBetween(panels, 6, 2, 2, 2), HEIGHT);
+  assert.equal(ceilingBetween(panels, 2, 2, 20, 2), 8.5);
+  assert.equal(ceilingBetween(panels, 20, 2, 30, 2), null);
 });
 
 test("a camera rising toward a ceiling stops a margin under it", () => {

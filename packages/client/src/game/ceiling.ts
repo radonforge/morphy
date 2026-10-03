@@ -25,6 +25,25 @@ export function ceilingHeightAt(
 }
 
 /**
+ * The lower ceiling over either end of a camera's reach, from its pivot at
+ * `fromX`/`fromZ` to where it would sit at `toX`/`toZ`; `null` when both ends
+ * are under open sky.
+ */
+export function ceilingBetween(
+  panels: readonly CeilingPanel[],
+  fromX: number,
+  fromZ: number,
+  toX: number,
+  toZ: number,
+): number | null {
+  const near = ceilingHeightAt(panels, fromX, fromZ);
+  const far = ceilingHeightAt(panels, toX, toZ);
+  if (near === null) return far;
+  if (far === null) return near;
+  return Math.min(near, far);
+}
+
+/**
  * How far a third-person camera may sit from its pivot along a direction that
  * rises by `dirY` per metre, so it stays `margin` under a ceiling at `ceilingY`
  * but never closer than `minDistance`. Unchanged under open sky or looking up.

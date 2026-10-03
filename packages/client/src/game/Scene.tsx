@@ -35,7 +35,7 @@ import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
 import { CeilingView } from "./CeilingView";
-import { capUnderCeiling, ceilingHeightAt } from "./ceiling";
+import { capUnderCeiling, ceilingBetween } from "./ceiling";
 import type { BloomSettings, ShadowSettings } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
 import { fitModel, MODEL_MIN_SIZE } from "./modelFit";
@@ -2101,7 +2101,7 @@ function LocalPlayer({
         desired,
         pivotY,
         dirY,
-        ceilingHeightAt(ceiling, body.x, body.z),
+        ceilingBetween(ceiling, body.x, body.z, body.x + dirX * desired, body.z + dirZ * desired),
         CAMERA_CEILING_MARGIN,
         CAMERA_MIN_DISTANCE,
       );
