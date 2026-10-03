@@ -703,6 +703,6 @@
     { "id": "light-23", "x": 42, "z": 0, "kind": "corridor" },
     { "id": "light-24", "x": -14, "z": -27, "kind": "room" },
     { "id": "light-25", "x": 14, "z": -27, "kind": "room" },
-    { "id": "light-26", "kind": "room", "x": -32, "z": 12 }
+    { "id": "light-26", "x": -32, "z": 12, "kind": "room" }
   ]
 }
