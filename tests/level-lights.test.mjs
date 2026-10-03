@@ -7,6 +7,7 @@ import {
   compileLevel,
   DEFAULT_ROOM_LIGHT_COUNT,
   deckLightsFor,
+  formatLevelDocument,
   LevelValidationError,
   moveLight,
   parseLevelDocument,
@@ -289,6 +290,12 @@ test("adding a light snaps it, names it by kind and refuses walls and repeated i
   assert.equal(walled.findings[0].code, "op.blocked");
   assert.equal(walled.doc, third.doc);
   assert.equal(addLight(third.doc, { at: { x: 11, z: 0 } }).ok, false);
+});
+
+test("an added light is written in the order the parser reads it back", () => {
+  const text = formatLevelDocument(addLight(parse(undefined), { at: { x: -6, z: 0 } }).doc);
+  const reread = parseLevelDocument(JSON.parse(text), { catalog: SPACE_CATALOG });
+  assert.equal(formatLevelDocument(reread), text);
 });
 
 test("adding or moving a light to a non-finite spot or with an empty id is refused by the op", () => {
