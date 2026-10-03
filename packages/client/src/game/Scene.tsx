@@ -1,6 +1,7 @@
 import type { Room } from "@colyseus/sdk";
 import { DEFAULT_ROOM_LIGHT_COUNT, deckLightsFor } from "@morphy/level";
 import {
+  type CeilingPanel,
   computePropBounds,
   INPUT_IDLE_EPSILON,
   INPUT_SEND_RATE_MS,
@@ -33,6 +34,8 @@ import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "r
 import * as THREE from "three";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
+import { CeilingView } from "./CeilingView";
+import { capUnderCeiling, ceilingBetween } from "./ceiling";
 import type { BloomSettings, ShadowSettings } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
 import { fitModel, MODEL_MIN_SIZE } from "./modelFit";
@@ -127,6 +130,8 @@ const CAMERA_DISTANCE = 8;
 const CAMERA_TARGET_Y = 1.2;
 const CAMERA_DAMP = 0.0008;
 const CAMERA_WALL_MARGIN = 0.35;
+const CAMERA_CEILING_MARGIN = 0.35;
+const NO_CEILING: readonly CeilingPanel[] = [];
 const CAMERA_MIN_DISTANCE = 0.2;
 const CAMERA_SLAB_EPSILON = 1e-4;
 const CAMERA_OCCLUDER_BASE_MAX = 0.5;
@@ -639,6 +644,7 @@ export const Scene = memo(function Scene({
         shadows={shadows}
       />
       <MapView map={map} groundColor={theme.ground} />
+      {map.ceiling && <CeilingView panels={map.ceiling} />}
       <PropActions room={room} enabled={canTransform} motionRef={motionRef} />
       <Decoys decoys={decoys} catalog={catalog} />
       <Shooter
@@ -1896,6 +1902,7 @@ function LocalPlayer({
     propRot: Number.NaN,
   });
   const camDistRef = useRef(CAMERA_DISTANCE);
+  const ceiling = map.ceiling ?? NO_CEILING;
   const propRot = useRef(0);
   const turnHeldMs = useRef(0);
   const lastTurnDir = useRef(0);
@@ -2089,13 +2096,21 @@ function LocalPlayer({
       if (wallDistance < desired) {
         desired = Math.max(wallDistance - CAMERA_WALL_MARGIN, CAMERA_MIN_DISTANCE);
       }
+      const pivotY = body.y + CAMERA_TARGET_Y;
+      desired = capUnderCeiling(
+        desired,
+        pivotY,
+        dirY,
+        ceilingBetween(ceiling, body.x, body.z, body.x + dirX * desired, body.z + dirZ * desired),
+        CAMERA_CEILING_MARGIN,
+        CAMERA_MIN_DISTANCE,
+      );
 
       const current = camDistRef.current;
       camDistRef.current =
         desired < current ? desired : current + (desired - current) * (1 - CAMERA_DAMP ** delta);
       const d = camDistRef.current;
 
-      const pivotY = body.y + CAMERA_TARGET_Y;
       camera.position.set(body.x + dirX * d, pivotY + dirY * d, body.z + dirZ * d);
       camera.lookAt(body.x, pivotY, body.z);
     }

@@ -286,6 +286,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
   const [selection, setSelection] = useState<Selection>(null);
   const [tool, setTool] = useState<Tool>({ kind: "select" });
   const [view, setView] = useState<EditorView>("plan");
+  const [ceilingShown, setCeilingShown] = useState(true);
   const [preview, setPreview] = useState<Preview>(EMPTY_PREVIEW);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [diskError, setDiskError] = useState<string | null>(null);
@@ -730,6 +731,9 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
         case "KeyL":
           setTool({ kind: "light" });
           return;
+        case "KeyC":
+          if (!event.repeat && view === "orbit") setCeilingShown((shown) => !shown);
+          return;
       }
     };
     const onKeyUp = (event: KeyboardEvent) => {
@@ -746,7 +750,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [cancel, deleteSelection, duplicateSelection, rotateSelection, save, stepHistory]);
+  }, [cancel, deleteSelection, duplicateSelection, rotateSelection, save, stepHistory, view]);
 
   const worldAt = (event: { clientX: number; clientY: number }) => {
     const container = containerRef.current;
@@ -1167,6 +1171,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
             map={map}
             theme={theme}
             view={view}
+            ceilingShown={ceilingShown}
             apiRef={apiRef}
             doc={doc}
             selection={selection}
@@ -1228,6 +1233,15 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
           >
             {view === "plan" ? "3D" : "Plan"} <kbd>Tab</kbd>
           </button>
+          {view === "orbit" && (
+            <button
+              type="button"
+              className={ceilingShown ? "ed-btn is-on" : "ed-btn"}
+              onClick={() => setCeilingShown((shown) => !shown)}
+            >
+              Ceiling <kbd>C</kbd>
+            </button>
+          )}
           <button
             type="button"
             className="ed-btn"

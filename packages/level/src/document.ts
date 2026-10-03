@@ -1,4 +1,11 @@
-import { isMapId, type MapId, type MapLight, type PropDefinition } from "@morphy/shared";
+import {
+  CEILING_KINDS,
+  type CeilingKind,
+  isMapId,
+  type MapId,
+  type MapLight,
+  type PropDefinition,
+} from "@morphy/shared";
 import { doorKey, TILE } from "./floorplan";
 import { rectContains } from "./geometry";
 import { wallRects } from "./walls";
@@ -11,11 +18,18 @@ export interface CellRect {
   j1: number;
 }
 
-/** A named region of floor cells; its walls fall on every edge it shares with another region. */
+/**
+ * A named region of floor cells; its walls fall on every edge it shares with another region.
+ * `ceiling` is glass unless the room says `solid`.
+ */
 export interface LevelRoom {
   id: string;
   rects: CellRect[];
+  ceiling?: CeilingKind;
 }
+
+/** The ceiling a room gets when its document does not name one. */
+export const DEFAULT_CEILING: CeilingKind = "glass";
 
 /** A wall gap: `axis: "v"` on vertical grid line `line` at row `cell`; `"h"` on horizontal line `line` at column `cell`. */
 export interface LevelDoor {
@@ -196,7 +210,18 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
       }
       rects.push({ i0, i1, j0, j1 });
     }
-    rooms.push({ id: roomId, rects });
+    if (raw.ceiling !== undefined && !CEILING_KINDS.includes(raw.ceiling as CeilingKind)) {
+      return fail(
+        entity,
+        `ceiling ${JSON.stringify(raw.ceiling)} is not a ceiling kind`,
+        `use one of ${CEILING_KINDS.join(", ")}, or leave it out for ${DEFAULT_CEILING}`,
+      );
+    }
+    rooms.push({
+      id: roomId,
+      rects,
+      ...(raw.ceiling !== undefined ? { ceiling: raw.ceiling as CeilingKind } : {}),
+    });
   }
 
   const regionAt = (i: number, j: number): string | null =>

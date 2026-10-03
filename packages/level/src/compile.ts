@@ -5,9 +5,10 @@ import {
   type PropDefinition,
   type TileInstance,
 } from "@morphy/shared";
-import type { LevelDocument } from "./document";
+import { DEFAULT_CEILING, type LevelDocument } from "./document";
 import {
   type Cell,
+  emitCeiling,
   emitFloorplan,
   FLOOR_THICKNESS,
   type Grid,
@@ -23,7 +24,8 @@ export interface CompileOptions {
 /**
  * Compile a validated level document into the `MapDefinition` the room and the
  * client consume: a floor slab under the whole grid, walls, gates and floor
- * tiles from the floorplan emitter, and one prop per object at `y = 0`. `seed`
+ * tiles from the floorplan emitter, a ceiling panel over every floor cell, and
+ * one prop per object at `y = 0`. `seed`
  * only picks floor and wall tile variants; nothing moves with it. The document's
  * lights, when it has any, are carried over as they are.
  */
@@ -48,6 +50,8 @@ export function compileLevel(doc: LevelDocument, { catalog, seed }: CompileOptio
     },
   ];
   emitFloorplan(grid, region, doc.doors, makeRng(seed), { tiles, colliders });
+  const ceilingKinds = new Map(doc.rooms.map((room) => [room.id, room.ceiling ?? DEFAULT_CEILING]));
+  const ceiling = emitCeiling(grid, region, (id) => ceilingKinds.get(id) ?? DEFAULT_CEILING);
 
   return {
     id: doc.id,
@@ -69,5 +73,6 @@ export function compileLevel(doc: LevelDocument, { catalog, seed }: CompileOptio
     })),
     propCatalog: [...catalog],
     ...(doc.lights !== undefined ? { lights: doc.lights.map((light) => ({ ...light })) } : {}),
+    ceiling,
   };
 }

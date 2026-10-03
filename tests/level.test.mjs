@@ -5,6 +5,8 @@ import {
   compileLevel,
   LevelValidationError,
   parseLevelDocument,
+  TILE,
+  WALL_HEIGHT,
 } from "../packages/level/src/index.ts";
 import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
 import { parseMapDefinition } from "../packages/shared/src/index.ts";
@@ -60,6 +62,11 @@ const INVALID = [
     'room "east"',
   ],
   ["a duplicate room id", edit((d) => Object.assign(d.rooms[2], { id: "west" })), 'room "west"'],
+  [
+    "an unknown ceiling kind",
+    edit((d) => Object.assign(d.rooms[1], { ceiling: "dome" })),
+    'room "hall"',
+  ],
   [
     "overlapping rooms",
     edit((d) => d.rooms[1].rects.push({ i0: 1, i1: 3, j0: 0, j1: 1 })),
@@ -152,6 +159,37 @@ test("a compiled level is a valid map", () => {
     map.props.map((prop) => [prop.type, prop.position, prop.rotation]),
     doc.objects.map((o) => [o.type, { x: o.x, y: 0, z: o.z }, o.yaw]),
   );
+});
+
+test("every floor cell gets a ceiling panel on the wall tops, glass unless its room is solid", () => {
+  const doc = fixture();
+  doc.rooms[1].ceiling = "solid";
+  const parsed = parseLevelDocument(doc, OPTIONS);
+  assert.equal(parsed.rooms[1].ceiling, "solid");
+  assert.equal(parsed.rooms[0].ceiling, undefined);
+  const { ceiling } = compileLevel(parsed, { catalog: SPACE_CATALOG, seed: 0 });
+  assert.equal(ceiling.length, 15);
+  assert.ok(ceiling.every((panel) => panel.size === TILE && panel.y === WALL_HEIGHT));
+  const solid = ceiling.filter((panel) => panel.kind === "solid");
+  assert.deepEqual(
+    solid.map(({ x, z }) => [x, z]),
+    [
+      [0, -4],
+      [0, 0],
+      [0, 4],
+    ],
+  );
+});
+
+test("a map refuses a ceiling panel without a size or of an unknown kind", () => {
+  const map = compileLevel(parseLevelDocument(fixture(), OPTIONS), {
+    catalog: SPACE_CATALOG,
+    seed: 0,
+  });
+  const [first] = map.ceiling;
+  for (const ceiling of [{}, [{ ...first, size: 0 }], [{ ...first, kind: "dome" }]]) {
+    assert.throws(() => parseMapDefinition({ ...map, ceiling }), /ceiling/);
+  }
 });
 
 test("compiling is deterministic per seed and the seed moves nothing", () => {
