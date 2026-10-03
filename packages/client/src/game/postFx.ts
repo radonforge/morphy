@@ -96,7 +96,11 @@ export function usePostFx(post: PostSettings | null, antialias: boolean): PostCo
   }, [chain]);
 }
 
-/** Contact shadows in world units, so a crate darkens the floor the same at any distance. */
+/**
+ * Contact shadows in world units, so a crate darkens the floor the same at any
+ * distance. Transparency awareness stays off: left on auto, n8ao scans the scene
+ * every frame and draws every tracer, beam and pane of glass a second time.
+ */
 function occlusionPass(scene: THREE.Scene, camera: THREE.Camera, halfRes: boolean): N8AOPostPass {
   const pass = new N8AOPostPass(scene, camera);
   pass.setQualityMode(AO_QUALITY);
@@ -105,6 +109,7 @@ function occlusionPass(scene: THREE.Scene, camera: THREE.Camera, halfRes: boolea
   pass.configuration.intensity = AO_INTENSITY;
   pass.configuration.halfRes = halfRes;
   pass.configuration.gammaCorrection = false;
+  pass.configuration.transparencyAware = false;
   return pass;
 }
 

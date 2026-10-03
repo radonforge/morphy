@@ -10,6 +10,7 @@ declare module "n8ao" {
     color: Color;
     gammaCorrection: boolean;
     halfRes: boolean;
+    transparencyAware: boolean;
   }
 
   export type N8AOQualityMode = "Performance" | "Low" | "Medium" | "High" | "Ultra";
