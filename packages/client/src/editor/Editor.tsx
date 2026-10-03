@@ -732,7 +732,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
           setTool({ kind: "light" });
           return;
         case "KeyC":
-          setCeilingShown((shown) => !shown);
+          if (!event.repeat && view === "orbit") setCeilingShown((shown) => !shown);
           return;
       }
     };
@@ -750,7 +750,7 @@ export function Editor({ id, initial, catalog, onTry }: EditorProps) {
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("blur", onBlur);
     };
-  }, [cancel, deleteSelection, duplicateSelection, rotateSelection, save, stepHistory]);
+  }, [cancel, deleteSelection, duplicateSelection, rotateSelection, save, stepHistory, view]);
 
   const worldAt = (event: { clientX: number; clientY: number }) => {
     const container = containerRef.current;
