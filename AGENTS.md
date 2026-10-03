@@ -103,9 +103,11 @@ client code, three.js or Colyseus.
   in `FINDING_CODES`; thresholds are the `LEVEL_*` constants in `shared/constants.ts`.
   Reachability floods a `LEVEL_SAMPLE_CELL` grid from the hunter spawns with the client's body
   radius, so a pocket under `LEVEL_UNREACHABLE_MIN_AREA` is sampling noise and is not reported, and
-  is skipped (the spawns are reported instead) when no hunter spawn is walkable. The station rooms
-  fail `LEVEL_SIGHTLINE_MAX` by design: they are oversized, which is what the editor is for, so do
-  not raise it to quiet them. Validators never move or drop an object.
+  is skipped (the spawns are reported instead) when no hunter spawn is walkable. The station's
+  corridor spine and its two 24 m stores still fail `LEVEL_SIGHTLINE_MAX`; that is layout work
+  still to do, so do not raise it to quiet them. Validators never move or drop an object. Tests that
+  need a stable document read `tests/fixtures/station-seven-rooms.level.json`, the station before
+  its rooms were split, so editing the map does not break them.
 - `ops.ts`: pure edits returning `{ doc, findings, ok }` (place by `at` / `center` / `againstWall` /
   `nextTo` / `row`, move, rotate, remove, duplicate, room add / resize / remove, door toggle).
   Positions snap to 0.5 m and yaw to quarter turns unless `free` (a rounded yaw is reported as
