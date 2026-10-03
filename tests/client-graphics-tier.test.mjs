@@ -5,9 +5,13 @@ import {
   GRAPHICS_PREFERENCES,
   isGraphicsPreference,
   nextRoundTier,
+  postSettings,
   STEP_DOWN_FPS,
   STEP_DOWN_MIN_FRAMES,
+  TIER_SETTINGS,
 } from "../packages/client/src/game/graphicsTier.ts";
+
+const BLOOM = { intensity: 1, radius: 0.5, threshold: 0.9 };
 
 function hints(renderer, { software = false, cores = 8, memoryGb = 8 } = {}) {
   return { gpu: { renderer, software }, cores, memoryGb };
@@ -50,4 +54,19 @@ test("a stored graphics preference is accepted only when it names a known option
   for (const bad of [null, "", "ultra", "Auto", " high"]) {
     assert.equal(isGraphicsPreference(bad), false);
   }
+});
+
+test("Low draws every map without a post pass", () => {
+  assert.equal(postSettings(TIER_SETTINGS.low, BLOOM), null);
+  assert.equal(postSettings(TIER_SETTINGS.low, null), null);
+});
+
+test("ambient occlusion runs at half resolution on Medium and full on High", () => {
+  assert.deepEqual(postSettings(TIER_SETTINGS.medium, null)?.ao, { halfRes: true });
+  assert.deepEqual(postSettings(TIER_SETTINGS.high, null)?.ao, { halfRes: false });
+});
+
+test("bloom follows the theme on the tiers that draw it", () => {
+  assert.equal(postSettings(TIER_SETTINGS.high, BLOOM)?.bloom, BLOOM);
+  assert.equal(postSettings(TIER_SETTINGS.high, null)?.bloom, null);
 });

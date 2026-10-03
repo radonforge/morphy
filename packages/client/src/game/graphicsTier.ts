@@ -31,28 +31,42 @@ export interface BloomSettings {
   threshold: number;
 }
 
+/** Screen-space ambient occlusion; `halfRes` traces it at half resolution and upsamples by depth. */
+export interface AoSettings {
+  halfRes: boolean;
+}
+
 export interface TierSettings {
   dpr: [number, number];
   antialias: boolean;
   shadows: ShadowSettings | null;
   glass: boolean;
   bloom: boolean;
+  ao: AoSettings | null;
+}
+
+/** What the post chain draws over one map on one tier. */
+export interface PostSettings {
+  bloom: BloomSettings | null;
+  ao: AoSettings | null;
 }
 
 /**
  * What each tier turns on. Low drops everything a weak integrated GPU pays for
- * per pixel or per frame (supersampling, MSAA, the shadow pass, bloom, backdrop blur
- * on the HUD); Medium keeps the look at a quarter of the shadow texels and half the
- * refresh; High is the full look with a wider, sharper shadow area.
+ * per pixel or per frame (supersampling, MSAA, the shadow pass, every post pass,
+ * backdrop blur on the HUD); Medium keeps the look at a quarter of the shadow texels
+ * and half the refresh, with ambient occlusion traced at half resolution; High is the
+ * full look with a wider, sharper shadow area and full-resolution occlusion.
  */
 export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
-  low: { dpr: [1, 1], antialias: false, shadows: null, glass: false, bloom: false },
+  low: { dpr: [1, 1], antialias: false, shadows: null, glass: false, bloom: false, ao: null },
   medium: {
     dpr: [1, 1],
     antialias: true,
     shadows: { mapSize: 1024, radius: 25, refreshHz: 15 },
     glass: true,
     bloom: true,
+    ao: { halfRes: true },
   },
   high: {
     dpr: [1, 1.25],
@@ -60,8 +74,18 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
     shadows: { mapSize: 2048, radius: 40, refreshHz: 30 },
     glass: true,
     bloom: true,
+    ao: { halfRes: false },
   },
 };
+
+/**
+ * The post chain a tier draws a map's theme with, or null when the frame goes
+ * straight to the canvas, which is always the case on Low.
+ */
+export function postSettings(tier: TierSettings, bloom: BloomSettings | null): PostSettings | null {
+  const post = { bloom: tier.bloom ? bloom : null, ao: tier.ao };
+  return post.bloom || post.ao ? post : null;
+}
 
 /** No tier renders faster than this: a 144 Hz monitor gains nothing a prop hunt needs. */
 export const MAX_RENDER_FPS = 60;

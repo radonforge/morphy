@@ -75,10 +75,11 @@ import {
   recordFrame,
 } from "./diagnostics";
 import {
-  type BloomSettings,
   type GraphicsTier,
   MAX_RENDER_FPS,
   nextRoundTier,
+  type PostSettings,
+  postSettings,
   type RoundFrames,
   resolveTier,
   TIER_SETTINGS,
@@ -431,15 +432,15 @@ function PerfProbe({
  */
 function RenderGate({
   skip,
-  bloom,
+  post,
   antialias,
 }: {
   skip: boolean;
-  bloom: BloomSettings | null;
+  post: PostSettings | null;
   antialias: boolean;
 }) {
   const lastRender = useRef(Number.NEGATIVE_INFINITY);
-  const composer = usePostFx(bloom, antialias);
+  const composer = usePostFx(post, antialias);
   useGuardedFrame(({ gl, scene, camera, clock }) => {
     if (skip) return;
     const now = clock.elapsedTime;
@@ -817,6 +818,11 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [roundFrames] = useState<RoundFrames>(() => ({ frames: 0, totalMs: 0 }));
   const tierSettings = TIER_SETTINGS[tier];
   const glConfig = useMemo(() => ({ antialias: tierSettings.antialias }), [tierSettings]);
+  const mapId = map?.id ?? null;
+  const post = useMemo(
+    () => postSettings(tierSettings, mapId === null ? null : themeBloom(mapId)),
+    [tierSettings, mapId],
+  );
   const glRef = useRef<WebGLRenderer | null>(null);
   const longTasksRef = useRef<LongTaskTally>({ count: 0, longestMs: 0 });
   const contextLossesRef = useRef(0);
@@ -1443,11 +1449,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           catchRef={catchRef}
           caughtCam={caught}
         />
-        <RenderGate
-          skip={blinded}
-          bloom={tierSettings.bloom ? themeBloom(map.id) : null}
-          antialias={tierSettings.antialias}
-        />
+        <RenderGate skip={blinded} post={post} antialias={tierSettings.antialias} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
         <PropFootsteps playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
         <PerfProbe
