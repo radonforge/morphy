@@ -78,7 +78,7 @@ export function addLight(
     return fail(doc, "a light needs a finite position", "pass numeric x, z", [id]);
   }
   const free = args.free === true;
-  const light: LevelLight = { id, kind, x: snap(args.at.x, free), z: snap(args.at.z, free) };
+  const light: LevelLight = { id, x: snap(args.at.x, free), z: snap(args.at.z, free), kind };
   const blocker = refusal(doc, light.x, light.z);
   if (blocker !== null) {
     return blocked(doc, light, blocker, "hang it over a room or a doorway instead");
