@@ -70,7 +70,11 @@ function forSamplesUnder(
   }
 }
 
-/** Sample a laid-out document for reachability and sight. */
+/**
+ * Sample a laid-out document for reachability and sight. Open ground with no
+ * door onto it and no spawn on it is outside the map, the void around a
+ * station, so it is not floor.
+ */
 export function sampleSpace(space: LevelSpace): SampleGrid {
   const { halfW, halfD } = space;
   const nx = Math.round((2 * halfW) / LEVEL_SAMPLE_CELL);
@@ -94,13 +98,18 @@ export function sampleSpace(space: LevelSpace): SampleGrid {
     },
   };
 
+  const { props, hunters } = space.doc.spawns;
+  const openGroundInPlay =
+    space.doors.some((zone) => zone.sides.some((side) => side.region === null)) ||
+    [...props, ...hunters].some((spawn) => space.regionAt(spawn.x, spawn.z) === null);
   for (let index = 0; index < nx * nz; index++) {
     const { x, z } = grid.centre(index);
     if (
       x - LEVEL_BODY_RADIUS < -halfW ||
       x + LEVEL_BODY_RADIUS > halfW ||
       z - LEVEL_BODY_RADIUS < -halfD ||
-      z + LEVEL_BODY_RADIUS > halfD
+      z + LEVEL_BODY_RADIUS > halfD ||
+      (!openGroundInPlay && space.regionAt(x, z) === null)
     ) {
       grid.walkable[index] = 0;
     }
