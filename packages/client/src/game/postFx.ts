@@ -68,7 +68,7 @@ export function usePostFx(post: PostSettings | null, antialias: boolean): PostCo
     const effects: Effect[] = [
       ...(post.bloom ? [bloomEffect(post.bloom)] : []),
       new ToneMappingEffect({ mode: TONE_MAPPING }),
-      ...(lut ? [new LUT3DEffect(lut)] : []),
+      ...(lut ? [new LUT3DEffect(lut, { inputColorSpace: THREE.SRGBColorSpace })] : []),
       ...(post.vignette
         ? [new VignetteEffect({ offset: VIGNETTE_OFFSET, darkness: VIGNETTE_DARKNESS })]
         : []),
@@ -115,11 +115,15 @@ function occlusionPass(scene: THREE.Scene, camera: THREE.Camera, halfRes: boolea
 
 /**
  * The map's grade baked into a 3D lookup table, sampled on the tone-mapped sRGB
- * frame. `LUT3DEffect` holds it in a uniform its own `dispose` never reaches, so the
- * chain frees it.
+ * frame. Half floats, because WebGL 2 filters them everywhere while 32-bit float
+ * filtering is an extension many mobile GPUs lack. `LUT3DEffect` holds the table in
+ * a uniform its own `dispose` never reaches, so the chain frees it.
  */
 function gradeLut(grade: ColorGrade): LookupTexture {
-  return new LookupTexture(gradeLutData(LUT_SIZE, grade), LUT_SIZE);
+  const texels = Uint16Array.from(gradeLutData(LUT_SIZE, grade), THREE.DataUtils.toHalfFloat);
+  const lut = new LookupTexture(texels, LUT_SIZE);
+  lut.type = THREE.HalfFloatType;
+  return lut;
 }
 
 function bloomEffect(bloom: BloomSettings): BloomEffect {
