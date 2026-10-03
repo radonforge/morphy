@@ -24,9 +24,9 @@ export interface ShadowSettings {
   refreshHz: number;
 }
 
-/** A theme's bloom over bright pixels, see `UnrealBloomPass` for the three parameters. */
+/** A theme's bloom over bright pixels, see `BloomEffect` in `postprocessing` for the three parameters. */
 export interface BloomSettings {
-  strength: number;
+  intensity: number;
   radius: number;
   threshold: number;
 }

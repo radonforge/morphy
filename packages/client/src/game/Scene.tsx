@@ -304,7 +304,7 @@ const THEMES: Record<string, ThemePreset> = {
       distance: 20,
       height: 3.6,
     },
-    bloom: { strength: 0.6, radius: 0.45, threshold: 0.85 },
+    bloom: { intensity: 7, radius: 0.75, threshold: 0.85 },
   },
   urban: {
     ground: MAP_THEME_BASE.urban.ground,

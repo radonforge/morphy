@@ -62,7 +62,6 @@ import {
   preloadSamples,
   toggleMuted,
 } from "./audio";
-import { useBloomComposer } from "./bloom";
 import { ControlsBar, ControlsDialog } from "./Controls";
 import { CopyDiagnostics } from "./CopyDiagnostics";
 import { deviceHints } from "./deviceProbe";
@@ -87,6 +86,7 @@ import {
 import { useGuardedFrame } from "./guardedFrame";
 import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
+import { usePostFx } from "./postFx";
 import { graphicsPreference, isPerfHudEnabled } from "./prefs";
 import {
   type CaptureRecord,
@@ -439,14 +439,14 @@ function RenderGate({
   antialias: boolean;
 }) {
   const lastRender = useRef(Number.NEGATIVE_INFINITY);
-  const composer = useBloomComposer(bloom, antialias);
+  const composer = usePostFx(bloom, antialias);
   useGuardedFrame(({ gl, scene, camera, clock }) => {
     if (skip) return;
     const now = clock.elapsedTime;
     const since = now - lastRender.current;
     if (since < RENDER_INTERVAL_S - RENDER_INTERVAL_SLACK_S) return;
     lastRender.current = Number.isFinite(since) ? now - (since % RENDER_INTERVAL_S) : now;
-    if (composer) composer.render(scene, camera);
+    if (composer) composer.render();
     else gl.render(scene, camera);
   }, RENDER_GATE_PRIORITY);
   return null;
