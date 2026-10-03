@@ -18,6 +18,9 @@ import { ASSET_CARDS, ASSET_TAGS } from "../packages/shared/src/index.ts";
 const STATION = fileURLToPath(
   new URL("../packages/server/src/maps/station.level.json", import.meta.url),
 );
+const SEVEN_ROOMS = fileURLToPath(
+  new URL("./fixtures/station-seven-rooms.level.json", import.meta.url),
+);
 const CLI = fileURLToPath(new URL("../tools/level/cli.ts", import.meta.url));
 const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS, tags: ASSET_TAGS };
 const EXIT_INVALID = 1;
@@ -29,7 +32,7 @@ let file;
 before(async () => {
   dir = await mkdtemp(join(tmpdir(), "morphy-level-"));
   file = join(dir, "station.level.json");
-  await copyFile(STATION, file);
+  await copyFile(SEVEN_ROOMS, file);
 });
 
 after(async () => {
@@ -139,7 +142,7 @@ test("an edit chain writes the document, keeps it valid and prints the report de
   assert.equal(formatLevelDocument(JSON.parse(text)), text, "written in the formatter's layout");
   probe = (await current()).objects.find((object) => object.id === "probe");
   assert.equal(probe, undefined);
-  const original = JSON.parse(await readFile(STATION, "utf8"));
+  const original = JSON.parse(await readFile(SEVEN_ROOMS, "utf8"));
   const final = JSON.parse(text);
   const byKey = (doors) => doors.map((d) => `${d.axis}:${d.line}:${d.cell}`).sort();
   assert.deepEqual(final.objects, original.objects);
