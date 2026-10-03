@@ -81,7 +81,8 @@ Raw TypeScript like `@morphy/shared` and depending only on it: it must never imp
 client code, three.js or Colyseus.
 
 - `document.ts`: `LevelDocument`, a map as a document of intents on the `TILE` grid (rooms as cell
-  rects, doors on grid edges, placed catalog objects, spawn points, optional night `lights`), and `parseLevelDocument(input,
+  rects, each with an optional `ceiling` of `glass` (the default) or `solid`, doors on grid edges,
+  placed catalog objects, spawn points, optional night `lights`), and `parseLevelDocument(input,
   { catalog, id? })`, the file boundary: it throws `LevelValidationError` naming the document, the
   offending entity and a fix hint (a different map id than asked for, overlapping rooms, duplicate
   ids, unknown types, a door with the same region on both sides or in the outer wall, anything
@@ -89,7 +90,11 @@ client code, three.js or Colyseus.
 - `compile.ts`: `compileLevel(doc, { catalog, seed })` → `MapDefinition`. **Positions in a document
   are fixed**: the seed only picks floor and wall tile variants, so a document-authored map has the
   same furniture every round by design, and the same lights (`MapDefinition.lights` is the
-  document's, copied).
+  document's, copied). Every floor cell also gets a `MapDefinition.ceiling` panel on the wall tops
+  (`emitCeiling`): the client draws glass as a ribbed pane the stars show through
+  (`game/CeilingView.tsx`), never a collider, and `capUnderCeiling` (`game/ceiling.ts`) keeps the
+  prop's third-person camera under it, which also stops it looking over the walls into the next
+  room. A map without `ceiling` (North District) is open sky.
 - `floorplan.ts`: `emitFloorplan`, turning a region grid and its doors into floor tiles, wall tiles,
   wall colliders and gates (which keep `gate.glb`: the bot finds doorways by that name), plus
   `doorKey` (the `axis:line:cell` identity parser and emitter share) and `FLOORPLAN_MODEL_PATHS`.
@@ -187,7 +192,8 @@ client code, three.js or Colyseus.
   (an extra rect of an L, deleting one, spawns, picking) and the op adapters. The checks panel runs
   `validateLevel` with `ASSET_CARDS` on every committed step and groups findings by severity;
   clicking one selects its entity and pans to it, and the unreachable-floor, sightline and
-  unique-type overlays are toggles. The pure parts (`edits.ts`, `history.ts`) are tested in
+  unique-type overlays are toggles. The plan view never draws the ceiling; `C` toggles it in the 3D
+  view. The pure parts (`edits.ts`, `history.ts`) are tested in
   `tests/editor.test.mjs`.
   **Try it** saves, waits for `tsx watch` to restart the game server (a document write always
   restarts it, since the server imports the JSON), and opens `App` with `tryMap`, i.e. a private
