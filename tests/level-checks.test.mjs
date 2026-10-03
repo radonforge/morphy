@@ -230,6 +230,23 @@ test("a room with no door is unreachable as a whole", () => {
   assert.equal(result.metrics["floor.unreachable.m2"], result.metrics["floor.reachable.m2"]);
 });
 
+test("open ground with no door into it is outside the map, not floor to reach", () => {
+  const raw = {
+    ...clean(),
+    grid: { cols: 5, rows: 2 },
+    objects: [],
+    spawns: { props: [{ x: 2, z: -2 }], hunters: [{ x: -6, z: -2 }] },
+  };
+  const result = report(raw);
+  assert.deepEqual(
+    result.findings.filter((f) => f.code === "floor.unreachable"),
+    [],
+  );
+  assert.equal(result.metrics["floor.unreachable.m2"], 0);
+  const doored = report({ ...raw, doors: [...raw.doors, { axis: "v", line: 4, cell: 0 }] });
+  assert.ok(doored.metrics["floor.reachable.m2"] > result.metrics["floor.reachable.m2"]);
+});
+
 test("objects whose vertical spans do not meet never overlap", () => {
   const context = slabContext(0.3);
   const shelf = {
