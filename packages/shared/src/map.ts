@@ -125,7 +125,7 @@ export interface MapLight {
 
 export type CeilingKind = "glass" | "solid";
 
-const CEILING_KINDS: readonly CeilingKind[] = ["glass", "solid"];
+export const CEILING_KINDS: readonly CeilingKind[] = ["glass", "solid"];
 
 /**
  * One square ceiling panel over a floor cell, centred on `x`/`z` with its

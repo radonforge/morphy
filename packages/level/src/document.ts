@@ -1,4 +1,5 @@
 import {
+  CEILING_KINDS,
   type CeilingKind,
   isMapId,
   type MapId,
@@ -29,8 +30,6 @@ export interface LevelRoom {
 
 /** The ceiling a room gets when its document does not name one. */
 export const DEFAULT_CEILING: CeilingKind = "glass";
-
-const CEILING_KINDS: readonly CeilingKind[] = ["glass", "solid"];
 
 /** A wall gap: `axis: "v"` on vertical grid line `line` at row `cell`; `"h"` on horizontal line `line` at column `cell`. */
 export interface LevelDoor {
