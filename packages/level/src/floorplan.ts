@@ -1,4 +1,4 @@
-import type { BoxCollider, TileInstance } from "@morphy/shared";
+import type { BoxCollider, CeilingKind, CeilingPanel, TileInstance } from "@morphy/shared";
 import type { LevelDoor } from "./document";
 
 /** World size of one grid cell (and of every modular floor/wall tile). */
@@ -251,4 +251,30 @@ export function emitFloorplan(
     emitWallTiles(grid, "x", lineZ(grid, r), faceSouth, models, 1, tiles);
     emitWallTiles(grid, "x", lineZ(grid, r), faceNorth, models, -1, tiles);
   }
+}
+
+/**
+ * One ceiling panel per floor cell, its underside on the wall tops, of the kind
+ * `kindOf` names for the cell's region.
+ */
+export function emitCeiling(
+  grid: Grid,
+  region: Cell[][],
+  kindOf: (regionId: string) => CeilingKind,
+): CeilingPanel[] {
+  const panels: CeilingPanel[] = [];
+  for (let i = 0; i < grid.gx; i++) {
+    for (let j = 0; j < grid.gz; j++) {
+      const regionId = region[i]![j];
+      if (regionId === null || regionId === undefined) continue;
+      panels.push({
+        x: cellCenterX(grid, i),
+        z: cellCenterZ(grid, j),
+        y: WALL_HEIGHT,
+        size: TILE,
+        kind: kindOf(regionId),
+      });
+    }
+  }
+  return panels;
 }

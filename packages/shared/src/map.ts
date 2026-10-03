@@ -123,6 +123,23 @@ export interface MapLight {
   kind: MapLightKind;
 }
 
+export type CeilingKind = "glass" | "solid";
+
+const CEILING_KINDS: readonly CeilingKind[] = ["glass", "solid"];
+
+/**
+ * One square ceiling panel over a floor cell, centred on `x`/`z` with its
+ * underside at `y`. `glass` shows the sky through a ribbed pane; `solid` closes
+ * it off.
+ */
+export interface CeilingPanel {
+  x: number;
+  z: number;
+  y: number;
+  size: number;
+  kind: CeilingKind;
+}
+
 export interface MapDefinition {
   id: string;
   bounds: MapBounds;
@@ -134,6 +151,8 @@ export interface MapDefinition {
   propCatalog: PropDefinition[];
   /** Authored point lights; a map without them has its lights picked from its layout. */
   lights?: MapLight[];
+  /** Panels over the floor cells; a map without them is open to the sky. */
+  ceiling?: CeilingPanel[];
 }
 
 export class MapValidationError extends Error {
@@ -233,6 +252,18 @@ function isMapLight(value: unknown): value is MapLight {
   );
 }
 
+function isCeilingPanel(value: unknown): value is CeilingPanel {
+  return (
+    isRecord(value) &&
+    isFiniteNumber(value.x) &&
+    isFiniteNumber(value.z) &&
+    isFiniteNumber(value.y) &&
+    isFiniteNumber(value.size) &&
+    value.size > 0 &&
+    CEILING_KINDS.includes(value.kind as CeilingKind)
+  );
+}
+
 /**
  * Parse and validate a map loaded from an untrusted source (file / bundle).
  * Throws {@link MapValidationError} with an actionable message on malformed input.
@@ -288,6 +319,13 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
     }
     lights = raw.lights.map(({ id: lightId, x, z, kind }) => ({ id: lightId, x, z, kind }));
   }
+  let ceiling: CeilingPanel[] | undefined;
+  if (raw.ceiling !== undefined) {
+    if (!Array.isArray(raw.ceiling) || !raw.ceiling.every(isCeilingPanel)) {
+      throw new MapValidationError(id, "field 'ceiling' must be CeilingPanel[]");
+    }
+    ceiling = raw.ceiling.map(({ x, z, y, size, kind }) => ({ x, z, y, size, kind }));
+  }
   if (!Array.isArray(raw.props) || !raw.props.every(isPropInstance)) {
     throw new MapValidationError(id, "field 'props' must be PropInstance[]");
   }
@@ -335,5 +373,6 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
     props: raw.props,
     propCatalog: raw.propCatalog,
     ...(lights !== undefined ? { lights } : {}),
+    ...(ceiling !== undefined ? { ceiling } : {}),
   };
 }
