@@ -11,6 +11,7 @@ import {
   RenderPass,
   ToneMappingEffect,
   ToneMappingMode,
+  VignetteEffect,
 } from "postprocessing";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
@@ -24,6 +25,8 @@ const AO_RADIUS_M = 1;
 const AO_DISTANCE_FALLOFF = 1;
 const AO_INTENSITY = 2;
 const LUT_SIZE = 32;
+const VIGNETTE_OFFSET = 0.5;
+const VIGNETTE_DARKNESS = 0.3;
 
 /**
  * The curve a direct render gets from the renderer, which `@react-three/fiber`
@@ -41,9 +44,10 @@ export interface PostComposer {
  * The post chain for a map on a tier, or null to draw straight to the canvas. The
  * scene renders into a half-float buffer, multisampled when the tier antialiases so
  * the canvas's own MSAA is not lost; `N8AOPostPass` darkens it where geometry meets,
- * in linear light; one `EffectPass` then adds the bloom, tone maps and converts to
- * sRGB, which a direct render does itself, so with every effect at zero the two
- * paths draw the same image.
+ * in linear light; one `EffectPass` then adds the bloom, tone maps, grades through
+ * the map's lookup table, darkens the corners and converts to sRGB. A direct render
+ * tone maps and converts itself, so with every effect at zero the two paths draw
+ * the same image.
  */
 export function usePostFx(post: PostSettings | null, antialias: boolean): PostComposer | null {
   const gl = useThree((state) => state.gl);
@@ -65,6 +69,9 @@ export function usePostFx(post: PostSettings | null, antialias: boolean): PostCo
       ...(post.bloom ? [bloomEffect(post.bloom)] : []),
       new ToneMappingEffect({ mode: TONE_MAPPING }),
       ...(lut ? [new LUT3DEffect(lut)] : []),
+      ...(post.vignette
+        ? [new VignetteEffect({ offset: VIGNETTE_OFFSET, darkness: VIGNETTE_DARKNESS })]
+        : []),
     ];
     composer.addPass(new EffectPass(camera, ...effects));
     return { composer, lut };

@@ -69,6 +69,11 @@ test("ambient occlusion runs at half resolution on Medium and full on High", () 
   assert.deepEqual(postSettings(TIER_SETTINGS.high, PLAIN)?.ao, { halfRes: false });
 });
 
+test("Medium and High draw the vignette on every map", () => {
+  assert.equal(postSettings(TIER_SETTINGS.medium, PLAIN)?.vignette, true);
+  assert.equal(postSettings(TIER_SETTINGS.high, PLAIN)?.vignette, true);
+});
+
 test("bloom and grade follow the theme on the tiers that draw them", () => {
   for (const tier of [TIER_SETTINGS.medium, TIER_SETTINGS.high]) {
     assert.equal(postSettings(tier, LOOK)?.bloom, BLOOM);

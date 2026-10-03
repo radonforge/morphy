@@ -45,6 +45,7 @@ export interface TierSettings {
   bloom: boolean;
   ao: AoSettings | null;
   grading: boolean;
+  vignette: boolean;
 }
 
 /** The post effects a map's theme asks for, before the tier decides which it can afford. */
@@ -58,14 +59,16 @@ export interface PostSettings {
   bloom: BloomSettings | null;
   ao: AoSettings | null;
   grade: ColorGrade | null;
+  vignette: boolean;
 }
 
 /**
  * What each tier turns on. Low drops everything a weak integrated GPU pays for
  * per pixel or per frame (supersampling, MSAA, the shadow pass, every post pass,
- * backdrop blur on the HUD); Medium keeps the look at a quarter of the shadow texels
- * and half the refresh, with ambient occlusion traced at half resolution; High is the
- * full look with a wider, sharper shadow area and full-resolution occlusion.
+ * backdrop blur on the HUD); Medium keeps the look (bloom, grade, vignette) at a
+ * quarter of the shadow texels and half the refresh, with ambient occlusion traced at
+ * half resolution; High is the full look with a wider, sharper shadow area and
+ * full-resolution occlusion.
  */
 export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
   low: {
@@ -76,6 +79,7 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
     bloom: false,
     ao: null,
     grading: false,
+    vignette: false,
   },
   medium: {
     dpr: [1, 1],
@@ -85,6 +89,7 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
     bloom: true,
     ao: { halfRes: true },
     grading: true,
+    vignette: true,
   },
   high: {
     dpr: [1, 1.25],
@@ -94,6 +99,7 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
     bloom: true,
     ao: { halfRes: false },
     grading: true,
+    vignette: true,
   },
 };
 
@@ -106,8 +112,9 @@ export function postSettings(tier: TierSettings, look: PostLook): PostSettings |
     bloom: tier.bloom ? look.bloom : null,
     ao: tier.ao,
     grade: tier.grading ? look.grade : null,
+    vignette: tier.vignette,
   };
-  return post.bloom || post.ao || post.grade ? post : null;
+  return post.bloom || post.ao || post.grade || post.vignette ? post : null;
 }
 
 /** No tier renders faster than this: a 144 Hz monitor gains nothing a prop hunt needs. */
