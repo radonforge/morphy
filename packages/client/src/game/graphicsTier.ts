@@ -1,3 +1,4 @@
+import type { ColorGrade } from "./colorGrade";
 import type { GpuInfo } from "./diagnostics";
 
 export type GraphicsTier = "low" | "medium" | "high";
@@ -43,12 +44,20 @@ export interface TierSettings {
   glass: boolean;
   bloom: boolean;
   ao: AoSettings | null;
+  grading: boolean;
+}
+
+/** The post effects a map's theme asks for, before the tier decides which it can afford. */
+export interface PostLook {
+  bloom: BloomSettings | null;
+  grade: ColorGrade | null;
 }
 
 /** What the post chain draws over one map on one tier. */
 export interface PostSettings {
   bloom: BloomSettings | null;
   ao: AoSettings | null;
+  grade: ColorGrade | null;
 }
 
 /**
@@ -59,7 +68,15 @@ export interface PostSettings {
  * full look with a wider, sharper shadow area and full-resolution occlusion.
  */
 export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
-  low: { dpr: [1, 1], antialias: false, shadows: null, glass: false, bloom: false, ao: null },
+  low: {
+    dpr: [1, 1],
+    antialias: false,
+    shadows: null,
+    glass: false,
+    bloom: false,
+    ao: null,
+    grading: false,
+  },
   medium: {
     dpr: [1, 1],
     antialias: true,
@@ -67,6 +84,7 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
     glass: true,
     bloom: true,
     ao: { halfRes: true },
+    grading: true,
   },
   high: {
     dpr: [1, 1.25],
@@ -75,6 +93,7 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
     glass: true,
     bloom: true,
     ao: { halfRes: false },
+    grading: true,
   },
 };
 
@@ -82,9 +101,13 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
  * The post chain a tier draws a map's theme with, or null when the frame goes
  * straight to the canvas, which is always the case on Low.
  */
-export function postSettings(tier: TierSettings, bloom: BloomSettings | null): PostSettings | null {
-  const post = { bloom: tier.bloom ? bloom : null, ao: tier.ao };
-  return post.bloom || post.ao ? post : null;
+export function postSettings(tier: TierSettings, look: PostLook): PostSettings | null {
+  const post = {
+    bloom: tier.bloom ? look.bloom : null,
+    ao: tier.ao,
+    grade: tier.grading ? look.grade : null,
+  };
+  return post.bloom || post.ao || post.grade ? post : null;
 }
 
 /** No tier renders faster than this: a 144 Hz monitor gains nothing a prop hunt needs. */

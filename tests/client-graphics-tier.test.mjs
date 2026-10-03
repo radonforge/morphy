@@ -12,6 +12,9 @@ import {
 } from "../packages/client/src/game/graphicsTier.ts";
 
 const BLOOM = { intensity: 1, radius: 0.5, threshold: 0.9 };
+const GRADE = { lift: [0, 0, 0], gain: [1, 1, 1], contrast: 1.1, saturation: 1 };
+const LOOK = { bloom: BLOOM, grade: GRADE };
+const PLAIN = { bloom: null, grade: null };
 
 function hints(renderer, { software = false, cores = 8, memoryGb = 8 } = {}) {
   return { gpu: { renderer, software }, cores, memoryGb };
@@ -57,16 +60,20 @@ test("a stored graphics preference is accepted only when it names a known option
 });
 
 test("Low draws every map without a post pass", () => {
-  assert.equal(postSettings(TIER_SETTINGS.low, BLOOM), null);
-  assert.equal(postSettings(TIER_SETTINGS.low, null), null);
+  assert.equal(postSettings(TIER_SETTINGS.low, LOOK), null);
+  assert.equal(postSettings(TIER_SETTINGS.low, PLAIN), null);
 });
 
 test("ambient occlusion runs at half resolution on Medium and full on High", () => {
-  assert.deepEqual(postSettings(TIER_SETTINGS.medium, null)?.ao, { halfRes: true });
-  assert.deepEqual(postSettings(TIER_SETTINGS.high, null)?.ao, { halfRes: false });
+  assert.deepEqual(postSettings(TIER_SETTINGS.medium, PLAIN)?.ao, { halfRes: true });
+  assert.deepEqual(postSettings(TIER_SETTINGS.high, PLAIN)?.ao, { halfRes: false });
 });
 
-test("bloom follows the theme on the tiers that draw it", () => {
-  assert.equal(postSettings(TIER_SETTINGS.high, BLOOM)?.bloom, BLOOM);
-  assert.equal(postSettings(TIER_SETTINGS.high, null)?.bloom, null);
+test("bloom and grade follow the theme on the tiers that draw them", () => {
+  for (const tier of [TIER_SETTINGS.medium, TIER_SETTINGS.high]) {
+    assert.equal(postSettings(tier, LOOK)?.bloom, BLOOM);
+    assert.equal(postSettings(tier, LOOK)?.grade, GRADE);
+    assert.equal(postSettings(tier, PLAIN)?.bloom, null);
+    assert.equal(postSettings(tier, PLAIN)?.grade, null);
+  }
 });

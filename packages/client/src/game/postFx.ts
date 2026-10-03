@@ -6,12 +6,15 @@ import {
   type Effect,
   EffectComposer,
   EffectPass,
+  LookupTexture,
+  LUT3DEffect,
   RenderPass,
   ToneMappingEffect,
   ToneMappingMode,
 } from "postprocessing";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
+import { type ColorGrade, gradeLutData } from "./colorGrade";
 import type { BloomSettings, PostSettings } from "./graphicsTier";
 
 const MSAA_SAMPLES = 4;
@@ -20,6 +23,7 @@ const AO_QUALITY: N8AOQualityMode = "Medium";
 const AO_RADIUS_M = 1;
 const AO_DISTANCE_FALLOFF = 1;
 const AO_INTENSITY = 2;
+const LUT_SIZE = 32;
 
 /**
  * The curve a direct render gets from the renderer, which `@react-three/fiber`
@@ -48,32 +52,41 @@ export function usePostFx(post: PostSettings | null, antialias: boolean): PostCo
   const size = useThree((state) => state.size);
   const dpr = useThree((state) => state.viewport.dpr);
 
-  const composer = useMemo(() => {
+  const chain = useMemo(() => {
     if (!post) return null;
-    const chain = new EffectComposer(gl, {
+    const lut = post.grade ? gradeLut(post.grade) : null;
+    const composer = new EffectComposer(gl, {
       frameBufferType: THREE.HalfFloatType,
       multisampling: antialias ? MSAA_SAMPLES : 0,
     });
-    chain.addPass(new RenderPass(scene, camera));
-    if (post.ao) chain.addPass(occlusionPass(scene, camera, post.ao.halfRes));
-    const effects: Effect[] = post.bloom ? [bloomEffect(post.bloom)] : [];
-    chain.addPass(
-      new EffectPass(camera, ...effects, new ToneMappingEffect({ mode: TONE_MAPPING })),
-    );
-    return chain;
+    composer.addPass(new RenderPass(scene, camera));
+    if (post.ao) composer.addPass(occlusionPass(scene, camera, post.ao.halfRes));
+    const effects: Effect[] = [
+      ...(post.bloom ? [bloomEffect(post.bloom)] : []),
+      new ToneMappingEffect({ mode: TONE_MAPPING }),
+      ...(lut ? [new LUT3DEffect(lut)] : []),
+    ];
+    composer.addPass(new EffectPass(camera, ...effects));
+    return { composer, lut };
   }, [gl, scene, camera, post, antialias]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: dpr is a trigger, not read in the body; the composer sizes its buffers from the renderer's pixel ratio, which a dpr change resets.
   useEffect(() => {
-    composer?.setSize(size.width, size.height);
-  }, [composer, size.width, size.height, dpr]);
+    chain?.composer.setSize(size.width, size.height);
+  }, [chain, size.width, size.height, dpr]);
 
-  useEffect(() => () => composer?.dispose(), [composer]);
+  useEffect(
+    () => () => {
+      chain?.composer.dispose();
+      chain?.lut?.dispose();
+    },
+    [chain],
+  );
 
   return useMemo(() => {
-    if (!composer) return null;
-    return { render: () => composer.render() };
-  }, [composer]);
+    if (!chain) return null;
+    return { render: () => chain.composer.render() };
+  }, [chain]);
 }
 
 /** Contact shadows in world units, so a crate darkens the floor the same at any distance. */
@@ -86,6 +99,15 @@ function occlusionPass(scene: THREE.Scene, camera: THREE.Camera, halfRes: boolea
   pass.configuration.halfRes = halfRes;
   pass.configuration.gammaCorrection = false;
   return pass;
+}
+
+/**
+ * The map's grade baked into a 3D lookup table, sampled on the tone-mapped sRGB
+ * frame. `LUT3DEffect` holds it in a uniform its own `dispose` never reaches, so the
+ * chain frees it.
+ */
+function gradeLut(grade: ColorGrade): LookupTexture {
+  return new LookupTexture(gradeLutData(LUT_SIZE, grade), LUT_SIZE);
 }
 
 function bloomEffect(bloom: BloomSettings): BloomEffect {

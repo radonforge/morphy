@@ -99,7 +99,7 @@ import {
   storyLine,
   wonRound,
 } from "./roundStory";
-import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene, themeBloom } from "./Scene";
+import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene, themeLook } from "./Scene";
 import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
 import type {
   BreaksRef,
@@ -820,7 +820,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const glConfig = useMemo(() => ({ antialias: tierSettings.antialias }), [tierSettings]);
   const mapId = map?.id ?? null;
   const post = useMemo(
-    () => postSettings(tierSettings, mapId === null ? null : themeBloom(mapId)),
+    () => (mapId === null ? null : postSettings(tierSettings, themeLook(mapId))),
     [tierSettings, mapId],
   );
   const glRef = useRef<WebGLRenderer | null>(null);
