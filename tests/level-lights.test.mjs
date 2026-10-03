@@ -99,11 +99,8 @@ function parse(lights) {
   return parseLevelDocument(hall(lights), { catalog: SPACE_CATALOG });
 }
 
-function stationDocument() {
-  const text = readFileSync(
-    new URL("../packages/server/src/maps/station.level.json", import.meta.url),
-    "utf8",
-  );
+function stationDocument(path = "../packages/server/src/maps/station.level.json") {
+  const text = readFileSync(new URL(path, import.meta.url), "utf8");
   return parseLevelDocument(JSON.parse(text), { catalog: SPACE_CATALOG, id: "station" });
 }
 
@@ -170,18 +167,22 @@ test("a map definition with malformed lights is refused", () => {
   }
 });
 
-test("the station document hangs exactly the lights the client used to pick", () => {
-  const doc = stationDocument();
+test("the seven-room station hangs exactly the lights the client used to pick", () => {
+  const doc = stationDocument("./fixtures/station-seven-rooms.level.json");
   const picked = pickDeckLights(
     compileLevel({ ...doc, lights: undefined }, { catalog: SPACE_CATALOG, seed: 1 }),
     DEFAULT_ROOM_LIGHT_COUNT,
   );
   assert.equal(picked.length, 23);
   assert.deepEqual(doc.lights, picked);
+});
+
+test("every seed hangs the station document's own lights", () => {
+  const { lights } = stationDocument();
   for (const seed of SEEDS) {
     const map = buildMap("station", seed);
-    assert.deepEqual(map.lights, picked);
-    assert.deepEqual(deckLightsFor(map, DEFAULT_ROOM_LIGHT_COUNT), picked);
+    assert.deepEqual(map.lights, lights);
+    assert.deepEqual(deckLightsFor(map, DEFAULT_ROOM_LIGHT_COUNT), lights);
   }
 });
 
