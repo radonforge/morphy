@@ -5,9 +5,16 @@ import {
   GRAPHICS_PREFERENCES,
   isGraphicsPreference,
   nextRoundTier,
+  postSettings,
   STEP_DOWN_FPS,
   STEP_DOWN_MIN_FRAMES,
+  TIER_SETTINGS,
 } from "../packages/client/src/game/graphicsTier.ts";
+
+const BLOOM = { intensity: 1, radius: 0.5, threshold: 0.9 };
+const GRADE = { lift: [0, 0, 0], gain: [1, 1, 1], contrast: 1.1, saturation: 1 };
+const LOOK = { bloom: BLOOM, grade: GRADE };
+const PLAIN = { bloom: null, grade: null };
 
 function hints(renderer, { software = false, cores = 8, memoryGb = 8 } = {}) {
   return { gpu: { renderer, software }, cores, memoryGb };
@@ -49,5 +56,29 @@ test("a stored graphics preference is accepted only when it names a known option
   for (const pref of GRAPHICS_PREFERENCES) assert.equal(isGraphicsPreference(pref), true);
   for (const bad of [null, "", "ultra", "Auto", " high"]) {
     assert.equal(isGraphicsPreference(bad), false);
+  }
+});
+
+test("Low draws every map without a post pass", () => {
+  assert.equal(postSettings(TIER_SETTINGS.low, LOOK), null);
+  assert.equal(postSettings(TIER_SETTINGS.low, PLAIN), null);
+});
+
+test("ambient occlusion runs at half resolution on Medium and full on High", () => {
+  assert.deepEqual(postSettings(TIER_SETTINGS.medium, PLAIN)?.ao, { halfRes: true });
+  assert.deepEqual(postSettings(TIER_SETTINGS.high, PLAIN)?.ao, { halfRes: false });
+});
+
+test("Medium and High draw the vignette on every map", () => {
+  assert.equal(postSettings(TIER_SETTINGS.medium, PLAIN)?.vignette, true);
+  assert.equal(postSettings(TIER_SETTINGS.high, PLAIN)?.vignette, true);
+});
+
+test("bloom and grade follow the theme on the tiers that draw them", () => {
+  for (const tier of [TIER_SETTINGS.medium, TIER_SETTINGS.high]) {
+    assert.equal(postSettings(tier, LOOK)?.bloom, BLOOM);
+    assert.equal(postSettings(tier, LOOK)?.grade, GRADE);
+    assert.equal(postSettings(tier, PLAIN)?.bloom, null);
+    assert.equal(postSettings(tier, PLAIN)?.grade, null);
   }
 });

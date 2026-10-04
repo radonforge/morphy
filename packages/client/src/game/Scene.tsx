@@ -36,7 +36,8 @@ import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
 import { CeilingView } from "./CeilingView";
 import { capUnderCeiling, ceilingBetween } from "./ceiling";
-import type { BloomSettings, ShadowSettings } from "./graphicsTier";
+import type { ColorGrade } from "./colorGrade";
+import type { BloomSettings, PostLook, ShadowSettings } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
 import { fitModel, MODEL_MIN_SIZE } from "./modelFit";
 import { enableShadows } from "./modelShading";
@@ -262,6 +263,7 @@ export interface ThemePreset {
   fog: FogPreset | null;
   deckLights: DeckLightPreset | null;
   bloom: BloomSettings | null;
+  grade: ColorGrade | null;
 }
 
 const DEFAULT_THEME: ThemePreset = {
@@ -279,6 +281,7 @@ const DEFAULT_THEME: ThemePreset = {
   fog: null,
   deckLights: null,
   bloom: null,
+  grade: null,
 };
 
 const THEMES: Record<string, ThemePreset> = {
@@ -304,7 +307,8 @@ const THEMES: Record<string, ThemePreset> = {
       distance: 20,
       height: 3.6,
     },
-    bloom: { strength: 0.6, radius: 0.45, threshold: 0.85 },
+    bloom: { intensity: 7, radius: 0.75, threshold: 0.85 },
+    grade: { lift: [0, 0.01, 0.03], gain: [1.02, 1, 0.97], contrast: 1, saturation: 1.05 },
   },
   urban: {
     ground: MAP_THEME_BASE.urban.ground,
@@ -321,12 +325,14 @@ const THEMES: Record<string, ThemePreset> = {
     fog: null,
     deckLights: null,
     bloom: null,
+    grade: { lift: [0.01, 0.005, 0], gain: [1.02, 1.01, 0.98], contrast: 1.04, saturation: 1.08 },
   },
 };
 
-/** The bloom a map's theme asks for, or null when it draws without post-processing. */
-export function themeBloom(mapId: string): BloomSettings | null {
-  return themeFor(mapId).bloom;
+/** The post effects a map's theme asks for; the graphics tier decides which are drawn. */
+export function themeLook(mapId: string): PostLook {
+  const { bloom, grade } = themeFor(mapId);
+  return { bloom, grade };
 }
 
 /** The sky, light and ground preset a map renders with. */

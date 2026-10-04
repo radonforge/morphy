@@ -62,7 +62,6 @@ import {
   preloadSamples,
   toggleMuted,
 } from "./audio";
-import { useBloomComposer } from "./bloom";
 import { ControlsBar, ControlsDialog } from "./Controls";
 import { CopyDiagnostics } from "./CopyDiagnostics";
 import { deviceHints } from "./deviceProbe";
@@ -76,10 +75,11 @@ import {
   recordFrame,
 } from "./diagnostics";
 import {
-  type BloomSettings,
   type GraphicsTier,
   MAX_RENDER_FPS,
   nextRoundTier,
+  type PostSettings,
+  postSettings,
   type RoundFrames,
   resolveTier,
   TIER_SETTINGS,
@@ -87,6 +87,7 @@ import {
 import { useGuardedFrame } from "./guardedFrame";
 import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
+import { usePostFx } from "./postFx";
 import { graphicsPreference, isPerfHudEnabled } from "./prefs";
 import {
   type CaptureRecord,
@@ -98,7 +99,7 @@ import {
   storyLine,
   wonRound,
 } from "./roundStory";
-import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene, themeBloom } from "./Scene";
+import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene, themeLook } from "./Scene";
 import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
 import type {
   BreaksRef,
@@ -431,22 +432,22 @@ function PerfProbe({
  */
 function RenderGate({
   skip,
-  bloom,
+  post,
   antialias,
 }: {
   skip: boolean;
-  bloom: BloomSettings | null;
+  post: PostSettings | null;
   antialias: boolean;
 }) {
   const lastRender = useRef(Number.NEGATIVE_INFINITY);
-  const composer = useBloomComposer(bloom, antialias);
+  const composer = usePostFx(post, antialias);
   useGuardedFrame(({ gl, scene, camera, clock }) => {
     if (skip) return;
     const now = clock.elapsedTime;
     const since = now - lastRender.current;
     if (since < RENDER_INTERVAL_S - RENDER_INTERVAL_SLACK_S) return;
     lastRender.current = Number.isFinite(since) ? now - (since % RENDER_INTERVAL_S) : now;
-    if (composer) composer.render(scene, camera);
+    if (composer) composer.render();
     else gl.render(scene, camera);
   }, RENDER_GATE_PRIORITY);
   return null;
@@ -817,6 +818,11 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [roundFrames] = useState<RoundFrames>(() => ({ frames: 0, totalMs: 0 }));
   const tierSettings = TIER_SETTINGS[tier];
   const glConfig = useMemo(() => ({ antialias: tierSettings.antialias }), [tierSettings]);
+  const mapId = map?.id ?? null;
+  const post = useMemo(
+    () => (mapId === null ? null : postSettings(tierSettings, themeLook(mapId))),
+    [tierSettings, mapId],
+  );
   const glRef = useRef<WebGLRenderer | null>(null);
   const longTasksRef = useRef<LongTaskTally>({ count: 0, longestMs: 0 });
   const contextLossesRef = useRef(0);
@@ -1443,11 +1449,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           catchRef={catchRef}
           caughtCam={caught}
         />
-        <RenderGate
-          skip={blinded}
-          bloom={tierSettings.bloom ? themeBloom(map.id) : null}
-          antialias={tierSettings.antialias}
-        />
+        <RenderGate skip={blinded} post={post} antialias={tierSettings.antialias} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
         <PropFootsteps playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
         <PerfProbe

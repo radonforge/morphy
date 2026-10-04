@@ -1,3 +1,4 @@
+import type { ColorGrade } from "./colorGrade";
 import type { GpuInfo } from "./diagnostics";
 
 export type GraphicsTier = "low" | "medium" | "high";
@@ -24,11 +25,16 @@ export interface ShadowSettings {
   refreshHz: number;
 }
 
-/** A theme's bloom over bright pixels, see `UnrealBloomPass` for the three parameters. */
+/** A theme's bloom over bright pixels, see `BloomEffect` in `postprocessing` for the three parameters. */
 export interface BloomSettings {
-  strength: number;
+  intensity: number;
   radius: number;
   threshold: number;
+}
+
+/** Screen-space ambient occlusion; `halfRes` traces it at half resolution and upsamples by depth. */
+export interface AoSettings {
+  halfRes: boolean;
 }
 
 export interface TierSettings {
@@ -37,22 +43,53 @@ export interface TierSettings {
   shadows: ShadowSettings | null;
   glass: boolean;
   bloom: boolean;
+  ao: AoSettings | null;
+  grading: boolean;
+  vignette: boolean;
+}
+
+/** The post effects a map's theme asks for, before the tier decides which it can afford. */
+export interface PostLook {
+  bloom: BloomSettings | null;
+  grade: ColorGrade | null;
+}
+
+/** What the post chain draws over one map on one tier. */
+export interface PostSettings {
+  bloom: BloomSettings | null;
+  ao: AoSettings | null;
+  grade: ColorGrade | null;
+  vignette: boolean;
 }
 
 /**
  * What each tier turns on. Low drops everything a weak integrated GPU pays for
- * per pixel or per frame (supersampling, MSAA, the shadow pass, bloom, backdrop blur
- * on the HUD); Medium keeps the look at a quarter of the shadow texels and half the
- * refresh; High is the full look with a wider, sharper shadow area.
+ * per pixel or per frame (supersampling, MSAA, the shadow pass, every post pass,
+ * backdrop blur on the HUD); Medium keeps the look (bloom, grade, vignette) at a
+ * quarter of the shadow texels and half the refresh, with ambient occlusion traced at
+ * half resolution; High is the full look with a wider, sharper shadow area and
+ * full-resolution occlusion.
  */
 export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
-  low: { dpr: [1, 1], antialias: false, shadows: null, glass: false, bloom: false },
+  low: {
+    dpr: [1, 1],
+    antialias: false,
+    shadows: null,
+    glass: false,
+    bloom: false,
+    ao: null,
+    grading: false,
+    vignette: false,
+  },
   medium: {
     dpr: [1, 1],
     antialias: true,
     shadows: { mapSize: 1024, radius: 25, refreshHz: 15 },
     glass: true,
     bloom: true,
+    ao: { halfRes: true },
+    grading: true,
+    vignette: true,
   },
   high: {
     dpr: [1, 1.25],
@@ -60,8 +97,25 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
     shadows: { mapSize: 2048, radius: 40, refreshHz: 30 },
     glass: true,
     bloom: true,
+    ao: { halfRes: false },
+    grading: true,
+    vignette: true,
   },
 };
+
+/**
+ * The post chain a tier draws a map's theme with, or null when the frame goes
+ * straight to the canvas, which is always the case on Low.
+ */
+export function postSettings(tier: TierSettings, look: PostLook): PostSettings | null {
+  const post = {
+    bloom: tier.bloom ? look.bloom : null,
+    ao: tier.ao,
+    grade: tier.grading ? look.grade : null,
+    vignette: tier.vignette,
+  };
+  return post.bloom || post.ao || post.grade || post.vignette ? post : null;
+}
 
 /** No tier renders faster than this: a 144 Hz monitor gains nothing a prop hunt needs. */
 export const MAX_RENDER_FPS = 60;
