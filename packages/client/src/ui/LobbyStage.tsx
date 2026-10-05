@@ -71,8 +71,8 @@ const MORPH_CAMERA_Z = 3.3;
 const MORPH_LOOK_Y = 0.92;
 const MORPH_DOLLY_DAMP = 4.2;
 
-const WORLD_CAMERA: [number, number, number] = [0, 5, 13];
-const WORLD_LOOK_AT: [number, number, number] = [0, 1.4, -7];
+const WORLD_CAMERA: [number, number, number] = [0, 2.1, 7.6];
+const WORLD_LOOK_AT: [number, number, number] = [0, 1.3, -6];
 const WORLD_BURST_SLOT: StageSlot = { x: 0, z: -6, yaw: 0 };
 const WORLD_BURST_SCALE = 6;
 const GHOST_OFFSET_X = 1.5;
