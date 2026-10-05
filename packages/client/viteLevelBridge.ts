@@ -6,6 +6,7 @@ import { isMapId, type MapId, type PropDefinition } from "@morphy/shared";
 import type { Plugin, ViteDevServer } from "vite";
 import { formatLevelDocument, type LevelDocument, parseLevelDocument } from "../level/src";
 import { SPACE_CATALOG } from "../server/src/spaceCatalog";
+import { URBAN_CATALOG } from "../server/src/urbanCatalog";
 import {
   type BridgeError,
   LEVEL_BRIDGE_PATH,
@@ -54,6 +55,11 @@ export function levelSources(clientRoot: string): Partial<Record<MapId, LevelSou
       id: "station",
       file: resolve(clientRoot, "../server/src/maps/station.level.json"),
       catalog: SPACE_CATALOG,
+    },
+    urban: {
+      id: "urban",
+      file: resolve(clientRoot, "../server/src/maps/urban.level.json"),
+      catalog: URBAN_CATALOG,
     },
   };
 }

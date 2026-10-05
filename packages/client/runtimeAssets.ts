@@ -1,6 +1,5 @@
 import { AVATAR_CATALOG, WEAPONS } from "@morphy/shared";
 import { FLOORPLAN_MODEL_PATHS, OUTDOOR_MODEL_PATHS } from "../level/src";
-import { URBAN_SCENERY_MODEL_PATHS } from "../server/src/maps/urban";
 import { SPACE_CATALOG } from "../server/src/spaceCatalog";
 import { URBAN_CATALOG } from "../server/src/urbanCatalog";
 import { LOBBY_DIORAMA_MODEL_PATHS } from "./src/ui/lobbyDioramas";
@@ -10,8 +9,8 @@ const catalogModels = [...SPACE_CATALOG, ...URBAN_CATALOG]
   .filter((model): model is string => typeof model === "string");
 
 /**
- * Complete production allow-list for GLBs. Each procedural builder exports all
- * alternatives it can emit, so this list does not rely on sampling random seeds.
+ * Complete production allow-list for GLBs. The level package exports every model
+ * a document can compile to, so this list does not rely on sampling random seeds.
  */
 export const RUNTIME_MODEL_PATHS = [
   ...new Set([
@@ -20,7 +19,6 @@ export const RUNTIME_MODEL_PATHS = [
     ...catalogModels,
     ...FLOORPLAN_MODEL_PATHS,
     ...OUTDOOR_MODEL_PATHS,
-    ...URBAN_SCENERY_MODEL_PATHS,
     ...LOBBY_DIORAMA_MODEL_PATHS,
   ]),
 ].sort();
