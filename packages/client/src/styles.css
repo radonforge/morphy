@@ -890,6 +890,18 @@ canvas {
   width: clamp(120px, 12vw, 170px);
   accent-color: var(--cyan);
 }
+.look-sensitivity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.look-sensitivity-value {
+  min-width: 3.4em;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
 .menu-select {
   width: clamp(120px, 12vw, 170px);
   padding: 5px 10px;
@@ -2339,6 +2351,18 @@ canvas {
   font-size: 1.1rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.pause-setting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
 }
 
 .pause-hint {

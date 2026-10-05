@@ -85,6 +85,7 @@ import {
   TIER_SETTINGS,
 } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
+import { LookSensitivitySlider } from "./LookSensitivitySlider";
 import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
 import { usePostFx } from "./postFx";
@@ -1737,6 +1738,10 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
             <button type="button" onClick={resume}>
               Resume
             </button>
+            <div className="pause-setting">
+              <span>Look sensitivity</span>
+              <LookSensitivitySlider />
+            </div>
             <button type="button" className="btn-ghost" onClick={onLeaveMatch}>
               Leave match
             </button>
