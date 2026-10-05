@@ -24,7 +24,7 @@ export const MAP_CATALOG = [
     name: "North District",
     theme: "urban",
     tag: "Streets",
-    blurb: "City blocks and sidewalks: blend in among planters, trees and roadworks.",
+    blurb: "Courtyards round a city park: blend in among trees, planters and parasols.",
   },
   {
     id: "station",
