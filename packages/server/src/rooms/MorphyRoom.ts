@@ -35,6 +35,7 @@ import {
   isWeaponId,
   type KillEvent,
   LOBBY_AUTOSTART_MS,
+  MAP_CATALOG,
   MAX_CHAT_LENGTH,
   MAX_CLIENT_MESSAGES_PER_SECOND,
   MAX_NAME_LENGTH,
@@ -65,6 +66,7 @@ import {
   MSG_TAUNT,
   MSG_TAUNT_REQUEST,
   MSG_TELEPORT,
+  NIGHT_CHANCE,
   PATCH_RATE_MS,
   type Phase,
   PING_INTERVAL_MS,
@@ -164,6 +166,7 @@ export class RoomState extends Schema {
   @type("string") hostId = "";
   @type("number") fillAt = 0;
   @type("boolean") isPrivate = false;
+  @type("boolean") night = false;
   @type({ map: PlayerState }) players = new MapSchema<PlayerState>();
   @type({ map: DecoyState }) decoys = new MapSchema<DecoyState>();
 }
@@ -325,6 +328,11 @@ function jitterDir(dir: Vec3, spreadRad: number): Vec3 {
   return { x: (dir.x + ox) / len, y: (dir.y + oy) / len, z: (dir.z + oz) / len };
 }
 
+/** Whether rounds on `mapId` are drawn by day or by night. */
+function drawsNight(mapId: string): boolean {
+  return MAP_CATALOG.some((entry) => entry.id === mapId && entry.dayNight);
+}
+
 function nextSeed(): number {
   return Math.floor(Math.random() * 0x1_0000_0000);
 }
@@ -430,6 +438,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
   private applyMap(map: MapDefinition): void {
     this.map = map;
+    this.state.night = false;
     this.propBounds = new Map(map.propCatalog.map((def) => [def.id, computePropBounds(def)]));
     this.state.mapId = map.id;
   }
@@ -951,6 +960,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
   private startCountdown(): void {
     this.state.winner = "";
+    this.state.night = drawsNight(this.state.mapId) && Math.random() < NIGHT_CHANCE;
     this.cancelBotFill();
     this.setPhase("starting", START_COUNTDOWN_MS, () => this.beginHiding());
   }

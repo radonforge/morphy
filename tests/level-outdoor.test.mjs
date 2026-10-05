@@ -410,3 +410,12 @@ test("lamps keep their fixture when moved, and are never replaced by a proposal"
   assert.equal(proposed.ok, false);
   assert.equal(proposed.doc, doc);
 });
+
+test("a street lamp's light carries the height of its head", () => {
+  const map = compiled();
+  const pole = map.scenery.find((s) => s.model === CURVED_LAMP);
+  const top = ASSET_CARDS[CURVED_LAMP].size.y * pole.scale;
+  const [light] = map.lights;
+  assert.ok(light.y > top - 0.5 && light.y < top, `light at ${light.y} m under a ${top} m lamp`);
+  assert.deepEqual(parseMapDefinition(map).lights[0], light);
+});

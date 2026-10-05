@@ -1204,3 +1204,23 @@ test("a round locks the room as roles are dealt, not as the countdown starts", (
   timersOf(room, START_COUNTDOWN_MS).at(-1).fn();
   assert.equal(locks, 1);
 });
+
+test("a round is drawn at night only on a day/night map, as its countdown starts", () => {
+  const random = Math.random;
+  try {
+    Math.random = () => 0;
+    const room = publicRoom();
+    room.state.mapId = "urban";
+    room.startCountdown();
+    assert.equal(room.state.night, true);
+    room.state.mapId = "station";
+    room.startCountdown();
+    assert.equal(room.state.night, false, "the station is never drawn");
+    Math.random = () => 0.99;
+    room.state.mapId = "urban";
+    room.startCountdown();
+    assert.equal(room.state.night, false);
+  } finally {
+    Math.random = random;
+  }
+});

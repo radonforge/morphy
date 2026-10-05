@@ -121,6 +121,8 @@ export interface MapLight {
   x: number;
   z: number;
   kind: MapLightKind;
+  /** Height of the lamp head it hangs from; absent for a deck light, which the theme places. */
+  y?: number;
 }
 
 export type CeilingKind = "glass" | "solid";
@@ -266,6 +268,7 @@ function isMapLight(value: unknown): value is MapLight {
     typeof value.id === "string" &&
     isFiniteNumber(value.x) &&
     isFiniteNumber(value.z) &&
+    (value.y === undefined || (isFiniteNumber(value.y) && value.y > 0)) &&
     MAP_LIGHT_KINDS.includes(value.kind as MapLightKind)
   );
 }
@@ -348,7 +351,13 @@ export function parseMapDefinition(raw: unknown): MapDefinition {
       }
       lightIds.add(light.id);
     }
-    lights = raw.lights.map(({ id: lightId, x, z, kind }) => ({ id: lightId, x, z, kind }));
+    lights = raw.lights.map(({ id: lightId, x, z, kind, y }) => ({
+      id: lightId,
+      x,
+      z,
+      kind,
+      ...(y !== undefined ? { y } : {}),
+    }));
   }
   let ceiling: CeilingPanel[] | undefined;
   if (raw.ceiling !== undefined) {

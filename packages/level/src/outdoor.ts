@@ -93,6 +93,8 @@ export const OUTDOOR_MODEL_PATHS: readonly string[] = [
 /** Kit units to metres for a street lamp: a 5.4 m pole for the curved one. */
 const LAMP_SCALE = 8;
 const LAMP_POLE_WIDTH = 0.3;
+/** How far below the top of a lamp model its head's underside hangs, where the bulb glows. */
+const LAMP_HEAD_DEPTH = 0.2;
 /** The longest side of a lot before a block is split into more buildings. */
 const LOT_MAX_SIDE = 11;
 /** A fit within this much of the best coverage counts as just as good, so lots vary. */
@@ -485,7 +487,7 @@ function emitLamps(
       size: { x: LAMP_POLE_WIDTH, y: height, z: LAMP_POLE_WIDTH },
     });
     const head = turn(fixture.head.x * LAMP_SCALE, fixture.head.z * LAMP_SCALE, yaw);
-    return { ...mapLight, x: light.x + head.x, z: light.z + head.z };
+    return { ...mapLight, x: light.x + head.x, z: light.z + head.z, y: height - LAMP_HEAD_DEPTH };
   });
 }
 
