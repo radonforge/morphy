@@ -329,6 +329,20 @@ function nextSeed(): number {
   return Math.floor(Math.random() * 0x1_0000_0000);
 }
 
+/** Fisher-Yates, in place. */
+function shuffle<T>(items: T[]): T[] {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const a = items[i];
+    const b = items[j];
+    if (a && b) {
+      items[i] = b;
+      items[j] = a;
+    }
+  }
+  return items;
+}
+
 export class MorphyRoom extends Room<{ state: RoomState }> {
   maxClients = MAX_PLAYERS;
   maxMessagesPerSecond = MAX_CLIENT_MESSAGES_PER_SECOND;
@@ -959,7 +973,26 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.tauntClockAt.clear();
     this.nextSonarAt.clear();
     this.assignRoles();
+    this.dealSpawns();
     this.setPhase("hiding", HIDE_DURATION_MS, () => this.beginHunting());
+  }
+
+  /**
+   * Stand everyone dealt into the round on a prop spawn of their own, in a
+   * fresh order every round. A public room runs one round into the next, so
+   * without this a round began where the last one ended: everyone clumped
+   * around the hunter that converted them, hunters waiting out the hide beside
+   * the props. A held seat is not in the round and stays where it dropped.
+   */
+  private dealSpawns(): void {
+    const spawns = shuffle([...this.map.spawnPoints.props]);
+    let index = 0;
+    this.state.players.forEach((player, sessionId) => {
+      if (!this.roundRoster.has(sessionId)) return;
+      const spot = spawns[index % spawns.length];
+      index++;
+      if (spot) this.teleport(player, spot);
+    });
   }
 
   /**
@@ -1513,15 +1546,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
       player.rerollsLeft = 0;
       player.decoysLeft = 0;
     });
-    for (let i = players.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const a = players[i];
-      const b = players[j];
-      if (a && b) {
-        players[i] = b;
-        players[j] = a;
-      }
-    }
+    shuffle(players);
     const hunterCount = Math.min(
       Math.max(players.length - 1, 0),
       Math.max(1, Math.round(players.length * HUNTER_RATIO)),
