@@ -1,9 +1,20 @@
 import type { AvatarId, MapId } from "@morphy/shared";
 import { Billboard, Html, Sky, Stars, Text, useAnimations, useGLTF } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { type RefObject, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  type RefObject,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as THREE from "three";
 import { playUiHover } from "../game/audio";
+import { CeilingView } from "../game/CeilingView";
+import type { PostLook } from "../game/graphicsTier";
 import { enableShadows } from "../game/modelShading";
 import { useSharedGLTF } from "../game/sharedTextures";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
@@ -22,8 +33,13 @@ import {
   tick,
   veilOpacity,
 } from "./dioramaTransition";
-import { LOBBY_DIORAMAS, type SetPiece } from "./lobbyDioramas";
+import { advanceFlicker, beginFlicker, type FlickerState } from "./flicker";
+import { LOBBY_DIORAMAS, LOBBY_DRESSING, type SetPiece, type StageLight } from "./lobbyDioramas";
 import { type PickerId, STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
+
+const StagePost = lazy(() =>
+  import("./StagePost").then((module) => ({ default: module.StagePost })),
+);
 
 const avatarModel = (id: AvatarId): string => `/models/pets/animal-${id}.glb`;
 
@@ -55,8 +71,8 @@ const MORPH_CAMERA_Z = 3.3;
 const MORPH_LOOK_Y = 0.92;
 const MORPH_DOLLY_DAMP = 4.2;
 
-const WORLD_CAMERA: [number, number, number] = [0, 5, 13];
-const WORLD_LOOK_AT: [number, number, number] = [0, 1.4, -7];
+const WORLD_CAMERA: [number, number, number] = [0, 2.1, 7.6];
+const WORLD_LOOK_AT: [number, number, number] = [0, 1.3, -6];
 const WORLD_BURST_SLOT: StageSlot = { x: 0, z: -6, yaw: 0 };
 const WORLD_BURST_SCALE = 6;
 const GHOST_OFFSET_X = 1.5;
@@ -87,6 +103,10 @@ const POP_SETTLED = Number.POSITIVE_INFINITY;
  */
 const DIORAMA_SETTLE_MS = DIORAMA_TRANSITION_S * 1000;
 const UNSCALED = 1;
+
+const LAMP_GLOW = 1.6;
+const LAMP_PANEL_OFFSET_Y = 0.35;
+const LAMP_PANEL_SIZE: [number, number, number] = [1.1, 0.1, 0.45];
 
 const VEIL_RADIUS = 80;
 const VEIL_SEGMENTS_W = 24;
@@ -198,6 +218,7 @@ interface StageTheme {
   ambient: number;
   dir: number;
   sky: "stars" | "day";
+  post: PostLook;
 }
 
 const STAGE_THEMES: Record<MapId, StageTheme> = {
@@ -209,10 +230,14 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
     ground: "#39404d",
     hemiSky: MAP_THEME_BASE.station.hemiSky,
     hemiGround: MAP_THEME_BASE.station.hemiGround,
-    hemiIntensity: 0.9,
-    ambient: 0.55,
-    dir: MAP_THEME_BASE.station.directional,
+    hemiIntensity: 0.45,
+    ambient: 0.22,
+    dir: 0.7,
     sky: "stars",
+    post: {
+      bloom: { intensity: 7, radius: 0.75, threshold: 0.85 },
+      grade: { lift: [0, 0.01, 0.03], gain: [1.02, 1, 0.97], contrast: 1, saturation: 1.05 },
+    },
   },
   urban: {
     background: MAP_THEME_BASE.urban.background,
@@ -226,6 +251,10 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
     ambient: 0.7,
     dir: MAP_THEME_BASE.urban.directional,
     sky: "day",
+    post: {
+      bloom: null,
+      grade: { lift: [0.01, 0.005, 0], gain: [1.02, 1.01, 0.98], contrast: 1.04, saturation: 1.08 },
+    },
   },
 };
 
@@ -634,6 +663,71 @@ function Diorama({
 }
 
 /**
+ * A deck lamp: the point light and the panel it hangs from, whose glow follows the light so a
+ * failing lamp reads as a fault in the fixture rather than a pulse from nowhere.
+ */
+function StageLamp({
+  light,
+  map,
+  transition,
+}: {
+  light: StageLight;
+  map: MapId;
+  transition: RefObject<DioramaTransition>;
+}) {
+  const lightRef = useRef<THREE.PointLight>(null);
+  const panel = useRef<THREE.MeshStandardMaterial>(null);
+  const flicker = useRef<FlickerState | null>(light.flicker ? beginFlicker(Math.random) : null);
+
+  useFrame((_, delta) => {
+    const fade = pieceScale(transition.current, map, 0, 1);
+    if (flicker.current) flicker.current = advanceFlicker(flicker.current, delta, Math.random);
+    const level = fade * (flicker.current?.level ?? 1);
+    if (lightRef.current) lightRef.current.intensity = light.intensity * level;
+    if (panel.current) panel.current.emissiveIntensity = LAMP_GLOW * level;
+  });
+
+  return (
+    <group position={light.position}>
+      <pointLight ref={lightRef} color={light.color} intensity={0} distance={light.distance} />
+      {!light.bare && (
+        <mesh position-y={LAMP_PANEL_OFFSET_Y}>
+          <boxGeometry args={LAMP_PANEL_SIZE} />
+          <meshStandardMaterial
+            ref={panel}
+            color={light.color}
+            emissive={light.color}
+            emissiveIntensity={0}
+            toneMapped={false}
+          />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+/** The lamps and ceiling a world hangs over its set pieces, fading in and out with them. */
+function Dressing({ map, transition }: { map: MapId; transition: RefObject<DioramaTransition> }) {
+  const { lights, ceiling } = LOBBY_DRESSING[map];
+  const roof = useRef<THREE.Group>(null);
+  useFrame(() => {
+    roof.current?.scale.setScalar(pieceScale(transition.current, map, 0, 1));
+  });
+  return (
+    <>
+      {lights.map((light) => (
+        <StageLamp key={light.position.join(",")} light={light} map={map} transition={transition} />
+      ))}
+      {ceiling.length > 0 && (
+        <group ref={roof} scale={0}>
+          <CeilingView panels={ceiling} />
+        </group>
+      )}
+    </>
+  );
+}
+
+/**
  * Advances the transition clock. Mounted ahead of the dioramas so the pieces read a clock that
  * has already moved this frame, and the only `useFrame` allowed to write the fold.
  */
@@ -883,6 +977,9 @@ export function LobbyStage({
         camera={{ fov: CAMERA_FOV, position: CAMERA_BASE }}
       >
         <FrameLimiter fps={boosted ? STAGE_BOOST_FPS : STAGE_MAX_FPS} />
+        <Suspense fallback={null}>
+          <StagePost look={theme.post} />
+        </Suspense>
         <Atmosphere theme={theme} />
         <ParallaxRig picker={picker} focus={selfSlot} />
         {theme.sky === "stars" && (
@@ -913,6 +1010,9 @@ export function LobbyStage({
             transition={transition}
             onReady={handleReady}
           />
+        ))}
+        {liveMaps(stage).map((id) => (
+          <Dressing key={`dressing:${id}`} map={id} transition={transition} />
         ))}
         {isVeiled(stage) && <SkyVeil transition={transition} />}
         <Suspense fallback={null}>
