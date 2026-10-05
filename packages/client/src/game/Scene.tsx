@@ -55,6 +55,7 @@ import {
   supportHeightAt,
 } from "./movement";
 import { lockPointer } from "./pointerLock";
+import { lookSensitivity } from "./prefs";
 import { useSharedGLTF } from "./sharedTextures";
 import { StaticModels } from "./staticModels";
 import { snapToTexels, sunBasis } from "./sunShadow";
@@ -1813,9 +1814,10 @@ function useMouseLook(look: LookRef): LookRef {
       if (document.pointerLockElement !== el) {
         return;
       }
-      look.current.yaw -= event.movementX * LOOK_SENSITIVITY;
+      const sensitivity = LOOK_SENSITIVITY * lookSensitivity();
+      look.current.yaw -= event.movementX * sensitivity;
       look.current.pitch = THREE.MathUtils.clamp(
-        look.current.pitch + event.movementY * LOOK_SENSITIVITY,
+        look.current.pitch + event.movementY * sensitivity,
         PITCH_MIN,
         PITCH_MAX,
       );

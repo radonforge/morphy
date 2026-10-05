@@ -40,6 +40,7 @@ import {
   type GraphicsPreference,
   isGraphicsPreference,
 } from "../game/graphicsTier";
+import { LookSensitivitySlider } from "../game/LookSensitivitySlider";
 import {
   graphicsPreference,
   isPerfHudEnabled,
@@ -806,6 +807,13 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="menu-opt-row">
+                <span className="l">
+                  <b>Look sensitivity</b>
+                  <span>Mouse and trackpad aim speed</span>
+                </span>
+                <LookSensitivitySlider />
               </div>
               <div className="menu-opt-row">
                 <span className="l">
