@@ -442,12 +442,20 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
             <span>MORPHY</span>
           </div>
-          <span
-            className="menu-build"
-            title="Version of this client. A trailing + means the build is past that release."
-          >
-            v{__MORPHY_VERSION__}
-          </span>
+          <div className="menu-build-row">
+            <span
+              className="menu-build"
+              title="Version of this client. A trailing + means the build is past that release."
+            >
+              v{__MORPHY_VERSION__}
+            </span>
+            <span
+              className="menu-alpha"
+              title="Morphy is in early alpha: expect bugs, rough edges and changes between visits."
+            >
+              Early alpha
+            </span>
+          </div>
           <a className="menu-legal" href={STUDIO_URL} target="_blank" rel="noreferrer">
             © {STUDIO_NAME}
           </a>
