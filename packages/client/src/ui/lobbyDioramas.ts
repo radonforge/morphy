@@ -1,4 +1,5 @@
-import type { MapId } from "@morphy/shared";
+import { TILE, WALL_HEIGHT } from "@morphy/level";
+import type { CeilingPanel, MapId } from "@morphy/shared";
 
 export interface SetPiece {
   url: string;
@@ -12,11 +13,23 @@ const sta = (name: string): string => `/models/space/station/${name}.glb`;
 const urb = (name: string): string => `/models/urban/${name}.glb`;
 
 /** Model set pieces rendered behind the lobby for each selected map. */
+const STATION_FLOOR_XS = [-15, -10, -5, 0, 5, 10, 15];
+const STATION_FLOOR_ZS = [-10.5, -5.5, -0.5, 4.5];
+const STATION_FLOOR_Y = 0.02;
+
 export const LOBBY_DIORAMAS: Record<MapId, SetPiece[]> = {
   station: [
+    ...STATION_FLOOR_XS.flatMap((x) =>
+      STATION_FLOOR_ZS.map((z) => ({
+        url: mod("template-floor"),
+        position: [x, STATION_FLOOR_Y, z] as [number, number, number],
+        scale: 1.25,
+      })),
+    ),
     { url: mod("gate-door-window"), position: [0, 0, -12.75], scale: 1.25 },
-    { url: mod("template-wall"), position: [-5.125, 0, -13], scale: 1.25 },
-    { url: mod("template-wall"), position: [5.125, 0, -13], scale: 1.25 },
+    { url: sta("wall-window"), position: [-5.125, 0, -13.6], scale: 5.3 },
+    { url: sta("wall-window"), position: [5.125, 0, -13.6], scale: 5.3 },
+    { url: sta("table-display-planet"), position: [2.6, 0, -9.4], scale: 4.5 },
     { url: mod("template-wall"), position: [-10.125, 0, -13], scale: 1.25 },
     { url: mod("template-wall"), position: [10.125, 0, -13], scale: 1.25 },
     { url: mod("template-wall"), position: [-15.125, 0, -13], scale: 1.25 },
@@ -70,6 +83,59 @@ export const LOBBY_DIORAMAS: Record<MapId, SetPiece[]> = {
     { url: urb("roads/construction-cone"), position: [8.2, 0, -2.3], scale: 6 },
     { url: urb("roads/light-curved"), position: [9.9, 0, -3], rotationY: Math.PI, scale: 6 },
   ],
+};
+
+export interface StageLight {
+  position: [number, number, number];
+  color: string;
+  intensity: number;
+  distance: number;
+  flicker?: boolean;
+  /** No lamp panel: a glow from a hologram, or fill light on the actors. */
+  bare?: boolean;
+}
+
+/** What hangs over a diorama besides its set pieces: deck lights and a ceiling. */
+export interface StageDressing {
+  lights: StageLight[];
+  ceiling: CeilingPanel[];
+}
+
+const STATION_SCALE = 1.25;
+const STATION_PANEL = TILE * STATION_SCALE;
+const STATION_CEILING_Y = WALL_HEIGHT * STATION_SCALE;
+const STATION_LAMP_Y = STATION_CEILING_Y - 0.9;
+const STATION_PANEL_XS = [-15, -10, -5, 0, 5, 10, 15];
+const STATION_PANEL_ZS = [-10.5, -5.5, -0.5];
+const WARM = "#ffc27a";
+const COOL = "#8ad8ff";
+
+export const LOBBY_DRESSING: Record<MapId, StageDressing> = {
+  station: {
+    lights: [
+      { position: [-8.5, STATION_LAMP_Y, -8], color: WARM, intensity: 34, distance: 16 },
+      {
+        position: [9, STATION_LAMP_Y, -8],
+        color: WARM,
+        intensity: 34,
+        distance: 16,
+        flicker: true,
+      },
+      { position: [0, STATION_LAMP_Y, -10.5], color: COOL, intensity: 10, distance: 10 },
+      { position: [2.6, 2.6, -9.4], color: COOL, intensity: 12, distance: 7, bare: true },
+      { position: [-1.35, 3, 3.5], color: "#fff1e0", intensity: 14, distance: 9, bare: true },
+    ],
+    ceiling: STATION_PANEL_XS.flatMap((x) =>
+      STATION_PANEL_ZS.map((z) => ({
+        x,
+        z,
+        y: STATION_CEILING_Y,
+        size: STATION_PANEL,
+        kind: "glass" as const,
+      })),
+    ),
+  },
+  urban: { lights: [], ceiling: [] },
 };
 
 export const LOBBY_DIORAMA_MODEL_PATHS = [
