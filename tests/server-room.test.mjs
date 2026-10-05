@@ -786,6 +786,63 @@ test("hunters are released on the hunter spawns furthest from the props", () => 
   }
 });
 
+/**
+ * Play a public room's first round to its end with everyone standing on one
+ * spot, as a round of infection leaves them, and run the result card into the
+ * next round's hide.
+ */
+function secondRoundFromOneSpot(room) {
+  startRound(room);
+  room.state.players.forEach((player) => {
+    player.x = 0;
+    player.y = 0;
+    player.z = 0;
+  });
+  room.state.winner = "hunters";
+  room.endRound();
+  timersOf(room, ROUND_END_MS).at(-1).fn();
+  timersOf(room, START_COUNTDOWN_MS).at(-1).fn();
+  assert.equal(room.state.phase, "hiding");
+}
+
+test("every round deals its players onto distinct prop spawns", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  fireBotFill(room);
+  joinRoom(room, "b");
+  const sent = [];
+  room.clients.push({ sessionId: "a", send: (type, message) => sent.push({ type, message }) });
+  secondRoundFromOneSpot(room);
+
+  const spawns = room.map.spawnPoints.props;
+  const taken = new Set();
+  room.state.players.forEach((player) => {
+    const spawn = spawns.findIndex((spot) => spot.x === player.x && spot.z === player.z);
+    assert.ok(spawn >= 0, `${player.id} stands on a prop spawn`);
+    taken.add(spawn);
+  });
+  assert.equal(taken.size, room.state.players.size, "nobody shares a spawn");
+  const a = room.state.players.get("a");
+  assert.deepEqual(sent.at(-1), { type: MSG_TELEPORT, message: { x: a.x, z: a.z } });
+});
+
+test("a held seat is left where it dropped when the next round is dealt", () => {
+  const room = publicRoom();
+  joinRoom(room, "a");
+  fireBotFill(room);
+  joinRoom(room, "b");
+  trackReconnections(room);
+  startRound(room);
+  pinHunterOnABot(room);
+  room.onDrop({ sessionId: "b" });
+  room.resetToLobby();
+  const held = room.state.players.get("b");
+  held.x = 0;
+  held.z = 0;
+  startRound(room);
+  assert.deepEqual({ x: held.x, z: held.z }, { x: 0, z: 0 });
+});
+
 /** Replace a room-filling bot's brain with one that presses a single key once. */
 function pressOnce(room, sessionId, act) {
   let pressed = false;
