@@ -1,6 +1,8 @@
 import {
   CEILING_KINDS,
   type CeilingKind,
+  GROUND_KINDS,
+  type GroundKind,
   isMapId,
   type MapId,
   type MapLight,
@@ -8,6 +10,7 @@ import {
 } from "@morphy/shared";
 import { doorKey, TILE } from "./floorplan";
 import { rectContains } from "./geometry";
+import { OUTDOOR_BUILDING_MODELS } from "./outdoor";
 import { wallRects } from "./walls";
 
 /** Half-open cell range: columns [i0, i1), rows [j0, j1). */
@@ -19,14 +22,52 @@ export interface CellRect {
 }
 
 /**
- * A named region of floor cells; its walls fall on every edge it shares with another region.
- * `ceiling` is glass unless the room says `solid`.
+ * A named region of floor cells. Indoors its walls fall on every edge it shares with
+ * another region and `ceiling` is glass unless the room says `solid`; outdoors it is open
+ * ground with no walls and no ceiling, surfaced with `ground` (paving unless it says otherwise).
  */
 export interface LevelRoom {
   id: string;
   rects: CellRect[];
   ceiling?: CeilingKind;
+  ground?: GroundKind;
 }
+
+/** The ground an outdoor room gets when its document does not name one. */
+export const DEFAULT_GROUND: GroundKind = "paving";
+
+/** Where a map plays: inside walled rooms under a ceiling, or on open ground under the sky. */
+export type LevelSetting = "indoor" | "outdoor";
+
+export const BLOCK_ZONES = ["residential", "commercial", "industrial"] as const;
+
+/** Which building kit dresses a block. */
+export type BlockZone = (typeof BLOCK_ZONES)[number];
+
+/**
+ * A solid outdoor block of cells nobody walks on, dressed with buildings from its
+ * zone's kit. With `building` it holds that one model instead, fitted to its single
+ * rect and turned by `yaw`: a landmark such as a tower or a market hall.
+ */
+export interface LevelBlock {
+  id: string;
+  zone: BlockZone;
+  rects: CellRect[];
+  building?: string;
+  yaw?: number;
+}
+
+export const LAMP_FIXTURES = [
+  "curved",
+  "curved-double",
+  "curved-cross",
+  "square",
+  "square-double",
+  "square-cross",
+] as const;
+
+/** A street lamp model from the road kit that an outdoor light hangs from. */
+export type LampFixture = (typeof LAMP_FIXTURES)[number];
 
 /** The ceiling a room gets when its document does not name one. */
 export const DEFAULT_CEILING: CeilingKind = "glass";
@@ -47,8 +88,15 @@ export interface LevelObject {
   yaw: number;
 }
 
-/** A point light over the deck; `room` pools over furniture, `corridor` marks a route. */
-export type LevelLight = MapLight;
+/**
+ * A point light over the deck; `room` pools over furniture, `corridor` marks a route.
+ * Outdoors a `fixture` stands a street lamp at `x`/`z`, its arm turned by `yaw`, and the
+ * light hangs from the lamp's head.
+ */
+export interface LevelLight extends MapLight {
+  fixture?: LampFixture;
+  yaw?: number;
+}
 
 export interface LevelPoint {
   x: number;
@@ -63,12 +111,19 @@ export interface LevelPoint {
 export interface LevelDocument {
   version: 1;
   id: MapId;
+  setting?: LevelSetting;
   grid: { cols: number; rows: number };
   rooms: LevelRoom[];
   doors: LevelDoor[];
+  blocks?: LevelBlock[];
   objects: LevelObject[];
   spawns: { props: LevelPoint[]; hunters: LevelPoint[] };
   lights?: LevelLight[];
+}
+
+/** Whether `doc` plays outdoors: open ground and solid blocks instead of walled rooms. */
+export function isOutdoor(doc: Pick<LevelDocument, "setting">): boolean {
+  return doc.setting === "outdoor";
 }
 
 const LEVEL_DOCUMENT_VERSION = 1;
@@ -107,6 +162,14 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
 }
 
+const QUARTER_TURN_TOLERANCE = 1e-6;
+
+function isQuarterTurn(value: unknown): value is number {
+  if (!isFiniteNumber(value)) return false;
+  const turns = value / (Math.PI / 2);
+  return Math.abs(turns - Math.round(turns)) < QUARTER_TURN_TOLERANCE;
+}
+
 /**
  * Parse and validate a level document read from a file or sent by a tool.
  * Checks shape, that rects stay on the grid and different rooms never overlap
@@ -141,6 +204,15 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
     );
   }
 
+  if (input.setting !== undefined && input.setting !== "indoor" && input.setting !== "outdoor") {
+    return fail(
+      "document",
+      `setting ${JSON.stringify(input.setting)} is not a setting`,
+      'use "outdoor", or leave it out for indoor',
+    );
+  }
+  const outdoor = input.setting === "outdoor";
+
   const grid = input.grid;
   if (
     !isRecord(grid) ||
@@ -168,21 +240,21 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
   const owner: (string | null)[][] = Array.from({ length: cols }, () =>
     new Array<string | null>(rows).fill(null),
   );
+  const roomCells: (string | null)[][] = Array.from({ length: cols }, () =>
+    new Array<string | null>(rows).fill(null),
+  );
   const rooms: LevelRoom[] = [];
-  for (const [index, raw] of input.rooms.entries()) {
-    if (!isRecord(raw) || !isNonEmptyString(raw.id)) {
-      return fail(`rooms[${index}]`, "missing string id", "give the room a non-empty id");
-    }
-    const roomId = raw.id;
-    const entity = `room "${roomId}"`;
-    if (rooms.some((room) => room.id === roomId)) {
-      return fail(entity, "id is used by another room", "rename one of the two rooms");
-    }
-    if (!Array.isArray(raw.rects) || raw.rects.length === 0) {
-      return fail(entity, "rects must be a non-empty array", "give the room at least one rect");
+  /**
+   * Claim the cells of `list` for `entity` (`room "x"` or `block "y"`, so a room and a
+   * block never share an owner name). A room's rects may overlap each other; a block's
+   * may not, since each rect compiles its own buildings.
+   */
+  const claimRects = (entity: string, list: unknown, noun: "room" | "block"): CellRect[] => {
+    if (!Array.isArray(list) || list.length === 0) {
+      return fail(entity, "rects must be a non-empty array", `give the ${noun} at least one rect`);
     }
     const rects: CellRect[] = [];
-    for (const rect of raw.rects) {
+    for (const rect of list) {
       const edges = isRecord(rect) ? [rect.i0, rect.i1, rect.j0, rect.j1] : [];
       if (edges.length !== 4 || !edges.every(Number.isInteger)) {
         return fail(entity, "rect needs integer i0, i1, j0, j1", "write whole cell indices");
@@ -197,18 +269,45 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
       }
       for (let i = i0; i < i1; i++) {
         for (let j = j0; j < j1; j++) {
-          const other = owner[i]![j];
-          if (other !== null && other !== roomId) {
+          const other = owner[i]![j]!;
+          if (other === entity && noun === "block") {
             return fail(
               entity,
-              `cell (${i},${j}) is already in room "${other}"`,
-              "shrink one of the two rects so rooms do not overlap",
+              `cell (${i},${j}) is in two of its rects`,
+              "make the block's rects meet without overlapping",
             );
           }
-          owner[i]![j] = roomId;
+          if (other !== null && other !== entity) {
+            return fail(
+              entity,
+              `cell (${i},${j}) is already in ${other}`,
+              `shrink one of the two rects so ${noun}s do not overlap`,
+            );
+          }
+          owner[i]![j] = entity;
         }
       }
       rects.push({ i0, i1, j0, j1 });
+    }
+    return rects;
+  };
+  for (const [index, raw] of input.rooms.entries()) {
+    if (!isRecord(raw) || !isNonEmptyString(raw.id)) {
+      return fail(`rooms[${index}]`, "missing string id", "give the room a non-empty id");
+    }
+    const roomId = raw.id;
+    const entity = `room "${roomId}"`;
+    if (rooms.some((room) => room.id === roomId)) {
+      return fail(entity, "id is used by another room", "rename one of the two rooms");
+    }
+    const rects = claimRects(entity, raw.rects, "room");
+    for (const rect of rects) {
+      for (let i = rect.i0; i < rect.i1; i++) {
+        for (let j = rect.j0; j < rect.j1; j++) roomCells[i]![j] = roomId;
+      }
+    }
+    if (raw.ceiling !== undefined && outdoor) {
+      return fail(entity, "an outdoor room has no ceiling", "remove its ceiling");
     }
     if (raw.ceiling !== undefined && !CEILING_KINDS.includes(raw.ceiling as CeilingKind)) {
       return fail(
@@ -217,17 +316,96 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
         `use one of ${CEILING_KINDS.join(", ")}, or leave it out for ${DEFAULT_CEILING}`,
       );
     }
+    if (raw.ground !== undefined && !outdoor) {
+      return fail(
+        entity,
+        "an indoor room has no ground kind",
+        'remove it, or set "setting": "outdoor"',
+      );
+    }
+    if (raw.ground !== undefined && !GROUND_KINDS.includes(raw.ground as GroundKind)) {
+      return fail(
+        entity,
+        `ground ${JSON.stringify(raw.ground)} is not a ground kind`,
+        `use one of ${GROUND_KINDS.join(", ")}, or leave it out for ${DEFAULT_GROUND}`,
+      );
+    }
     rooms.push({
       id: roomId,
       rects,
       ...(raw.ceiling !== undefined ? { ceiling: raw.ceiling as CeilingKind } : {}),
+      ...(raw.ground !== undefined ? { ground: raw.ground as GroundKind } : {}),
     });
   }
 
+  const blocks: LevelBlock[] = [];
+  if (input.blocks !== undefined) {
+    if (!outdoor) {
+      return fail("blocks", "only an outdoor map has blocks", 'set "setting": "outdoor"');
+    }
+    if (!Array.isArray(input.blocks)) {
+      return fail("blocks", "must be an array", 'write "blocks": []');
+    }
+    for (const [index, raw] of input.blocks.entries()) {
+      if (!isRecord(raw) || !isNonEmptyString(raw.id)) {
+        return fail(`blocks[${index}]`, "missing string id", "give the block a non-empty id");
+      }
+      const blockId = raw.id;
+      const entity = `block "${blockId}"`;
+      if (blocks.some((block) => block.id === blockId)) {
+        return fail(entity, "id is used by another block", "rename one of the two blocks");
+      }
+      if (!BLOCK_ZONES.includes(raw.zone as BlockZone)) {
+        return fail(
+          entity,
+          `zone ${JSON.stringify(raw.zone)} is not a block zone`,
+          `use one of ${BLOCK_ZONES.join(", ")}`,
+        );
+      }
+      const rects = claimRects(entity, raw.rects, "block");
+      if (raw.building !== undefined) {
+        if (typeof raw.building !== "string" || !OUTDOOR_BUILDING_MODELS.includes(raw.building)) {
+          return fail(
+            entity,
+            `building ${JSON.stringify(raw.building)} is not an outdoor building model`,
+            "use a model path from OUTDOOR_BUILDING_MODELS",
+          );
+        }
+        if (rects.length !== 1) {
+          return fail(
+            entity,
+            "a block with one building needs exactly one rect",
+            "merge its rects",
+          );
+        }
+      }
+      if (raw.yaw !== undefined && raw.building === undefined) {
+        return fail(entity, "only a block with one building turns", "remove its yaw");
+      }
+      if (raw.yaw !== undefined && !isQuarterTurn(raw.yaw)) {
+        return fail(
+          entity,
+          `yaw ${JSON.stringify(raw.yaw)} is not a quarter turn`,
+          "write a multiple of PI / 2 in radians",
+        );
+      }
+      blocks.push({
+        id: blockId,
+        zone: raw.zone as BlockZone,
+        rects,
+        ...(raw.building !== undefined ? { building: raw.building as string } : {}),
+        ...(raw.yaw !== undefined ? { yaw: raw.yaw as number } : {}),
+      });
+    }
+  }
+
   const regionAt = (i: number, j: number): string | null =>
-    i >= 0 && i < cols && j >= 0 && j < rows ? owner[i]![j]! : null;
+    i >= 0 && i < cols && j >= 0 && j < rows ? roomCells[i]![j]! : null;
 
   if (!Array.isArray(input.doors)) return fail("doors", "must be an array", 'write "doors": []');
+  if (outdoor && input.doors.length > 0) {
+    return fail("doors", "an outdoor map has no walls to open", 'write "doors": []');
+  }
   const doors: LevelDoor[] = [];
   const doorKeys = new Set<string>();
   for (const [index, raw] of input.doors.entries()) {
@@ -323,9 +501,11 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
   const parsed: LevelDocument = {
     version: LEVEL_DOCUMENT_VERSION,
     id,
+    ...(outdoor ? { setting: "outdoor" as const } : {}),
     grid: { cols, rows },
     rooms,
     doors,
+    ...(input.blocks !== undefined ? { blocks } : {}),
     objects,
     spawns: { props: points("props"), hunters: points("hunters") },
   };
@@ -358,12 +538,35 @@ export function parseLevelDocument(input: unknown, options: LevelParseOptions): 
     if (walls.some((wall) => rectContains(wall, raw.x as number, raw.z as number))) {
       return fail(
         entity,
-        `(${raw.x}, ${raw.z}) is inside a wall`,
-        "move it into a room or a doorway",
+        `(${raw.x}, ${raw.z}) is inside a ${outdoor ? "block" : "wall"}`,
+        outdoor ? "move it onto open ground" : "move it into a room or a doorway",
       );
     }
+    if (raw.fixture !== undefined && !outdoor) {
+      return fail(entity, "only an outdoor light stands on a lamp", "remove its fixture");
+    }
+    if (raw.fixture !== undefined && !LAMP_FIXTURES.includes(raw.fixture as LampFixture)) {
+      return fail(
+        entity,
+        `fixture ${JSON.stringify(raw.fixture)} is not a lamp fixture`,
+        `use one of ${LAMP_FIXTURES.join(", ")}`,
+      );
+    }
+    if (raw.yaw !== undefined && raw.fixture === undefined) {
+      return fail(entity, "only a light on a lamp turns", "remove its yaw, or give it a fixture");
+    }
+    if (raw.yaw !== undefined && !isFiniteNumber(raw.yaw)) {
+      return fail(entity, "yaw must be a finite number", "write the yaw in radians");
+    }
     lightIds.add(raw.id);
-    lights.push({ id: raw.id, x: raw.x, z: raw.z, kind: raw.kind });
+    lights.push({
+      id: raw.id,
+      x: raw.x,
+      z: raw.z,
+      kind: raw.kind,
+      ...(raw.fixture !== undefined ? { fixture: raw.fixture as LampFixture } : {}),
+      ...(raw.yaw !== undefined ? { yaw: raw.yaw as number } : {}),
+    });
   }
   return { ...parsed, lights };
 }

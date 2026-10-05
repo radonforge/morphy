@@ -674,6 +674,19 @@ function checkRect(doc: LevelDocument, roomId: string, rect: CellRect): OpResult
       }
     }
   }
+  for (const block of doc.blocks ?? []) {
+    for (const other of block.rects) {
+      if (other.i0 < i1 && i0 < other.i1 && other.j0 < j1 && j0 < other.j1) {
+        return fail(
+          doc,
+          "op.blocked",
+          `rect ${i0},${i1},${j0},${j1} overlaps block "${block.id}"`,
+          "shrink the rect so it stays on open ground",
+          [roomId, block.id],
+        );
+      }
+    }
+  }
   return null;
 }
 

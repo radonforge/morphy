@@ -7,6 +7,7 @@ export * from "./geometry";
 export * from "./lightOps";
 export * from "./lights";
 export * from "./ops";
+export { OUTDOOR_BUILDING_MODELS, OUTDOOR_MODEL_PATHS } from "./outdoor";
 export * from "./overlays";
 export * from "./serialize";
 export * from "./views";

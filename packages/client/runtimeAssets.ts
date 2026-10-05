@@ -1,5 +1,5 @@
 import { AVATAR_CATALOG, WEAPONS } from "@morphy/shared";
-import { FLOORPLAN_MODEL_PATHS } from "../level/src";
+import { FLOORPLAN_MODEL_PATHS, OUTDOOR_MODEL_PATHS } from "../level/src";
 import { URBAN_SCENERY_MODEL_PATHS } from "../server/src/maps/urban";
 import { SPACE_CATALOG } from "../server/src/spaceCatalog";
 import { URBAN_CATALOG } from "../server/src/urbanCatalog";
@@ -19,6 +19,7 @@ export const RUNTIME_MODEL_PATHS = [
     ...Object.values(WEAPONS).map((weapon) => weapon.model),
     ...catalogModels,
     ...FLOORPLAN_MODEL_PATHS,
+    ...OUTDOOR_MODEL_PATHS,
     ...URBAN_SCENERY_MODEL_PATHS,
     ...LOBBY_DIORAMA_MODEL_PATHS,
   ]),

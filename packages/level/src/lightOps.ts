@@ -1,6 +1,6 @@
 import type { Finding } from "./checks";
 import { compileLevel } from "./compile";
-import type { LevelDocument, LevelLight, LevelPoint } from "./document";
+import { isOutdoor, type LevelDocument, type LevelLight, type LevelPoint } from "./document";
 import { TILE } from "./floorplan";
 import { point } from "./format";
 import { POSITION_SNAP, rectContains } from "./geometry";
@@ -160,8 +160,17 @@ export function removeLight(doc: LevelDocument, args: { id: string }): OpResult 
  * Replace the document's lights with what {@link pickDeckLights} proposes for its
  * layout: `roomCount` room lights (default {@link DEFAULT_ROOM_LIGHT_COUNT}) and one
  * corridor light per hunter spawn. Positions are the picker's own, not snapped.
+ * Refused outdoors, where every light stands on a street lamp the picker knows nothing of.
  */
 export function proposeLights(doc: LevelDocument, args: { roomCount?: number } = {}): OpResult {
+  if (isOutdoor(doc)) {
+    return fail(
+      doc,
+      "an outdoor map's lights stand on placed street lamps, which a proposal would drop",
+      "add, move or remove lamps one by one",
+      [],
+    );
+  }
   const roomCount = args.roomCount ?? DEFAULT_ROOM_LIGHT_COUNT;
   if (!Number.isInteger(roomCount) || roomCount < 0) {
     return fail(doc, "the room light count must be a whole number, 0 or more", "fix --rooms", []);

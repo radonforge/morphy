@@ -95,6 +95,19 @@ client code, three.js or Colyseus.
   (`game/CeilingView.tsx`), never a collider, and `capUnderCeiling` (`game/ceiling.ts`) keeps the
   prop's third-person camera under it, which also stops it looking over the walls into the next
   room. A map without `ceiling` (North District) is open sky.
+- `outdoor.ts`: what `setting: "outdoor"` compiles to. Outdoors a room is open ground with a
+  `ground` kind (`paving`, `grass`, `yard`; `MapDefinition.ground` patches the client draws in
+  `game/GroundView.tsx`), never walls, doors or a ceiling; `blocks` are solid cell rects of a
+  `zone` (residential, commercial, industrial) that `compileOutdoor` splits into lots of at most
+  11 m and dresses with the kit building that fills each lot best, its front turned to the most
+  open side, and a collider over the whole lot at that building's height (so a shot passes over a
+  low house); a block with `building` holds that one model instead (the landmarks). Which model a
+  lot gets depends on the block id, never on the seed, because colliders follow it. A light with a
+  `fixture` stands a road-kit street lamp (pole collider included) and hangs the light from its
+  arm. An unseen wall closes the map's edge and any cell that is neither ground nor block, and
+  low-detail facades stand beyond the edge wherever open ground meets it. `OUTDOOR_MODEL_PATHS`
+  feeds the asset allow-list. The checks measure one sightline over all the open ground (no wall
+  separates one ground region from the next), and an object across two ground regions is fine.
 - `floorplan.ts`: `emitFloorplan`, turning a region grid and its doors into floor tiles, wall tiles,
   wall colliders and gates (which keep `gate.glb`: the bot finds doorways by that name), plus
   `doorKey` (the `axis:line:cell` identity parser and emitter share) and `FLOORPLAN_MODEL_PATHS`.
