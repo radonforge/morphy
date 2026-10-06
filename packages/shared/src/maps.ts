@@ -10,6 +10,8 @@ export interface MapInfo {
   tag: string;
   /** One-line pitch for the lobby card. */
   blurb: string;
+  /** Whether the server draws each round on this map by day or by night ({@link NIGHT_CHANCE}). */
+  dayNight: boolean;
 }
 
 /**
@@ -25,6 +27,7 @@ export const MAP_CATALOG = [
     theme: "urban",
     tag: "Streets",
     blurb: "Courtyards round a city park: blend in among trees, planters and parasols.",
+    dayNight: true,
   },
   {
     id: "station",
@@ -32,6 +35,7 @@ export const MAP_CATALOG = [
     theme: "station",
     tag: "Indoor",
     blurb: "Pressurized modules and tight corridors: blend in among furniture and containers.",
+    dayNight: false,
   },
 ] as const satisfies readonly MapInfo[];
 

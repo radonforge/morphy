@@ -57,6 +57,7 @@ import {
 } from "./movement";
 import { lockPointer } from "./pointerLock";
 import { lookSensitivity } from "./prefs";
+import { SkyGlow, type SkyGlowPreset, type StreetLampPreset, StreetLamps } from "./StreetLamps";
 import { useSharedGLTF } from "./sharedTextures";
 import { StaticModels } from "./staticModels";
 import { snapToTexels, sunBasis } from "./sunShadow";
@@ -260,6 +261,10 @@ export interface ThemePreset {
   dir: number;
   dirColor: string;
   sky: "day" | "stars";
+  /** How many stars a night sky shows and how big; a city's own light hides most of them. */
+  stars: { count: number; factor: number };
+  skyGlow: SkyGlowPreset | null;
+  streetLamps: StreetLampPreset | null;
   turbidity: number;
   rayleigh: number;
   fog: FogPreset | null;
@@ -278,6 +283,9 @@ const DEFAULT_THEME: ThemePreset = {
   dir: 1.4,
   dirColor: "#ffffff",
   sky: "day",
+  stars: { count: STARS_COUNT, factor: STARS_FACTOR },
+  skyGlow: null,
+  streetLamps: null,
   turbidity: 6,
   rayleigh: 1.2,
   fog: null,
@@ -297,6 +305,9 @@ const THEMES: Record<string, ThemePreset> = {
     dir: 0.22,
     dirColor: "#8fa6e0",
     sky: "stars",
+    stars: { count: STARS_COUNT, factor: STARS_FACTOR },
+    skyGlow: null,
+    streetLamps: null,
     turbidity: 9,
     rayleigh: 0.5,
     fog: { color: MAP_THEME_BASE.station.background, near: 16, far: 62 },
@@ -322,6 +333,9 @@ const THEMES: Record<string, ThemePreset> = {
     dir: MAP_THEME_BASE.urban.directional,
     dirColor: "#ffffff",
     sky: "day",
+    stars: { count: STARS_COUNT, factor: STARS_FACTOR },
+    skyGlow: null,
+    streetLamps: null,
     turbidity: 4,
     rayleigh: 1.4,
     fog: null,
@@ -331,16 +345,56 @@ const THEMES: Record<string, ThemePreset> = {
   },
 };
 
-/** The post effects a map's theme asks for; the graphics tier decides which are drawn. */
-export function themeLook(mapId: string): PostLook {
-  const { bloom, grade } = themeFor(mapId);
+const SODIUM = "#ffa448";
+const LED = "#dfe9ff";
+
+/**
+ * The night a day/night theme turns into when the server draws one: few faint stars
+ * over a sky glowing warm at the skyline, the station's low globals and bloom, and
+ * sodium street lamps with every fifth one a cold LED.
+ */
+const NIGHT_THEMES: Record<string, ThemePreset> = {
+  urban: {
+    ...THEMES.urban!,
+    background: "#0d1030",
+    hemiSky: "#6c78b8",
+    hemiGround: "#2b2935",
+    hemiIntensity: 0.3,
+    ambient: 0.18,
+    dir: 0.22,
+    dirColor: "#8fa6e0",
+    sky: "stars",
+    stars: { count: 500, factor: 2 },
+    skyGlow: { top: "#0d1030", horizon: "#3d2c4a", fade: 0.35 },
+    fog: { color: "#221e3c", near: 35, far: 150 },
+    streetLamps: {
+      color: SODIUM,
+      altColor: LED,
+      altEvery: 5,
+      intensity: 70,
+      distance: 20,
+      lightDrop: 0.5,
+      lightPull: 0.8,
+      bulbGlow: 5,
+      poleTint: 0.45,
+      budget: 8,
+    },
+    bloom: { intensity: 7, radius: 0.75, threshold: 0.85 },
+    grade: { lift: [0, 0.01, 0.03], gain: [1.02, 1, 0.97], contrast: 1, saturation: 1.05 },
+  },
+};
+
+/** The post effects a map's theme asks for, by day or by night; the graphics tier decides which are drawn. */
+export function themeLook(mapId: string, night = false): PostLook {
+  const { bloom, grade } = themeFor(mapId, night);
   return { bloom, grade };
 }
 
-/** The sky, light and ground preset a map renders with. */
-export function themeFor(mapId: string): ThemePreset {
+/** The sky, light and ground preset a map renders with, and its night when the round is drawn at night. */
+export function themeFor(mapId: string, night = false): ThemePreset {
   const theme = MAP_CATALOG.find((m) => m.id === mapId)?.theme;
-  return (theme && THEMES[theme]) || DEFAULT_THEME;
+  if (!theme) return DEFAULT_THEME;
+  return (night && NIGHT_THEMES[theme]) || THEMES[theme] || DEFAULT_THEME;
 }
 
 type Catalog = Map<string, PropDefinition>;
@@ -509,6 +563,7 @@ interface SceneProps {
   shadows: ShadowSettings | null;
   catchRef: CatchMomentRef;
   caughtCam: CaughtCam | null;
+  night: boolean;
 }
 
 export const Scene = memo(function Scene({
@@ -531,6 +586,7 @@ export const Scene = memo(function Scene({
   shadows,
   catchRef,
   caughtCam,
+  night,
 }: SceneProps) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
@@ -543,7 +599,7 @@ export const Scene = memo(function Scene({
     [staticColliders, decoyColliders],
   );
   const walls = useMemo(() => buildWalls(map), [map]);
-  const theme = useMemo(() => themeFor(map.id), [map.id]);
+  const theme = useMemo(() => themeFor(map.id, night), [map.id, night]);
   const localGroundRef = useRef(new THREE.Vector3());
   const motionRef = useRef<LocalMotion>({
     speed: 0,
@@ -624,12 +680,14 @@ export const Scene = memo(function Scene({
         <Stars
           radius={STARS_RADIUS}
           depth={STARS_DEPTH}
-          count={STARS_COUNT}
-          factor={STARS_FACTOR}
+          count={theme.stars.count}
+          factor={theme.stars.factor}
           fade
           speed={0}
         />
       )}
+      {theme.skyGlow && <SkyGlow preset={theme.skyGlow} />}
+      {theme.streetLamps && <StreetLamps map={map} preset={theme.streetLamps} />}
       <hemisphereLight args={[theme.hemiSky, theme.hemiGround, theme.hemiIntensity]} />
       <ambientLight intensity={theme.ambient} />
       {theme.deckLights && <DeckLights map={map} preset={theme.deckLights} />}

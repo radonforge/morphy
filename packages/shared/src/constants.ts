@@ -12,6 +12,8 @@ export const LOBBY_AUTOSTART_MS = 8_000;
 export const BOT_FILL_DELAY_MS = 2_000;
 export const BOT_FILL_TARGET = 4;
 export const START_COUNTDOWN_MS = 3_000;
+/** Chance that a round on a day/night map is played at night, drawn as its countdown starts. */
+export const NIGHT_CHANCE = 0.5;
 export const HIDE_DURATION_MS = 15_000;
 export const ROUND_DURATION_MS = 180_000;
 export const ROUND_END_MS = 5_000;

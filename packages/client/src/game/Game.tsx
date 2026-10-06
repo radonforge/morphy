@@ -181,6 +181,7 @@ interface RoomStateView {
   hostId: string;
   isPrivate: boolean;
   fillAt: number;
+  night: boolean;
 }
 
 interface LobbyStatus {
@@ -797,6 +798,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [winner, setWinner] = useState<Winner>("");
   const [hostId, setHostId] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
+  const [night, setNight] = useState(false);
   const [messages, setMessages] = useState<ChatLine[]>([]);
   const [killFeed, setKillFeed] = useState<KillLine[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
@@ -821,8 +823,8 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const glConfig = useMemo(() => ({ antialias: tierSettings.antialias }), [tierSettings]);
   const mapId = map?.id ?? null;
   const post = useMemo(
-    () => (mapId === null ? null : postSettings(tierSettings, themeLook(mapId))),
-    [tierSettings, mapId],
+    () => (mapId === null ? null : postSettings(tierSettings, themeLook(mapId, night))),
+    [tierSettings, mapId, night],
   );
   const glRef = useRef<WebGLRenderer | null>(null);
   const longTasksRef = useRef<LongTaskTally>({ count: 0, longestMs: 0 });
@@ -878,6 +880,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       setHostId((prev) => (prev === view.hostId ? prev : view.hostId));
       setIsPrivate((prev) => (prev === view.isPrivate ? prev : view.isPrivate));
       setFillAt((prev) => (prev === view.fillAt ? prev : view.fillAt));
+      setNight((prev) => (prev === view.night ? prev : view.night));
     };
 
     const syncPlayerMeta = () => {
@@ -937,6 +940,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       "hostId",
       "isPrivate",
       "fillAt",
+      "night",
     ] as const) {
       unsubscribers.push(callbacks.listen(field, syncRoomMeta));
     }
@@ -1449,6 +1453,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           shadows={tierSettings.shadows}
           catchRef={catchRef}
           caughtCam={caught}
+          night={night}
         />
         <RenderGate skip={blinded} post={post} antialias={tierSettings.antialias} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
