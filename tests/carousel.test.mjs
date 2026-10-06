@@ -3,30 +3,18 @@ import { test } from "node:test";
 
 globalThis.WheelEvent = { DOM_DELTA_PIXEL: 0, DOM_DELTA_LINE: 1, DOM_DELTA_PAGE: 2 };
 
-const {
-  AVATAR_COUNT,
-  avatarIndex,
-  avatarNeighbors,
-  MAP_COUNT,
-  mapIndex,
-  mapNeighbors,
-  stepAvatar,
-  stepMap,
-} = await import("../packages/client/src/ui/carousel.ts");
+const { AVATAR_COUNT, avatarIndex, avatarNeighbors, stepAvatar } = await import(
+  "../packages/client/src/ui/carousel.ts"
+);
 const { feedWheel, initialWheelGesture, wheelDeltaPx } = await import(
   "../packages/client/src/ui/carouselWheel.ts"
 );
 const { AVATAR_CATALOG } = await import("../packages/shared/src/avatars.ts");
-const { MAP_CATALOG } = await import("../packages/shared/src/maps.ts");
 
 const FIRST = AVATAR_CATALOG[0].id;
 const SECOND = AVATAR_CATALOG[1].id;
 const LAST = AVATAR_CATALOG[AVATAR_CATALOG.length - 1].id;
 const SECOND_TO_LAST = AVATAR_CATALOG[AVATAR_CATALOG.length - 2].id;
-
-const FIRST_MAP = MAP_CATALOG[0].id;
-const SECOND_MAP = MAP_CATALOG[1].id;
-const LAST_MAP = MAP_CATALOG[MAP_CATALOG.length - 1].id;
 
 test("the carousel covers the whole catalog", () => {
   assert.equal(AVATAR_COUNT, AVATAR_CATALOG.length);
@@ -70,22 +58,6 @@ test("neighbours wrap at both ends of the catalog", () => {
 
 test("an avatar missing from the catalog steps from the default instead of pinning", () => {
   assert.equal(stepAvatar("retired-shape", 1), SECOND);
-});
-
-test("the world carousel covers the whole map catalog", () => {
-  assert.equal(MAP_COUNT, MAP_CATALOG.length);
-  assert.equal(mapIndex(FIRST_MAP), 0);
-  assert.equal(mapIndex(LAST_MAP), MAP_CATALOG.length - 1);
-});
-
-test("the world carousel wraps at both ends", () => {
-  assert.equal(stepMap(LAST_MAP, 1), FIRST_MAP);
-  assert.equal(stepMap(FIRST_MAP, -1), LAST_MAP);
-  assert.deepEqual(mapNeighbors(FIRST_MAP), { prev: LAST_MAP, next: SECOND_MAP });
-});
-
-test("a retired map id steps from the default instead of pinning", () => {
-  assert.equal(stepMap("atlantis", 1), SECOND_MAP);
 });
 
 const pixels = (x, y) => ({ x, y });

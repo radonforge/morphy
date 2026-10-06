@@ -1,11 +1,4 @@
-import {
-  AVATAR_CATALOG,
-  type AvatarId,
-  DEFAULT_AVATAR_ID,
-  DEFAULT_MAP_ID,
-  MAP_CATALOG,
-  type MapId,
-} from "@morphy/shared";
+import { AVATAR_CATALOG, type AvatarId, DEFAULT_AVATAR_ID } from "@morphy/shared";
 
 export const STEP_BACK = -1;
 export const STEP_FORWARD = 1;
@@ -65,21 +58,4 @@ export function stepAvatar(avatar: AvatarId, delta: number): AvatarId {
 
 export function avatarNeighbors(avatar: AvatarId): Neighbors<AvatarId> {
   return catalogNeighbors(AVATAR_IDS, avatar, DEFAULT_AVATAR_ID);
-}
-
-export const MAP_IDS: readonly MapId[] = MAP_CATALOG.map((entry) => entry.id);
-
-/** Entries on the world carousel, which is the map catalog in catalog order. */
-export const MAP_COUNT: number = MAP_IDS.length;
-
-export function mapIndex(map: MapId): number {
-  return catalogIndex(MAP_IDS, map);
-}
-
-export function stepMap(map: MapId, delta: number): MapId {
-  return catalogStep(MAP_IDS, map, delta, DEFAULT_MAP_ID);
-}
-
-export function mapNeighbors(map: MapId): Neighbors<MapId> {
-  return catalogNeighbors(MAP_IDS, map, DEFAULT_MAP_ID);
 }
