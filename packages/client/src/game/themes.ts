@@ -22,6 +22,10 @@ export interface DeckLightPreset {
   roomIntensity: number;
   corridorIntensity: number;
   distance: number;
+  /**
+   * How high the lights hang. Kepler-9's 3 m sits 1.25 m under its 4.25 m ceiling, so
+   * the beams over a light get about 6 times the floor's light rather than 30.
+   */
   height: number;
 }
 
@@ -93,7 +97,7 @@ const THEMES: Record<string, ThemePreset> = {
       roomIntensity: 32,
       corridorIntensity: 16,
       distance: 20,
-      height: 3.6,
+      height: 3,
     },
     bloom: { intensity: 7, radius: 0.75, threshold: 0.85 },
     grade: { lift: [0, 0.01, 0.03], gain: [1.02, 1, 0.97], contrast: 1, saturation: 1.05 },
