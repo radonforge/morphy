@@ -1,4 +1,5 @@
 import {
+  isDisguise,
   LEVEL_BODY_RADIUS,
   LEVEL_ENTRANCE_CLEARANCE_DEPTH,
   LEVEL_ENTRANCE_CLEARANCE_SIDE,
@@ -385,6 +386,7 @@ function roomFindings(
   findings: Finding[],
   metrics: Record<string, number>,
 ): void {
+  const worn = new Set(space.context.catalog.filter(isDisguise).map((def) => def.id));
   for (const room of space.doc.rooms) {
     const key = (name: string): string => `room.${room.id}.${name}`;
     const cells = room.rects.reduce((sum, r) => sum + (r.i1 - r.i0) * (r.j1 - r.j0), 0);
@@ -395,7 +397,7 @@ function roomFindings(
     metrics[key("objects")] = inside.length;
 
     const byType = new Map<string, LevelObject[]>();
-    for (const object of inside)
+    for (const object of inside.filter((entry) => worn.has(entry.type)))
       byType.set(object.type, [...(byType.get(object.type) ?? []), object]);
     let disguises = 0;
     for (const [type, group] of byType) {

@@ -3,6 +3,7 @@ import {
   computePropBounds,
   type InputMessage,
   type Intent,
+  isDisguise,
   type MapDefinition,
   MOVE_SPEED,
   type Observation,
@@ -272,7 +273,12 @@ export class Reflex {
     this.propBounds = new Map(
       map.propCatalog.map((def) => [def.id, computePropBounds(def)] as const),
     );
-    this.sceneProps = new Map(map.props.map((prop, index) => [scenePropSource(index), prop]));
+    const worn = new Set(map.propCatalog.filter(isDisguise).map((def) => def.id));
+    this.sceneProps = new Map(
+      map.props.flatMap((prop, index) =>
+        worn.has(prop.type) ? [[scenePropSource(index), prop] as const] : [],
+      ),
+    );
     this.doorways = map.tiles
       .filter((tile) => tile.model.includes(DOORWAY_TILE_MARKER))
       .map((tile) => ({ x: tile.position.x, z: tile.position.z }));
@@ -539,8 +545,8 @@ export class Reflex {
 
   /**
    * The furniture a hunter looks at, listed exactly as a disguised player
-   * standing still would be. Every scene prop is a shape from the catalog a
-   * prop can wear, so to a player a still disguise is one more object in the
+   * standing still would be. Every scene prop a player can wear (decor is left out)
+   * is a shape from the catalog, so to a player a still disguise is one more object in the
    * room until it moves, honks or is shot; a hunter shown only players knew
    * every disguise in sight was one, and shot it on sight.
    */

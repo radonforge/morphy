@@ -13,6 +13,7 @@ import {
   HUNTER_CAPTURE_HEAL,
   HUNTER_MAX_HP,
   HUNTER_RESPAWN_MS,
+  isDisguise,
   LOBBY_AUTOSTART_MS,
   MSG_SHOT_FIRED,
   MSG_SONAR_PING,
@@ -859,6 +860,27 @@ function botWithRole(room, role) {
   }
   assert.fail(`expected a bot playing ${role}`);
 }
+
+test("on North District a prop is dealt and rerolls only shapes it can wear, never a car", () => {
+  const room = publicRoom();
+  room.map = buildMap("urban", 1);
+  const decor = new Set(room.map.propCatalog.filter((def) => !isDisguise(def)).map((d) => d.id));
+  assert.ok(decor.has("sedan"), "the urban catalog carries parked cars as decor");
+  joinRoom(room, "human");
+  fireBotFill(room);
+  startRound(room);
+  const props = [...room.state.players.values()].filter((p) => p.role === "prop");
+  assert.ok(props.length > 0);
+  const seen = new Set();
+  for (const player of props) {
+    seen.add(player.propType);
+    for (let k = 0; k < 200; k++) seen.add(room.randomPropId(player.propType));
+  }
+  assert.deepEqual(
+    [...seen].filter((id) => decor.has(id)),
+    [],
+  );
+});
 
 test("a room-filling prop bot drops a decoy where it stands", () => {
   const room = publicRoom();

@@ -288,6 +288,76 @@ export const ASSET_TAGS: Readonly<Record<string, AssetTags>> = {
       mount: "auto",
     },
   },
+  "/models/urban/cars/delivery.glb": {
+    front: "pz",
+    symmetry: 1,
+    mount: "floor",
+    source: {
+      front: "auto",
+      symmetry: "auto",
+      mount: "auto",
+    },
+  },
+  "/models/urban/cars/hatchback-sports.glb": {
+    front: "pz",
+    symmetry: 1,
+    mount: "floor",
+    source: {
+      front: "auto",
+      symmetry: "auto",
+      mount: "auto",
+    },
+  },
+  "/models/urban/cars/sedan.glb": {
+    front: "pz",
+    symmetry: 1,
+    mount: "floor",
+    source: {
+      front: "auto",
+      symmetry: "auto",
+      mount: "auto",
+    },
+  },
+  "/models/urban/cars/suv.glb": {
+    front: "pz",
+    symmetry: 1,
+    mount: "floor",
+    source: {
+      front: "auto",
+      symmetry: "auto",
+      mount: "auto",
+    },
+  },
+  "/models/urban/cars/taxi.glb": {
+    front: "pz",
+    symmetry: 1,
+    mount: "floor",
+    source: {
+      front: "auto",
+      symmetry: "auto",
+      mount: "auto",
+    },
+  },
+  "/models/urban/cars/truck.glb": {
+    front: "pz",
+    symmetry: 1,
+    mount: "floor",
+    source: {
+      front: "auto",
+      symmetry: "auto",
+      mount: "auto",
+    },
+  },
+  "/models/urban/cars/van.glb": {
+    front: "pz",
+    symmetry: 1,
+    mount: "floor",
+    source: {
+      front: "auto",
+      symmetry: "auto",
+      mount: "auto",
+    },
+  },
   "/models/urban/commercial/detail-parasol-a.glb": {
     front: "pz",
     symmetry: 4,
@@ -348,16 +418,6 @@ export const ASSET_TAGS: Readonly<Record<string, AssetTags>> = {
       mount: "auto",
     },
   },
-  "/models/urban/industrial/detail-tank.glb": {
-    front: "nx",
-    symmetry: 1,
-    mount: "floor",
-    source: {
-      front: "auto",
-      symmetry: "auto",
-      mount: "auto",
-    },
-  },
   "/models/urban/planter.glb": {
     front: "pz",
     symmetry: 1,
@@ -411,6 +471,26 @@ export const ASSET_TAGS: Readonly<Record<string, AssetTags>> = {
   "/models/urban/roads/construction-light.glb": {
     front: "px",
     symmetry: 2,
+    mount: "floor",
+    source: {
+      front: "auto",
+      symmetry: "auto",
+      mount: "auto",
+    },
+  },
+  "/models/urban/street/construction-fence.glb": {
+    front: "pz",
+    symmetry: 2,
+    mount: "floor",
+    source: {
+      front: "auto",
+      symmetry: "auto",
+      mount: "auto",
+    },
+  },
+  "/models/urban/street/dumpster.glb": {
+    front: "pz",
+    symmetry: 1,
     mount: "floor",
     source: {
       front: "auto",
