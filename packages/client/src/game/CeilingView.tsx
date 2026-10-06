@@ -3,10 +3,10 @@ import { memo, type RefObject, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { type CeilingRib, glassRibs } from "./ceiling";
 
-const GLASS_COLOR = "#9fd6e6";
+const GLASS_COLOR = "#000000";
 const GLASS_OPACITY = 0.12;
-const GLASS_ROUGHNESS = 0.05;
-const GLASS_METALNESS = 0.6;
+const GLASS_ROUGHNESS = 0.5;
+const GLASS_METALNESS = 0;
 const SOLID_COLOR = "#4a5568";
 const SOLID_THICKNESS = 0.3;
 const SOLID_ROUGHNESS = 0.8;
@@ -86,9 +86,12 @@ function ribPlacement(rib: CeilingRib): Placement {
 }
 
 /**
- * A map's ceiling: tinted glass panes on a grid of beams where the sky shows
- * through, closed slabs where it does not. Instanced, casts no shadow, and is
- * never a collider: the camera keeps under it on its own.
+ * A map's ceiling: clear glass panes on a grid of beams where the sky shows
+ * through, closed slabs where it does not. The glass is a dielectric with no
+ * colour of its own and a soft sheen, so a deck light hanging under it neither
+ * lights the pane nor leaves a sharp image of itself in it for bloom to blow up.
+ * Instanced, casts no shadow, and is never a collider: the camera keeps under
+ * it on its own.
  */
 export const CeilingView = memo(function CeilingView({
   panels,
