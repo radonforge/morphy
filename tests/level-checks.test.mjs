@@ -5,6 +5,7 @@ import { PLAYER_RADIUS, STEP_HEIGHT } from "../packages/client/src/game/movement
 import {
   FINDING_CODES,
   objectFootprint,
+  outdoorEntrances,
   parseLevelDocument,
   rectExtent,
   shapeExtent,
@@ -144,6 +145,32 @@ test("a clean document has no findings and full metrics", () => {
   assert.ok(metrics["room.west.sightline.m"] > 0);
 });
 
+/** A paved street over a row of homes, with a chair on the street in front of the first door. */
+function blockedEntrance() {
+  const raw = {
+    version: 1,
+    id: "station",
+    setting: "outdoor",
+    grid: { cols: 4, rows: 4 },
+    rooms: [{ id: "street", ground: "paving", rects: [{ i0: 0, i1: 4, j0: 0, j1: 2 }] }],
+    doors: [],
+    blocks: [{ id: "homes", zone: "residential", rects: [{ i0: 0, i1: 4, j0: 2, j1: 4 }] }],
+    objects: [],
+    spawns: { props: [{ x: -6, z: -6 }], hunters: [{ x: 6, z: -6 }] },
+  };
+  const doc = parseLevelDocument(raw, { catalog: SPACE_CATALOG });
+  const [entrance] = outdoorEntrances(doc);
+  assert.ok(entrance, "the homes have a door onto the street");
+  raw.objects.push({
+    id: "street-1",
+    type: "chair",
+    x: entrance.x + entrance.nx,
+    z: entrance.z + entrance.nz,
+    yaw: 0,
+  });
+  return raw;
+}
+
 const CASES = [
   [
     "object.unmeasured",
@@ -186,6 +213,7 @@ const CASES = [
     "light.wall-clearance",
     edited((d) => Object.assign(d, { lights: [{ id: "light-1", x: -6, z: 0, kind: "room" }] })),
   ],
+  ["entrance.blocked", blockedEntrance()],
 ];
 
 test("every finding code has a case", () => {

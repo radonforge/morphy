@@ -74,6 +74,10 @@ The single source of truth for everything client and server must agree on. **Exp
   (floor, wall, surface), each marked `auto` (a proposal the owner kept on review) or `human`. A
   typed literal, not JSON, so the compiler checks every value and the production bundle drops it; a new
   catalog prop fails `tests/asset-cards.test.mjs` until it is tagged.
+- `assetCards.ts`: `ASSET_CARDS`, the geometry `pnpm cards` reads off every runtime GLB (size,
+  centre, support surfaces). A City Kit building's card also lists its ground-level `doors`: the
+  extractor finds the panels painted with the kit's door swatch that stand on the ground at door
+  size, solid and garage doors alike; glass shop doors use another swatch and are not read.
 
 ### `packages/level`: the level document
 
@@ -117,7 +121,10 @@ client code, three.js or Colyseus.
   `uniformFitScale`, the same arithmetic the client's `fitModel` delegates to); passage, doorways
   and spawns by the per-part collision boxes, rotated with the object, that the client moves
   against (they always contain the footprint), less the parts no taller than `LEVEL_STEP_HEIGHT`,
-  which a body steps onto. Shapes whose vertical spans do not meet never overlap. Codes are listed
+  which a body steps onto. Shapes whose vertical spans do not meet never overlap. Outdoors,
+  `entrance.blocked` reports any object footprint or lamp pole in front of a building's doorway
+  (`outdoorEntrances` in `outdoor.ts`: the doors on the buildings' cards that open onto walkable
+  ground), so set dressing never stands in a doorway. Codes are listed
   in `FINDING_CODES`; thresholds are the `LEVEL_*` constants in `shared/constants.ts`.
   Reachability floods a `LEVEL_SAMPLE_CELL` grid from the hunter spawns with the client's body
   radius, so a pocket under `LEVEL_UNREACHABLE_MIN_AREA` is sampling noise and is not reported, and
