@@ -123,6 +123,13 @@ export const LEVEL_ENTRANCE_CLEARANCE_SIDE = 0.3;
 export const LEVEL_ENTRANCE_CLEARANCE_DEPTH = 2.5;
 /** A pocket of floor no hunter can reach is reported once it covers this many square metres. */
 export const LEVEL_UNREACHABLE_MIN_AREA = 1;
+/** Clear width, in metres, a way between buildings or furniture keeps once objects stand along it. */
+export const LEVEL_PASSAGE_WIDTH = 2.5;
+/**
+ * Metres a walk around objects may add to the way straight through where they stand, beyond
+ * half their outline: more than that and they close a passage instead of standing in it.
+ */
+export const LEVEL_PASSAGE_DETOUR_SLACK = 4;
 /** An object at least this tall hides a crouching prop, so it blocks a sightline. */
 export const LEVEL_SIGHT_BLOCK_HEIGHT = 1;
 /** A room whose longest clear sightline exceeds this many metres leaves props nowhere to hide. */

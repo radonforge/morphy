@@ -23,6 +23,8 @@ export interface SampleGrid {
   nx: number;
   nz: number;
   walkable: Uint8Array;
+  /** Where a body fits on the bare layout, before any object stands on it. */
+  open: Uint8Array;
   sightBlocked: Uint8Array;
   /** Object ids whose collision boxes keep a body off each sample, for naming what encloses a pocket. */
   blockers: Map<number, Set<string>>;
@@ -85,6 +87,7 @@ export function sampleSpace(space: LevelSpace): SampleGrid {
     nx,
     nz,
     walkable: new Uint8Array(nx * nz).fill(1),
+    open: new Uint8Array(nx * nz),
     sightBlocked: new Uint8Array(nx * nz),
     blockers: new Map(),
     centre: (index) => ({
@@ -133,6 +136,7 @@ export function sampleSpace(space: LevelSpace): SampleGrid {
     });
 
   for (const wall of space.walls) block(wall, null, true);
+  grid.open.set(grid.walkable);
   for (const [id, boxes] of space.hitboxes) {
     for (const box of boxes) block(box, id, false);
   }
@@ -202,6 +206,67 @@ export function components(grid: SampleGrid, member: (index: number) => boolean)
     groups.push(group);
   }
   return groups;
+}
+
+function allWithin(grid: SampleGrid, index: number, radius: number, member: Uint8Array): boolean {
+  const a = Math.floor(index / grid.nz);
+  const b = index % grid.nz;
+  const reach = Math.ceil(radius / LEVEL_SAMPLE_CELL);
+  for (let da = -reach; da <= reach; da++) {
+    for (let db = -reach; db <= reach; db++) {
+      if (Math.hypot(da, db) * LEVEL_SAMPLE_CELL >= radius) continue;
+      const na = a + da;
+      const nb = b + db;
+      if (na < 0 || na >= grid.nx || nb < 0 || nb >= grid.nz || !member[na * grid.nz + nb]) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+/**
+ * The samples of `member` where a body `width` across stands clear of every sample
+ * outside it: where the centre of a wider walker fits, given a set already eroded by
+ * {@link LEVEL_BODY_RADIUS}.
+ */
+export function wideSamples(grid: SampleGrid, member: Uint8Array, width: number): Uint8Array {
+  const inset = width / 2 - LEVEL_BODY_RADIUS;
+  const wide = new Uint8Array(grid.nx * grid.nz);
+  for (let index = 0; index < wide.length; index++) {
+    if (member[index] && allWithin(grid, index, inset, member)) wide[index] = 1;
+  }
+  return wide;
+}
+
+/**
+ * Steps from the nearest of `seeds` to every sample of `member` within `limit` edge-adjacent
+ * steps through `member`; -1 where it is further or cut off.
+ */
+export function stepDistances(
+  grid: SampleGrid,
+  member: Uint8Array,
+  seeds: readonly number[],
+  limit: number,
+): Int32Array {
+  const distance = new Int32Array(grid.nx * grid.nz).fill(-1);
+  const queue: number[] = [];
+  for (const index of seeds) {
+    if (distance[index] !== -1) continue;
+    distance[index] = 0;
+    queue.push(index);
+  }
+  for (let head = 0; head < queue.length; head++) {
+    const index = queue[head]!;
+    const next = distance[index]! + 1;
+    if (next > limit) continue;
+    for (const step of neighbours(grid, index)) {
+      if (!member[step] || distance[step] !== -1) continue;
+      distance[step] = next;
+      queue.push(step);
+    }
+  }
+  return distance;
 }
 
 function march(
