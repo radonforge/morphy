@@ -33,6 +33,21 @@ export function isDisguise(def: PropDefinition): boolean {
   return def.decor !== true;
 }
 
+/**
+ * The types a round deals and a reroll draws from: the disguises `map` places at
+ * least once, in catalog order. A catalog entry the map never places is left
+ * out, since a prop wearing it would look like nothing around it.
+ */
+export function disguiseTypes(map: {
+  props: readonly { type: string }[];
+  propCatalog: readonly PropDefinition[];
+}): string[] {
+  const placed = new Set(map.props.map((prop) => prop.type));
+  return map.propCatalog
+    .filter((def) => isDisguise(def) && placed.has(def.id))
+    .map((def) => def.id);
+}
+
 export interface PropInstance {
   type: string;
   position: Vec3;

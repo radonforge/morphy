@@ -22,6 +22,7 @@ import {
   DEFAULT_PLAYER_NAME,
   DEFAULT_WEAPON,
   type DecoyBreakEvent,
+  disguiseTypes,
   generatePartyCode,
   HIDE_DURATION_MS,
   HUNTER_CAPTURE_HEAL,
@@ -31,7 +32,6 @@ import {
   INPUT_SEND_RATE_MS,
   type InputMessage,
   isAvatarId,
-  isDisguise,
   isMapId,
   isWeaponId,
   type KillEvent,
@@ -43,6 +43,7 @@ import {
   MAX_PLAYERS,
   type MapDefinition,
   type MapId,
+  MIN_DISGUISE_TYPES,
   MIN_PLAYERS_TO_START,
   MSG_CHAT,
   MSG_DECOY,
@@ -613,18 +614,23 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     if (player?.role !== "prop" || !player.alive) return;
     if (this.state.phase !== "hiding" && this.state.phase !== "hunting") return;
     if (player.rerollsLeft <= 0) return;
-    const next = this.randomPropId(player.propType);
-    if (!next || next === player.propType) return;
-    player.propType = next;
+    player.propType = this.randomPropId(player.propType);
     player.rerollsLeft -= 1;
   }
 
+  /**
+   * A random disguise the map places, other than `exclude`. `buildMap` refuses a
+   * map placing fewer than {@link MIN_DISGUISE_TYPES}, so the pool is never empty.
+   */
   private randomPropId(exclude?: string): string {
-    const catalog = this.map.propCatalog.filter(isDisguise);
-    if (catalog.length === 0) return "";
-    const pool =
-      exclude && catalog.length > 1 ? catalog.filter((def) => def.id !== exclude) : catalog;
-    return pool[Math.floor(Math.random() * pool.length)]?.id ?? "";
+    const pool = disguiseTypes(this.map).filter((type) => type !== exclude);
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pick === undefined) {
+      throw new Error(
+        `map "${this.map.id}" has no disguise to deal besides "${exclude ?? ""}"; build it through buildMap, which refuses one placing fewer than ${MIN_DISGUISE_TYPES}`,
+      );
+    }
+    return pick;
   }
 
   private handleDecoy(client: Actor): void {
