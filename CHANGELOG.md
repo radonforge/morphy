@@ -20,13 +20,14 @@ props get a taunt, and bots now play with only what a player could see.
   with glowing street lamps and lit windows after dark.
 - Kepler-9 is a night station with starlight, glowing deck lamps and a glass
   ceiling. It is relaid as thirteen rooms around a central atrium joined by
-  short covered corridors, and the same layout is the same every round.
+  short covered corridors, and the furniture stands in the same place every
+  round.
 - Props can taunt with F to score points, and score more with a hunter close
   by. A prop that has been quiet too long is made to honk, for no points.
 - Hunters have a sonar on F: every prop nearby honks, decoys stay silent.
   Props hear a hunter's sonar from a distance, and you hear props rustle as
   they move.
-- Props can drop decoys, and bots do it too when they break cover.
+- Bot props drop a decoy when they break cover, like a player would.
 - The game tells you your role, your goal and the phase in big type. The catch
   is the loudest moment of the round for the shooter, the victim and everyone
   nearby, and the result card tells your round by the role you started with.
