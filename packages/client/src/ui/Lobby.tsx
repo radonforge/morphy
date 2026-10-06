@@ -5,10 +5,10 @@ import {
   DEFAULT_PLAYER_NAME,
   isAvatarId,
   isPartyCode,
-  MAP_CATALOG,
   MAX_NAME_LENGTH,
   type MapId,
   MIN_PLAYERS_TO_START,
+  NIGHT_CHANCE,
   normalizePartyCode,
   PARTY_CODE_LENGTH,
 } from "@morphy/shared";
@@ -47,13 +47,23 @@ import {
   setGraphicsPreference,
   setPerfHudEnabled,
 } from "../game/prefs";
-import { MAP_CHROME, MAP_GLASS } from "../theme";
+import { storageGet, storageSet } from "../safeStorage";
+import { MAP_GLASS } from "../theme";
 import { CarouselRail } from "./CarouselRail";
-import { AVATAR_COUNT, avatarIndex, MAP_COUNT, mapIndex, stepAvatar, stepMap } from "./carousel";
+import { AVATAR_COUNT, avatarIndex, stepAvatar } from "./carousel";
+import { MapSlices } from "./MapSlices";
 import { loadPrefs, savePrefs } from "./prefs";
 import { StatsPane } from "./StatsPane";
-import { type PickerId, STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
+import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
 import { useCarouselInput } from "./useCarouselInput";
+import { useReducedMotion } from "./useReducedMotion";
+import {
+  settledMotion,
+  sliceForKey,
+  WORLD_IDS,
+  type WorldsMotion,
+  worldsLayout,
+} from "./worldSlices";
 
 const LobbyStage = lazy(() =>
   import("./LobbyStage").then((module) => ({ default: module.LobbyStage })),
@@ -132,13 +142,42 @@ function resolveAvatar(avatar: string): AvatarId {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "private", label: "Private" },
+  { id: "private", label: "Party" },
   { id: "stats", label: "Stats" },
   { id: "options", label: "Options" },
 ];
 
 const STUDIO_NAME = "Radon Forge";
 const STUDIO_URL = "https://radonforge.com";
+
+const CHANGELOG_PATH = "/changelog";
+const FOOTER_LINKS = [
+  { href: CHANGELOG_PATH, label: "Changelog" },
+  { href: "/privacy", label: "Privacy" },
+  { href: "/terms", label: "Terms" },
+] as const;
+
+/** The last client version this browser opened the changelog for, or saw the notice of. */
+const SEEN_VERSION_KEY = "morphy:seen-version";
+
+/** Whether the lobby is drawn by night, once per page load: coming back from a match keeps it. */
+const LOBBY_NIGHT = Math.random() < NIGHT_CHANCE;
+
+function mapIndex(map: MapId): number {
+  return Math.max(0, WORLD_IDS.indexOf(map));
+}
+
+function isTypingTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  );
+}
+
+function isActivatable(target: EventTarget | null): boolean {
+  return target instanceof HTMLButtonElement || target instanceof HTMLAnchorElement;
+}
 
 const PANE_TITLES: Record<PaneId, string> = {
   private: "Private room",
@@ -163,12 +202,20 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const [graphics, setGraphicsState] = useState<GraphicsPreference>(() => graphicsPreference());
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
-  const [picker, setPicker] = useState<PickerId | null>(null);
+  const [picking, setPicking] = useState(false);
   const [chipHost, setChipHost] = useState<HTMLDivElement | null>(null);
+  const [unseenVersion, setUnseenVersion] = useState(
+    () => storageGet(SEEN_VERSION_KEY) !== __MORPHY_VERSION__,
+  );
+  const reduced = useReducedMotion();
 
   const inParty = party !== null;
   const isHost = party !== null && party.selfId === party.hostId;
   const activeMap = party ? party.mapId : selectedMap;
+  const openIndex = mapIndex(activeMap);
+  const motion = useRef<WorldsMotion>(
+    settledMotion(worldsLayout(WORLD_IDS.length, openIndex, false)),
+  );
 
   useEffect(() => {
     savePrefs({ name, map: selectedMap, avatar: selectedAvatar });
@@ -251,54 +298,74 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     [pane, closePane],
   );
 
-  const openPicker = useCallback((id: PickerId) => {
+  const openAvatarPicker = useCallback(() => {
     playUiOpen();
     setPane(null);
-    setPicker(id);
+    setPicking(true);
   }, []);
 
-  const openAvatarPicker = useCallback(() => openPicker("avatar"), [openPicker]);
-  const openWorldPicker = useCallback(() => {
-    setSelectedMap(activeMap);
-    openPicker("world");
-  }, [openPicker, activeMap]);
-
   const closePicker = useCallback(() => {
-    if (picker === "avatar") commitProfile();
+    commitProfile();
     playUiClose();
-    setPicker(null);
-  }, [picker, commitProfile]);
+    setPicking(false);
+  }, [commitProfile]);
 
-  const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      if (party) return;
-      playUiDeploy();
-      onConnect(name, selectedMap, selectedAvatar);
-    },
-    [party, name, selectedMap, selectedAvatar, onConnect],
-  );
-
-  const handleStart = useCallback(() => {
-    playUiDeploy();
-    party?.onStart();
-  }, [party]);
+  const connecting = status.kind === "connecting";
+  const canChoose = !inParty || isHost;
+  const canStart = party !== null && isHost && party.members.length >= MIN_PLAYERS_TO_START;
+  const canPlay = party ? canStart : !connecting;
 
   /**
-   * The world carousel steps from `selectedMap`, not from `activeMap`: in a party the map on
-   * screen is the server's, so two quick presses would both compute from the same pre-round-trip
-   * value and advance one map instead of two. `openPicker` aligns the two before the first step.
+   * Play always plays the open map, so choosing a world and starting are one gesture. In a party
+   * only the host starts, and only once there are enough players to.
    */
-  const handleWorldStep = useCallback(
-    (delta: number) => {
-      if (party !== null && party.selfId !== party.hostId) return;
-      const next = stepMap(selectedMap, delta);
+  const play = useCallback(() => {
+    if (party) {
+      if (!canStart) return;
+      playUiDeploy();
+      party.onStart();
+      return;
+    }
+    if (connecting) return;
+    playUiDeploy();
+    onConnect(name, activeMap, selectedAvatar);
+  }, [party, canStart, connecting, onConnect, name, activeMap, selectedAvatar]);
+
+  const openSlice = useCallback(
+    (index: number) => {
+      const next = WORLD_IDS[index];
+      if (next === undefined || next === activeMap || !canChoose) return;
       playMorph();
       setSelectedMap(next);
       party?.onSetMap(next);
     },
-    [party, selectedMap],
+    [activeMap, canChoose, party],
   );
+
+  const markVersionSeen = useCallback(() => {
+    storageSet(SEEN_VERSION_KEY, __MORPHY_VERSION__);
+    setUnseenVersion(false);
+  }, []);
+
+  useEffect(() => {
+    if (picking || pane !== null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (isTypingTarget(e.target)) return;
+      if (e.key === "Enter") {
+        if (isActivatable(e.target)) return;
+        e.preventDefault();
+        play();
+        return;
+      }
+      const next = sliceForKey(e.key, openIndex, WORLD_IDS.length);
+      if (next === null || !canChoose) return;
+      e.preventDefault();
+      openSlice(next);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [picking, pane, play, openIndex, canChoose, openSlice]);
 
   const handleAvatarStep = useCallback(
     (delta: number) => {
@@ -310,8 +377,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     [party, name, selectedAvatar],
   );
 
-  const avatarInput = useCarouselInput(picker === "avatar", handleAvatarStep, closePicker);
-  const worldInput = useCarouselInput(picker === "world", handleWorldStep, closePicker);
+  const avatarInput = useCarouselInput(picking, handleAvatarStep, closePicker);
 
   const canCopy = typeof navigator !== "undefined" && navigator.clipboard !== undefined;
   const copyCode = useCallback(() => {
@@ -387,9 +453,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     setMusicVolState(next);
   }, []);
 
-  const connecting = status.kind === "connecting";
   const trimmedName = name.trim();
-  const mapInfo = MAP_CATALOG.find((info) => info.id === activeMap) ?? MAP_CATALOG[0];
   const avatarInfo = AVATAR_CATALOG.find((info) => info.id === selectedAvatar);
 
   const stageActors: StageActor[] =
@@ -414,7 +478,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
           },
         ];
 
-  const chromeClass = `menu-chrome${picker !== null ? " menu-chrome-out" : ""}`;
+  const chromeClass = `menu-chrome${picking ? " menu-chrome-out" : ""}`;
 
   return (
     <div
@@ -425,40 +489,64 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     >
       <Suspense fallback={null}>
         <LobbyStage
-          map={activeMap}
+          open={activeMap}
+          motion={motion}
+          night={LOBBY_NIGHT}
           actors={stageActors}
           inParty={inParty}
-          picker={picker}
+          picking={picking}
           chipHost={chipHost}
           onCustomize={openAvatarPicker}
         />
       </Suspense>
+      <MapSlices
+        open={openIndex}
+        focus={picking}
+        motion={motion}
+        night={LOBBY_NIGHT}
+        canChoose={canChoose}
+        reduced={reduced}
+        onOpen={openSlice}
+        onPlay={canPlay ? play : null}
+      >
+        <div className="world-play-row">
+          {party && !isHost ? (
+            <span className="world-play world-play-waiting">Waiting for host…</span>
+          ) : (
+            <button
+              type="button"
+              className="world-play"
+              onClick={play}
+              onPointerEnter={playUiHover}
+              disabled={party ? !canStart : connecting}
+            >
+              <i aria-hidden="true" />
+              {party ? "Start match" : connecting ? "Connecting…" : "Play"}
+            </button>
+          )}
+          <span className="world-play-sub">
+            {party
+              ? isHost
+                ? party.members.length < MIN_PLAYERS_TO_START
+                  ? `Need at least ${MIN_PLAYERS_TO_START} players`
+                  : `Party of ${party.members.length}`
+                : "Only the host can start the match"
+              : "Public match"}
+          </span>
+        </div>
+        {status.kind === "error" && <span className="menu-error">{status.message}</span>}
+      </MapSlices>
       <div className="stage-overlay" ref={setChipHost} />
-      <div className="menu-vignette" />
 
-      <header className={`menu-top ${chromeClass}`} inert={picker !== null}>
+      <header className={`menu-top ${chromeClass}`} inert={picking}>
         <div className="menu-brand">
-          <div className="menu-wordmark">
-            <img className="tri" src="/icon-192.png" alt="" aria-hidden="true" />
-            <span>MORPHY</span>
-          </div>
-          <div className="menu-build-row">
-            <span
-              className="menu-build"
-              title="Version of this client. A trailing + means the build is past that release."
-            >
-              v{__MORPHY_VERSION__}
-            </span>
-            <span
-              className="menu-alpha"
-              title="Morphy is in early alpha: expect bugs, rough edges and changes between visits."
-            >
-              Early alpha
-            </span>
-          </div>
-          <a className="menu-legal" href={STUDIO_URL} target="_blank" rel="noreferrer">
-            © {STUDIO_NAME}
-          </a>
+          <span className="menu-wordmark">MORPHY</span>
+          <span
+            className="menu-version"
+            title="Version of this client, in early alpha: expect bugs, rough edges and changes between visits. A trailing + means the build is past that release."
+          >
+            v{__MORPHY_VERSION__} · Early alpha
+          </span>
         </div>
         <nav className="menu-tabs" aria-label="Menu">
           {NAV_ITEMS.map((item) => (
@@ -477,7 +565,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       </header>
 
       {party && (
-        <aside className={`menu-party panel ${chromeClass}`} inert={picker !== null}>
+        <aside className={`menu-party panel ${chromeClass}`} inert={picking}>
           <span className="eyebrow">Party code</span>
           <div className="menu-party-code">
             <b>{party.code}</b>
@@ -515,126 +603,62 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         </aside>
       )}
 
-      {stageActors.length === 1 && pane === null && (
-        <aside className={`menu-maptitle ${chromeClass}`} key={activeMap} inert={picker !== null}>
-          <span className="menu-maptitle-tag" style={{ color: MAP_CHROME[activeMap].accent }}>
-            {mapInfo.tag} sector
-          </span>
-          <h2>{mapInfo.name}</h2>
-          <p>{mapInfo.blurb}</p>
-        </aside>
-      )}
-
-      {picker !== null && (
+      {picking && (
         <>
           <button
             type="button"
             className="morph-backdrop"
-            aria-label={`Close the ${picker === "avatar" ? "avatar" : "map"} picker`}
+            aria-label="Close the avatar picker"
             onClick={closePicker}
-            onWheel={picker === "avatar" ? avatarInput.onWheel : worldInput.onWheel}
+            onWheel={avatarInput.onWheel}
           />
-          {picker === "avatar" ? (
-            <CarouselRail
-              noun="avatar"
-              name={avatarInfo?.name ?? selectedAvatar}
-              position={avatarIndex(selectedAvatar) + 1}
-              total={AVATAR_COUNT}
-              onStep={handleAvatarStep}
-            >
-              <div className="morph-callsign panel">
-                <label htmlFor="player-name" className="eyebrow">
-                  Callsign
-                </label>
-                <input
-                  id="player-name"
-                  value={name}
-                  maxLength={MAX_NAME_LENGTH}
-                  placeholder={DEFAULT_PLAYER_NAME}
-                  onChange={(e) => setName(e.target.value)}
-                  onBlur={commitProfile}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") e.currentTarget.blur();
-                  }}
-                />
-              </div>
-            </CarouselRail>
-          ) : (
-            <CarouselRail
-              noun="map"
-              name={mapInfo.name}
-              position={mapIndex(activeMap) + 1}
-              total={MAP_COUNT}
-              onStep={handleWorldStep}
-            />
-          )}
+          <CarouselRail
+            noun="avatar"
+            name={avatarInfo?.name ?? selectedAvatar}
+            position={avatarIndex(selectedAvatar) + 1}
+            total={AVATAR_COUNT}
+            onStep={handleAvatarStep}
+          >
+            <div className="morph-callsign panel">
+              <label htmlFor="player-name" className="eyebrow">
+                Callsign
+              </label>
+              <input
+                id="player-name"
+                value={name}
+                maxLength={MAX_NAME_LENGTH}
+                placeholder={DEFAULT_PLAYER_NAME}
+                onChange={(e) => setName(e.target.value)}
+                onBlur={commitProfile}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+            </div>
+          </CarouselRail>
         </>
       )}
 
-      <form
-        className={`menu-bottom ${chromeClass}`}
-        onSubmit={handleSubmit}
-        inert={picker !== null}
-      >
-        <div className="menu-strip">
-          <span className="menu-strip-label">Map</span>
-          <button
-            type="button"
-            className="menu-mapcard panel sel"
-            style={{ "--accent": MAP_CHROME[activeMap].accent } as React.CSSProperties}
-            onClick={openWorldPicker}
-            onPointerEnter={playUiHover}
-            disabled={inParty && !isHost}
+      <footer className={`menu-foot ${chromeClass}`} inert={picking}>
+        {unseenVersion && (
+          <a className="menu-new" href={CHANGELOG_PATH} onClick={markVersionSeen}>
+            What's new
+          </a>
+        )}
+        {FOOTER_LINKS.map((link) => (
+          <a
+            key={link.href}
+            className="menu-foot-link"
+            href={link.href}
+            onClick={link.href === CHANGELOG_PATH ? markVersionSeen : undefined}
           >
-            <span className="menu-mapcard-glyph" aria-hidden="true">
-              {MAP_CHROME[activeMap].glyph}
-            </span>
-            <span className="menu-mapcard-text">
-              <span className="menu-mapcard-tag">{mapInfo.tag}</span>
-              <span className="menu-mapcard-name">{mapInfo.name}</span>
-            </span>
-            <span className="menu-mapcard-swap" aria-hidden="true">
-              {inParty && !isHost ? "" : "\u21c4"}
-            </span>
-          </button>
-        </div>
-        <div className="menu-dock">
-          {party ? (
-            isHost ? (
-              <button
-                type="button"
-                className="menu-deploy"
-                onClick={handleStart}
-                onPointerEnter={playUiHover}
-                disabled={party.members.length < MIN_PLAYERS_TO_START}
-              >
-                <span className="big">Start match</span>
-                <span className="small">
-                  {party.members.length < MIN_PLAYERS_TO_START
-                    ? `Need at least ${MIN_PLAYERS_TO_START} players`
-                    : `Party of ${party.members.length}`}
-                </span>
-              </button>
-            ) : (
-              <div className="menu-deploy menu-waiting">
-                <span className="big">Waiting for host…</span>
-                <span className="small">Only the host can start the match</span>
-              </div>
-            )
-          ) : (
-            <button
-              type="submit"
-              className="menu-deploy"
-              onPointerEnter={playUiHover}
-              disabled={connecting}
-            >
-              <span className="big">{connecting ? "Connecting…" : "Play"}</span>
-              <span className="small">Public match</span>
-            </button>
-          )}
-        </div>
-        {status.kind === "error" && <span className="menu-error">{status.message}</span>}
-      </form>
+            {link.label}
+          </a>
+        ))}
+        <a className="menu-foot-studio" href={STUDIO_URL} target="_blank" rel="noreferrer">
+          © {STUDIO_NAME}
+        </a>
+      </footer>
 
       {pane !== null && (
         <section className="menu-panel panel">

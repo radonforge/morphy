@@ -1,6 +1,6 @@
-import { type AvatarId, MAP_CATALOG, type MapId, NIGHT_CHANCE } from "@morphy/shared";
-import { Billboard, Html, Sky, Stars, Text, useAnimations, useGLTF } from "@react-three/drei";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { type AvatarId, MAP_CATALOG, type MapId } from "@morphy/shared";
+import { Billboard, Html, Sky, Stars, Text, useAnimations } from "@react-three/drei";
+import { Canvas, createPortal, useFrame, useThree } from "@react-three/fiber";
 import {
   lazy,
   type RefObject,
@@ -16,6 +16,7 @@ import { playUiHover } from "../game/audio";
 import { CeilingView } from "../game/CeilingView";
 import type { PostLook } from "../game/graphicsTier";
 import { enableShadows } from "../game/modelShading";
+import type { PostComposer } from "../game/postFx";
 import {
   SkyGlow,
   type SkyGlowPreset,
@@ -25,24 +26,21 @@ import {
 import { useSharedGLTF } from "../game/sharedTextures";
 import { themeFor } from "../game/themes";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
-import { avatarNeighbors, mapNeighbors } from "./carousel";
-import {
-  beginTransition,
-  DIORAMA_TRANSITION_S,
-  type DioramaTransition,
-  isVeiled,
-  liveMaps,
-  pieceScale,
-  ready,
-  retarget,
-  sameStageRender,
-  stageMap,
-  tick,
-  veilOpacity,
-} from "./dioramaTransition";
+import { avatarNeighbors } from "./carousel";
+import { DIORAMA_FORM_S, pieceScale } from "./dioramaForm";
 import { advanceFlicker, beginFlicker, type FlickerState } from "./flicker";
 import { LOBBY_DIORAMAS, LOBBY_DRESSING, type SetPiece, type StageLight } from "./lobbyDioramas";
-import { type PickerId, STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
+import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
+import { useReducedMotion } from "./useReducedMotion";
+import {
+  frameShift,
+  layoutAt,
+  type Point,
+  sliceShape,
+  WORLD_IDS,
+  type WorldsLayout,
+  type WorldsMotion,
+} from "./worldSlices";
 
 const StagePost = lazy(() =>
   import("./StagePost").then((module) => ({ default: module.StagePost })),
@@ -51,16 +49,20 @@ const StagePost = lazy(() =>
 const avatarModel = (id: AvatarId): string => `/models/pets/animal-${id}.glb`;
 
 const AVATAR_HEIGHT = 1.5;
-const AVATAR_X = -1.35;
-const AVATAR_YAW = 0.35;
+/**
+ * The avatar stands right of centre, facing back across it, so the open slice's name and Play
+ * have the left of the frame to themselves.
+ */
+const AVATAR_X = 1.35;
+const AVATAR_YAW = -0.35;
 const MODEL_MIN_SIZE = 0.001;
 const CLIP_FADE_SECONDS = 0.3;
 
-const STAGE_FRONT_X = -0.7;
+const STAGE_FRONT_X = 0.7;
 const STAGE_FRONT_Z = 0.35;
-const STAGE_STEP_X = 1.2;
+const STAGE_STEP_X = -1.2;
 const STAGE_STEP_Z = 0.8;
-const STAGE_YAW = 0.15;
+const STAGE_YAW = -0.15;
 
 const NAMEPLATE_Y = AVATAR_HEIGHT + 0.42;
 const NAMEPLATE_FONT_SIZE = 0.14;
@@ -71,17 +73,11 @@ const NAMEPLATE_OUTLINE_WIDTH = 0.015;
 const CHIP_Y = AVATAR_HEIGHT + 0.12;
 const CHIP_Z_INDEX = 2;
 
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
-
 const MORPH_CAMERA_Y = 1.2;
 const MORPH_CAMERA_Z = 3.3;
 const MORPH_LOOK_Y = 0.92;
 const MORPH_DOLLY_DAMP = 4.2;
 
-const WORLD_CAMERA: [number, number, number] = [0, 2.1, 7.6];
-const WORLD_LOOK_AT: [number, number, number] = [0, 1.3, -6];
-const WORLD_BURST_SLOT: StageSlot = { x: 0, z: -6, yaw: 0 };
-const WORLD_BURST_SCALE = 6;
 const GHOST_OFFSET_X = 1.5;
 const GHOST_OFFSET_Z = -1.2;
 const GHOST_HEIGHT = AVATAR_HEIGHT * 0.74;
@@ -104,27 +100,21 @@ const MORPH_SHARD_SPIN = 9;
 const POP_SETTLED = Number.POSITIVE_INFINITY;
 
 /*
- * The one budget the world swap is spent from. The stage runs at `STAGE_BOOST_FPS` and keeps its
- * shadow map live for exactly as long as a cross takes, so both are derived from the fold that
- * owns the timeline rather than tuned next to it, where they used to drift.
+ * The one budget a world's arrival is spent from. The stage runs at `STAGE_BOOST_FPS` and keeps
+ * its shadow map live for exactly as long as a world takes to form, so both are derived from the
+ * fold that owns the timeline rather than tuned next to it, where they used to drift.
  */
-const DIORAMA_SETTLE_MS = DIORAMA_TRANSITION_S * 1000;
-const UNSCALED = 1;
+const DIORAMA_SETTLE_MS = DIORAMA_FORM_S * 1000;
 
 const LAMP_GLOW = 1.6;
 const LAMP_OFF = "#000000";
 const LAMP_PANEL_OFFSET_Y = 0.35;
 const LAMP_PANEL_SIZE: [number, number, number] = [1.1, 0.1, 0.45];
 
-const VEIL_RADIUS = 80;
-const VEIL_SEGMENTS_W = 24;
-const VEIL_SEGMENTS_H = 16;
-const VEIL_RENDER_ORDER = 1;
-
 /**
  * True for `STAGE_BOOST_MS` after every change of `beat`. The stage idles at 30 fps, which is
- * plenty for a parallax drift but coarse for the morph dolly and the pop that follows a step,
- * so those get `STAGE_BOOST_FPS` for as long as they are actually running and no longer.
+ * plenty for a parallax drift but coarse for the morph dolly, a slice opening and the pop that
+ * follows a step, so those get `STAGE_BOOST_FPS` for as long as they are actually running.
  */
 function useMotionBoost(beat: string): boolean {
   const [boosted, setBoosted] = useState(false);
@@ -137,19 +127,6 @@ function useMotionBoost(beat: string): boolean {
   }, [beat]);
 
   return boosted;
-}
-
-function useReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(() => window.matchMedia(REDUCED_MOTION_QUERY).matches);
-
-  useEffect(() => {
-    const query = window.matchMedia(REDUCED_MOTION_QUERY);
-    const onChange = () => setReduced(query.matches);
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
-
-  return reduced;
 }
 
 interface ModelFit {
@@ -191,6 +168,8 @@ function computeStageSlots(count: number, inParty: boolean): StageSlot[] {
 }
 
 const CAMERA_FOV = 38;
+const CAMERA_NEAR = 0.1;
+const CAMERA_FAR = 1000;
 const CAMERA_BASE: [number, number, number] = [0, 1.5, 6];
 const STAGE_MAX_FPS = 30;
 const STAGE_BOOST_FPS = 60;
@@ -201,7 +180,6 @@ const PARALLAX_X = 0.55;
 const PARALLAX_Y = 0.25;
 const PARALLAX_DAMP = 3.2;
 
-const ATMOSPHERE_LERP = 2.4;
 const GROUND_RADIUS = 70;
 const SUN_POSITION: [number, number, number] = [14, 26, 10];
 const SHADOW_MAP_SIZE = 2048;
@@ -218,6 +196,23 @@ const STARS_DEPTH = 40;
 const STARS_SPEED = 0.4;
 /** Where the night stage's lamps are ranked from: the street, so every lamp of it is lit. */
 const LAMP_FOCUS = { current: new THREE.Vector3(0, 0, -4) };
+
+/** Rounding of a closed slice's framing before it counts as changed, in CSS pixels. */
+const FRAMING_STEP_PX = 0.5;
+
+const BLIT_VERTEX = `
+void main() {
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const BLIT_FRAGMENT = `
+uniform sampler2D map;
+uniform vec2 resolution;
+void main() {
+  gl_FragColor = texture2D(map, gl_FragCoord.xy / resolution);
+}
+`;
 
 interface StageTheme {
   background: string;
@@ -305,8 +300,7 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
 
 /**
  * A day/night map's stage by night: the match's own night theme (sky, globals, street lamps,
- * post), but the day stage's fog range. The match's night fog reaches past `VEIL_RADIUS`, and
- * the veil only draws in pure fog colour while the fog has closed before it.
+ * post), but the day stage's fog range, which frames the diorama the same either way.
  */
 function nightStage(map: MapId): StageTheme {
   const day = STAGE_THEMES[map];
@@ -336,11 +330,28 @@ const NIGHT_STAGE_THEMES: Partial<Record<MapId, StageTheme>> = Object.fromEntrie
   MAP_CATALOG.filter((info) => info.dayNight).map((info) => [info.id, nightStage(info.id)]),
 );
 
-/** Whether the lobby is drawn by night, once per page load: coming back from a match keeps it. */
-const LOBBY_NIGHT = Math.random() < NIGHT_CHANCE;
-
 function stageTheme(map: MapId, night: boolean): StageTheme {
   return (night && NIGHT_STAGE_THEMES[map]) || STAGE_THEMES[map];
+}
+
+/**
+ * One map's world: its own scene, drawn through its own camera into its slice. The camera is
+ * the stage's to frame, never the renderer's to resize, hence `manual`. `age` is how long ago
+ * the world's models finished loading, null until they have, and is what the set pieces form by.
+ */
+interface WorldView {
+  map: MapId;
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  age: { current: number | null };
+}
+
+function createWorldView(map: MapId): WorldView {
+  const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, CAMERA_NEAR, CAMERA_FAR);
+  Object.assign(camera, { manual: true });
+  camera.position.set(...CAMERA_BASE);
+  camera.lookAt(CAMERA_LOOK_AT);
+  return { map, scene: new THREE.Scene(), camera, age: { current: null } };
 }
 
 /**
@@ -501,25 +512,23 @@ function AvatarGhost({ avatar, slot }: { avatar: AvatarId; slot: StageSlot }) {
 
 /**
  * The lobby's materialize burst: a rising beam and one ring of shards that converge on the
- * stage slot, replayed whenever `signal` changes. Deliberately not the scene's pooled
- * MorphEffects: only one thing ever morphs here at a time, and this has to keep playing
- * outside the model's suspense boundary so a cold GLB loads under cover of the beam.
- *
- * `scale` sizes the whole effect: the avatar carousel bursts around one pet, the world
- * carousel around a whole diorama, off the same geometry.
+ * stage slot, replayed whenever `signal` changes, and on mount when `burstOnMount` says the
+ * avatar has just walked into this world. Deliberately not the scene's pooled MorphEffects: only
+ * one thing ever morphs here at a time, and this has to keep playing outside the model's
+ * suspense boundary so a cold GLB loads under cover of the beam.
  */
 function MorphBurst({
   signal,
   slot,
-  scale = UNSCALED,
+  burstOnMount,
 }: {
   signal: string;
   slot: StageSlot;
-  scale?: number;
+  burstOnMount: boolean;
 }) {
   const beam = useRef<THREE.Mesh>(null);
   const shards = useRef<THREE.InstancedMesh>(null);
-  const age = useRef(POP_SETTLED);
+  const age = useRef(burstOnMount ? 0 : POP_SETTLED);
   const previous = useRef(signal);
 
   const seeds = useMemo(
@@ -565,10 +574,9 @@ function MorphBurst({
     const beamT = elapsed / MORPH_BEAM_DURATION_S;
     if (beamT < 1) {
       const growth = Math.min(1, beamT / MORPH_BEAM_GROW_FRACTION);
-      const height = AVATAR_HEIGHT * MORPH_BEAM_HEIGHT_MULT * growth * scale;
-      const radius = MORPH_BEAM_RADIUS * scale;
+      const height = AVATAR_HEIGHT * MORPH_BEAM_HEIGHT_MULT * growth;
       beamMesh.position.set(slot.x, height / 2, slot.z);
-      beamMesh.scale.set(radius, Math.max(height, MODEL_MIN_SIZE), radius);
+      beamMesh.scale.set(MORPH_BEAM_RADIUS, Math.max(height, MODEL_MIN_SIZE), MORPH_BEAM_RADIUS);
       (beamMesh.material as THREE.MeshBasicMaterial).opacity = MORPH_BEAM_OPACITY * (1 - beamT);
       beamMesh.visible = true;
     } else {
@@ -577,13 +585,13 @@ function MorphBurst({
 
     const t = Math.min(1, elapsed / MORPH_DURATION_S);
     const convergence = t * t;
-    const radial = MORPH_SHARD_SPAWN_RADIUS * scale * (1 - convergence);
-    const size = Math.max(MORPH_SHARD_SIZE * scale * (1 - t), MODEL_MIN_SIZE);
-    const spawnHeight = AVATAR_HEIGHT * MORPH_SHARD_SPAWN_HEIGHT_MULT * scale;
+    const radial = MORPH_SHARD_SPAWN_RADIUS * (1 - convergence);
+    const size = Math.max(MORPH_SHARD_SIZE * (1 - t), MODEL_MIN_SIZE);
+    const spawnHeight = AVATAR_HEIGHT * MORPH_SHARD_SPAWN_HEIGHT_MULT;
     seeds.forEach((seed, i) => {
       scratch.position.set(
         slot.x + Math.cos(seed.angle) * radial,
-        THREE.MathUtils.lerp(seed.yFrac * spawnHeight, (AVATAR_HEIGHT * scale) / 2, convergence),
+        THREE.MathUtils.lerp(seed.yFrac * spawnHeight, AVATAR_HEIGHT / 2, convergence),
         slot.z + Math.sin(seed.angle) * radial,
       );
       scratch.euler.set(seed.spinX * elapsed, 0, seed.spinZ * elapsed);
@@ -647,9 +655,7 @@ function ActorNameplate({ label, slot }: { label: string; slot: StageSlot }) {
 }
 
 /**
- * One diorama set piece. Its scale is not its own business: the transition fold answers where
- * every piece of both the leaving and the arriving world is on its ramp this instant, which is
- * what lets one sweep dissolve while the other forms instead of the two taking turns.
+ * One diorama set piece, scaled by how far its world has formed.
  *
  * A piece is anchored by its own footprint, not by the origin its GLB happens to carry. Every
  * `space/exterior` model centres its geometry 2 units right and 1.5 forward of that origin, so
@@ -661,16 +667,14 @@ function ActorNameplate({ label, slot }: { label: string; slot: StageSlot }) {
  */
 function SetPieceModel({
   piece,
-  map,
   index,
   count,
-  transition,
+  age,
 }: {
   piece: SetPiece;
-  map: MapId;
   index: number;
   count: number;
-  transition: RefObject<DioramaTransition>;
+  age: WorldView["age"];
 }) {
   const { scene } = useSharedGLTF(piece.url);
   const pop = useRef<THREE.Group>(null);
@@ -685,9 +689,7 @@ function SetPieceModel({
   }, [object]);
 
   useFrame(() => {
-    const node = pop.current;
-    if (node === null) return;
-    node.scale.setScalar(pieceScale(transition.current, map, index, count));
+    pop.current?.scale.setScalar(pieceScale(age.current, index, count));
   });
 
   return (
@@ -702,9 +704,9 @@ function SetPieceModel({
 }
 
 /**
- * The arriving world's own report that it is loaded. A Suspense boundary commits all of its
- * children at once, so an effect on a sibling of the set pieces fires exactly when the last of
- * their models has resolved: no polling, no second loader, nothing added to the `useGLTF` cache.
+ * A world's own report that it is loaded. A Suspense boundary commits all of its children at
+ * once, so an effect on a sibling of the set pieces fires exactly when the last of their models
+ * has resolved: no polling, no second loader, nothing added to the `useGLTF` cache.
  */
 function DioramaReady({ onReady }: { onReady: () => void }) {
   useEffect(() => {
@@ -713,20 +715,14 @@ function DioramaReady({ onReady }: { onReady: () => void }) {
   return null;
 }
 
-/**
- * One whole world, mounted inside its own boundary so an uncached map suspends alone. The world
- * already on stage is in a boundary of its own and keeps rendering throughout, which is what
- * closed the hole a cold map used to leave.
- */
+/** A world's set pieces, inside their own boundary so an uncached world suspends alone. */
 function Diorama({
   map,
-  arriving,
-  transition,
+  age,
   onReady,
 }: {
   map: MapId;
-  arriving: boolean;
-  transition: RefObject<DioramaTransition>;
+  age: WorldView["age"];
   onReady: () => void;
 }) {
   const pieces = LOBBY_DIORAMAS[map];
@@ -736,30 +732,41 @@ function Diorama({
         <SetPieceModel
           key={`${piece.url}:${piece.position.join(",")}`}
           piece={piece}
-          map={map}
           index={index}
           count={pieces.length}
-          transition={transition}
+          age={age}
         />
       ))}
-      {arriving && <DioramaReady onReady={onReady} />}
+      <DioramaReady onReady={onReady} />
     </Suspense>
   );
+}
+
+/** Advances a world's formation clock until it has formed, then leaves it alone. */
+function FormClock({ age }: { age: WorldView["age"] }) {
+  useFrame((_, delta) => {
+    const current = age.current;
+    if (current === null || current >= DIORAMA_FORM_S) return;
+    age.current = current + delta;
+  });
+  return null;
 }
 
 /**
  * A deck lamp: the point light and the panel it hangs from, whose glow follows the light so a
  * failing lamp reads as a fault in the fixture rather than a pulse from nowhere. The panel is
- * unlit: a lit one took its own light from 0.3 m below and bloomed far past its glow.
+ * unlit: a lit one took its own light from 0.3 m below and bloomed far past its glow. A failing
+ * lamp only fails while its world is `live`: a closed slice keeps the frame it was drawn in, and
+ * a lamp caught mid-flicker would stay dark in it.
  */
 function StageLamp({
   light,
-  map,
-  transition,
+  age,
+  live,
 }: {
   light: StageLight;
-  map: MapId;
-  transition: RefObject<DioramaTransition>;
+  age: WorldView["age"];
+  live: boolean;
 }) {
   const lightRef = useRef<THREE.PointLight>(null);
   const panel = useRef<THREE.MeshBasicMaterial>(null);
@@ -767,9 +774,9 @@ function StageLamp({
   const flicker = useRef<FlickerState | null>(light.flicker ? beginFlicker(Math.random) : null);
 
   useFrame((_, delta) => {
-    const fade = pieceScale(transition.current, map, 0, 1);
+    const fade = pieceScale(age.current, 0, 1);
     if (flicker.current) flicker.current = advanceFlicker(flicker.current, delta, Math.random);
-    const level = fade * (flicker.current?.level ?? 1);
+    const level = fade * (live ? (flicker.current?.level ?? 1) : 1);
     if (lightRef.current) lightRef.current.intensity = light.intensity * level;
     panel.current?.color.copy(glow).multiplyScalar(LAMP_GLOW * level);
   });
@@ -787,25 +794,27 @@ function StageLamp({
   );
 }
 
-/** The lamps and ceiling a world hangs over its set pieces, fading in and out with them. */
+/** The lamps and ceiling a world hangs over its set pieces, forming with them. */
 function Dressing({
   map,
   night,
-  transition,
+  age,
+  live,
 }: {
   map: MapId;
   night: boolean;
-  transition: RefObject<DioramaTransition>;
+  age: WorldView["age"];
+  live: boolean;
 }) {
   const { lights, nightLights, ceiling } = LOBBY_DRESSING[map];
   const roof = useRef<THREE.Group>(null);
   useFrame(() => {
-    roof.current?.scale.setScalar(pieceScale(transition.current, map, 0, 1));
+    roof.current?.scale.setScalar(pieceScale(age.current, 0, 1));
   });
   return (
     <>
       {(night && nightLights ? nightLights : lights).map((light) => (
-        <StageLamp key={light.position.join(",")} light={light} map={map} transition={transition} />
+        <StageLamp key={light.position.join(",")} light={light} age={age} live={live} />
       ))}
       {ceiling.length > 0 && (
         <group ref={roof} scale={0}>
@@ -813,53 +822,6 @@ function Dressing({
         </group>
       )}
     </>
-  );
-}
-
-/**
- * Advances the transition clock. Mounted ahead of the dioramas so the pieces read a clock that
- * has already moved this frame, and the only `useFrame` allowed to write the fold.
- */
-function DioramaDriver({
-  transition,
-  onAdvance,
-}: {
-  transition: RefObject<DioramaTransition>;
-  onAdvance: (state: DioramaTransition) => void;
-}) {
-  useFrame((_, delta) => {
-    onAdvance(tick(transition.current, delta));
-  });
-  return null;
-}
-
-/**
- * An inward-facing shell between the ground disc and the stars, which closes over the sky while
- * the theme swaps underneath it and opens again. It sits past every theme's fog far plane, so it
- * draws in pure fog colour, and that is the colour `Atmosphere` is already lerping between
- * themes: opacity is the only value left to animate. It renders after the stars, which blend
- * additively and would otherwise shine straight through it.
- */
-function SkyVeil({ transition }: { transition: RefObject<DioramaTransition> }) {
-  const material = useRef<THREE.MeshBasicMaterial>(null);
-
-  useFrame(() => {
-    const node = material.current;
-    if (node === null) return;
-    node.opacity = veilOpacity(transition.current);
-  });
-
-  return (
-    <mesh renderOrder={VEIL_RENDER_ORDER}>
-      <sphereGeometry args={[VEIL_RADIUS, VEIL_SEGMENTS_W, VEIL_SEGMENTS_H]} />
-      <meshBasicMaterial
-        ref={material}
-        side={THREE.BackSide}
-        transparent
-        opacity={0}
-        depthWrite={false}
-      />
-    </mesh>
   );
 }
 
@@ -886,9 +848,10 @@ function FrameLimiter({ fps }: { fps: number }) {
 /**
  * The only owner of `shadowMap.autoUpdate`, and the reason it is one component: the stage wants
  * a frozen shadow map, but freezing it the frame new content mounts bakes the diorama while the
- * grow-in still has every set piece at ~0 scale, and nothing ever kicks it again, so a map you
- * switched to kept the shadows of nothing. Shadows stay live until `settleMs` after `signal`
- * changes, then freeze with one final bake at full size.
+ * grow-in still has every set piece at ~0 scale, and nothing ever kicks it again, so a world
+ * kept the shadows of nothing. Shadows stay live until `settleMs` after `signal` changes, then
+ * freeze with one final bake at full size. Mounted in the open world only: a closed slice is
+ * drawn so rarely that the stage bakes its shadows each time it draws it.
  */
 function ShadowStage({ signal, settleMs }: { signal: string; settleMs: number }) {
   const gl = useThree((state) => state.gl);
@@ -911,69 +874,63 @@ function ShadowStage({ signal, settleMs }: { signal: string; settleMs: number })
 
 function Atmosphere({ theme }: { theme: StageTheme }) {
   const scene = useThree((state) => state.scene);
-  const [background] = useState(() => new THREE.Color(theme.background));
-  const [fog] = useState(() => new THREE.Fog(theme.fog, theme.fogNear, theme.fogFar));
-  const [target] = useState(() => ({
-    background: new THREE.Color(theme.background),
-    fog: new THREE.Color(theme.fog),
-  }));
 
   useEffect(() => {
-    scene.background = background;
-    scene.fog = fog;
+    scene.background = new THREE.Color(theme.background);
+    scene.fog = new THREE.Fog(theme.fog, theme.fogNear, theme.fogFar);
     return () => {
       scene.background = null;
       scene.fog = null;
     };
-  }, [scene, background, fog]);
-
-  useEffect(() => {
-    target.background.set(theme.background);
-    target.fog.set(theme.fog);
-    fog.near = theme.fogNear;
-    fog.far = theme.fogFar;
-  }, [theme, target, fog]);
-
-  useFrame((_, delta) => {
-    const k = 1 - Math.exp(-ATMOSPHERE_LERP * delta);
-    background.lerp(target.background, k);
-    fog.color.lerp(target.fog, k);
-  });
+  }, [scene, theme]);
 
   return null;
 }
 
 /**
- * Drives the stage camera: pointer parallax in the menu, a dolly onto `focus` for the avatar
- * picker, and a pull back and up for the world picker, which frames the diorama the player is
- * choosing rather than the pet standing in front of it.
+ * Drives the open world's camera: pointer parallax in the menu, and a dolly onto `focus` for the
+ * avatar picker. `pointer` is the canvas's own, not the world's: a world is a portal with a
+ * pointer of its own that only moves over something in it that listens.
  *
  * The aim point is damped alongside the position rather than set outright: snapping it the
- * frame a picker opens swings the camera ~13° in one step, which reads as a cut however
- * smoothly the position travels.
+ * frame the picker opens swings the camera in one step, which reads as a cut however smoothly
+ * the position travels. A world that closes hands its camera back at rest, so it stands still.
  */
-function ParallaxRig({ picker, focus }: { picker: PickerId | null; focus: StageSlot }) {
+function ParallaxRig({
+  picking,
+  focus,
+  pointer,
+}: {
+  picking: boolean;
+  focus: StageSlot;
+  pointer: THREE.Vector2;
+}) {
   const camera = useThree((state) => state.camera);
   const reduced = useReducedMotion();
   const scratch = useMemo(() => ({ target: new THREE.Vector3(), look: new THREE.Vector3() }), []);
   const aim = useMemo(() => CAMERA_LOOK_AT.clone(), []);
 
-  useFrame((state, delta) => {
-    if (picker === "avatar") {
+  useEffect(
+    () => () => {
+      camera.position.set(...CAMERA_BASE);
+      camera.lookAt(CAMERA_LOOK_AT);
+    },
+    [camera],
+  );
+
+  useFrame((_, delta) => {
+    if (picking) {
       scratch.target.set(focus.x, MORPH_CAMERA_Y, focus.z + MORPH_CAMERA_Z);
       scratch.look.set(focus.x, MORPH_LOOK_Y, focus.z);
-    } else if (picker === "world") {
-      scratch.target.set(...WORLD_CAMERA);
-      scratch.look.set(...WORLD_LOOK_AT);
     } else {
       scratch.target.set(
-        CAMERA_BASE[0] + state.pointer.x * PARALLAX_X,
-        CAMERA_BASE[1] + state.pointer.y * PARALLAX_Y,
+        CAMERA_BASE[0] + pointer.x * PARALLAX_X,
+        CAMERA_BASE[1] + pointer.y * PARALLAX_Y,
         CAMERA_BASE[2],
       );
       scratch.look.copy(CAMERA_LOOK_AT);
     }
-    const damp = picker === null ? PARALLAX_DAMP : MORPH_DOLLY_DAMP;
+    const damp = picking ? MORPH_DOLLY_DAMP : PARALLAX_DAMP;
     const k = reduced ? 1 : 1 - Math.exp(-damp * delta);
     camera.position.lerp(scratch.target, k);
     aim.lerp(scratch.look, k);
@@ -982,36 +939,448 @@ function ParallaxRig({ picker, focus }: { picker: PickerId | null; focus: StageS
   return null;
 }
 
-function Ground({ theme }: { theme: StageTheme }) {
-  const material = useRef<THREE.MeshStandardMaterial>(null);
-  const [target] = useState(() => new THREE.Color(theme.ground));
-  useEffect(() => {
-    target.set(theme.ground);
-  }, [theme, target]);
-  useFrame((_, delta) => {
-    const k = 1 - Math.exp(-ATMOSPHERE_LERP * delta);
-    material.current?.color.lerp(target, k);
-  });
+function Ground({ color }: { color: string }) {
   return (
     <mesh rotation-x={-Math.PI / 2} receiveShadow>
       <circleGeometry args={[GROUND_RADIUS, 48]} />
-      <meshStandardMaterial ref={material} color={theme.ground} />
+      <meshStandardMaterial color={color} />
     </mesh>
   );
 }
 
+interface CastProps {
+  actors: StageActor[];
+  slots: StageSlot[];
+  picking: boolean;
+  entering: boolean;
+  reduced: boolean;
+  chipPortal: RefObject<HTMLElement> | null;
+  onCustomize: () => void;
+}
+
+/** Who stands in the open world: the player and their party, and the picker's ghosts. */
+function Cast({ actors, slots, picking, entering, reduced, chipPortal, onCustomize }: CastProps) {
+  const selfSlot = slots[0] ?? SOLO_SLOT;
+  const self = actors[0];
+  const neighbors = self ? avatarNeighbors(self.avatar) : null;
+  const morphs = !reduced && (picking || entering);
+  return (
+    <>
+      <Suspense fallback={null}>
+        {actors.map((actor, index) => (
+          <AvatarActor
+            key={`${actor.id}:${actor.avatar}`}
+            avatar={actor.avatar}
+            slot={slots[index] ?? SOLO_SLOT}
+            onSelect={index === 0 && !picking ? onCustomize : undefined}
+            materialize={index === 0 && morphs}
+          />
+        ))}
+      </Suspense>
+      {picking && neighbors !== null && (
+        <>
+          <Suspense fallback={null}>
+            <AvatarGhost
+              avatar={neighbors.prev}
+              slot={{
+                x: selfSlot.x - GHOST_OFFSET_X,
+                z: selfSlot.z + GHOST_OFFSET_Z,
+                yaw: selfSlot.yaw,
+              }}
+            />
+          </Suspense>
+          <Suspense fallback={null}>
+            <AvatarGhost
+              avatar={neighbors.next}
+              slot={{
+                x: selfSlot.x + GHOST_OFFSET_X,
+                z: selfSlot.z + GHOST_OFFSET_Z,
+                yaw: selfSlot.yaw,
+              }}
+            />
+          </Suspense>
+        </>
+      )}
+      {!reduced && self && (
+        <MorphBurst signal={self.avatar} slot={selfSlot} burstOnMount={entering} />
+      )}
+      {actors.map((actor, index) =>
+        index > 0 ? (
+          <ActorNameplate
+            key={actor.id}
+            label={`${actor.isHost ? "★ " : ""}${actor.name}`}
+            slot={slots[index] ?? SOLO_SLOT}
+          />
+        ) : null,
+      )}
+      {!picking && chipPortal !== null && (
+        <Html
+          portal={chipPortal}
+          position={[selfSlot.x, CHIP_Y, selfSlot.z]}
+          center
+          zIndexRange={[CHIP_Z_INDEX, CHIP_Z_INDEX]}
+          wrapperClass="stage-chip"
+        >
+          <button
+            type="button"
+            onClick={onCustomize}
+            onPointerEnter={playUiHover}
+            aria-label={`${self?.name ?? ""}: change your callsign and avatar`}
+          >
+            <span className="stage-chip-name">
+              {self?.isHost ? "★ " : ""}
+              {self?.name ?? ""}
+            </span>
+            <span className="stage-chip-pencil" aria-hidden="true">
+              ✎
+            </span>
+          </button>
+        </Html>
+      )}
+    </>
+  );
+}
+
+interface WorldProps extends Omit<CastProps, "reduced"> {
+  view: WorldView;
+  open: boolean;
+  night: boolean;
+  reduced: boolean;
+  pointer: THREE.Vector2;
+  post: RefObject<PostComposer | null>;
+  signature: string;
+}
+
+/**
+ * One map's world, mounted into its own scene. Every world stays mounted so a closed slice can
+ * be drawn whenever its framing changes; only the open one holds the cast, the camera rig and
+ * the post chain.
+ */
+function World({ view, open, night, reduced, pointer, post, signature, ...cast }: WorldProps) {
+  const theme = stageTheme(view.map, night);
+  const street = LOBBY_DRESSING[view.map].street;
+  const [loaded, setLoaded] = useState(false);
+  const handleReady = useCallback(() => {
+    view.age.current = reduced ? DIORAMA_FORM_S : 0;
+    setLoaded(true);
+  }, [view, reduced]);
+
+  return createPortal(
+    <>
+      <Atmosphere theme={theme} />
+      <FormClock age={view.age} />
+      {theme.sky === "stars" && (
+        <Stars
+          radius={STARS_RADIUS}
+          depth={STARS_DEPTH}
+          count={theme.stars.count}
+          factor={theme.stars.factor}
+          fade
+          speed={STARS_SPEED}
+        />
+      )}
+      {theme.sky === "day" && (
+        <Sky sunPosition={SUN_POSITION} turbidity={theme.turbidity} rayleigh={theme.rayleigh} />
+      )}
+      {theme.skyGlow && <SkyGlow preset={theme.skyGlow} />}
+      {theme.streetLamps && street && (
+        <StreetLamps map={street} preset={theme.streetLamps} focus={LAMP_FOCUS} />
+      )}
+      <hemisphereLight args={[theme.hemiSky, theme.hemiGround, theme.hemiIntensity]} />
+      <ambientLight intensity={theme.ambient} />
+      <directionalLight
+        position={SUN_POSITION}
+        intensity={theme.dir}
+        color={theme.dirColor}
+        castShadow
+        shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
+        shadow-camera-left={-SHADOW_EXTENT}
+        shadow-camera-right={SHADOW_EXTENT}
+        shadow-camera-top={SHADOW_EXTENT}
+        shadow-camera-bottom={-SHADOW_EXTENT}
+        shadow-normalBias={SHADOW_NORMAL_BIAS * theme.shadowRadius}
+        shadow-radius={theme.shadowRadius}
+      />
+      <Ground color={theme.ground} />
+      <Diorama map={view.map} age={view.age} onReady={handleReady} />
+      <Dressing map={view.map} night={night} age={view.age} live={open} />
+      {open && (
+        <>
+          <ParallaxRig
+            picking={cast.picking}
+            focus={cast.slots[0] ?? SOLO_SLOT}
+            pointer={pointer}
+          />
+          <ShadowStage signal={`${loaded}:${signature}`} settleMs={DIORAMA_SETTLE_MS} />
+          <Suspense fallback={null}>
+            <StagePost look={theme.post} target={post} />
+          </Suspense>
+          <Cast {...cast} reduced={reduced} />
+        </>
+      )}
+    </>,
+    view.scene,
+    { camera: view.camera },
+  );
+}
+
+interface SliceBlit {
+  mesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  uniforms: { map: { value: THREE.Texture | null }; resolution: { value: THREE.Vector2 } };
+  texture: THREE.FramebufferTexture | null;
+  /** What the copy was drawn at: framing and formation. */
+  key: string;
+  /** How far formed the world was when its shadows were last baked. */
+  baked: string;
+}
+
+function createBlit(): SliceBlit {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(12), 3));
+  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  const uniforms: SliceBlit["uniforms"] = {
+    map: { value: null },
+    resolution: { value: new THREE.Vector2() },
+  };
+  const material = new THREE.ShaderMaterial({
+    uniforms,
+    vertexShader: BLIT_VERTEX,
+    fragmentShader: BLIT_FRAGMENT,
+    side: THREE.DoubleSide,
+    depthTest: false,
+    depthWrite: false,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.frustumCulled = false;
+  mesh.visible = false;
+  return { mesh, uniforms, texture: null, key: "", baked: "" };
+}
+
+function placeBlit(blit: SliceBlit, polygon: readonly Point[]): void {
+  const position = blit.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+  polygon.forEach(([x, y], index) => {
+    position.setXYZ(index, x, y, 0);
+  });
+  position.needsUpdate = true;
+}
+
+function snap(value: number): number {
+  return Math.round(value / FRAMING_STEP_PX) * FRAMING_STEP_PX;
+}
+
+function formKey(age: number | null): string {
+  if (age === null) return "loading";
+  return age >= DIORAMA_FORM_S ? "formed" : age.toFixed(3);
+}
+
+/**
+ * Where the open world's focus sits across today's full frame, 0 left to 1 right: the middle of
+ * whoever stands on the stage, seen from the camera at rest.
+ */
+function focusOf(slots: readonly StageSlot[], aspect: number, camera: THREE.PerspectiveCamera) {
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
+  const point = new THREE.Vector3();
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const slot of slots) {
+    const x = point.set(slot.x, AVATAR_HEIGHT / 2, slot.z).project(camera).x;
+    min = Math.min(min, x);
+    max = Math.max(max, x);
+  }
+  return ((min + max) / 2 + 1) / 2;
+}
+
+/**
+ * Draws the worlds into their slices, on one canvas. Each world renders through its own camera,
+ * slid by `frameShift` so the slice shows its part of today's frame, and clipped by scissor to
+ * the slice's box. The open world is drawn live every frame, through the post chain when there
+ * is one. A closed world is drawn only when its framing or its formation changes, and copied to
+ * a texture there; every frame then lays each closed slice back down from its copy as its
+ * slanted shape, which also restores the corners the open world's box drew over. So a still
+ * menu costs one live world and a few quads, however many maps it shows.
+ */
+function Compositor({
+  views,
+  open,
+  motion,
+  slots,
+  post,
+}: {
+  views: readonly WorldView[];
+  open: number;
+  motion: RefObject<WorldsMotion>;
+  slots: readonly StageSlot[];
+  post: RefObject<PostComposer | null>;
+}) {
+  const gl = useThree((state) => state.gl);
+  const overlay = useMemo(() => {
+    const scene = new THREE.Scene();
+    const blits = views.map(() => createBlit());
+    for (const blit of blits) scene.add(blit.mesh);
+    return { scene, blits, camera: new THREE.OrthographicCamera(0, 1, 0, 1, -1, 1) };
+  }, [views]);
+  const focusCamera = useMemo(() => {
+    const camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, CAMERA_NEAR, CAMERA_FAR);
+    camera.position.set(...CAMERA_BASE);
+    camera.lookAt(CAMERA_LOOK_AT);
+    return camera;
+  }, []);
+  const frame = useRef<WorldsLayout | null>(null);
+  const buffer = useMemo(() => new THREE.Vector2(), []);
+
+  useEffect(() => {
+    const autoClear = gl.autoClear;
+    gl.autoClear = false;
+    return () => {
+      gl.autoClear = autoClear;
+      gl.setScissorTest(false);
+    };
+  }, [gl]);
+
+  useEffect(
+    () => () => {
+      for (const blit of overlay.blits) {
+        blit.texture?.dispose();
+        blit.mesh.geometry.dispose();
+        blit.mesh.material.dispose();
+      }
+    },
+    [overlay],
+  );
+
+  useFrame(({ size }) => {
+    const { width, height } = size;
+    const layout = layoutAt(motion.current, performance.now());
+    const focus = focusOf(slots, width / height, focusCamera);
+    views.forEach((view, index) => {
+      const shift = frameShift(layout, index, width, height, focus);
+      view.camera.aspect = width / height;
+      view.camera.setViewOffset(width, height, -shift, 0, width, height);
+    });
+    frame.current = layout;
+  }, -1);
+
+  useFrame(({ size }) => {
+    const layout = frame.current;
+    if (layout === null) return;
+    const { width, height } = size;
+    gl.getDrawingBufferSize(buffer);
+    const pendingBake = gl.shadowMap.needsUpdate;
+    gl.setRenderTarget(null);
+    gl.setScissorTest(true);
+
+    views.forEach((view, index) => {
+      const blit = overlay.blits[index];
+      if (blit === undefined) return;
+      const shape = sliceShape(layout, index, width, height);
+      blit.mesh.visible = index !== open && shape.right > shape.left;
+      if (!blit.mesh.visible) return;
+      if (
+        blit.texture === null ||
+        blit.texture.image.width !== buffer.x ||
+        blit.texture.image.height !== buffer.y
+      ) {
+        blit.texture?.dispose();
+        blit.texture = new THREE.FramebufferTexture(buffer.x, buffer.y);
+        blit.uniforms.map.value = blit.texture;
+        blit.key = "";
+      }
+      blit.uniforms.resolution.value.copy(buffer);
+      placeBlit(blit, shape.polygon);
+      const form = formKey(view.age.current);
+      const key = [
+        buffer.x,
+        buffer.y,
+        snap(shape.left),
+        snap(shape.right),
+        snap(view.camera.view?.offsetX ?? 0),
+        form,
+      ].join(":");
+      if (key === blit.key) return;
+      gl.setScissor(shape.left, 0, shape.right - shape.left, height);
+      gl.shadowMap.needsUpdate = form !== blit.baked;
+      gl.clear();
+      gl.render(view.scene, view.camera);
+      gl.copyFramebufferToTexture(blit.texture);
+      blit.key = key;
+      blit.baked = form;
+    });
+    gl.shadowMap.needsUpdate = pendingBake;
+
+    const live = views[open];
+    if (live !== undefined) {
+      const shape = sliceShape(layout, open, width, height);
+      gl.setScissor(shape.left, 0, shape.right - shape.left, height);
+      const composer = post.current;
+      if (composer) {
+        composer.render();
+      } else {
+        gl.clear();
+        gl.render(live.scene, live.camera);
+      }
+    }
+
+    gl.setScissorTest(false);
+    const camera = overlay.camera;
+    if (camera.right !== width || camera.bottom !== height) {
+      camera.right = width;
+      camera.bottom = height;
+      camera.updateProjectionMatrix();
+    }
+    gl.render(overlay.scene, camera);
+  }, 1);
+
+  return null;
+}
+
+/** Everything inside the canvas, where the canvas's own pointer can be read. */
+function Worlds({
+  views,
+  openIndex,
+  motion,
+  post,
+  ...world
+}: Omit<WorldProps, "view" | "open" | "pointer"> & {
+  views: readonly WorldView[];
+  openIndex: number;
+  motion: RefObject<WorldsMotion>;
+}) {
+  const pointer = useThree((state) => state.pointer);
+  return (
+    <>
+      <Compositor views={views} open={openIndex} motion={motion} slots={world.slots} post={post} />
+      {views.map((view, index) => (
+        <World
+          key={view.map}
+          view={view}
+          open={index === openIndex}
+          pointer={pointer}
+          post={post}
+          {...world}
+        />
+      ))}
+    </>
+  );
+}
+
 export function LobbyStage({
-  map,
+  open,
+  motion,
+  night,
   actors,
   inParty,
-  picker,
+  picking,
   chipHost,
   onCustomize,
 }: {
-  map: MapId;
+  open: MapId;
+  motion: RefObject<WorldsMotion>;
+  night: boolean;
   actors: StageActor[];
   inParty: boolean;
-  picker: PickerId | null;
+  picking: boolean;
   chipHost: HTMLElement | null;
   onCustomize: () => void;
 }) {
@@ -1022,180 +1391,40 @@ export function LobbyStage({
    * buried in a hidden subtree is reachable by Tab but invisible to a screen reader.
    */
   const chipPortal = useMemo(() => (chipHost === null ? null : { current: chipHost }), [chipHost]);
-  const [stage, setStage] = useState<DioramaTransition>(() => beginTransition(map));
-  const transition = useRef(stage);
-  const theme = stageTheme(stageMap(stage), LOBBY_NIGHT);
-  const street = LOBBY_DRESSING[stageMap(stage)].street;
+  const views = useMemo(() => WORLD_IDS.map(createWorldView), []);
+  const post = useRef<PostComposer | null>(null);
+  const openIndex = Math.max(0, WORLD_IDS.indexOf(open));
   const slots = computeStageSlots(actors.length, inParty);
-  const selfSlot = slots[0] ?? SOLO_SLOT;
-  const self = actors[0];
-  const neighbors = self ? avatarNeighbors(self.avatar) : null;
-  const inWorldPicker = picker === "world";
-  const animateMorph = picker === "avatar" && !reduced;
-  const animateWorld = inWorldPicker && !reduced;
-  const stageSignature = `${map}:${inParty}:${actors.map((a) => `${a.id}:${a.avatar}`).join("|")}`;
-  const boosted = useMotionBoost(`${picker}:${stageSignature}:${stage.bake}`);
+  const signature = `${inParty}:${actors.map((a) => `${a.id}:${a.avatar}`).join("|")}`;
+  const boosted = useMotionBoost(`${picking}:${open}:${signature}`);
+  /**
+   * Whether the avatar has walked into the open world from another, rather than stood in it since
+   * the menu loaded. Set in the render that changes `open`, so the cast mounting in the new world
+   * that render reads it, and kept from then on: every later arrival morphs in as well.
+   */
+  const [arrival, setArrival] = useState({ open, entering: false });
+  if (arrival.open !== open) setArrival({ open, entering: true });
+  const entering = arrival.entering || arrival.open !== open;
 
-  const apply = useCallback((next: DioramaTransition) => {
-    const previous = transition.current;
-    if (next === previous) return;
-    transition.current = next;
-    if (!sameStageRender(previous, next)) setStage(next);
-  }, []);
-  const handleReady = useCallback(
-    () => apply(ready(transition.current, reduced)),
-    [apply, reduced],
-  );
-
-  useEffect(() => {
-    apply(retarget(transition.current, map));
-  }, [apply, map]);
-
-  useEffect(() => {
-    if (!inWorldPicker) return;
-    const { prev, next } = mapNeighbors(map);
-    for (const id of [prev, next]) {
-      for (const piece of LOBBY_DIORAMAS[id]) useGLTF.preload(piece.url);
-    }
-  }, [inWorldPicker, map]);
   return (
     <div className="menu-canvas" aria-hidden="true">
-      <Canvas
-        shadows={SHADOW_TYPE}
-        frameloop="demand"
-        dpr={STAGE_DPR}
-        camera={{ fov: CAMERA_FOV, position: CAMERA_BASE }}
-      >
+      <Canvas shadows={SHADOW_TYPE} frameloop="demand" dpr={STAGE_DPR}>
         <FrameLimiter fps={boosted ? STAGE_BOOST_FPS : STAGE_MAX_FPS} />
-        <Suspense fallback={null}>
-          <StagePost look={theme.post} />
-        </Suspense>
-        <Atmosphere theme={theme} />
-        <ParallaxRig picker={picker} focus={selfSlot} />
-        {theme.sky === "stars" && (
-          <Stars
-            radius={STARS_RADIUS}
-            depth={STARS_DEPTH}
-            count={theme.stars.count}
-            factor={theme.stars.factor}
-            fade
-            speed={STARS_SPEED}
-          />
-        )}
-        {theme.sky === "day" && (
-          <Sky sunPosition={SUN_POSITION} turbidity={theme.turbidity} rayleigh={theme.rayleigh} />
-        )}
-        {theme.skyGlow && <SkyGlow preset={theme.skyGlow} />}
-        {theme.streetLamps && street && (
-          <StreetLamps map={street} preset={theme.streetLamps} focus={LAMP_FOCUS} />
-        )}
-        <hemisphereLight args={[theme.hemiSky, theme.hemiGround, theme.hemiIntensity]} />
-        <ambientLight intensity={theme.ambient} />
-        <directionalLight
-          position={SUN_POSITION}
-          intensity={theme.dir}
-          color={theme.dirColor}
-          castShadow
-          shadow-mapSize={[SHADOW_MAP_SIZE, SHADOW_MAP_SIZE]}
-          shadow-camera-left={-SHADOW_EXTENT}
-          shadow-camera-right={SHADOW_EXTENT}
-          shadow-camera-top={SHADOW_EXTENT}
-          shadow-camera-bottom={-SHADOW_EXTENT}
-          shadow-normalBias={SHADOW_NORMAL_BIAS * theme.shadowRadius}
-          shadow-radius={theme.shadowRadius}
+        <Worlds
+          views={views}
+          openIndex={openIndex}
+          motion={motion}
+          post={post}
+          night={night}
+          reduced={reduced}
+          signature={signature}
+          actors={actors}
+          slots={slots}
+          picking={picking}
+          entering={entering}
+          chipPortal={chipPortal}
+          onCustomize={onCustomize}
         />
-        <Ground theme={theme} />
-        <ShadowStage signal={`${stageSignature}:${stage.bake}`} settleMs={DIORAMA_SETTLE_MS} />
-        <DioramaDriver transition={transition} onAdvance={apply} />
-        {liveMaps(stage).map((id) => (
-          <Diorama
-            key={`diorama:${id}`}
-            map={id}
-            arriving={id === stage.next}
-            transition={transition}
-            onReady={handleReady}
-          />
-        ))}
-        {liveMaps(stage).map((id) => (
-          <Dressing key={`dressing:${id}`} map={id} night={LOBBY_NIGHT} transition={transition} />
-        ))}
-        {isVeiled(stage) && <SkyVeil transition={transition} />}
-        <Suspense fallback={null}>
-          {actors.map((actor, index) => (
-            <AvatarActor
-              key={`${actor.id}:${actor.avatar}`}
-              avatar={actor.avatar}
-              slot={slots[index] ?? SOLO_SLOT}
-              onSelect={index === 0 && picker === null ? onCustomize : undefined}
-              materialize={index === 0 && animateMorph}
-            />
-          ))}
-        </Suspense>
-        {picker === "avatar" && neighbors !== null && (
-          <>
-            <Suspense fallback={null}>
-              <AvatarGhost
-                avatar={neighbors.prev}
-                slot={{
-                  x: selfSlot.x - GHOST_OFFSET_X,
-                  z: selfSlot.z + GHOST_OFFSET_Z,
-                  yaw: selfSlot.yaw,
-                }}
-              />
-            </Suspense>
-            <Suspense fallback={null}>
-              <AvatarGhost
-                avatar={neighbors.next}
-                slot={{
-                  x: selfSlot.x + GHOST_OFFSET_X,
-                  z: selfSlot.z + GHOST_OFFSET_Z,
-                  yaw: selfSlot.yaw,
-                }}
-              />
-            </Suspense>
-          </>
-        )}
-        {animateMorph && self && <MorphBurst signal={self.avatar} slot={selfSlot} />}
-        {animateWorld && (
-          <MorphBurst
-            signal={`world:${stage.bake}`}
-            slot={WORLD_BURST_SLOT}
-            scale={WORLD_BURST_SCALE}
-          />
-        )}
-        {actors.map((actor, index) =>
-          index > 0 ? (
-            <ActorNameplate
-              key={actor.id}
-              label={`${actor.isHost ? "★ " : ""}${actor.name}`}
-              slot={slots[index] ?? SOLO_SLOT}
-            />
-          ) : null,
-        )}
-        {picker === null && chipPortal !== null && (
-          <Html
-            portal={chipPortal}
-            position={[selfSlot.x, CHIP_Y, selfSlot.z]}
-            center
-            zIndexRange={[CHIP_Z_INDEX, CHIP_Z_INDEX]}
-            wrapperClass="stage-chip"
-          >
-            <button
-              type="button"
-              onClick={onCustomize}
-              onPointerEnter={playUiHover}
-              aria-label={`${self?.name ?? ""}: change your callsign and avatar`}
-            >
-              <span className="stage-chip-name">
-                {actors[0]?.isHost ? "★ " : ""}
-                {actors[0]?.name ?? ""}
-              </span>
-              <span className="stage-chip-pencil" aria-hidden="true">
-                ✎
-              </span>
-            </button>
-          </Html>
-        )}
       </Canvas>
     </div>
   );

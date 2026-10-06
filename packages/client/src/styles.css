@@ -135,8 +135,7 @@ canvas {
 
 .lobby-overlay-card button,
 .result-actions button,
-.pause-card button,
-.menu-deploy {
+.pause-card button {
   appearance: none;
   cursor: pointer;
   border: 0;
@@ -167,8 +166,7 @@ canvas {
 
 .lobby-overlay-card button:hover,
 .result-actions button:hover,
-.pause-card button:hover,
-.menu-deploy:hover {
+.pause-card button:hover {
   filter: brightness(1.05);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.55),
@@ -180,8 +178,7 @@ canvas {
 
 .lobby-overlay-card button:active,
 .result-actions button:active,
-.pause-card button:active,
-.menu-deploy:active {
+.pause-card button:active {
   transform: translateY(1px);
 }
 
@@ -324,25 +321,267 @@ canvas {
 
 /*
  * The stage chip lives here rather than under `.menu-canvas`, which is `aria-hidden` for the
- * 3D scene it holds. Same box and same stacking level as the canvas, so the chip keeps its
- * place under the vignette and over the scene; only the chip itself takes pointer events.
+ * 3D scene it holds. Same box as the canvas, stacked over the slices so the chip on the avatar
+ * stays in reach above them; only the chip itself takes pointer events.
  */
 .stage-overlay {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 2;
   pointer-events: none;
 }
 
-.menu-vignette {
+/*
+ * One slice per map over the stage. Each slice is the whole screen clipped to its slanted shape
+ * (`clip-path` and `--slice-x`, its bottom-left corner, are written per frame by `MapSlices`),
+ * so hit testing and the backdrop filter follow the shape exactly. A closed slice dims the world
+ * the canvas draws under it; the open one lets clicks through to the avatar, and only its Play
+ * takes them back.
+ */
+.worlds {
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
+}
+.world-slice {
+  --slice-pad: 2.6vw;
+  position: absolute;
+  inset: 0;
+  -webkit-backdrop-filter: saturate(0.35) brightness(0.42);
+  backdrop-filter: saturate(0.35) brightness(0.42);
+  transition:
+    -webkit-backdrop-filter 0.4s ease,
+    backdrop-filter 0.4s ease;
+}
+.world-slice::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(5, 8, 15, 0.2), rgba(5, 8, 15, 0.6));
+}
+.world-slice:not(.open) {
+  pointer-events: auto;
+}
+.world-slice:not(.open):has(.world-slice-hit:hover:enabled) {
+  -webkit-backdrop-filter: saturate(0.55) brightness(0.6);
+  backdrop-filter: saturate(0.55) brightness(0.6);
+}
+.world-slice.open {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.world-slice.open::after {
   background:
-    radial-gradient(120% 90% at 50% 40%, transparent 55%, rgba(4, 7, 12, 0.55) 100%),
-    linear-gradient(180deg, rgba(4, 7, 12, 0.5) 0%, transparent 16%),
-    linear-gradient(0deg, rgba(4, 7, 12, 0.72) 0%, transparent 28%);
+    linear-gradient(180deg, rgba(4, 7, 14, 0.45) 0%, rgba(4, 7, 14, 0) 16%),
+    linear-gradient(0deg, rgba(4, 7, 14, 0.7) 0%, rgba(4, 7, 14, 0) 45%);
+}
+.world-slice-hit {
+  position: absolute;
+  inset: 0;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.world-slice-hit:disabled {
+  cursor: default;
+}
+.world-slice.open .world-slice-hit {
+  pointer-events: none;
+}
+.world-slice-hit:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -6px;
+}
+.world-slice-v {
+  position: absolute;
+  z-index: 1;
+  left: calc(var(--slice-x, 0px) + var(--slice-pad));
+  bottom: 7.5vw;
+  display: flex;
+  align-items: center;
+  gap: 1vw;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: clamp(1.1rem, 2.1vw, 2rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.world-slice-v small {
+  font-size: 0.5em;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--cyan);
+}
+.world-slice.open .world-slice-v,
+.worlds-focus .world-slice-v {
+  opacity: 0;
+}
+.world-slice-open {
+  position: absolute;
+  z-index: 1;
+  left: calc(var(--slice-x, 0px) + var(--slice-pad));
+  bottom: 7.5vw;
+  display: grid;
+  justify-items: start;
+  gap: 1.3vw;
+  max-width: 44vw;
+  animation: world-open-in 0.35s 0.15s ease backwards;
+}
+@keyframes world-open-in {
+  from {
+    opacity: 0;
+    transform: translateY(1vw);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.worlds-focus .world-slice-open {
+  opacity: 0;
+  transition: opacity 0.26s ease;
+}
+.world-slice-tag {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(0.72rem, 1.15vw, 1.05rem);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
+}
+.world-slice-name {
+  max-width: 9ch;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: clamp(2.6rem, 5.4vw, 5.6rem);
+  line-height: 0.92;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0.3vw 2vw rgba(0, 0, 0, 0.55);
+}
+.world-play-row {
+  display: flex;
+  align-items: center;
+  gap: 2vw;
+  margin-top: 1.2vw;
+}
+.world-play {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 1.1vw;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-weight: 800;
+  font-size: clamp(1.4rem, 2.5vw, 2.4rem);
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0.2vw 1.2vw rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  pointer-events: auto;
+}
+.world-play i {
+  display: grid;
+  place-items: center;
+  width: clamp(2.4rem, 4.2vw, 4rem);
+  height: clamp(2.4rem, 4.2vw, 4rem);
+  border-radius: 0.7vw;
+  background: var(--cyan);
+  box-shadow: 0 0 2.4vw rgba(53, 224, 255, 0.45);
+  transition: transform 0.18s ease;
+}
+.world-play i::before {
+  content: "";
+  margin-left: 0.3vw;
+  border-left: 1.3vw solid var(--accent-ink);
+  border-top: 0.85vw solid transparent;
+  border-bottom: 0.85vw solid transparent;
+}
+.world-play:hover:enabled i {
+  transform: scale(1.08);
+}
+.world-play:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 6px;
+  border-radius: 0.7vw;
+}
+.world-play:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.world-play-waiting {
+  cursor: default;
+  font-size: clamp(1.1rem, 1.8vw, 1.7rem);
+}
+.world-play-sub {
+  font-family: var(--font-mono);
+  font-size: clamp(0.7rem, 1.05vw, 0.95rem);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(219, 231, 242, 0.75);
+  text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
+}
+
+.menu-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2vw;
+  padding: 1.2vw clamp(18px, 2.6vw, 44px);
+  font-family: var(--font-mono);
+  font-size: clamp(0.72rem, 0.95vw, 0.92rem);
+  letter-spacing: 0.04em;
+  background: linear-gradient(transparent, rgba(4, 8, 16, 0.55));
+  pointer-events: none;
+}
+.menu-foot a {
+  pointer-events: auto;
+  color: rgba(219, 231, 242, 0.82);
+  text-decoration: none;
+  text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
+  transition: color 0.16s ease;
+}
+.menu-foot a:hover {
+  color: var(--cyan);
+}
+.menu-foot a:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+.menu-foot .menu-new {
+  font-weight: 700;
+  color: var(--accent-ink);
+  background: var(--amber);
+  border-radius: 999px;
+  padding: 3px 12px;
+  text-shadow: none;
+}
+.menu-foot .menu-new:hover {
+  color: var(--accent-ink);
+  filter: brightness(1.08);
+}
+.menu-foot-studio {
+  margin-left: auto;
 }
 
 /*
@@ -378,79 +617,28 @@ canvas {
 
 .menu-brand {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-}
-
-.menu-build {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
-  user-select: text;
-}
-
-.menu-build-row {
-  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
-
-.menu-alpha {
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--amber);
-  padding: 1px 6px;
-  border: 1px solid rgba(255, 178, 74, 0.45);
-  border-radius: 999px;
-  background: rgba(255, 178, 74, 0.1);
-  text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
-  cursor: default;
-}
-
-.menu-legal {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  text-decoration: underline;
-  text-decoration-color: rgba(219, 231, 242, 0.3);
-  text-underline-offset: 3px;
-  text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
-  transition:
-    color 0.18s ease,
-    text-decoration-color 0.18s ease;
-}
-.menu-legal:hover,
-.menu-legal:focus-visible {
-  color: var(--cyan);
-  text-decoration-color: var(--cyan);
-}
-.menu-legal:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 2px;
-}
-
 .menu-wordmark {
-  justify-self: start;
-  display: flex;
-  align-items: baseline;
   font-family: var(--font-mono);
   font-weight: 800;
-  font-size: 1.05rem;
+  font-size: clamp(1.15rem, 1.6vw, 1.6rem);
   letter-spacing: 0.02em;
-  text-shadow: 0 1px 8px rgba(4, 7, 12, 0.8);
+  text-shadow: 0 2px 12px rgba(4, 7, 12, 0.6);
 }
-.menu-wordmark .tri {
-  height: 1.5em;
-  width: auto;
-  margin-right: 0.4em;
-  align-self: center;
+.menu-version {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+  padding: 3px 10px;
+  border: 1px solid rgba(255, 178, 74, 0.6);
+  border-radius: 999px;
+  background: rgba(5, 9, 18, 0.35);
+  cursor: default;
+  user-select: text;
 }
 
 .menu-tabs {
@@ -498,236 +686,6 @@ canvas {
   border-bottom-color: var(--cyan);
 }
 
-.menu-maptitle {
-  position: absolute;
-  right: clamp(18px, 4vw, 64px);
-  top: 26%;
-  z-index: 2;
-  max-width: min(42vw, 480px);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-  text-align: right;
-  pointer-events: none;
-  animation: menu-titlein 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
-}
-@keyframes menu-titlein {
-  from {
-    opacity: 0;
-    transform: translateX(26px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-.menu-maptitle-tag {
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  padding: 4px 10px;
-  border-radius: 3px;
-  background: rgba(4, 7, 12, 0.55);
-  box-shadow: inset 0 0 0 1px currentcolor;
-}
-.menu-maptitle h2 {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: clamp(1.7rem, 3.4vw, 2.8rem);
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  line-height: 1.05;
-  text-shadow:
-    0 2px 18px rgba(4, 7, 12, 0.8),
-    0 1px 2px rgba(4, 7, 12, 0.9);
-}
-.menu-maptitle p {
-  margin: 0;
-  max-width: 38ch;
-  font-size: 0.88rem;
-  line-height: 1.45;
-  color: var(--text);
-  opacity: 0.85;
-  text-shadow:
-    0 2px 14px rgba(4, 7, 12, 0.85),
-    0 1px 2px rgba(4, 7, 12, 0.9);
-}
-
-.menu-bottom {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 3;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: end;
-  gap: 10px 26px;
-  padding: 0 clamp(18px, 3vw, 44px) clamp(16px, 2.6vh, 30px);
-  animation: menu-bottomin 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
-}
-@keyframes menu-bottomin {
-  from {
-    opacity: 0;
-    transform: translateY(18px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.menu-strip {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-.menu-strip-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--muted);
-  text-shadow: 0 1px 6px rgba(4, 7, 12, 0.8);
-}
-.menu-strip-label::after {
-  content: "";
-  flex: 0 1 120px;
-  height: 1px;
-  background: linear-gradient(90deg, var(--border), transparent);
-}
-/*
- * `flex: none` and an explicit width, not a flex basis: the strip around this is a column, so a
- * basis would size the card's height and leave a 250px-tall square.
- */
-.menu-mapcard {
-  position: relative;
-  align-self: start;
-  flex: none;
-  width: min(280px, 100%);
-  margin-top: 6px;
-  cursor: pointer;
-  text-align: left;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px 14px;
-  border: 0;
-  border-radius: var(--r-control);
-  transition:
-    transform 0.16s ease,
-    box-shadow 0.16s ease,
-    background 0.16s ease;
-}
-.menu-mapcard-glyph {
-  flex: none;
-  font-size: 1.5rem;
-  line-height: 1;
-  color: var(--accent);
-  opacity: 0.55;
-  transition: opacity 0.16s ease;
-}
-.menu-mapcard:hover .menu-mapcard-glyph,
-.menu-mapcard.sel .menu-mapcard-glyph {
-  opacity: 1;
-}
-.menu-mapcard-text {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-/*
- * The card is the whole map picker now, so it has to read as an opener rather than as a chip
- * showing state: the glyph says which world, this says the world can be changed.
- */
-.menu-mapcard-swap {
-  flex: none;
-  margin-left: auto;
-  font-size: 1.1rem;
-  line-height: 1;
-  color: var(--accent);
-  opacity: 0.5;
-  transition:
-    opacity 0.16s ease,
-    transform 0.16s ease;
-}
-.menu-mapcard:hover .menu-mapcard-swap {
-  opacity: 1;
-  transform: translateX(2px);
-}
-.menu-mapcard:disabled {
-  cursor: default;
-}
-.menu-mapcard:disabled:hover {
-  transform: none;
-  box-shadow:
-    inset 0 0 0 1px var(--accent),
-    inset 0 0 30px color-mix(in srgb, var(--accent) 16%, transparent);
-}
-.menu-mapcard:hover {
-  transform: translateY(-3px);
-  box-shadow:
-    inset 0 1px 0 var(--glass-rim-top),
-    inset 0 -1px 0 var(--glass-rim-bottom),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, var(--glass-rim-edge)),
-    0 4px 12px -4px var(--glass-shadow-contact),
-    0 26px 54px -18px var(--glass-shadow-ambient);
-}
-.menu-mapcard:focus-visible,
-.menu-mapcard.sel:focus-visible {
-  outline: none;
-  box-shadow:
-    inset 0 0 0 2px var(--text),
-    inset 0 0 0 4px var(--accent),
-    0 2px 8px -2px var(--glass-shadow-contact),
-    0 22px 48px -16px var(--glass-shadow-ambient);
-}
-.menu-mapcard-tag {
-  font-family: var(--font-mono);
-  font-size: 0.56rem;
-  font-weight: 700;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-.menu-mapcard-name {
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
-.menu-mapcard.sel {
-  background:
-    radial-gradient(130% 105% at var(--mx) var(--my), var(--glass-sheen), transparent 58%),
-    linear-gradient(180deg, color-mix(in srgb, var(--accent) 20%, transparent), transparent 72%),
-    var(--glass-tint);
-  box-shadow:
-    inset 0 1px 0 var(--glass-rim-top),
-    inset 0 -1px 0 var(--glass-rim-bottom),
-    inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent),
-    0 2px 8px -2px var(--glass-shadow-contact),
-    0 22px 48px -16px var(--glass-shadow-ambient);
-}
-.menu-mapcard.sel .menu-mapcard-name {
-  color: var(--accent);
-}
-
-.menu-dock {
-  display: flex;
-  gap: 14px;
-  align-items: stretch;
-}
 .morph-callsign input,
 .menu-party-joinrow input {
   border: 0;
@@ -752,32 +710,7 @@ canvas {
   font-size: 0.98rem;
   padding: 0.75rem 1rem;
 }
-.menu-deploy {
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: clamp(180px, 19vw, 280px);
-  padding: 0.95rem 2.2rem;
-}
-.menu-deploy:disabled {
-  cursor: default;
-  opacity: 0.55;
-  filter: none;
-}
-.menu-deploy .big {
-  font-size: 1.26rem;
-}
-.menu-deploy .small {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: rgba(4, 18, 28, 0.66);
-}
 .menu-error {
-  grid-column: 1 / -1;
-  justify-self: end;
   color: var(--danger);
   font-size: 0.9rem;
   text-shadow: 0 1px 6px rgba(4, 7, 12, 0.8);
@@ -1181,18 +1114,6 @@ canvas {
     inset 0 0 0 1px rgba(255, 91, 91, 0.7),
     0 3px 10px -4px var(--glass-shadow-contact);
 }
-.menu-waiting {
-  cursor: default;
-  color: var(--text);
-  background: var(--control-tint);
-  box-shadow:
-    inset 0 1px 0 var(--glass-rim-top),
-    inset 0 0 0 1px var(--control-rim),
-    0 2px 8px -4px var(--glass-shadow-contact);
-}
-.menu-waiting .small {
-  color: var(--muted);
-}
 .menu-party-setup {
   display: flex;
   flex-direction: column;
@@ -1285,21 +1206,8 @@ canvas {
     max-width: 100%;
     overflow-x: auto;
   }
-  .menu-maptitle,
   .menu-party {
     display: none;
-  }
-  .menu-bottom {
-    grid-template-columns: 1fr;
-  }
-  .menu-dock {
-    flex-direction: column;
-  }
-  .menu-deploy {
-    padding: 1rem;
-  }
-  .menu-error {
-    justify-self: start;
   }
   .menu-panel {
     top: 120px;
@@ -1311,16 +1219,19 @@ canvas {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .menu-maptitle,
-  .menu-bottom,
-  .menu-panel {
+  .menu-panel,
+  .world-slice-open {
     animation: none;
+  }
+  .world-slice,
+  .world-slice-v,
+  .world-play i {
+    transition: none;
   }
   .panel,
   .lobby-overlay-card button,
   .result-actions button,
-  .pause-card button,
-  .menu-deploy {
+  .pause-card button {
     --mx: 30%;
     --my: 0%;
   }
