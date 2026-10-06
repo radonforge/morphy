@@ -236,6 +236,8 @@ function readAccessor(glb: Glb, index: number, model: string): number[][] {
 interface MeshVisit {
   matrix: Matrix;
   primitive: GltfPrimitive;
+  /** -1 under a mirrored transform, whose triangles wind the other way round (glTF 3.7.4). */
+  winding: 1 | -1;
 }
 
 function visitPrimitives(glb: Glb, model: string): MeshVisit[] {
@@ -252,11 +254,9 @@ function visitPrimitives(glb: Glb, model: string): MeshVisit[] {
     const node = required(gltf.nodes?.[index], model, `node ${index}`);
     const matrix = multiply(parent, nodeMatrix(node));
     if (node.mesh !== undefined) {
-      if (determinant3(matrix) < 0) {
-        throw new Error(`${model}: node ${index} has a mirrored transform (negative determinant)`);
-      }
+      const winding = determinant3(matrix) < 0 ? -1 : 1;
       const mesh = required(gltf.meshes?.[node.mesh], model, `mesh ${node.mesh}`);
-      for (const primitive of mesh.primitives) visits.push({ matrix, primitive });
+      for (const primitive of mesh.primitives) visits.push({ matrix, primitive, winding });
     }
     for (const child of node.children ?? []) walk(child, matrix);
   };
@@ -301,7 +301,7 @@ function extractBounds(glb: Glb, visits: MeshVisit[], model: string) {
 
 function extractSurfaces(glb: Glb, visits: MeshVisit[], model: string): SupportSurface[] {
   const buckets = new Map<number, number>();
-  for (const { matrix, primitive } of visits) {
+  for (const { matrix, primitive, winding } of visits) {
     if ((primitive.mode ?? 4) !== 4) throw new Error(`${model}: non-triangle primitive mode`);
     const positions = readAccessor(glb, positionAccessor(glb, primitive, model), model).map((p) =>
       transform(matrix, [p[0] ?? 0, p[1] ?? 0, p[2] ?? 0]),
@@ -317,9 +317,9 @@ function extractSurfaces(glb: Glb, visits: MeshVisit[], model: string): SupportS
       if (!a || !b || !c) throw new Error(`${model}: triangle index out of range`);
       const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]] as Vec3Tuple;
       const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]] as Vec3Tuple;
-      const nx = u[1] * v[2] - u[2] * v[1];
-      const ny = u[2] * v[0] - u[0] * v[2];
-      const nz = u[0] * v[1] - u[1] * v[0];
+      const nx = (u[1] * v[2] - u[2] * v[1]) * winding;
+      const ny = (u[2] * v[0] - u[0] * v[2]) * winding;
+      const nz = (u[0] * v[1] - u[1] * v[0]) * winding;
       const twiceArea = Math.hypot(nx, ny, nz);
       if (twiceArea > 0 && ny / twiceArea > SURFACE_NORMAL_MIN_Y) {
         const bucket = roundHalfEven((a[1] + b[1] + c[1]) / 3 / SURFACE_HEIGHT_STEP);
@@ -380,7 +380,7 @@ function mergePanels(panels: DoorPanel[]): DoorPanel[] {
 function extractDoors(glb: Glb, visits: MeshVisit[], model: string): AssetDoor[] {
   if (!DOOR_MODEL_PATTERN.test(model)) return [];
   const panels: DoorPanel[] = [];
-  for (const { matrix, primitive } of visits) {
+  for (const { matrix, primitive, winding } of visits) {
     const uvIndex = primitive.attributes.TEXCOORD_0;
     if (uvIndex === undefined) continue;
     const uvs = readAccessor(glb, uvIndex, model);
@@ -402,9 +402,9 @@ function extractDoors(glb: Glb, visits: MeshVisit[], model: string): AssetDoor[]
       if (!a || !b || !c) throw new Error(`${model}: triangle index out of range`);
       const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
       const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
-      const nx = (e1[1] ?? 0) * (e2[2] ?? 0) - (e1[2] ?? 0) * (e2[1] ?? 0);
-      const ny = (e1[2] ?? 0) * (e2[0] ?? 0) - (e1[0] ?? 0) * (e2[2] ?? 0);
-      const nz = (e1[0] ?? 0) * (e2[1] ?? 0) - (e1[1] ?? 0) * (e2[0] ?? 0);
+      const nx = ((e1[1] ?? 0) * (e2[2] ?? 0) - (e1[2] ?? 0) * (e2[1] ?? 0)) * winding;
+      const ny = ((e1[2] ?? 0) * (e2[0] ?? 0) - (e1[0] ?? 0) * (e2[2] ?? 0)) * winding;
+      const nz = ((e1[0] ?? 0) * (e2[1] ?? 0) - (e1[1] ?? 0) * (e2[0] ?? 0)) * winding;
       const length = Math.hypot(nx, ny, nz);
       if (length === 0 || Math.abs(ny / length) > DOOR_FACE_MAX_NORMAL_Y) continue;
       if (Math.min(a[1], b[1], c[1]) > DOOR_GROUND_MAX_Y) continue;
