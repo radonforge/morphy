@@ -79,7 +79,9 @@ function chunk(type, body) {
   return Buffer.concat([head, body]);
 }
 
-function syntheticGlb() {
+function syntheticGlb(
+  node = { rotation: [0, Math.SQRT1_2, 0, Math.SQRT1_2], translation: [0, 1, 0] },
+) {
   const padding = [9, 9, 9];
   const corner = (x, z) => [x, 0, z, ...padding];
   const bin = Buffer.from(
@@ -96,7 +98,7 @@ function syntheticGlb() {
     asset: { version: "2.0" },
     scene: 0,
     scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, rotation: [0, Math.SQRT1_2, 0, Math.SQRT1_2], translation: [0, 1, 0] }],
+    nodes: [{ mesh: 0, ...node }],
     meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
     accessors: [
       {
@@ -129,6 +131,11 @@ test("a rotated node, an index-less primitive and an interleaved stride yield th
     minY: 1,
     surfaces: [{ y: 1, area: 4 }],
   });
+});
+
+test("a mirrored node still faces its floor up, its triangles read the other way round", () => {
+  const card = extractAssetCard(syntheticGlb({ scale: [-1, 1, 1] }), "/models/mirrored.glb");
+  assert.deepEqual(card.surfaces, [{ y: 0, area: 4 }]);
 });
 
 test("every catalog prop's model is tagged, and nothing else is", () => {

@@ -2295,6 +2295,394 @@
       }
     ]
   },
+  "/models/urban/cars/delivery.glb": {
+    "model": "/models/urban/cars/delivery.glb",
+    "size": {
+      "x": 1.5,
+      "y": 1.65,
+      "z": 3.25
+    },
+    "center": {
+      "x": 0,
+      "y": 0.825,
+      "z": -0.025
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.64,
+        "area": 0.13
+      },
+      {
+        "y": 1.6,
+        "area": 2.456
+      },
+      {
+        "y": 1.4,
+        "area": 0.212
+      },
+      {
+        "y": 1.3,
+        "area": 0.408
+      },
+      {
+        "y": 0.9,
+        "area": 0.044
+      },
+      {
+        "y": 0.7,
+        "area": 0.605
+      },
+      {
+        "y": 0.68,
+        "area": 0.041
+      },
+      {
+        "y": 0.6,
+        "area": 0.063
+      },
+      {
+        "y": 0.5,
+        "area": 1.375
+      },
+      {
+        "y": 0.42,
+        "area": 0.012
+      },
+      {
+        "y": 0.4,
+        "area": 0.124
+      },
+      {
+        "y": 0.32,
+        "area": 0.012
+      },
+      {
+        "y": 0.3,
+        "area": 0.058
+      }
+    ]
+  },
+  "/models/urban/cars/hatchback-sports.glb": {
+    "model": "/models/urban/cars/hatchback-sports.glb",
+    "size": {
+      "x": 1.3,
+      "y": 1.1,
+      "z": 2.85
+    },
+    "center": {
+      "x": 0,
+      "y": 0.55,
+      "z": -0.025
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.1,
+        "area": 0.995
+      },
+      {
+        "y": 0.8,
+        "area": 0.02
+      },
+      {
+        "y": 0.68,
+        "area": 0.081
+      },
+      {
+        "y": 0.6,
+        "area": 0.094
+      },
+      {
+        "y": 0.5,
+        "area": 0.196
+      },
+      {
+        "y": 0.42,
+        "area": 0.012
+      },
+      {
+        "y": 0.4,
+        "area": 0.244
+      },
+      {
+        "y": 0.32,
+        "area": 0.012
+      }
+    ]
+  },
+  "/models/urban/cars/sedan.glb": {
+    "model": "/models/urban/cars/sedan.glb",
+    "size": {
+      "x": 1.5,
+      "y": 1.3,
+      "z": 2.55
+    },
+    "center": {
+      "x": 0,
+      "y": 0.65,
+      "z": -0.025
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.3,
+        "area": 0.582
+      },
+      {
+        "y": 0.8,
+        "area": 0.04
+      },
+      {
+        "y": 0.78,
+        "area": 0.026
+      },
+      {
+        "y": 0.76,
+        "area": 0.584
+      },
+      {
+        "y": 0.74,
+        "area": 0.62
+      },
+      {
+        "y": 0.68,
+        "area": 0.081
+      },
+      {
+        "y": 0.6,
+        "area": 0.094
+      },
+      {
+        "y": 0.4,
+        "area": 0.244
+      },
+      {
+        "y": 0.32,
+        "area": 0.025
+      },
+      {
+        "y": 0.3,
+        "area": 0.18
+      }
+    ]
+  },
+  "/models/urban/cars/suv.glb": {
+    "model": "/models/urban/cars/suv.glb",
+    "size": {
+      "x": 1.5,
+      "y": 1.3,
+      "z": 2.7
+    },
+    "center": {
+      "x": 0,
+      "y": 0.65,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.3,
+        "area": 1.08
+      },
+      {
+        "y": 1,
+        "area": 0.023
+      },
+      {
+        "y": 0.9,
+        "area": 0.04
+      },
+      {
+        "y": 0.8,
+        "area": 0.577
+      },
+      {
+        "y": 0.68,
+        "area": 0.081
+      },
+      {
+        "y": 0.6,
+        "area": 0.094
+      },
+      {
+        "y": 0.5,
+        "area": 0.055
+      },
+      {
+        "y": 0.42,
+        "area": 0.012
+      },
+      {
+        "y": 0.4,
+        "area": 0.244
+      },
+      {
+        "y": 0.38,
+        "area": 0.012
+      },
+      {
+        "y": 0.3,
+        "area": 0.18
+      }
+    ]
+  },
+  "/models/urban/cars/taxi.glb": {
+    "model": "/models/urban/cars/taxi.glb",
+    "size": {
+      "x": 1.5,
+      "y": 1.5,
+      "z": 2.75
+    },
+    "center": {
+      "x": 0,
+      "y": 0.75,
+      "z": -0.025
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.5,
+        "area": 0.05
+      },
+      {
+        "y": 1.3,
+        "area": 0.604
+      },
+      {
+        "y": 0.8,
+        "area": 0.37
+      },
+      {
+        "y": 0.76,
+        "area": 0.448
+      },
+      {
+        "y": 0.74,
+        "area": 0.448
+      },
+      {
+        "y": 0.68,
+        "area": 0.081
+      },
+      {
+        "y": 0.6,
+        "area": 0.063
+      },
+      {
+        "y": 0.4,
+        "area": 0.244
+      },
+      {
+        "y": 0.32,
+        "area": 0.025
+      },
+      {
+        "y": 0.3,
+        "area": 0.247
+      }
+    ]
+  },
+  "/models/urban/cars/truck.glb": {
+    "model": "/models/urban/cars/truck.glb",
+    "size": {
+      "x": 1.5,
+      "y": 1.3,
+      "z": 2.95
+    },
+    "center": {
+      "x": 0,
+      "y": 0.65,
+      "z": -0.025
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.3,
+        "area": 0.36
+      },
+      {
+        "y": 0.8,
+        "area": 0.368
+      },
+      {
+        "y": 0.76,
+        "area": 0.332
+      },
+      {
+        "y": 0.74,
+        "area": 0.337
+      },
+      {
+        "y": 0.68,
+        "area": 0.081
+      },
+      {
+        "y": 0.6,
+        "area": 1.084
+      },
+      {
+        "y": 0.4,
+        "area": 0.27
+      },
+      {
+        "y": 0.32,
+        "area": 0.025
+      },
+      {
+        "y": 0.3,
+        "area": 0.28
+      }
+    ]
+  },
+  "/models/urban/cars/van.glb": {
+    "model": "/models/urban/cars/van.glb",
+    "size": {
+      "x": 1.5,
+      "y": 1.35,
+      "z": 2.75
+    },
+    "center": {
+      "x": 0,
+      "y": 0.675,
+      "z": -0.025
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.34,
+        "area": 0.854
+      },
+      {
+        "y": 1.3,
+        "area": 0.721
+      },
+      {
+        "y": 0.9,
+        "area": 0.044
+      },
+      {
+        "y": 0.68,
+        "area": 0.081
+      },
+      {
+        "y": 0.6,
+        "area": 0.094
+      },
+      {
+        "y": 0.4,
+        "area": 0.244
+      },
+      {
+        "y": 0.32,
+        "area": 0.025
+      },
+      {
+        "y": 0.3,
+        "area": 0.247
+      }
+    ]
+  },
   "/models/urban/commercial/building-a.glb": {
     "model": "/models/urban/commercial/building-a.glb",
     "size": {
@@ -5860,21 +6248,6 @@
       }
     ]
   },
-  "/models/urban/industrial/detail-tank.glb": {
-    "model": "/models/urban/industrial/detail-tank.glb",
-    "size": {
-      "x": 0.848,
-      "y": 0.415,
-      "z": 0.515
-    },
-    "center": {
-      "x": 0,
-      "y": 0.208,
-      "z": 0
-    },
-    "minY": 0,
-    "surfaces": []
-  },
   "/models/urban/planter.glb": {
     "model": "/models/urban/planter.glb",
     "size": {
@@ -6143,6 +6516,57 @@
       {
         "y": 0,
         "area": 0.8
+      }
+    ]
+  },
+  "/models/urban/street/construction-fence.glb": {
+    "model": "/models/urban/street/construction-fence.glb",
+    "size": {
+      "x": 0.075,
+      "y": 0.179,
+      "z": 0.375
+    },
+    "center": {
+      "x": 0,
+      "y": 0.089,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": []
+  },
+  "/models/urban/street/dumpster.glb": {
+    "model": "/models/urban/street/dumpster.glb",
+    "size": {
+      "x": 0.275,
+      "y": 0.209,
+      "z": 0.37
+    },
+    "center": {
+      "x": 0.008,
+      "y": 0.105,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.2,
+        "area": 0.039
+      },
+      {
+        "y": 0.18,
+        "area": 0.037
+      },
+      {
+        "y": 0.16,
+        "area": 0.01
+      },
+      {
+        "y": 0.14,
+        "area": 0.01
+      },
+      {
+        "y": 0.06,
+        "area": 0.039
       }
     ]
   },

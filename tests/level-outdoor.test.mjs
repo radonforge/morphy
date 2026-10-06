@@ -519,3 +519,15 @@ test("a planter may flank a door, just past the side margin, but not stand in it
   assert.deepEqual(entranceFindings(at(edge + 0.1)), [], "flanking the door");
   assert.equal(entranceFindings(at(edge - 0.2)).length, 1, "inside the margin");
 });
+
+test("a parked car is decor: never a disguise, so never the only one of its type", () => {
+  const doc = edit((d) => Object.assign(d.objects[0], { type: "sedan", x: 0, z: -6 }))(fixture());
+  const report = validateLevel(parse(doc), CONTEXT);
+  assert.equal(report.metrics["room.street.objects"], 1);
+  assert.equal(report.findings.filter((f) => f.code === "object.unique-type").length, 0);
+  const planter = edit((d) => Object.assign(d.objects[0], { type: "planter", x: 0, z: -6 }))(
+    fixture(),
+  );
+  const worn = validateLevel(parse(planter), CONTEXT);
+  assert.equal(worn.findings.filter((f) => f.code === "object.unique-type").length, 1);
+});

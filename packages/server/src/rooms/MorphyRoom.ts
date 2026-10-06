@@ -31,6 +31,7 @@ import {
   INPUT_SEND_RATE_MS,
   type InputMessage,
   isAvatarId,
+  isDisguise,
   isMapId,
   isWeaponId,
   type KillEvent,
@@ -619,7 +620,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   }
 
   private randomPropId(exclude?: string): string {
-    const catalog = this.map.propCatalog;
+    const catalog = this.map.propCatalog.filter(isDisguise);
     if (catalog.length === 0) return "";
     const pool =
       exclude && catalog.length > 1 ? catalog.filter((def) => def.id !== exclude) : catalog;

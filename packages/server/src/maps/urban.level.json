@@ -551,9 +551,6 @@
       "z": -36,
       "yaw": 1.5707963267948966
     },
-    { "id": "detail-tank-1", "type": "detail-tank", "x": 41, "z": 30, "yaw": 3.141592653589793 },
-    { "id": "detail-tank-2", "type": "detail-tank", "x": 41, "z": 28, "yaw": 3.141592653589793 },
-    { "id": "detail-tank-3", "type": "detail-tank", "x": 39, "z": 27, "yaw": 3.141592653589793 },
     {
       "id": "chimney-small-1",
       "type": "chimney-small",
@@ -568,7 +565,6 @@
       "z": 37,
       "yaw": 3.141592653589793
     },
-    { "id": "detail-tank-4", "type": "detail-tank", "x": 36, "z": 29, "yaw": 3.141592653589793 },
     {
       "id": "construction-barrier-9",
       "type": "construction-barrier",

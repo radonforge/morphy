@@ -21,6 +21,16 @@ export interface PropDefinition {
   parts: PrimitiveSpec[];
   model?: string;
   modelScale?: number;
+  /**
+   * Dresses the map but nobody wears it (a parked car, a street sign): never dealt or
+   * rerolled into, never counted as a disguise, never suspected by a bot.
+   */
+  decor?: boolean;
+}
+
+/** Whether players can wear `def`, the catalog entries a round deals and a reroll draws from. */
+export function isDisguise(def: PropDefinition): boolean {
+  return def.decor !== true;
 }
 
 export interface PropInstance {
@@ -223,7 +233,9 @@ function isPropDefinition(value: unknown): value is PropDefinition {
     Array.isArray(value.parts) &&
     value.parts.every(isPrimitive) &&
     (value.model === undefined || typeof value.model === "string") &&
-    (value.modelScale === undefined || (isFiniteNumber(value.modelScale) && value.modelScale > 0))
+    (value.modelScale === undefined ||
+      (isFiniteNumber(value.modelScale) && value.modelScale > 0)) &&
+    (value.decor === undefined || typeof value.decor === "boolean")
   );
 }
 
