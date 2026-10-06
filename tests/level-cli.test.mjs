@@ -251,9 +251,9 @@ test("an unusable document file exits 1 with its path and what to fix", async ()
     [join(dir, "missing.json"), null, /cannot read .*missing\.json \(ENOENT\); pass --file/],
     [join(dir, "broken.json"), "{ not json", /broken\.json is not valid JSON .*fix the syntax/],
     [
-      join(dir, "urban.json"),
-      '{ "id": "urban" }',
-      /urban\.json has id "urban", which has no level catalog/,
+      join(dir, "mars.json"),
+      '{ "id": "mars" }',
+      /mars\.json has id "mars", which has no level catalog/,
     ],
     [
       join(dir, "invalid.json"),

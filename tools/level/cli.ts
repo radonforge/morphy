@@ -37,6 +37,7 @@ import {
   validateLevel,
 } from "../../packages/level/src/index";
 import { SPACE_CATALOG } from "../../packages/server/src/spaceCatalog";
+import { URBAN_CATALOG } from "../../packages/server/src/urbanCatalog";
 import {
   ASSET_CARDS,
   ASSET_TAGS,
@@ -48,7 +49,10 @@ import {
 const DEFAULT_FILE = fileURLToPath(
   new URL("../../packages/server/src/maps/station.level.json", import.meta.url),
 );
-const CATALOGS: Partial<Record<MapId, readonly PropDefinition[]>> = { station: SPACE_CATALOG };
+const CATALOGS: Record<MapId, readonly PropDefinition[]> = {
+  station: SPACE_CATALOG,
+  urban: URBAN_CATALOG,
+};
 const EXIT_INVALID = 1;
 const EXIT_USAGE = 2;
 

@@ -195,9 +195,8 @@ test("the station's lights raise no wall clearance finding", () => {
   );
 });
 
-test("a map without lights falls back to the picked ones and the urban map has none", () => {
-  const map = buildMap("urban", 1);
-  assert.equal(map.lights, undefined);
+test("a map without lights falls back to the picked ones", () => {
+  const { lights: _lights, ...map } = buildMap("station", 1);
   assert.deepEqual(
     deckLightsFor(map, DEFAULT_ROOM_LIGHT_COUNT),
     pickDeckLights(map, DEFAULT_ROOM_LIGHT_COUNT),
