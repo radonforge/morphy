@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   addRoom,
@@ -15,6 +16,7 @@ import {
   validateLevel,
 } from "../packages/level/src/index.ts";
 import { wallRects } from "../packages/level/src/walls.ts";
+import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
 import { URBAN_CATALOG } from "../packages/server/src/urbanCatalog.ts";
 import {
   ASSET_CARDS,
@@ -530,4 +532,70 @@ test("a parked car is decor: never a disguise, so never the only one of its type
   );
   const worn = validateLevel(parse(planter), CONTEXT);
   assert.equal(worn.findings.filter((f) => f.code === "object.unique-type").length, 1);
+});
+
+/**
+ * An 8 m street along the north edge and another along the south, joined by a 4 m lane
+ * between two blocks, so the lane is reachable from both ends.
+ */
+function lanes(objects) {
+  return {
+    version: 1,
+    id: "urban",
+    setting: "outdoor",
+    grid: { cols: 10, rows: 7 },
+    rooms: [
+      { id: "north", ground: "paving", rects: [{ i0: 0, i1: 10, j0: 0, j1: 2 }] },
+      { id: "lane", ground: "paving", rects: [{ i0: 4, i1: 5, j0: 2, j1: 5 }] },
+      { id: "south", ground: "paving", rects: [{ i0: 0, i1: 10, j0: 5, j1: 7 }] },
+    ],
+    doors: [],
+    blocks: [
+      { id: "west", zone: "residential", rects: [{ i0: 0, i1: 4, j0: 2, j1: 5 }] },
+      { id: "east", zone: "residential", rects: [{ i0: 5, i1: 10, j0: 2, j1: 5 }] },
+    ],
+    objects,
+    spawns: { props: [{ x: 14, z: 10 }], hunters: [{ x: -14, z: -10 }] },
+    lights: [],
+  };
+}
+
+const passages = (objects) =>
+  validateLevel(parse(lanes(objects)), CONTEXT).findings.filter(
+    (f) => f.code === "passage.blocked",
+  );
+
+test("a car parked along the kerb of a street leaves its way open", () => {
+  assert.deepEqual(passages([{ id: "car", type: "sedan", x: 0, z: -12.5, yaw: QUARTER }]), []);
+});
+
+test("a car left in a lane closes it, though a body squeezes past", () => {
+  const found = passages([{ id: "car", type: "sedan", x: -2, z: 0, yaw: 0 }]);
+  assert.equal(found.length, 1);
+  assert.deepEqual(found[0].entities, ["car"]);
+  assert.equal(found[0].severity, "warning");
+});
+
+test("a car across the mouth of a lane closes it", () => {
+  const found = passages([{ id: "car", type: "sedan", x: -2, z: -8.75, yaw: QUARTER }]);
+  assert.deepEqual(
+    found.map((f) => f.entities),
+    [["car"]],
+  );
+});
+
+test("indoors, furniture is never reported as closing a passage", () => {
+  const station = JSON.parse(
+    readFileSync(new URL("./fixtures/station-seven-rooms.level.json", import.meta.url), "utf8"),
+  );
+  const doc = parseLevelDocument(station, { catalog: SPACE_CATALOG });
+  const report = validateLevel(doc, {
+    catalog: SPACE_CATALOG,
+    cards: ASSET_CARDS,
+    tags: ASSET_TAGS,
+  });
+  assert.equal(
+    report.findings.some((f) => f.code === "passage.blocked"),
+    false,
+  );
 });

@@ -171,6 +171,24 @@ function blockedEntrance() {
   return raw;
 }
 
+/** A 4 m lane between two blocks with a table left across the middle of it. */
+function blockedLane() {
+  return {
+    version: 1,
+    id: "station",
+    setting: "outdoor",
+    grid: { cols: 3, rows: 3 },
+    rooms: [{ id: "lane", ground: "paving", rects: [{ i0: 1, i1: 2, j0: 0, j1: 3 }] }],
+    doors: [],
+    blocks: [
+      { id: "west", zone: "residential", rects: [{ i0: 0, i1: 1, j0: 0, j1: 3 }] },
+      { id: "east", zone: "residential", rects: [{ i0: 2, i1: 3, j0: 0, j1: 3 }] },
+    ],
+    objects: [{ id: "lane-1", type: "table", x: 0, z: 0, yaw: 0 }],
+    spawns: { props: [{ x: 0, z: 5 }], hunters: [{ x: 0, z: -5 }] },
+  };
+}
+
 const CASES = [
   [
     "object.unmeasured",
@@ -214,6 +232,7 @@ const CASES = [
     edited((d) => Object.assign(d, { lights: [{ id: "light-1", x: -6, z: 0, kind: "room" }] })),
   ],
   ["entrance.blocked", blockedEntrance()],
+  ["passage.blocked", blockedLane()],
 ];
 
 test("every finding code has a case", () => {

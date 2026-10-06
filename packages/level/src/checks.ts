@@ -5,6 +5,8 @@ import {
   LEVEL_ENTRANCE_CLEARANCE_SIDE,
   LEVEL_MIN_DISGUISES,
   LEVEL_OVERLAP_TOLERANCE,
+  LEVEL_PASSAGE_DETOUR_SLACK,
+  LEVEL_PASSAGE_WIDTH,
   LEVEL_SAMPLE_CELL,
   LEVEL_SIGHT_BLOCK_HEIGHT,
   LEVEL_SIGHTLINE_MAX,
@@ -36,6 +38,8 @@ import {
   type SampleGrid,
   type Sightline,
   sampleSpace,
+  stepDistances,
+  wideSamples,
 } from "./samples";
 import { buildSpace, type LevelSpace } from "./space";
 
@@ -73,6 +77,7 @@ export const FINDING_CODES = [
   "entrance.blocked",
   "spawn.blocked",
   "floor.unreachable",
+  "passage.blocked",
   "room.sightline",
   "room.few-disguises",
   "object.unique-type",
@@ -380,6 +385,72 @@ function reachFindings(
   return grid;
 }
 
+function centralSample(grid: SampleGrid, group: readonly number[]): LevelPoint {
+  const points = group.map((index) => grid.centre(index));
+  const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+  const cz = points.reduce((sum, p) => sum + p.z, 0) / points.length;
+  return points.reduce((best, p) =>
+    Math.hypot(p.x - cx, p.z - cz) < Math.hypot(best.x - cx, best.z - cz) ? p : best,
+  );
+}
+
+/**
+ * Outdoors, a `passage.blocked` warning where objects close a way a {@link LEVEL_PASSAGE_WIDTH} wide
+ * walker takes on the bare layout. Around each patch the objects take from that walker, a
+ * free-standing obstacle costs at most half its outline to walk round; a patch whose far side
+ * is further than that, plus {@link LEVEL_PASSAGE_DETOUR_SLACK}, has shut a lane or a gap.
+ */
+function passageFindings(space: LevelSpace, grid: SampleGrid, findings: Finding[]): void {
+  const bare = wideSamples(grid, grid.open, LEVEL_PASSAGE_WIDTH);
+  const dressed = wideSamples(grid, grid.walkable, LEVEL_PASSAGE_WIDTH);
+  const slack = LEVEL_PASSAGE_DETOUR_SLACK / LEVEL_SAMPLE_CELL;
+  for (const group of components(grid, (index) => !!bare[index] && !dressed[index])) {
+    const edge = new Set<number>();
+    const blockers = new Set<string>();
+    for (const index of group) {
+      for (const id of grid.blockers.get(index) ?? []) blockers.add(id);
+      for (const next of neighbours(grid, index)) {
+        if (dressed[next]) edge.add(next);
+        for (const id of grid.blockers.get(next) ?? []) blockers.add(id);
+      }
+    }
+    if (edge.size < 2 || blockers.size === 0) continue;
+    const sides = [...edge];
+    const from = sides[0]!;
+    const span = group.length + edge.size;
+    const straight = stepDistances(grid, bare, [from], span);
+    const allowed = edge.size / 2 + slack;
+    const around = stepDistances(grid, dressed, [from], span + allowed);
+    const cut = sides.find((index) => {
+      const direct = straight[index]!;
+      if (direct < 0) return false;
+      const walked = around[index]!;
+      return walked < 0 || walked - direct > allowed;
+    });
+    if (cut === undefined) continue;
+    const at = centralSample(grid, group);
+    const named = [...blockers].sort().slice(0, MAX_NAMED_BLOCKERS);
+    const objects = named.map((id) => {
+      const object = space.doc.objects.find((candidate) => candidate.id === id);
+      return object === undefined ? id : label(object);
+    });
+    const a = grid.centre(from);
+    const b = grid.centre(cut);
+    const walked = around[cut]!;
+    findings.push({
+      code: "passage.blocked",
+      severity: "warning",
+      message:
+        walked < 0
+          ? `${objects.join(", ")} close the way from ${point(a)} to ${point(b)} in ${regionName(space.regionAt(at.x, at.z))}`
+          : `${objects.join(", ")} turn the ${num(straight[cut]! * LEVEL_SAMPLE_CELL)} m walk from ${point(a)} to ${point(b)} into ${num(walked * LEVEL_SAMPLE_CELL)} m in ${regionName(space.regionAt(at.x, at.z))}`,
+      entities: named,
+      at,
+      hint: `leave a gap of at least ${num(LEVEL_PASSAGE_WIDTH)} m through them, or move them against a wall`,
+    });
+  }
+}
+
 function roomFindings(
   space: LevelSpace,
   grid: SampleGrid,
@@ -468,7 +539,8 @@ function compareFindings(a: Finding, b: Finding): number {
  * Check a parsed document for layout problems an agent can fix without looking at
  * it: objects cutting into walls or each other (real rendered footprints), objects
  * off their room, blocked doorways and building entrances, spawns inside geometry,
- * room lights hung against a wall, floor a hunter cannot reach, and per room the
+ * room lights hung against a wall, floor a hunter cannot reach, outdoor ways closed
+ * by objects, and per room the
  * longest clear sightline and how well a disguise blends in. Pure: it neither drops
  * nor moves anything.
  */
@@ -487,6 +559,7 @@ export function validateLevel(doc: LevelDocument, context: LevelContext): LevelR
   spawnFindings(space, findings);
   lightFindings(space, findings);
   const grid = reachFindings(space, findings, metrics);
+  if (isOutdoor(doc)) passageFindings(space, grid, findings);
   roomFindings(space, grid, findings, metrics);
   findings.sort(compareFindings);
   for (const severity of ["error", "warning", "info"] as const) {

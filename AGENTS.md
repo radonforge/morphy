@@ -124,7 +124,10 @@ client code, three.js or Colyseus.
   which a body steps onto. Shapes whose vertical spans do not meet never overlap. Outdoors,
   `entrance.blocked` reports any object footprint or lamp pole in front of a building's doorway
   (`outdoorEntrances` in `outdoor.ts`: the doors on the buildings' cards that open onto walkable
-  ground), so set dressing never stands in a doorway. Codes are listed
+  ground), so set dressing never stands in a doorway, and `passage.blocked` reports objects
+  that close a way a `LEVEL_PASSAGE_WIDTH` walker takes on the bare layout (a car left in a
+  lane or across its mouth), measured by the detour round them; indoors it is not run, since
+  a station room is furniture, not a route. Codes are listed
   in `FINDING_CODES`; thresholds are the `LEVEL_*` constants in `shared/constants.ts`.
   Reachability floods a `LEVEL_SAMPLE_CELL` grid from the hunter spawns with the client's body
   radius, so a pocket under `LEVEL_UNREACHABLE_MIN_AREA` is sampling noise and is not reported, and
