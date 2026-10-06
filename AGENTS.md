@@ -307,6 +307,8 @@ GitHub's free plan, which gates that feature (and CODEOWNERS) behind a paid plan
 repositories, so the PR flow is convention, not enforcement. CI runs on every pull request and on
 every push to `master`.
 
+Release workflow: tagged. A release PR renames `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD` (leaving an empty Unreleased above it) and bumps the root `package.json` version; the tag goes on its merge commit.
+
 Production ships on a **version tag**, never on a push to a branch:
 
 ```bash
