@@ -4,10 +4,14 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-07
+
 Two maps, back-to-back rounds and a much louder catch. North District is rebuilt
 as a park ringed by courtyards and plays by day or by night, Kepler-9 is a
 night station with a new layout, and Ares Outpost is gone. Hunters get a sonar,
-props get a taunt, and bots now play with only what a player could see.
+props get a taunt, and bots now play with only what a player could see. The
+menu opens on one slice per map, and the game has changelog, privacy and terms
+pages.
 
 ### Added
 
