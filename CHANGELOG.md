@@ -34,14 +34,18 @@ props get a taunt, and bots now play with only what a player could see.
 - A Copy diagnostics link in the match menus gathers frame rate and graphics
   details to paste into a bug report. Nothing is uploaded.
 - An Early alpha badge in the menu header, beside the version.
+- A changelog page at /changelog with the notes for every release, linked
+  from the menu footer, and a What's new chip in the menu when the game has
+  changed since your last visit.
 - The lobby credits the studio: a Radon Forge link to radonforge.com sits
   under the version stamp in the menu header.
 
 ### Changed
 
-- You pick a map by morphing the whole stage around your avatar, from a
-  carousel that holds any number of maps. Switching dissolves one world into
-  the next. Your callsign now lives in the avatar picker.
+- The menu opens on one slice per map. Click a slice, or press the arrow
+  keys or its number, and it opens with your avatar inside; Play always plays
+  the map you have open. In a party only the host picks the map. Your callsign
+  now lives in the avatar picker.
 - Quick play joins the busiest room on the map you picked, and opens one there
   if none exists. Your map choice is no longer a hint.
 - North District is the first map you see.
