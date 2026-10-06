@@ -230,13 +230,22 @@ interface StageTheme {
   ambient: number;
   dir: number;
   dirColor: string;
+  /** Penumbra of the key light's shadows, in shadow-map texels; 1 is a hard edge. */
+  shadowRadius: number;
   sky: "stars" | "day";
+  turbidity: number;
+  rayleigh: number;
   stars: { count: number; factor: number };
   skyGlow: SkyGlowPreset | null;
   streetLamps: StreetLampPreset | null;
   post: PostLook;
 }
 
+/**
+ * Each map's stage by day. North District's is a late afternoon: a warm key and a cool sky
+ * fill, so shadows read blue against sunlit faces, a soft penumbra, haze closing the far end
+ * of the street and a soft bloom on the sky behind it.
+ */
 const STAGE_THEMES: Record<MapId, StageTheme> = {
   station: {
     background: "#05080f",
@@ -250,7 +259,10 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
     ambient: 0.22,
     dir: 0.7,
     dirColor: "#ffffff",
+    shadowRadius: 1,
     sky: "stars",
+    turbidity: 4,
+    rayleigh: 1.4,
     stars: { count: 1600, factor: 3 },
     skyGlow: null,
     streetLamps: null,
@@ -261,23 +273,31 @@ const STAGE_THEMES: Record<MapId, StageTheme> = {
   },
   urban: {
     background: MAP_THEME_BASE.urban.background,
-    fog: "#b9cede",
-    fogNear: 16,
-    fogFar: 60,
+    fog: "#d6d3cc",
+    fogNear: 12,
+    fogFar: 58,
     ground: "#6b7078",
-    hemiSky: MAP_THEME_BASE.urban.hemiSky,
-    hemiGround: MAP_THEME_BASE.urban.hemiGround,
-    hemiIntensity: 1.0,
-    ambient: 0.7,
-    dir: MAP_THEME_BASE.urban.directional,
-    dirColor: "#ffffff",
+    hemiSky: "#a9c6ec",
+    hemiGround: "#8a7562",
+    hemiIntensity: 1.1,
+    ambient: 0.45,
+    dir: 1.7,
+    dirColor: "#ffe2bd",
+    shadowRadius: 2.5,
     sky: "day",
+    turbidity: 5,
+    rayleigh: 2.6,
     stars: { count: 0, factor: 0 },
     skyGlow: null,
     streetLamps: null,
     post: {
-      bloom: null,
-      grade: { lift: [0.01, 0.005, 0], gain: [1.02, 1.01, 0.98], contrast: 1.04, saturation: 1.08 },
+      bloom: { intensity: 0.35, radius: 0.8, threshold: 1 },
+      grade: {
+        lift: [0, 0.008, 0.025],
+        gain: [1.05, 1.01, 0.94],
+        contrast: 1.05,
+        saturation: 1.12,
+      },
     },
   },
 };
@@ -787,7 +807,7 @@ function Dressing({
   });
   return (
     <>
-      {(night ? [...lights, ...nightLights] : lights).map((light) => (
+      {(night && nightLights ? nightLights : lights).map((light) => (
         <StageLamp key={light.position.join(",")} light={light} map={map} transition={transition} />
       ))}
       {ceiling.length > 0 && (
@@ -1065,7 +1085,9 @@ export function LobbyStage({
             speed={STARS_SPEED}
           />
         )}
-        {theme.sky === "day" && <Sky sunPosition={SUN_POSITION} turbidity={4} rayleigh={1.4} />}
+        {theme.sky === "day" && (
+          <Sky sunPosition={SUN_POSITION} turbidity={theme.turbidity} rayleigh={theme.rayleigh} />
+        )}
         {theme.skyGlow && <SkyGlow preset={theme.skyGlow} />}
         {theme.streetLamps && street && (
           <StreetLamps map={street} preset={theme.streetLamps} focus={LAMP_FOCUS} />
@@ -1082,7 +1104,8 @@ export function LobbyStage({
           shadow-camera-right={SHADOW_EXTENT}
           shadow-camera-top={SHADOW_EXTENT}
           shadow-camera-bottom={-SHADOW_EXTENT}
-          shadow-normalBias={SHADOW_NORMAL_BIAS}
+          shadow-normalBias={SHADOW_NORMAL_BIAS * theme.shadowRadius}
+          shadow-radius={theme.shadowRadius}
         />
         <Ground theme={theme} />
         <ShadowStage signal={`${stageSignature}:${stage.bake}`} settleMs={DIORAMA_SETTLE_MS} />

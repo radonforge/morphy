@@ -126,13 +126,13 @@ export interface StageLight {
 }
 
 /**
- * What hangs over a diorama besides its set pieces: deck lights and a ceiling, and the
- * street lamps a night stage lights. `nightLights` hang only when the lobby drew night;
- * only a day/night map carries any.
+ * What hangs over a diorama besides its set pieces: deck lights and the fill on the actors,
+ * a ceiling, and the street lamps a night stage lights. A day/night map hangs `nightLights`
+ * instead of `lights` when the lobby drew night; any other map has none.
  */
 export interface StageDressing {
   lights: StageLight[];
-  nightLights: StageLight[];
+  nightLights: StageLight[] | null;
   ceiling: CeilingPanel[];
   street: Pick<MapDefinition, "scenery" | "lights"> | null;
 }
@@ -170,13 +170,15 @@ export const LOBBY_DRESSING: Record<MapId, StageDressing> = {
         kind: "glass" as const,
       })),
     ),
-    nightLights: [],
+    nightLights: null,
     street: null,
   },
   urban: {
-    lights: [],
+    lights: [
+      { position: [-1.35, 3, 3.5], color: "#ffe8cc", intensity: 10, distance: 9, bare: true },
+    ],
     nightLights: [
-      { position: [-1.35, 3, 3.5], color: WARM, intensity: 24, distance: 9, bare: true },
+      { position: [-1.35, 3, 3.5], color: "#ffd9b0", intensity: 24, distance: 6, bare: true },
     ],
     ceiling: [],
     street: {
