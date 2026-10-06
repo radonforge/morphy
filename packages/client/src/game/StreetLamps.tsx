@@ -3,12 +3,15 @@ import { useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useGuardedFrame } from "./guardedFrame";
+import { tintGlow } from "./modelGlow";
 import { useSharedGLTF } from "./sharedTextures";
 
 const SKY_GLOW_RADIUS = 400;
 const SKY_GLOW_SEGMENTS = 32;
 const BULB_SIZE: [number, number, number] = [0.36, 0.04, 0.36];
 const LAMP_MODEL_MARK = "/roads/light-";
+const BACKDROP_MODEL_MARK = "/low-detail-building-";
+const WINDOW_GLOW = "windows";
 const ARM_EPSILON = 1e-6;
 
 const noRaycast = () => {};
@@ -16,9 +19,13 @@ const noRaycast = () => {};
 /** A night street's lamps, lit from the `MapDefinition.lights` that carry a lamp head height. */
 export interface StreetLampPreset {
   color: string;
-  /** Colour of every `altEvery`-th lamp, in document order; 0 keeps them all `color`. */
+  /**
+   * Colour of every `altEvery`-th lamp hanging from a pole whose model contains `altPole`,
+   * in document order; 0 keeps them all `color`.
+   */
   altColor: string;
   altEvery: number;
+  altPole: string;
   intensity: number;
   distance: number;
   /** How far below the head the light hangs, and how far past it along the arm. */
@@ -28,6 +35,10 @@ export interface StreetLampPreset {
   bulbGlow: number;
   /** Lamp models' colour at night, as a fraction of their day colour, so a light does not wash its own pole. */
   poleTint: number;
+  /** The skyline facades beyond the map's edge at night, as a fraction of their day colour. */
+  backdropTint: number;
+  /** What the building windows glow at night: lit rooms behind them. */
+  windowGlow: string;
   /** Real point lights, moved each frame onto the lamps nearest the camera; the rest only glow. */
   budget: number;
 }
@@ -80,6 +91,10 @@ export function SkyGlow({ preset }: { preset: SkyGlowPreset }) {
   );
 }
 
+function modelsMarked(map: MapDefinition, mark: string): string[] {
+  return [...new Set(map.scenery.filter((s) => s.model.includes(mark)).map((s) => s.model))];
+}
+
 interface Lamp {
   bulb: THREE.Vector3;
   light: THREE.Vector3;
@@ -92,17 +107,23 @@ function layLamps(map: MapDefinition, preset: StreetLampPreset): Lamp[] {
   const lights = (map.lights ?? []).filter(
     (light): light is MapLight & { y: number } => light.y !== undefined,
   );
-  return lights.map((light, index) => {
+  let altCount = 0;
+  return lights.map((light) => {
     let nearest = poles[0]?.position ?? { x: light.x, z: light.z };
+    let model = poles[0]?.model ?? "";
     for (const pole of poles) {
       const d = Math.hypot(pole.position.x - light.x, pole.position.z - light.z);
-      if (d < Math.hypot(nearest.x - light.x, nearest.z - light.z)) nearest = pole.position;
+      if (d < Math.hypot(nearest.x - light.x, nearest.z - light.z)) {
+        nearest = pole.position;
+        model = pole.model;
+      }
     }
     const dx = light.x - nearest.x;
     const dz = light.z - nearest.z;
     const arm = Math.hypot(dx, dz);
     const pull = arm > ARM_EPSILON ? preset.lightPull / arm : 0;
-    const alt = preset.altEvery > 0 && index % preset.altEvery === preset.altEvery - 1;
+    const alternates = preset.altEvery > 0 && model.includes(preset.altPole);
+    const alt = alternates && ++altCount % preset.altEvery === 0;
     return {
       bulb: new THREE.Vector3(light.x, light.y, light.z),
       light: new THREE.Vector3(
@@ -115,8 +136,8 @@ function layLamps(map: MapDefinition, preset: StreetLampPreset): Lamp[] {
   });
 }
 
-/** Darken one lamp model's materials for the night, and give the day colour back on unmount. */
-function LampTint({ url, tint }: { url: string; tint: number }) {
+/** Darken one model's materials for the night, and give the day colour back on unmount. */
+function ModelTint({ url, tint }: { url: string; tint: number }) {
   const { scene } = useSharedGLTF(url);
   useEffect(() => {
     const restore: [THREE.MeshStandardMaterial, THREE.Color][] = [];
@@ -146,12 +167,8 @@ function LampTint({ url, tint }: { url: string; tint: number }) {
  */
 export function StreetLamps({ map, preset }: { map: MapDefinition; preset: StreetLampPreset }) {
   const lamps = useMemo(() => layLamps(map, preset), [map, preset]);
-  const lampModels = useMemo(
-    () => [
-      ...new Set(map.scenery.filter((s) => s.model.includes(LAMP_MODEL_MARK)).map((s) => s.model)),
-    ],
-    [map],
-  );
+  const lampModels = useMemo(() => modelsMarked(map, LAMP_MODEL_MARK), [map]);
+  const backdropModels = useMemo(() => modelsMarked(map, BACKDROP_MODEL_MARK), [map]);
   const bulbs = useRef<THREE.InstancedMesh>(null);
   const lights = useRef<(THREE.PointLight | null)[]>([]);
   const camera = useThree((state) => state.camera);
@@ -169,6 +186,11 @@ export function StreetLamps({ map, preset }: { map: MapDefinition; preset: Stree
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   }, [lamps, preset.bulbGlow]);
+
+  useEffect(() => {
+    tintGlow(WINDOW_GLOW, preset.windowGlow);
+    return () => tintGlow(WINDOW_GLOW, null);
+  }, [preset.windowGlow]);
 
   useGuardedFrame(() => {
     const eye = camera.position;
@@ -189,7 +211,10 @@ export function StreetLamps({ map, preset }: { map: MapDefinition; preset: Stree
     <>
       <Suspense fallback={null}>
         {lampModels.map((url) => (
-          <LampTint key={url} url={url} tint={preset.poleTint} />
+          <ModelTint key={url} url={url} tint={preset.poleTint} />
+        ))}
+        {backdropModels.map((url) => (
+          <ModelTint key={url} url={url} tint={preset.backdropTint} />
         ))}
       </Suspense>
       {lamps.length > 0 && (
