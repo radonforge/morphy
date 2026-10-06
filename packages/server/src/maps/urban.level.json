@@ -278,38 +278,38 @@
     { "id": "detail-parasol-a-2", "type": "detail-parasol-a", "x": 7.5, "z": -5, "yaw": 0 },
     { "id": "detail-parasol-a-3", "type": "detail-parasol-a", "x": 5, "z": 7.5, "yaw": 0 },
     { "id": "detail-parasol-a-4", "type": "detail-parasol-a", "x": -7.5, "z": 5, "yaw": 0 },
-    { "id": "tree-large-53", "type": "tree-large", "x": 10.5, "z": 0, "yaw": 0 },
+    { "id": "tree-large-53", "type": "tree-large", "x": 11.5, "z": 2.5, "yaw": 0 },
     { "id": "tree-large-54", "type": "tree-large", "x": 7.5, "z": -7.5, "yaw": 0 },
     { "id": "tree-large-55", "type": "tree-large", "x": -6, "z": -15, "yaw": 0 },
     { "id": "tree-large-56", "type": "tree-large", "x": -15, "z": 6, "yaw": 0 },
-    { "id": "tree-large-57", "type": "tree-large", "x": 0, "z": 10.5, "yaw": 0 },
+    { "id": "tree-large-57", "type": "tree-large", "x": -2.5, "z": 11.5, "yaw": 0 },
     { "id": "tree-large-58", "type": "tree-large", "x": 7.5, "z": 7.5, "yaw": 0 },
     { "id": "tree-large-59", "type": "tree-large", "x": 15, "z": -6, "yaw": 0 },
     { "id": "tree-large-60", "type": "tree-large", "x": -5, "z": -15, "yaw": 0 },
-    { "id": "tree-large-61", "type": "tree-large", "x": -10.5, "z": 0, "yaw": 0 },
+    { "id": "tree-large-61", "type": "tree-large", "x": -11.5, "z": -2.5, "yaw": 0 },
     { "id": "tree-large-62", "type": "tree-large", "x": -7.5, "z": 7.5, "yaw": 0 },
     { "id": "tree-large-63", "type": "tree-large", "x": 6, "z": 15, "yaw": 0 },
     { "id": "tree-large-64", "type": "tree-large", "x": 15, "z": -5, "yaw": 0 },
-    { "id": "tree-large-65", "type": "tree-large", "x": 0, "z": -10.5, "yaw": 0 },
+    { "id": "tree-large-65", "type": "tree-large", "x": 2.5, "z": -11.5, "yaw": 0 },
     { "id": "tree-large-66", "type": "tree-large", "x": -7.5, "z": -7.5, "yaw": 0 },
     { "id": "tree-large-67", "type": "tree-large", "x": -14, "z": 6, "yaw": 0 },
     { "id": "tree-large-68", "type": "tree-large", "x": 7, "z": 15, "yaw": 0 },
     { "id": "tree-large-69", "type": "tree-large", "x": -14, "z": -16.5, "yaw": 0 },
     { "id": "tree-large-70", "type": "tree-large", "x": -7.5, "z": -16.5, "yaw": 0 },
-    { "id": "tree-large-71", "type": "tree-large", "x": -1.5, "z": -16.5, "yaw": 0 },
+    { "id": "tree-large-71", "type": "tree-large", "x": -1.5, "z": -17, "yaw": 0 },
     { "id": "tree-large-72", "type": "tree-large", "x": 15, "z": -16.5, "yaw": 0 },
-    { "id": "tree-large-73", "type": "tree-large", "x": 16.5, "z": -14, "yaw": 0 },
+    { "id": "tree-large-73", "type": "tree-large", "x": 16, "z": -14, "yaw": 0 },
     { "id": "tree-large-74", "type": "tree-large", "x": 16.5, "z": -7.5, "yaw": 0 },
-    { "id": "tree-large-75", "type": "tree-large", "x": 16.5, "z": -1.5, "yaw": 0 },
-    { "id": "tree-large-76", "type": "tree-large", "x": 16.5, "z": 15, "yaw": 0 },
+    { "id": "tree-large-75", "type": "tree-large", "x": 17, "z": -1.5, "yaw": 0 },
+    { "id": "tree-large-76", "type": "tree-large", "x": 16, "z": 15, "yaw": 0 },
     { "id": "tree-large-77", "type": "tree-large", "x": 14, "z": 16.5, "yaw": 0 },
     { "id": "tree-large-78", "type": "tree-large", "x": 7.5, "z": 16.5, "yaw": 0 },
-    { "id": "tree-large-79", "type": "tree-large", "x": 1.5, "z": 16.5, "yaw": 0 },
+    { "id": "tree-large-79", "type": "tree-large", "x": 1.5, "z": 17, "yaw": 0 },
     { "id": "tree-large-80", "type": "tree-large", "x": -15, "z": 16.5, "yaw": 0 },
-    { "id": "tree-large-81", "type": "tree-large", "x": -16.5, "z": 14, "yaw": 0 },
+    { "id": "tree-large-81", "type": "tree-large", "x": -16, "z": 14, "yaw": 0 },
     { "id": "tree-large-82", "type": "tree-large", "x": -16.5, "z": 7.5, "yaw": 0 },
-    { "id": "tree-large-83", "type": "tree-large", "x": -16.5, "z": 1.5, "yaw": 0 },
-    { "id": "tree-large-84", "type": "tree-large", "x": -16.5, "z": -15, "yaw": 0 },
+    { "id": "tree-large-83", "type": "tree-large", "x": -17, "z": 1.5, "yaw": 0 },
+    { "id": "tree-large-84", "type": "tree-large", "x": -16, "z": -15, "yaw": 0 },
     { "id": "detail-parasol-a-5", "type": "detail-parasol-a", "x": -8, "z": -42, "yaw": 0 },
     { "id": "detail-parasol-a-6", "type": "detail-parasol-a", "x": -4, "z": -42, "yaw": 0 },
     { "id": "detail-parasol-a-7", "type": "detail-parasol-a", "x": -8, "z": -37, "yaw": 0 },
@@ -333,7 +333,312 @@
     { "id": "planter-5", "type": "planter", "x": 41.5, "z": 36, "yaw": 0 },
     { "id": "planter-6", "type": "planter", "x": 33.5, "z": 28, "yaw": 0 },
     { "id": "planter-7", "type": "planter", "x": -36, "z": 41.5, "yaw": 0 },
-    { "id": "planter-8", "type": "planter", "x": -28, "z": 33.5, "yaw": 0 }
+    { "id": "planter-8", "type": "planter", "x": -28, "z": 33.5, "yaw": 0 },
+    { "id": "planter-9", "type": "planter", "x": -3, "z": -48, "yaw": 0 },
+    { "id": "planter-10", "type": "planter", "x": -3, "z": -46.5, "yaw": 0 },
+    { "id": "planter-11", "type": "planter", "x": -9, "z": -47, "yaw": 0 },
+    { "id": "detail-parasol-a-10", "type": "detail-parasol-a", "x": -3, "z": -33.5, "yaw": 0 },
+    { "id": "detail-parasol-a-11", "type": "detail-parasol-a", "x": 3, "z": -35.5, "yaw": 0 },
+    { "id": "detail-parasol-a-12", "type": "detail-parasol-a", "x": 9, "z": -36, "yaw": 0 },
+    { "id": "tree-small-25", "type": "tree-small", "x": 3, "z": -21, "yaw": 0 },
+    { "id": "tree-small-26", "type": "tree-small", "x": 9, "z": -19.5, "yaw": 0 },
+    { "id": "planter-12", "type": "planter", "x": 3, "z": -27, "yaw": 0 },
+    { "id": "planter-13", "type": "planter", "x": -14, "z": -45.5, "yaw": 0 },
+    { "id": "planter-14", "type": "planter", "x": -12.5, "z": -45.5, "yaw": 0 },
+    { "id": "planter-15", "type": "planter", "x": 19, "z": -26.5, "yaw": 0 },
+    { "id": "planter-16", "type": "planter", "x": 20.5, "z": -26.5, "yaw": 0 },
+    { "id": "planter-17", "type": "planter", "x": 48, "z": -3, "yaw": 1.5707963267948966 },
+    { "id": "planter-18", "type": "planter", "x": 46.5, "z": -3, "yaw": 1.5707963267948966 },
+    { "id": "planter-19", "type": "planter", "x": 47, "z": -9, "yaw": 1.5707963267948966 },
+    {
+      "id": "detail-parasol-b-1",
+      "type": "detail-parasol-b",
+      "x": 33.5,
+      "z": -3,
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "detail-parasol-b-2",
+      "type": "detail-parasol-b",
+      "x": 35.5,
+      "z": 3,
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "detail-parasol-b-3",
+      "type": "detail-parasol-b",
+      "x": 36,
+      "z": 9,
+      "yaw": 1.5707963267948966
+    },
+    { "id": "tree-small-27", "type": "tree-small", "x": 21, "z": 3, "yaw": 1.5707963267948966 },
+    { "id": "tree-small-28", "type": "tree-small", "x": 19.5, "z": 9, "yaw": 1.5707963267948966 },
+    {
+      "id": "detail-parasol-b-4",
+      "type": "detail-parasol-b",
+      "x": 27,
+      "z": 3,
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "detail-parasol-b-5",
+      "type": "detail-parasol-b",
+      "x": 28.5,
+      "z": 3,
+      "yaw": 1.5707963267948966
+    },
+    { "id": "planter-20", "type": "planter", "x": 45.5, "z": -14, "yaw": 1.5707963267948966 },
+    { "id": "planter-21", "type": "planter", "x": 45.5, "z": -12.5, "yaw": 1.5707963267948966 },
+    { "id": "planter-22", "type": "planter", "x": 26.5, "z": 19, "yaw": 1.5707963267948966 },
+    { "id": "planter-23", "type": "planter", "x": 26.5, "z": 20.5, "yaw": 1.5707963267948966 },
+    {
+      "id": "construction-barrier-4",
+      "type": "construction-barrier",
+      "x": 3,
+      "z": 48,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-barrier-5",
+      "type": "construction-barrier",
+      "x": 3,
+      "z": 46.5,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-barrier-6",
+      "type": "construction-barrier",
+      "x": 9,
+      "z": 47,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-light-1",
+      "type": "construction-light",
+      "x": 3,
+      "z": 33.5,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-cone-4",
+      "type": "construction-cone",
+      "x": -3,
+      "z": 35.5,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-cone-5",
+      "type": "construction-cone",
+      "x": -9,
+      "z": 36,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-light-2",
+      "type": "construction-light",
+      "x": -3,
+      "z": 21,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-light-3",
+      "type": "construction-light",
+      "x": -9,
+      "z": 19.5,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-barrier-7",
+      "type": "construction-barrier",
+      "x": -3,
+      "z": 27,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-barrier-8",
+      "type": "construction-barrier",
+      "x": -3,
+      "z": 28.5,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-cone-6",
+      "type": "construction-cone",
+      "x": 14,
+      "z": 45.5,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-cone-7",
+      "type": "construction-cone",
+      "x": 12.5,
+      "z": 45.5,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-cone-8",
+      "type": "construction-cone",
+      "x": -19,
+      "z": 26.5,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "construction-cone-9",
+      "type": "construction-cone",
+      "x": -20.5,
+      "z": 26.5,
+      "yaw": 3.141592653589793
+    },
+    { "id": "planter-24", "type": "planter", "x": -48, "z": 3, "yaw": -1.5707963267948966 },
+    { "id": "planter-25", "type": "planter", "x": -46.5, "z": 3, "yaw": -1.5707963267948966 },
+    { "id": "planter-26", "type": "planter", "x": -47, "z": 9, "yaw": -1.5707963267948966 },
+    { "id": "tree-small-29", "type": "tree-small", "x": -33.5, "z": 3, "yaw": -1.5707963267948966 },
+    {
+      "id": "tree-small-30",
+      "type": "tree-small",
+      "x": -35.5,
+      "z": -3,
+      "yaw": -1.5707963267948966
+    },
+    { "id": "tree-small-31", "type": "tree-small", "x": -36, "z": -9, "yaw": -1.5707963267948966 },
+    { "id": "planter-27", "type": "planter", "x": -21, "z": -3, "yaw": -1.5707963267948966 },
+    { "id": "planter-28", "type": "planter", "x": -19.5, "z": -9, "yaw": -1.5707963267948966 },
+    { "id": "fence-2x2-1", "type": "fence-2x2", "x": -27, "z": -3, "yaw": -1.5707963267948966 },
+    { "id": "fence-2x2-2", "type": "fence-2x2", "x": -28.5, "z": -3, "yaw": -1.5707963267948966 },
+    { "id": "fence-1x2-6", "type": "fence-1x2", "x": -45.5, "z": 14, "yaw": -1.5707963267948966 },
+    { "id": "fence-1x2-7", "type": "fence-1x2", "x": -45.5, "z": 12.5, "yaw": -1.5707963267948966 },
+    { "id": "fence-1x2-8", "type": "fence-1x2", "x": -26.5, "z": -19, "yaw": -1.5707963267948966 },
+    {
+      "id": "fence-1x2-9",
+      "type": "fence-1x2",
+      "x": -26.5,
+      "z": -20.5,
+      "yaw": -1.5707963267948966
+    },
+    { "id": "tree-small-32", "type": "tree-small", "x": -41, "z": -30, "yaw": 0 },
+    { "id": "tree-small-33", "type": "tree-small", "x": -41, "z": -28, "yaw": 0 },
+    { "id": "tree-small-34", "type": "tree-small", "x": -39, "z": -27, "yaw": 0 },
+    { "id": "planter-29", "type": "planter", "x": -38.5, "z": -37, "yaw": 0 },
+    { "id": "planter-30", "type": "planter", "x": -36.5, "z": -37, "yaw": 0 },
+    { "id": "tree-small-35", "type": "tree-small", "x": -36, "z": -29, "yaw": 0 },
+    {
+      "id": "detail-parasol-b-6",
+      "type": "detail-parasol-b",
+      "x": 30,
+      "z": -41,
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "detail-parasol-b-7",
+      "type": "detail-parasol-b",
+      "x": 28,
+      "z": -41,
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "detail-parasol-b-8",
+      "type": "detail-parasol-b",
+      "x": 27,
+      "z": -39,
+      "yaw": 1.5707963267948966
+    },
+    { "id": "planter-31", "type": "planter", "x": 37, "z": -38.5, "yaw": 1.5707963267948966 },
+    { "id": "planter-32", "type": "planter", "x": 37, "z": -36.5, "yaw": 1.5707963267948966 },
+    {
+      "id": "detail-parasol-b-9",
+      "type": "detail-parasol-b",
+      "x": 29,
+      "z": -36,
+      "yaw": 1.5707963267948966
+    },
+    { "id": "detail-tank-1", "type": "detail-tank", "x": 41, "z": 30, "yaw": 3.141592653589793 },
+    { "id": "detail-tank-2", "type": "detail-tank", "x": 41, "z": 28, "yaw": 3.141592653589793 },
+    { "id": "detail-tank-3", "type": "detail-tank", "x": 39, "z": 27, "yaw": 3.141592653589793 },
+    {
+      "id": "chimney-small-1",
+      "type": "chimney-small",
+      "x": 38.5,
+      "z": 37,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "chimney-small-2",
+      "type": "chimney-small",
+      "x": 36.5,
+      "z": 37,
+      "yaw": 3.141592653589793
+    },
+    { "id": "detail-tank-4", "type": "detail-tank", "x": 36, "z": 29, "yaw": 3.141592653589793 },
+    {
+      "id": "construction-barrier-9",
+      "type": "construction-barrier",
+      "x": -30,
+      "z": 41,
+      "yaw": -1.5707963267948966
+    },
+    {
+      "id": "construction-barrier-10",
+      "type": "construction-barrier",
+      "x": -28,
+      "z": 41,
+      "yaw": -1.5707963267948966
+    },
+    {
+      "id": "construction-barrier-11",
+      "type": "construction-barrier",
+      "x": -27,
+      "z": 39,
+      "yaw": -1.5707963267948966
+    },
+    {
+      "id": "construction-cone-10",
+      "type": "construction-cone",
+      "x": -37,
+      "z": 38.5,
+      "yaw": -1.5707963267948966
+    },
+    {
+      "id": "construction-cone-11",
+      "type": "construction-cone",
+      "x": -37,
+      "z": 36.5,
+      "yaw": -1.5707963267948966
+    },
+    { "id": "tree-small-36", "type": "tree-small", "x": -10.5, "z": -9.5, "yaw": 0 },
+    { "id": "tree-small-37", "type": "tree-small", "x": -9.5, "z": 10.5, "yaw": 0 },
+    { "id": "tree-small-38", "type": "tree-small", "x": 10.5, "z": 9.5, "yaw": 0 },
+    { "id": "tree-small-39", "type": "tree-small", "x": 9.5, "z": -10.5, "yaw": 0 },
+    { "id": "tree-small-40", "type": "tree-small", "x": -13, "z": 3.5, "yaw": 0 },
+    { "id": "tree-small-41", "type": "tree-small", "x": -3.5, "z": -13, "yaw": 0 },
+    { "id": "tree-small-42", "type": "tree-small", "x": 13, "z": -3.5, "yaw": 0 },
+    { "id": "tree-small-43", "type": "tree-small", "x": 3.5, "z": 13, "yaw": 0 },
+    { "id": "tree-small-44", "type": "tree-small", "x": 6.5, "z": -15.5, "yaw": 0 },
+    { "id": "tree-small-45", "type": "tree-small", "x": 15.5, "z": 6.5, "yaw": 0 },
+    { "id": "tree-small-46", "type": "tree-small", "x": -6.5, "z": 15.5, "yaw": 0 },
+    { "id": "tree-small-47", "type": "tree-small", "x": -15.5, "z": -6.5, "yaw": 0 },
+    { "id": "detail-parasol-a-13", "type": "detail-parasol-a", "x": -1.5, "z": -33.5, "yaw": 0 },
+    {
+      "id": "detail-parasol-b-10",
+      "type": "detail-parasol-b",
+      "x": 33.5,
+      "z": -1.5,
+      "yaw": 1.5707963267948966
+    },
+    {
+      "id": "construction-light-4",
+      "type": "construction-light",
+      "x": 1.5,
+      "z": 33.5,
+      "yaw": 3.141592653589793
+    },
+    {
+      "id": "tree-small-48",
+      "type": "tree-small",
+      "x": -33.5,
+      "z": 1.5,
+      "yaw": -1.5707963267948966
+    },
+    { "id": "construction-cone-12", "type": "construction-cone", "x": -29, "z": 36, "yaw": 0 }
   ],
   "spawns": {
     "props": [
