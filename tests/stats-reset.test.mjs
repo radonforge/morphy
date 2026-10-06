@@ -19,19 +19,23 @@ const BAD_REQUEST = 400;
 const SERVER_ERROR = 500;
 
 after(() => {
+  playerStats.close();
   for (const suffix of ["", "-shm", "-wal"]) rmSync(`${databasePath}${suffix}`, { force: true });
 });
 
-function mountRoutes() {
+function mountRoutes(repository) {
   const handlers = {};
-  registerStatsRoute({
-    get: (path, handler) => {
-      handlers[`GET ${path}`] = handler;
+  registerStatsRoute(
+    {
+      get: (path, handler) => {
+        handlers[`GET ${path}`] = handler;
+      },
+      delete: (path, handler) => {
+        handlers[`DELETE ${path}`] = handler;
+      },
     },
-    delete: (path, handler) => {
-      handlers[`DELETE ${path}`] = handler;
-    },
-  });
+    repository,
+  );
   return handlers;
 }
 
@@ -92,21 +96,29 @@ test("DELETE /stats for an unknown device is still 204", () => {
   assert.equal(result.status, NO_CONTENT);
 });
 
-test("DELETE /stats rejects a missing or malformed device id with 400", () => {
+test("DELETE /stats rejects a missing or malformed device id with 400 and keeps rows", () => {
   const handler = mountRoutes()["DELETE /stats"];
+  playerStats.recordRound(DEVICE_ID, "Alpha", WON_ROUND);
   for (const bad of [undefined, "", "short", "has spaces in it!!", "x".repeat(65)]) {
     const result = call(handler, bad);
     assert.equal(result.status, BAD_REQUEST);
     assert.equal(result.ended, false);
   }
+  assert.equal(playerStats.get(DEVICE_ID).rounds, 1);
+  playerStats.delete(DEVICE_ID);
 });
 
 test("DELETE /stats answers 500 and logs only a truncated id when the store fails", () => {
-  const handler = mountRoutes()["DELETE /stats"];
+  const failing = {
+    ...playerStats,
+    delete() {
+      throw new Error("disk I/O error");
+    },
+  };
+  const handler = mountRoutes(failing)["DELETE /stats"];
   const logged = [];
   const original = console.error;
   console.error = (...args) => logged.push(args.map(String).join(" "));
-  playerStats.close();
   try {
     const result = call(handler, DEVICE_ID);
     assert.equal(result.status, SERVER_ERROR);
