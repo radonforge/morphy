@@ -7,6 +7,8 @@ import {
   levelOverlays,
   moveLight,
   OUTDOOR_MODEL_PATHS,
+  objectFootprint,
+  outdoorEntrances,
   parseLevelDocument,
   proposeLights,
   TILE,
@@ -14,7 +16,12 @@ import {
 } from "../packages/level/src/index.ts";
 import { wallRects } from "../packages/level/src/walls.ts";
 import { URBAN_CATALOG } from "../packages/server/src/urbanCatalog.ts";
-import { ASSET_CARDS, ASSET_TAGS, parseMapDefinition } from "../packages/shared/src/index.ts";
+import {
+  ASSET_CARDS,
+  ASSET_TAGS,
+  LEVEL_ENTRANCE_CLEARANCE_SIDE,
+  parseMapDefinition,
+} from "../packages/shared/src/index.ts";
 
 const OPTIONS = { catalog: URBAN_CATALOG };
 const CONTEXT = { catalog: URBAN_CATALOG, cards: ASSET_CARDS, tags: ASSET_TAGS };
@@ -418,4 +425,97 @@ test("a street lamp's light carries the height of its head", () => {
   const [light] = map.lights;
   assert.ok(light.y > top - 0.5 && light.y < top, `light at ${light.y} m under a ${top} m lamp`);
   assert.deepEqual(parseMapDefinition(map).lights[0], light);
+});
+
+const entranceFindings = (doc) =>
+  validateLevel(parse(doc), CONTEXT).findings.filter((f) => f.code === "entrance.blocked");
+
+/** The first entrance of the fixture's homes, and the point `depth` metres out in front of it. */
+function frontOf(depth) {
+  const [entrance] = outdoorEntrances(parse(fixture()));
+  assert.ok(entrance, "the fixture's homes have an entrance");
+  return {
+    entrance,
+    x: entrance.x + entrance.nx * depth,
+    z: entrance.z + entrance.nz * depth,
+  };
+}
+
+test("the homes open onto the street they face, at the edge of their lot", () => {
+  const { entrance } = frontOf(0);
+  assert.deepEqual([entrance.nx, entrance.nz], [0, -1], "it opens north, onto the park");
+  assert.equal(entrance.z, 0, "on the block's north edge");
+  assert.ok(entrance.width > 0.5 && entrance.width < 3, `a door ${entrance.width} m wide`);
+});
+
+/** A 2 x 2 cell home in the middle of a 6 x 6 map whose only ground is a street on `side`. */
+function lonelyHome(side) {
+  const turn = (r) => ({ i0: 6 - r.j1, i1: 6 - r.j0, j0: r.i0, j1: r.i1 });
+  let street = { i0: 2, i1: 4, j0: 0, j1: 2 };
+  for (let k = 0; k < side; k++) street = turn(street);
+  const cx = -12 + ((street.i0 + street.i1) / 2) * TILE;
+  const cz = -12 + ((street.j0 + street.j1) / 2) * TILE;
+  return parse({
+    version: 1,
+    id: "urban",
+    setting: "outdoor",
+    grid: { cols: 6, rows: 6 },
+    rooms: [{ id: "street", ground: "paving", rects: [street] }],
+    doors: [],
+    blocks: [{ id: "home", zone: "residential", rects: [{ i0: 2, i1: 4, j0: 2, j1: 4 }] }],
+    objects: [],
+    spawns: { props: [{ x: cx, z: cz }], hunters: [{ x: cx + 1, z: cz }] },
+  });
+}
+
+test("a home turned to each side opens onto its street, the same door turned with it", () => {
+  const north = outdoorEntrances(lonelyHome(0));
+  assert.ok(north.length > 0, "the home has a door on its street");
+  for (let side = 0; side < 4; side++) {
+    const entrances = outdoorEntrances(lonelyHome(side));
+    const back = entrances.map((e) => {
+      let [x, z, nx, nz] = [e.x, e.z, e.nx, e.nz];
+      for (let k = 0; k < side; k++) [x, z, nx, nz] = [z, -x, nz, -nx];
+      return [x, z, nx, nz, e.width];
+    });
+    assert.equal(back.length, north.length, `side ${side}: as many entrances`);
+    back.forEach(([x, z, nx, nz, width], k) => {
+      const want = north[k];
+      assert.ok(Math.abs(x - want.x) < 1e-6 && Math.abs(z - want.z) < 1e-6, `side ${side} at`);
+      assert.deepEqual([nx || 0, nz || 0], [want.nx, want.nz], `side ${side} facing`);
+      assert.ok(Math.abs(width - want.width) < 1e-6, `side ${side} width`);
+    });
+  }
+});
+
+test("an object or a street lamp in front of an entrance is reported", () => {
+  const front = frontOf(1.2);
+  const planted = edit((d) =>
+    Object.assign(d.objects[0], { type: "planter", x: front.x, z: front.z }),
+  )(fixture());
+  const [blocked] = entranceFindings(planted);
+  assert.deepEqual(blocked.entities.slice(1), ["tree-1"]);
+  assert.match(blocked.entities[0], /^entrance@/);
+  const lit = edit((d) => {
+    d.objects = [];
+    Object.assign(d.lights[0], { x: front.x, z: front.z });
+  })(fixture());
+  assert.deepEqual(entranceFindings(lit)[0].entities.slice(1), ["lamp-1"]);
+});
+
+test("a planter may flank a door, just past the side margin, but not stand in it", () => {
+  const front = frontOf(0.6);
+  const [card] = [ASSET_CARDS[URBAN_CATALOG.find((def) => def.id === "planter").model]];
+  assert.ok(card, "the planter has a card");
+  const planter = edit((d) => Object.assign(d.objects[0], { type: "planter", x: 0, z: 0 }))(
+    fixture(),
+  );
+  const half = objectFootprint(parse(planter).objects[0], CONTEXT).rect.halfX;
+  const edge = front.entrance.width / 2 + LEVEL_ENTRANCE_CLEARANCE_SIDE + half;
+  const at = (dx) =>
+    edit((d) => Object.assign(d.objects[0], { type: "planter", x: front.x + dx, z: front.z }))(
+      fixture(),
+    );
+  assert.deepEqual(entranceFindings(at(edge + 0.1)), [], "flanking the door");
+  assert.equal(entranceFindings(at(edge - 0.2)).length, 1, "inside the margin");
 });

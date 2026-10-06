@@ -114,6 +114,13 @@ export const LEVEL_OVERLAP_TOLERANCE = 0.05;
 export const LEVEL_DOOR_CLEARANCE_WIDTH = 2;
 /** Depth, away from the wall, of the floor kept clear on each side of a doorway. */
 export const LEVEL_DOOR_CLEARANCE_DEPTH = 1.5;
+/**
+ * Floor kept clear beyond each side of a building's doorway, along its facade, in metres:
+ * narrow enough that a pair of planters may flank the door.
+ */
+export const LEVEL_ENTRANCE_CLEARANCE_SIDE = 0.3;
+/** Depth, out from the facade, of the floor kept clear in front of a building's doorway. */
+export const LEVEL_ENTRANCE_CLEARANCE_DEPTH = 2.5;
 /** A pocket of floor no hunter can reach is reported once it covers this many square metres. */
 export const LEVEL_UNREACHABLE_MIN_AREA = 1;
 /** An object at least this tall hides a crouching prop, so it blocks a sightline. */

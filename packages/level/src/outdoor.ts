@@ -2,6 +2,7 @@ import {
   ASSET_CARDS,
   type AssetCard,
   type BoxCollider,
+  type DoorFacing,
   type GroundKind,
   type GroundPatch,
   type MapLight,
@@ -92,9 +93,17 @@ export const OUTDOOR_MODEL_PATHS: readonly string[] = [
 
 /** Kit units to metres for a street lamp: a 5.4 m pole for the curved one. */
 const LAMP_SCALE = 8;
-const LAMP_POLE_WIDTH = 0.3;
+export const LAMP_POLE_WIDTH = 0.3;
 /** How far below the top of a lamp model its head's underside hangs, where the bulb glows. */
 const LAMP_HEAD_DEPTH = 0.2;
+/** How far past its lot's edge the ground must be walkable for a doorway to be an entrance. */
+const ENTRANCE_PROBE = 0.5;
+const FACING_AXIS: Record<DoorFacing, { x: number; z: number }> = {
+  "+x": { x: 1, z: 0 },
+  "-x": { x: -1, z: 0 },
+  "+z": { x: 0, z: 1 },
+  "-z": { x: 0, z: -1 },
+};
 /** The longest side of a lot before a block is split into more buildings. */
 const LOT_MAX_SIDE = 11;
 /** A fit within this much of the best coverage counts as just as good, so lots vary. */
@@ -114,6 +123,13 @@ export interface OutdoorParts {
   scenery: SceneryInstance[];
   ground: GroundPatch[];
   lights?: MapLight[];
+}
+
+interface Emitted {
+  colliders: BoxCollider[];
+  scenery: SceneryInstance[];
+  /** Filled only when asked for: each building's doorways, carried out to its lot's edge. */
+  doors?: Entrance[];
 }
 
 interface Lot {
@@ -203,12 +219,7 @@ function turn(x: number, z: number, yaw: number): { x: number; z: number } {
  * `front` quarter turns when that keeps the fitted footprint, and the collider
  * covering the whole lot at the building's height, so no gap opens between neighbours.
  */
-function placeBuilding(
-  fit: Fit,
-  lot: Lot,
-  front: number,
-  out: { colliders: BoxCollider[]; scenery: SceneryInstance[] },
-): void {
+function placeBuilding(fit: Fit, lot: Lot, front: number, out: Emitted): void {
   const turns = (front - fit.turns) % 2 === 0 ? front : fit.turns;
   const yaw = turns * QUARTER_TURN;
   const cx = lot.minX + lot.w / 2;
@@ -225,6 +236,22 @@ function placeBuilding(
     position: { x: cx, y: height / 2, z: cz },
     size: { x: lot.w, y: height, z: lot.d },
   });
+  for (const door of out.doors ? (fit.card.doors ?? []) : []) {
+    const at = turn(door.x * fit.scale, door.z * fit.scale, yaw);
+    const axis = FACING_AXIS[door.facing];
+    const way = turn(axis.x, axis.z, yaw);
+    const nx = Math.round(way.x) || 0;
+    const nz = Math.round(way.z) || 0;
+    const edgeX = nx > 0 ? lot.minX + lot.w : lot.minX;
+    const edgeZ = nz > 0 ? lot.minZ + lot.d : lot.minZ;
+    out.doors?.push({
+      x: nx === 0 ? cx - offset.x + at.x : edgeX,
+      z: nz === 0 ? cz - offset.z + at.z : edgeZ,
+      width: door.width * fit.scale,
+      nx,
+      nz,
+    });
+  }
 }
 
 /** World-space rectangle of a cell rect. */
@@ -272,7 +299,7 @@ function emitBlock(
   halfW: number,
   halfD: number,
   walkable: (i: number, j: number) => boolean,
-  out: { colliders: BoxCollider[]; scenery: SceneryInstance[] },
+  out: Emitted,
 ): void {
   const salt = stableHash(block.id);
   if (block.building !== undefined) {
@@ -489,6 +516,47 @@ function emitLamps(
     const head = turn(fixture.head.x * LAMP_SCALE, fixture.head.z * LAMP_SCALE, yaw);
     return { ...mapLight, x: light.x + head.x, z: light.z + head.z, y: height - LAMP_HEAD_DEPTH };
   });
+}
+
+/**
+ * A building's doorway onto open ground, in world space: where its way out meets the
+ * edge of the building's lot (the lot's collider covers any inset in front of the
+ * facade), the doorway's width and the axis it opens along.
+ */
+export interface Entrance {
+  x: number;
+  z: number;
+  width: number;
+  nx: number;
+  nz: number;
+}
+
+/**
+ * The doorways of every block building that open onto walkable ground: the buildings
+ * {@link compileOutdoor} seats, each door read off its asset card. Walkable is the same
+ * rule the compiler orients buildings by, a cell some room owns. A door that opens onto
+ * a neighbour's lot or the map's edge is not an entrance.
+ */
+export function outdoorEntrances(doc: LevelDocument): Entrance[] {
+  const { cols, rows } = doc.grid;
+  const halfW = (cols * TILE) / 2;
+  const halfD = (rows * TILE) / 2;
+  const owned = Array.from({ length: cols }, () => new Array<boolean>(rows).fill(false));
+  for (const room of doc.rooms) {
+    for (const rect of room.rects) {
+      for (let i = rect.i0; i < rect.i1; i++)
+        for (let j = rect.j0; j < rect.j1; j++) owned[i]![j] = true;
+    }
+  }
+  const walkable = (i: number, j: number): boolean => owned[i]?.[j] === true;
+  const out: Emitted = { colliders: [], scenery: [], doors: [] };
+  for (const block of doc.blocks ?? []) emitBlock(block, halfW, halfD, walkable, out);
+  return (out.doors ?? []).filter((door) =>
+    walkable(
+      Math.floor((door.x + door.nx * ENTRANCE_PROBE + halfW) / TILE),
+      Math.floor((door.z + door.nz * ENTRANCE_PROBE + halfD) / TILE),
+    ),
+  );
 }
 
 /**

@@ -1,4 +1,9 @@
-import type { AssetCard, SupportSurface } from "../../packages/shared/src/assetCards";
+import type {
+  AssetCard,
+  AssetDoor,
+  DoorFacing,
+  SupportSurface,
+} from "../../packages/shared/src/assetCards";
 
 const GLB_MAGIC = 0x46546c67;
 const GLB_VERSION = 2;
@@ -14,6 +19,21 @@ const ROUND_SCALE = 1000;
 const SURFACE_NORMAL_MIN_Y = 0.98;
 const SURFACE_HEIGHT_STEP = 0.02;
 const SURFACE_MIN_AREA = 0.01;
+/** The City Kit buildings: the models whose door panels share one swatch of their colormap. */
+const DOOR_MODEL_PATTERN = /^\/models\/urban\/(?:(?:commercial|industrial)\/)?building-/;
+/** Horizontal texture coordinate of the dark swatch a City Kit door panel is painted with. */
+const DOOR_SWATCH_U = 0.219;
+const DOOR_SWATCH_TOLERANCE = 0.01;
+/** A panel counts as a doorway when it stands on the ground and is door-sized, in model units. */
+const DOOR_GROUND_MAX_Y = 0.03;
+const DOOR_MIN_HEIGHT = 0.18;
+const DOOR_MAX_HEIGHT = 0.45;
+const DOOR_MIN_WIDTH = 0.08;
+const DOOR_MAX_WIDTH = 0.7;
+/** Faces within this much of vertical count as part of a facade. */
+const DOOR_FACE_MAX_NORMAL_Y = 0.2;
+/** Panel planes in one bucket of this size are one plane; spans closer than this are one door. */
+const DOOR_MERGE_GAP = 0.01;
 
 type Vec3Tuple = [number, number, number];
 type Matrix = number[];
@@ -313,6 +333,115 @@ function extractSurfaces(glb: Glb, visits: MeshVisit[], model: string): SupportS
     .sort((a, b) => b.y - a.y);
 }
 
+interface DoorPanel {
+  facing: DoorFacing;
+  plane: number;
+  from: number;
+  to: number;
+  top: number;
+}
+
+function facingOf(nx: number, nz: number): DoorFacing {
+  if (Math.abs(nx) > Math.abs(nz)) return nx > 0 ? "+x" : "-x";
+  return nz > 0 ? "+z" : "-z";
+}
+
+function planeBucket(panel: DoorPanel): number {
+  return Math.round(panel.plane / DOOR_MERGE_GAP);
+}
+
+function mergePanels(panels: DoorPanel[]): DoorPanel[] {
+  const sorted = [...panels].sort(
+    (a, b) =>
+      a.facing.localeCompare(b.facing) || planeBucket(a) - planeBucket(b) || a.from - b.from,
+  );
+  const merged: DoorPanel[] = [];
+  for (const panel of sorted) {
+    const last = merged[merged.length - 1];
+    if (
+      last !== undefined &&
+      last.facing === panel.facing &&
+      planeBucket(last) === planeBucket(panel) &&
+      panel.from <= last.to + DOOR_MERGE_GAP
+    ) {
+      last.to = Math.max(last.to, panel.to);
+      last.top = Math.max(last.top, panel.top);
+    } else {
+      merged.push({ ...panel });
+    }
+  }
+  return merged;
+}
+
+/**
+ * The doorways of a City Kit building: vertical panels painted with the door swatch that
+ * stand on the ground and are as tall and as wide as a door. Every other model has none.
+ */
+function extractDoors(glb: Glb, visits: MeshVisit[], model: string): AssetDoor[] {
+  if (!DOOR_MODEL_PATTERN.test(model)) return [];
+  const panels: DoorPanel[] = [];
+  for (const { matrix, primitive } of visits) {
+    const uvIndex = primitive.attributes.TEXCOORD_0;
+    if (uvIndex === undefined) continue;
+    const uvs = readAccessor(glb, uvIndex, model);
+    const positions = readAccessor(glb, positionAccessor(glb, primitive, model), model).map((p) =>
+      transform(matrix, [p[0] ?? 0, p[1] ?? 0, p[2] ?? 0]),
+    );
+    const indices =
+      primitive.indices === undefined
+        ? positions.map((_, i) => i)
+        : readAccessor(glb, primitive.indices, model).map((row) => row[0] ?? 0);
+    for (let t = 0; t + 2 < indices.length; t += 3) {
+      const corners = [indices[t] ?? 0, indices[t + 1] ?? 0, indices[t + 2] ?? 0];
+      const painted = corners.every((k) => {
+        const u = uvs[k]?.[0];
+        return u !== undefined && Math.abs(u - DOOR_SWATCH_U) <= DOOR_SWATCH_TOLERANCE;
+      });
+      if (!painted) continue;
+      const [a, b, c] = corners.map((k) => positions[k]);
+      if (!a || !b || !c) throw new Error(`${model}: triangle index out of range`);
+      const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      const nx = (e1[1] ?? 0) * (e2[2] ?? 0) - (e1[2] ?? 0) * (e2[1] ?? 0);
+      const ny = (e1[2] ?? 0) * (e2[0] ?? 0) - (e1[0] ?? 0) * (e2[2] ?? 0);
+      const nz = (e1[0] ?? 0) * (e2[1] ?? 0) - (e1[1] ?? 0) * (e2[0] ?? 0);
+      const length = Math.hypot(nx, ny, nz);
+      if (length === 0 || Math.abs(ny / length) > DOOR_FACE_MAX_NORMAL_Y) continue;
+      if (Math.min(a[1], b[1], c[1]) > DOOR_GROUND_MAX_Y) continue;
+      const facing = facingOf(nx, nz);
+      const alongX = facing === "+z" || facing === "-z";
+      const along = [a, b, c].map((p) => (alongX ? p[0] : p[2]));
+      panels.push({
+        facing,
+        plane: alongX ? a[2] : a[0],
+        from: Math.min(...along),
+        to: Math.max(...along),
+        top: Math.max(a[1], b[1], c[1]),
+      });
+    }
+  }
+  return mergePanels(panels)
+    .filter((panel) => {
+      const width = panel.to - panel.from;
+      return (
+        panel.top >= DOOR_MIN_HEIGHT &&
+        panel.top <= DOOR_MAX_HEIGHT &&
+        width >= DOOR_MIN_WIDTH &&
+        width <= DOOR_MAX_WIDTH
+      );
+    })
+    .map((panel) => {
+      const middle = (panel.from + panel.to) / 2;
+      const alongX = panel.facing === "+z" || panel.facing === "-z";
+      return {
+        x: round(alongX ? middle : panel.plane),
+        z: round(alongX ? panel.plane : middle),
+        width: round(panel.to - panel.from),
+        facing: panel.facing,
+      };
+    });
+}
+
 /** Read one GLB and derive its asset card. Throws with the model path on anything unsupported. */
 export function extractAssetCard(bytes: Buffer, model: string): AssetCard {
   const glb = parseGlb(bytes, model);
@@ -320,11 +449,13 @@ export function extractAssetCard(bytes: Buffer, model: string): AssetCard {
   const { lo, hi } = extractBounds(glb, visits, model);
   const [x0, y0, z0] = lo as Vec3Tuple;
   const [x1, y1, z1] = hi as Vec3Tuple;
+  const doors = extractDoors(glb, visits, model);
   return {
     model,
     size: { x: round(x1 - x0), y: round(y1 - y0), z: round(z1 - z0) },
     center: { x: round((x1 + x0) / 2), y: round((y1 + y0) / 2), z: round((z1 + z0) / 2) },
     minY: round(y0),
     surfaces: extractSurfaces(glb, visits, model),
+    ...(doors.length > 0 ? { doors } : {}),
   };
 }

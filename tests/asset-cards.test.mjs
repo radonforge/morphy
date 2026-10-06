@@ -48,6 +48,25 @@ test("reference cards match the measured values", () => {
   near(barrel.center.z, 1.5, "barrel centre z");
 });
 
+test("a City Kit house reads its front and back doors, and nothing else carries any", () => {
+  assert.deepEqual(ASSET_CARDS["/models/urban/building-type-a.glb"].doors, [
+    { x: 0, z: -0.344, width: 0.14, facing: "-z" },
+    { x: 0, z: 0.456, width: 0.14, facing: "+z" },
+  ]);
+  const doorless = Object.values(ASSET_CARDS).filter(
+    (card) => !/^\/models\/urban\/(?:(?:commercial|industrial)\/)?building-/.test(card.model),
+  );
+  assert.ok(doorless.every((card) => card.doors === undefined));
+  const houses = Object.values(ASSET_CARDS).filter((card) =>
+    /^\/models\/urban\/building-type-/.test(card.model),
+  );
+  assert.ok(houses.length > 0 && houses.every((card) => (card.doors ?? []).length > 0));
+  const facings = new Set(["+x", "-x", "+z", "-z"]);
+  for (const card of Object.values(ASSET_CARDS)) {
+    for (const door of card.doors ?? []) assert.ok(facings.has(door.facing), card.model);
+  }
+});
+
 const GLB_MAGIC = 0x46546c67;
 const GLB_JSON_CHUNK = 0x4e4f534a;
 const GLB_BIN_CHUNK = 0x004e4942;
