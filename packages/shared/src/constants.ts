@@ -81,6 +81,8 @@ export const PROP_TURN_SNAP = Math.PI / 2;
 export const PROP_TURN_TAP_MS = 200;
 
 export const REROLL_BUDGET = 2;
+/** Fewest distinct disguises a map must place, so a reroll always has another shape to take. */
+export const MIN_DISGUISE_TYPES = 2;
 export const DECOY_BUDGET = 3;
 export const DECOY_COOLDOWN_MS = 1_500;
 /** Share of a weapon's miss damage a shot pays when all it breaks is a decoy. */

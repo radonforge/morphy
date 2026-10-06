@@ -25,7 +25,7 @@ const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS, tags: ASSET_TAGS }
 const TABLE = SPACE_CATALOG.find((def) => def.id === "table");
 const NEAR = 1e-9;
 
-/** Two 8 x 8 m rooms side by side with one door, three chairs in each, spawns in the open. */
+/** Two 8 x 8 m rooms side by side with one door, three chairs west and three armchairs east, spawns in the open. */
 function clean() {
   return {
     version: 1,
@@ -40,9 +40,9 @@ function clean() {
       { id: "west-1", type: "chair", x: -6, z: -2, yaw: 0 },
       { id: "west-2", type: "chair", x: -6, z: 0, yaw: 0 },
       { id: "west-3", type: "chair", x: -6, z: 2, yaw: 0 },
-      { id: "east-1", type: "chair", x: 6, z: -2, yaw: 0 },
-      { id: "east-2", type: "chair", x: 6, z: 0, yaw: 0 },
-      { id: "east-3", type: "chair", x: 6, z: 2, yaw: 0 },
+      { id: "east-1", type: "chair-armrest", x: 6, z: -2, yaw: 0 },
+      { id: "east-2", type: "chair-armrest", x: 6, z: 0, yaw: 0 },
+      { id: "east-3", type: "chair-armrest", x: 6, z: 2, yaw: 0 },
     ],
     spawns: { props: [{ x: 3, z: -2 }], hunters: [{ x: -3, z: -2 }] },
   };
@@ -196,7 +196,9 @@ const CASES = [
     {
       ...CONTEXT,
       cards: Object.fromEntries(
-        Object.entries(ASSET_CARDS).filter(([model]) => !model.endsWith("/chair.glb")),
+        Object.entries(ASSET_CARDS).filter(
+          ([model]) => !/\/station\/chair(-armrest)?\.glb$/.test(model),
+        ),
       ),
     },
   ],
@@ -226,6 +228,12 @@ const CASES = [
     }),
   ],
   ["room.few-disguises", edited((d) => d.objects.splice(0, 1))],
+  [
+    "map.few-disguise-types",
+    edited((d) => {
+      d.objects = d.objects.filter((object) => object.id.startsWith("west-"));
+    }),
+  ],
   ["object.unique-type", edited((d) => Object.assign(d.objects[0], { type: "barrel" }))],
   [
     "light.wall-clearance",
@@ -270,7 +278,11 @@ test("a door with a chair in its doorway names the side and the chair", () => {
 });
 
 test("a room with no door is unreachable as a whole", () => {
-  const result = report(CASES[7][1]);
+  const mirrored = edited((d) => {
+    d.doors.pop();
+    for (const object of d.objects) object.type = "chair";
+  });
+  const result = report(mirrored);
   const [finding] = result.findings.filter((f) => f.code === "floor.unreachable");
   assert.ok(finding.entities.includes("east"));
   assert.equal(finding.hint, "add a door into east");

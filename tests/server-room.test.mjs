@@ -9,12 +9,14 @@ import {
   CONVERTED_HUNTER_HP,
   DECOY_BUDGET,
   DECOY_MISS_DAMAGE_FACTOR,
+  disguiseTypes,
   HIDE_DURATION_MS,
   HUNTER_CAPTURE_HEAL,
   HUNTER_MAX_HP,
   HUNTER_RESPAWN_MS,
   isDisguise,
   LOBBY_AUTOSTART_MS,
+  MapValidationError,
   MSG_SHOT_FIRED,
   MSG_SONAR_PING,
   MSG_TAUNT,
@@ -40,7 +42,7 @@ process.env.MORPHY_DB_PATH = databasePath;
 const { DecoyState, MorphyRoom, PlayerState } = await import(
   "../packages/server/src/rooms/MorphyRoom.ts"
 );
-const { buildMap } = await import("../packages/server/src/maps/index.ts");
+const { buildMap, MAP_BUILDERS } = await import("../packages/server/src/maps/index.ts");
 const { describeRoomException } = await import("../packages/server/src/rooms/roomErrors.ts");
 const { playerStats } = await import("../packages/server/src/stats/repository.ts");
 
@@ -861,11 +863,10 @@ function botWithRole(room, role) {
   assert.fail(`expected a bot playing ${role}`);
 }
 
-test("on North District a prop is dealt and rerolls only shapes it can wear, never a car", () => {
-  const room = publicRoom();
-  room.map = buildMap("urban", 1);
-  const decor = new Set(room.map.propCatalog.filter((def) => !isDisguise(def)).map((d) => d.id));
-  assert.ok(decor.has("sedan"), "the urban catalog carries parked cars as decor");
+const REROLL_DRAWS = 300;
+
+/** Every type the props are dealt in one round on `room`, plus every type their rerolls land on. */
+function dealtAndRerolled(room) {
   joinRoom(room, "human");
   fireBotFill(room);
   startRound(room);
@@ -874,12 +875,113 @@ test("on North District a prop is dealt and rerolls only shapes it can wear, nev
   const seen = new Set();
   for (const player of props) {
     seen.add(player.propType);
-    for (let k = 0; k < 200; k++) seen.add(room.randomPropId(player.propType));
+    player.rerollsLeft = REROLL_DRAWS;
+    for (let k = 0; k < REROLL_DRAWS; k++) {
+      const before = player.propType;
+      room.handleReroll({ sessionId: player.id });
+      assert.notEqual(player.propType, before, "a reroll always changes the shape");
+      seen.add(player.propType);
+    }
   }
+  return seen;
+}
+
+for (const mapId of ["urban", "station"]) {
+  test(`on ${mapId} a prop is dealt and rerolls only disguises the map places`, () => {
+    const room = publicRoom();
+    room.map = buildMap(mapId, 1);
+    const placed = new Set(room.map.props.map((prop) => prop.type));
+    const absent = room.map.propCatalog
+      .filter((def) => isDisguise(def) && !placed.has(def.id))
+      .map((def) => def.id);
+    assert.ok(absent.length > 0, `${mapId} has catalog disguises it never places`);
+    const seen = dealtAndRerolled(room);
+    assert.deepEqual(
+      [...seen].filter((type) => !disguiseTypes(room.map).includes(type)),
+      [],
+    );
+    assert.deepEqual(
+      absent.filter((type) => seen.has(type)),
+      [],
+    );
+  });
+}
+
+test("on North District a prop is never dealt a parked car", () => {
+  const room = publicRoom();
+  room.map = buildMap("urban", 1);
+  const decor = room.map.propCatalog.filter((def) => !isDisguise(def)).map((def) => def.id);
+  assert.ok(decor.includes("sedan"), "the urban catalog carries parked cars as decor");
+  assert.ok(
+    room.map.props.some((prop) => prop.type === "sedan"),
+    "North District parks a sedan",
+  );
+  const seen = dealtAndRerolled(room);
   assert.deepEqual(
-    [...seen].filter((id) => decor.has(id)),
+    decor.filter((type) => seen.has(type)),
     [],
   );
+});
+
+test("a host's map switch moves the disguise pool to the new map", () => {
+  const room = publicRoom();
+  room.state.isPrivate = true;
+  room.state.mapId = "station";
+  joinRoom(room, "host");
+  room.state.hostId = "host";
+  room.broadcast = () => {};
+  room.clients = [];
+  room.handleSetMap({ sessionId: "host" }, { map: "urban" });
+  assert.equal(room.map.id, "urban");
+  const placed = new Set(disguiseTypes(room.map));
+  const stale = new Set(disguiseTypes(buildMap("station", 1)));
+  for (let k = 0; k < REROLL_DRAWS; k++) {
+    const type = room.randomPropId();
+    assert.ok(placed.has(type), `${type} is placed on North District`);
+    assert.ok(!stale.has(type), `${type} is a Kepler-9 disguise`);
+  }
+});
+
+test("with exactly two disguises placed, a reroll always swaps to the other", () => {
+  const room = publicRoom();
+  const [first, second] = disguiseTypes(room.map);
+  room.map = {
+    ...room.map,
+    props: room.map.props.filter((prop) => prop.type === first || prop.type === second),
+  };
+  joinRoom(room, "a");
+  joinRoom(room, "b");
+  startRound(room);
+  const prop = [...room.state.players.values()].find((p) => p.role === "prop");
+  assert.ok([first, second].includes(prop.propType));
+  prop.rerollsLeft = REROLL_DRAWS;
+  for (let k = 0; k < REROLL_DRAWS; k++) {
+    const expected = prop.propType === first ? second : first;
+    room.handleReroll({ sessionId: prop.id });
+    assert.equal(prop.propType, expected);
+  }
+});
+
+test("a map placing fewer than two disguises is refused when it is built", () => {
+  const original = MAP_BUILDERS.station;
+  const station = original(1);
+  const [only] = disguiseTypes(station);
+  try {
+    for (const keep of [[only], []]) {
+      MAP_BUILDERS.station = () => ({
+        ...station,
+        props: station.props.filter((prop) => keep.includes(prop.type)),
+      });
+      assert.throws(
+        () => buildMap("station", 1),
+        (error) =>
+          error instanceof MapValidationError &&
+          error.message.includes(`places ${keep.length} disguise types`),
+      );
+    }
+  } finally {
+    MAP_BUILDERS.station = original;
+  }
 });
 
 test("a room-filling prop bot drops a decoy where it stands", () => {

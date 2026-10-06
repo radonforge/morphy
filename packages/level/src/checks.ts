@@ -1,4 +1,5 @@
 import {
+  disguiseTypes,
   isDisguise,
   LEVEL_BODY_RADIUS,
   LEVEL_ENTRANCE_CLEARANCE_DEPTH,
@@ -11,6 +12,7 @@ import {
   LEVEL_SIGHT_BLOCK_HEIGHT,
   LEVEL_SIGHTLINE_MAX,
   LEVEL_UNREACHABLE_MIN_AREA,
+  MIN_DISGUISE_TYPES,
 } from "@morphy/shared";
 import { isOutdoor, type LevelDocument, type LevelObject, type LevelPoint } from "./document";
 import { TILE } from "./floorplan";
@@ -80,6 +82,7 @@ export const FINDING_CODES = [
   "passage.blocked",
   "room.sightline",
   "room.few-disguises",
+  "map.few-disguise-types",
   "object.unique-type",
   "light.wall-clearance",
 ] as const;
@@ -452,6 +455,20 @@ function passageFindings(space: LevelSpace, grid: SampleGrid, findings: Finding[
   }
 }
 
+/** The server refuses a map placing fewer than `MIN_DISGUISE_TYPES` disguises, since a prop wears only those. */
+function disguiseTypeFindings(space: LevelSpace, findings: Finding[]): void {
+  const { doc } = space;
+  const types = disguiseTypes({ props: doc.objects, propCatalog: space.context.catalog });
+  if (types.length >= MIN_DISGUISE_TYPES) return;
+  findings.push({
+    code: "map.few-disguise-types",
+    severity: "error",
+    message: `${doc.id} places ${types.length} disguise types (${types.join(", ") || "none"}), fewer than ${MIN_DISGUISE_TYPES}, so a prop has no other shape to reroll into and the server refuses the map`,
+    entities: [doc.id],
+    hint: "place objects of another catalog type that is not decor",
+  });
+}
+
 function roomFindings(
   space: LevelSpace,
   grid: SampleGrid,
@@ -562,6 +579,7 @@ export function validateLevel(doc: LevelDocument, context: LevelContext): LevelR
   const grid = reachFindings(space, findings, metrics);
   if (isOutdoor(doc)) passageFindings(space, grid, findings);
   roomFindings(space, grid, findings, metrics);
+  disguiseTypeFindings(space, findings);
   findings.sort(compareFindings);
   for (const severity of ["error", "warning", "info"] as const) {
     metrics[`findings.${severity}`] = findings.filter((f) => f.severity === severity).length;
