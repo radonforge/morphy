@@ -39,7 +39,9 @@ and **server → bot/brain** (client and server still never import each other at
 `client → level` exists for the dev-only map editor, which compiles the document it edits on every
 change, and for what the production client takes from it: `deckLightsFor` (`DeckLights` in
 `Scene.tsx`), `DEFAULT_ROOM_LIGHT_COUNT` and `streetLamp`, which stands the lobby's North District
-lamps the way a document's lamp compiles; `@morphy/level` is pure, so the rest tree-shakes out of the bundle.
+lamps the way a document's lamp compiles; `@morphy/level` and `@morphy/shared` are pure and declare
+`"sideEffects": false`, so the rest tree-shakes out of the bundle. Without the flag it did not: level's
+editor ops and checks shipped to the browser, and the asset cards landed in the entry chunk.
 
 `server → bot` exists so the room-filling bots and the CLI bots run the *same* behaviour instead of
 two copies that drift. It is confined to the `@morphy/bot/brain` entry point: the package's
