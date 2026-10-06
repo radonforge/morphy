@@ -16,6 +16,9 @@ const ARM_EPSILON = 1e-6;
 
 const noRaycast = () => {};
 
+/** What a street's lamps are read from: its lamp models and the lights that carry a head height. */
+type LampedStreet = Pick<MapDefinition, "scenery" | "lights">;
+
 /** A night street's lamps, lit from the `MapDefinition.lights` that carry a lamp head height. */
 export interface StreetLampPreset {
   color: string;
@@ -97,7 +100,7 @@ export function SkyGlow({ preset }: { preset: SkyGlowPreset }) {
   );
 }
 
-function modelsMarked(map: MapDefinition, mark: string): string[] {
+function modelsMarked(map: LampedStreet, mark: string): string[] {
   return [...new Set(map.scenery.filter((s) => s.model.includes(mark)).map((s) => s.model))];
 }
 
@@ -109,7 +112,7 @@ interface Lamp {
 }
 
 /** Where each lamp's bulb glows and its light hangs: below the head, pulled along the arm away from the pole. */
-function layLamps(map: MapDefinition, preset: StreetLampPreset): Lamp[] {
+function layLamps(map: LampedStreet, preset: StreetLampPreset): Lamp[] {
   const poles = map.scenery.filter((s) => s.model.includes(LAMP_MODEL_MARK));
   const lights = (map.lights ?? []).filter(
     (light): light is MapLight & { y: number } => light.y !== undefined,
@@ -180,7 +183,7 @@ export function StreetLamps({
   preset,
   focus,
 }: {
-  map: MapDefinition;
+  map: LampedStreet;
   preset: StreetLampPreset;
   focus: { readonly current: THREE.Vector3 };
 }) {

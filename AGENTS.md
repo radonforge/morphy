@@ -37,8 +37,11 @@ pnpm-workspace monorepo, five packages with a strict runtime dependency directio
 **client → shared ← server**, plus **server → level → shared**, **client → level**, **bot → shared**
 and **server → bot/brain** (client and server still never import each other at runtime).
 `client → level` exists for the dev-only map editor, which compiles the document it edits on every
-change, and for `pickDeckLights`, the one thing the production client (`DeckLights` in `Scene.tsx`)
-imports from it; `@morphy/level` is pure, so the rest tree-shakes out of the bundle.
+change, and for what the production client takes from it: `deckLightsFor` (`DeckLights` in
+`Scene.tsx`), `DEFAULT_ROOM_LIGHT_COUNT` and `streetLamp`, which stands the lobby's North District
+lamps the way a document's lamp compiles; `@morphy/level` and `@morphy/shared` are pure and declare
+`"sideEffects": false`, so the rest tree-shakes out of the bundle. Without the flag it did not: level's
+editor ops and checks shipped to the browser, and the asset cards landed in the entry chunk.
 
 `server → bot` exists so the room-filling bots and the CLI bots run the *same* behaviour instead of
 two copies that drift. It is confined to the `@morphy/bot/brain` entry point: the package's
@@ -109,7 +112,9 @@ client code, three.js or Colyseus.
   lot gets depends on the block id, never on the seed, because colliders follow it. A light with a
   `fixture` stands a road-kit street lamp (pole collider included) and hangs the light from its
   arm. An unseen wall closes the map's edge and any cell that is neither ground nor block, and
-  low-detail facades stand beyond the edge wherever open ground meets it. `OUTDOOR_MODEL_PATHS`
+  low-detail facades stand beyond the edge wherever open ground meets it. `streetLamp` is how one
+  lamp stands (model, height, head, footprint centre), shared with the lobby, whose North District
+  diorama stands its lamps through it at the diorama's own scale. `OUTDOOR_MODEL_PATHS`
   feeds the asset allow-list. The checks measure one sightline over all the open ground (no wall
   separates one ground region from the next), and an object across two ground regions is fine.
 - `floorplan.ts`: `emitFloorplan`, turning a region grid and its doors into floor tiles, wall tiles,
@@ -153,7 +158,7 @@ client code, three.js or Colyseus.
   the client hangs: the map's own `lights` when it has any (an empty list means none), else the pick.
   Kepler-9's document was seeded with exactly the pick it used to get on the client, so the night
   looks the same; from there the lights are edited, not generated. Kinds stay `room` and
-  `corridor`, the theme preset (`DeckLightPreset` in `Scene.tsx`) owns colour, intensity and reach.
+  `corridor`, the theme preset (`DeckLightPreset` in `game/themes.ts`) owns colour, intensity and reach.
   `lightOps.ts`: `addLight` / `moveLight` / `removeLight` / `proposeLights` (replaces the lights
   with the pick), snapped to 0.5 m unless `free`, refused in a wall or off the map; a room or door
   edit that would raise a wall over a light is refused too, since the parser would reject the
@@ -184,7 +189,7 @@ client code, three.js or Colyseus.
 
 ### `packages/client`: Vite + React + react-three-fiber
 
-- `ui/App.tsx`: the shell owning connection state, swapping between menu and game (the game route is `lazy`-loaded behind a `Suspense`). `ui/Lobby.tsx` + `ui/LobbyStage.tsx` are the menu: name, ready state, party codes, `StatsPane`, and **two carousels on the stage itself**: the avatar is chosen by morphing through the catalog, and the map by morphing the whole diorama around it, neither from a grid or a strip. Both run off one set of parts (`ui/CarouselRail.tsx`, `ui/carousel.ts`, `ui/carouselWheel.ts`, `ui/useCarouselInput.ts`) and are a single `PickerId` apart, so the cost of either picker is flat in catalog size; the strip of one card per map it replaced hid its own overflow past about five maps. `carouselWheel.ts` is where the reasoning about trackpad inertia lives, and it is a pure fold under test; do not reinline it into a component. **The callsign is inside the avatar picker**, not in a menu of its own: naming yourself and picking a shape are one decision, so the Identity pane that held them separately was removed (2026-09-17) once the only other thing in it was a third button opening this same picker. The name commits on blur and on picker close, the avatar per step, and `useCarouselInput` ignores arrows while the field has focus. The opener is the chip over your avatar, which is why `LobbyStage` portals it out of `.menu-canvas`: that subtree is `aria-hidden` for the 3D scene, and it was the only keyboard path left. The weapon picker is in-game, not here (`game/Game.tsx`). `net/connection.ts` wraps the Colyseus SDK `joinOrCreate` / `create` / `joinById` with a timeout.
+- `ui/App.tsx`: the shell owning connection state, swapping between menu and game (the game route is `lazy`-loaded behind a `Suspense`). `ui/Lobby.tsx` + `ui/LobbyStage.tsx` are the menu: name, ready state, party codes, `StatsPane`, and **two carousels on the stage itself**: the avatar is chosen by morphing through the catalog, and the map by morphing the whole diorama around it, neither from a grid or a strip. Both run off one set of parts (`ui/CarouselRail.tsx`, `ui/carousel.ts`, `ui/carouselWheel.ts`, `ui/useCarouselInput.ts`) and are a single `PickerId` apart, so the cost of either picker is flat in catalog size; the strip of one card per map it replaced hid its own overflow past about five maps. `carouselWheel.ts` is where the reasoning about trackpad inertia lives, and it is a pure fold under test; do not reinline it into a component. **The callsign is inside the avatar picker**, not in a menu of its own: naming yourself and picking a shape are one decision, so the Identity pane that held them separately was removed (2026-09-17) once the only other thing in it was a third button opening this same picker. The name commits on blur and on picker close, the avatar per step, and `useCarouselInput` ignores arrows while the field has focus. The opener is the chip over your avatar, which is why `LobbyStage` portals it out of `.menu-canvas`: that subtree is `aria-hidden` for the 3D scene, and it was the only keyboard path left. The weapon picker is in-game, not here (`game/Game.tsx`). `net/connection.ts` wraps the Colyseus SDK `joinOrCreate` / `create` / `joinById` with a timeout. The stage reads each map's sky and light presets (`themeFor`) from `game/themes.ts`, never from `game/Scene.tsx`: importing anything from Scene loads its whole chunk with the menu. A day/night map's stage is drawn by night at random once per page load (`NIGHT_CHANCE`), with the match's own night theme, `StreetLamps` and `SkyGlow`. They are not in `client/theme.ts` either, which the menu shell imports for `MAP_CHROME`: anything there ships in the entry chunk, before first paint.
 - `game/Game.tsx`: React HUD and the network event hub: registers all `room.onMessage` handlers and the schema `Callbacks` (player add/remove), drives chat/kill-feed/result/scoreboard overlays.
 - `game/Scene.tsx`: the entire 3D scene: map rendering (instanced tiles, fitted GLB props/avatars, scenery), remote-player interpolation, the shooting raycast, pointer-lock mouse look, and the per-frame drive of the local player through `movement.ts`. Still the densest file in the client. **There is no prop picker**: a prop presses `R` to send `MSG_REROLL` and the *server* swaps in a random different disguise the map places, spending one of a bounded `rerollsLeft`. `Q`/`E` are prop-only and spin the disguise in place (`propRot` at `PROP_TURN_SPEED`), not the camera; aim is mouse-look alone. Do not re-add a picker believing one was lost.
 - **Day and night**: a map whose `MAP_CATALOG` entry has `dayNight` (North District) is drawn by day or by night as each countdown starts (`RoomState.night`, `NIGHT_CHANCE`); `themeFor(mapId, night)` swaps in its night theme. At night `game/StreetLamps.tsx` glows every lamp bulb in `MapDefinition.lights` that carries a head height, but hangs only `budget` real point lights, held by the lamps nearest the player, because a forward renderer pays for every light on every lit pixel (36 lights took a frame from 8 to 15.6 ms on an M4 Pro). Ranking by the player rather than the orbiting prop camera, and `lampWeights` (`game/lampBudget.ts`) dimming a light to zero before it changes lamp, is what keeps the pools from popping while you walk: ranking by the camera measured 98 full on/off pops in a 10 s walk. The lights fall off with `decay` 1, not the physical 2, because every lamp hangs 2 m from a facade and decay 2 blew those facades out.
@@ -206,7 +211,7 @@ client code, three.js or Colyseus.
   it. It also checks that `Host` is localhost or a loopback IP on the dev port and that a `PUT`'s
   `Origin`, when present, is the dev origin, and answers 408 to a body slower than
   `BRIDGE_LIMITS.bodyTimeoutMs`; its atomic-write temp files are gitignored. The plan is an orthographic top-down view drawn by the
-  game's own renderers (`MapView`, `DeckLights`, `themeFor` from `game/Scene.tsx`); `Tab` swaps to
+  game's own renderers (`MapView`, `DeckLights` from `game/Scene.tsx`, `themeFor` from `game/themes.ts`); `Tab` swaps to
   an orbit view. **Every edit an op exists for goes through the `@morphy/level` op** (place, move,
   rotate, duplicate, remove, against-wall placement, room add / resize / remove, door toggle, light
   add / move / remove / propose), so the

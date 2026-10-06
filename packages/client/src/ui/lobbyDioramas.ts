@@ -1,5 +1,5 @@
-import { TILE, WALL_HEIGHT } from "@morphy/level";
-import type { CeilingPanel, MapId } from "@morphy/shared";
+import { type StreetLamp, streetLamp, TILE, WALL_HEIGHT } from "@morphy/level";
+import type { CeilingPanel, MapDefinition, MapId } from "@morphy/shared";
 
 export interface SetPiece {
   url: string;
@@ -11,6 +11,24 @@ export interface SetPiece {
 const mod = (name: string): string => `/models/space/modular/${name}.glb`;
 const sta = (name: string): string => `/models/space/station/${name}.glb`;
 const urb = (name: string): string => `/models/urban/${name}.glb`;
+
+const NORTH_LAMP_SCALE = 6;
+
+/** The street lamps of the North District stage, by pole, arm turned out over the pavement. */
+const NORTH_LAMPS: StreetLamp[] = [
+  streetLamp("curved", 1.4, -3.5, Math.PI, NORTH_LAMP_SCALE),
+  streetLamp("curved", 6.6, -3.5, Math.PI, NORTH_LAMP_SCALE),
+];
+
+/** A lamp's set piece: `position` is the footprint centre, which the arm pulls off the pole. */
+function lampPiece({ scenery, centre }: StreetLamp): SetPiece {
+  return {
+    url: scenery.model,
+    position: [centre.x, 0, centre.z],
+    rotationY: scenery.rotationY,
+    scale: scenery.scale,
+  };
+}
 
 /** Model set pieces rendered behind the lobby for each selected map. */
 const STATION_FLOOR_XS = [-15, -10, -5, 0, 5, 10, 15];
@@ -91,8 +109,7 @@ export const LOBBY_DIORAMAS: Record<MapId, SetPiece[]> = {
     { url: urb("tree-small"), position: [1.1, 0, -5.5], scale: 6 },
     { url: urb("tree-small"), position: [6.1, 0, -7.5], scale: 6 },
     { url: urb("tree-small"), position: [6.1, 0, -11.5], scale: 6 },
-    { url: urb("roads/light-curved"), position: [1.4, 0, -3], rotationY: Math.PI, scale: 6 },
-    { url: urb("roads/light-curved"), position: [6.6, 0, -3], rotationY: Math.PI, scale: 6 },
+    ...NORTH_LAMPS.map(lampPiece),
     { url: urb("tree-large"), position: [10, 0, -3], scale: 6 },
     { url: urb("tree-large"), position: [14, 0, -3], scale: 6 },
   ],
@@ -108,10 +125,16 @@ export interface StageLight {
   bare?: boolean;
 }
 
-/** What hangs over a diorama besides its set pieces: deck lights and a ceiling. */
+/**
+ * What hangs over a diorama besides its set pieces: deck lights and the fill on the actors,
+ * a ceiling, and the street lamps a night stage lights. A day/night map hangs `nightLights`
+ * instead of `lights` when the lobby drew night; any other map has none.
+ */
 export interface StageDressing {
   lights: StageLight[];
+  nightLights: StageLight[] | null;
   ceiling: CeilingPanel[];
+  street: Pick<MapDefinition, "scenery" | "lights"> | null;
 }
 
 const STATION_SCALE = 1.25;
@@ -147,8 +170,26 @@ export const LOBBY_DRESSING: Record<MapId, StageDressing> = {
         kind: "glass" as const,
       })),
     ),
+    nightLights: null,
+    street: null,
   },
-  urban: { lights: [], ceiling: [] },
+  urban: {
+    lights: [
+      { position: [-1.35, 3, 3.5], color: "#ffe8cc", intensity: 10, distance: 9, bare: true },
+    ],
+    nightLights: [
+      { position: [-1.35, 3, 3.5], color: "#ffd9b0", intensity: 24, distance: 6, bare: true },
+    ],
+    ceiling: [],
+    street: {
+      scenery: NORTH_LAMPS.map((lamp) => lamp.scenery),
+      lights: NORTH_LAMPS.map((lamp, index) => ({
+        id: `lamp-${index}`,
+        kind: "corridor",
+        ...lamp.head,
+      })),
+    },
+  },
 };
 
 export const LOBBY_DIORAMA_MODEL_PATHS = [

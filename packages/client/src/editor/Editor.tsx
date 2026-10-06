@@ -47,7 +47,7 @@ import {
   useState,
   type WheelEvent,
 } from "react";
-import { themeFor } from "../game/Scene";
+import { themeFor } from "../game/themes";
 import { SERVER_URL } from "../net/endpoints";
 import { onExternalLevelChange, saveLevel, waitForGameServerReload } from "./bridge";
 import { type CheckItem, ChecksPanel, type OverlayToggles } from "./ChecksPanel";
