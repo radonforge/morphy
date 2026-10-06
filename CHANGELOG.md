@@ -1,10 +1,6 @@
 # Changelog
 
-All notable changes to Morphy are documented here.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
-(0.x releases are pre-1.0).
+Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
