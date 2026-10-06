@@ -242,7 +242,9 @@ client code, three.js or Colyseus.
   https:, mailto: or site-relative, which fails the build. Its changelog view turns each
   `## [x.y.z] - YYYY-MM-DD` into a release block, labels Added as New, and leaves `[Unreleased]`
   and link reference definitions off the page. `sitePage.ts` is the one page template (title,
-  description, canonical, `og:*`, a nav linking only the pages the build has). Everything here runs
+  description, canonical, `og:*`, a nav linking only the pages the build has); a new page needs an
+  entry in its `NAV_LINKS` or the build fails, and a slug the site already serves (a `public/`
+  name, `index`, `colyseus`, `stats`, a dev root) is refused. Everything here runs
   in Node, so the client bundle does not change; `tests/site-pages.test.mjs` covers it from
   `tests/fixtures/site/`.
 
@@ -322,10 +324,10 @@ client is static files nginx serves directly.
 `deploy/nginx.conf` is a **reference copy that CI does not deploy**: the workflow only ships
 `compose.yml` and `dist/`. Changing it means applying it on the host by hand
 (`nginx -t && systemctl reload nginx`), so the two drift silently if you forget.
-The site pages depend on it: `location /` must read `try_files $uri $uri.html /index.html` and
-send `Cache-Control: no-cache` like `index.html`, or `/changelog` and the other pages fall through
-to the game in production. Apply that change on the host by hand before the first release that
-ships them.
+The site pages depend on it: the `location ~ ^/[a-z0-9-]+$` block serves `/<slug>` from
+`<slug>.html` with `Cache-Control: no-cache` like `index.html`; without it `/changelog` and the
+other pages fall through to the game in production. Apply that block on the host by hand before
+the first release that ships them.
 
 ## Conventions
 
