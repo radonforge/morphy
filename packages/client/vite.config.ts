@@ -4,12 +4,13 @@ import { COLYSEUS_PROXY_PATH, DEFAULT_PORT, STATS_PATH } from "../shared/src/con
 import { resolveBuildInfo } from "./buildInfo";
 import { levelBridgePlugin } from "./viteLevelBridge";
 import { runtimeAssetsPlugin } from "./viteRuntimeAssets";
+import { sitePagesPlugin } from "./viteSitePages";
 
 const buildInfo = resolveBuildInfo();
 const serverTarget = `http://localhost:${Number(process.env.PORT ?? DEFAULT_PORT)}`;
 
 export default defineConfig({
-  plugins: [react(), runtimeAssetsPlugin(), levelBridgePlugin()],
+  plugins: [react(), runtimeAssetsPlugin(), levelBridgePlugin(), sitePagesPlugin()],
   build: {
     rolldownOptions: {
       output: {

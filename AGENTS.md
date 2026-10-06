@@ -232,6 +232,19 @@ client code, three.js or Colyseus.
   room on that map; a private room needs a second player to start, so a dev-only card over the room
   (`TryHint.tsx`) spells out `pnpm bot -- --code <party code> -n 1` and offers Back to editor.
 - `game/audio.ts`: **hybrid audio**: weapon shots / hit impacts (Kenney Sci-fi Sounds, `public/sounds/sci-fi/`) and lobby UI cues (Kenney UI Audio, `public/sounds/ui/`) play cached OGG samples; the lobby loops a licensed theme (`public/sounds/music/lobby-theme.ogg`, own gain, fade in/out); every other cue is synthesized at runtime via the Web Audio API (oscillators + noise bursts). Everything routes through one master gain, so mute covers all; volume / music / UI-sound prefs persist to localStorage (`morphy:*` keys). Positional cues (taunts, sonar, prop rustles) pan by the camera's facing through `spatialAudio.ts`; a remote prop on the move rustles (`PropFootsteps.tsx`) out to `FOOTSTEP_HEARING_RADIUS`, the very radius a bot hears a mover at, so keep the two on the one constant.
+- **Site pages**: `viteSitePages.ts` renders the repo-root `CHANGELOG.md` to `/changelog` and every
+  `packages/client/content/<slug>.md` to `/<slug>` as static HTML with no script and no 3D (a missing
+  or empty `content/` leaves only the changelog). A build emits `dist/<slug>.html` beside
+  `index.html`; the dev server renders them on each request, so `pnpm dev` shows an edit on reload.
+  `siteMarkdown.ts` is the pure converter for the one markdown subset these files may use (`#` to
+  `###` headings, paragraphs, `-` lists with two-space continuation lines, `**bold**`, `` `code` ``,
+  `[text](url)` links); it escapes every text and attribute and refuses any link that is not
+  https:, mailto: or site-relative, which fails the build. Its changelog view turns each
+  `## [x.y.z] - YYYY-MM-DD` into a release block, labels Added as New, and leaves `[Unreleased]`
+  and link reference definitions off the page. `sitePage.ts` is the one page template (title,
+  description, canonical, `og:*`, a nav linking only the pages the build has). Everything here runs
+  in Node, so the client bundle does not change; `tests/site-pages.test.mjs` covers it from
+  `tests/fixtures/site/`.
 
 ### Two facts that span files
 
@@ -309,6 +322,10 @@ client is static files nginx serves directly.
 `deploy/nginx.conf` is a **reference copy that CI does not deploy**: the workflow only ships
 `compose.yml` and `dist/`. Changing it means applying it on the host by hand
 (`nginx -t && systemctl reload nginx`), so the two drift silently if you forget.
+The site pages depend on it: `location /` must read `try_files $uri $uri.html /index.html` and
+send `Cache-Control: no-cache` like `index.html`, or `/changelog` and the other pages fall through
+to the game in production. Apply that change on the host by hand before the first release that
+ships them.
 
 ## Conventions
 
