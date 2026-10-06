@@ -151,9 +151,13 @@ function navigation(current: string, available: ReadonlySet<string>): string {
 /**
  * The complete HTML of a static site page: Morphy's header, footer and look,
  * with no script, so it reads the same with JavaScript disabled. `available`
- * holds the slugs this build renders, and only those get a nav link.
+ * holds the slugs this build renders, and only those get a nav link. A page
+ * the nav does not list is refused, so none ships unreachable from the others.
  */
 export function renderSitePage(page: SitePage, available: ReadonlySet<string>): string {
+  if (!NAV_LINKS.some((link) => link.slug === page.slug)) {
+    throw new Error(`site page /${page.slug} has no nav link: add it to NAV_LINKS in sitePage.ts`);
+  }
   const title = escapeHtml(`${page.title} - ${SITE_NAME}`);
   const description = escapeHtml(page.description);
   const url = `${SITE_ORIGIN}/${page.slug}`;

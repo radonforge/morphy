@@ -13,13 +13,51 @@ import {
   renderMarkdown,
   SiteMarkdownError,
 } from "../packages/client/siteMarkdown.ts";
-import { renderSitePages } from "../packages/client/viteSitePages.ts";
+import { renderSitePages, sitePagesPlugin } from "../packages/client/viteSitePages.ts";
 
 const FIXTURES = new URL("./fixtures/site/", import.meta.url);
 const CHANGELOG = fileURLToPath(new URL("CHANGELOG.md", FIXTURES));
-const CONTENT = fileURLToPath(new URL("content", FIXTURES));
+const FIXTURE_ROOT = fileURLToPath(new URL("packages/client", FIXTURES));
+const CONTENT = join(FIXTURE_ROOT, "content");
 const MISSING_CONTENT = fileURLToPath(new URL("no-such-content", FIXTURES));
+const PUBLIC_DIR = fileURLToPath(new URL("../packages/client/public", import.meta.url));
 const REPO_CHANGELOG = new URL("../CHANGELOG.md", import.meta.url);
+const GAME_DESCRIPTION = "Browser multiplayer prop hunt: morph into objects, then hunt or hide.";
+
+function sources(contentDir) {
+  return { changelogPath: CHANGELOG, contentDir, publicDir: PUBLIC_DIR };
+}
+
+function withContent(t, files) {
+  const contentDir = mkdtempSync(join(tmpdir(), "morphy-site-"));
+  t.after(() => rmSync(contentDir, { recursive: true, force: true }));
+  for (const [name, text] of Object.entries(files)) {
+    writeFileSync(join(contentDir, name), text, { encoding: "utf-8" });
+  }
+  return contentDir;
+}
+
+function resolvedPlugin() {
+  const plugin = sitePagesPlugin();
+  plugin.configResolved({ root: FIXTURE_ROOT, publicDir: PUBLIC_DIR });
+  return plugin;
+}
+
+function devMiddleware() {
+  let middleware;
+  resolvedPlugin().configureServer({ middlewares: { use: (handler) => (middleware = handler) } });
+  return (method, url) =>
+    new Promise((resolve, reject) => {
+      const headers = {};
+      const res = {
+        setHeader: (name, value) => (headers[name.toLowerCase()] = value),
+        end: (body) => resolve({ served: true, headers, body }),
+      };
+      middleware({ method, url }, res, (error) =>
+        error ? reject(error) : resolve({ served: false }),
+      );
+    });
+}
 
 test("text and attributes are escaped", () => {
   assert.equal(
@@ -79,8 +117,23 @@ test("any other link target is refused", () => {
     "//evil.com",
     "/\\evil.com",
     "privacy",
+    "data:text/html,<script>alert(1)</script>",
+    "HTTPS://example.com",
+    "MAILTO:hi@example.com",
+    "https:example.com",
+    "https://",
   ]) {
     assert.throws(() => renderInline(`[x](${url})`), SiteMarkdownError, url);
+  }
+});
+
+test("a link target with whitespace in it is not a link at all", () => {
+  for (const text of [
+    "[x]( javascript:alert(1))",
+    "[x](java\tscript:alert(1))",
+    "[x](/\t/evil.com)",
+  ]) {
+    assert.equal(renderInline(text), text);
   }
 });
 
@@ -110,6 +163,33 @@ test("changelog groups take their player-facing labels", () => {
   );
   const labels = [...html.matchAll(/<h3 class="group group-\w+">(\w+)<\/h3>/g)].map((m) => m[1]);
   assert.deepEqual(labels, ["New", "Changed", "Fixed", "Removed", "Security"]);
+});
+
+test("Unreleased is hidden in any case, with or without brackets", () => {
+  for (const heading of ["[Unreleased]", "[unreleased]", "Unreleased", "UNRELEASED"]) {
+    const html = renderChangelog(`## ${heading}\n\n- not yet\n\n## [1.0.0] - 2026-01-01`);
+    assert.doesNotMatch(html, /not yet|nreleased/i, heading);
+    assert.match(html, /id="v1\.0\.0"/, heading);
+  }
+});
+
+test("a prerelease version is a release", () => {
+  assert.match(
+    renderChangelog("## [1.0.0-rc.1] - 2026-01-01"),
+    /<section class="release" id="v1\.0\.0-rc\.1">\n<h2><span class="version">v1\.0\.0-rc\.1<\/span>/,
+  );
+});
+
+test("a version listed twice is refused", () => {
+  assert.throws(
+    () => renderChangelog("## [1.0.0] - 2026-01-01\n\n## [1.0.0] - 2026-01-02"),
+    /1\.0\.0 is listed twice/,
+  );
+});
+
+test("an indented list item is refused, naming its line", () => {
+  assert.throws(() => parseMarkdown("- parent\n  - child"), /line 2 "- child"/);
+  assert.throws(() => parseMarkdown("text\n   - child"), SiteMarkdownError);
 });
 
 test("a malformed release heading or date is refused", () => {
@@ -143,6 +223,16 @@ test("a long description is cut at a word boundary", () => {
   assert.match(markdownPage(`# One\n\n${"x".repeat(200)}`).description, /^x{157}\.\.\.$/);
 });
 
+test("a description is cut by code points, never inside a surrogate pair", () => {
+  const description = markdownPage(`# Fox\n\n${"\u{1F98A}".repeat(200)}`).description;
+  assert.equal(Array.from(description).length, 160);
+  assert.ok(description.isWellFormed());
+});
+
+test("a page with no paragraph takes the game's description", () => {
+  assert.equal(markdownPage("# Only a heading\n\n- a list").description, GAME_DESCRIPTION);
+});
+
 test("the repository changelog renders", () => {
   const page = changelogPage(readFileSync(REPO_CHANGELOG, { encoding: "utf-8" }));
   assert.equal(page.title, "Changelog");
@@ -150,7 +240,7 @@ test("the repository changelog renders", () => {
 });
 
 test("pages render with their metadata and a nav limited to the pages built", async () => {
-  const pages = await renderSitePages({ changelogPath: CHANGELOG, contentDir: CONTENT });
+  const pages = await renderSitePages(sources(CONTENT));
   assert.deepEqual(
     pages.map((page) => page.slug),
     ["changelog", "privacy"],
@@ -176,7 +266,7 @@ test("pages render with their metadata and a nav limited to the pages built", as
 });
 
 test("without a content directory only the changelog is built", async () => {
-  const pages = await renderSitePages({ changelogPath: CHANGELOG, contentDir: MISSING_CONTENT });
+  const pages = await renderSitePages(sources(MISSING_CONTENT));
   assert.deepEqual(
     pages.map((page) => page.slug),
     ["changelog"],
@@ -185,11 +275,56 @@ test("without a content directory only the changelog is built", async () => {
 });
 
 test("a content page cannot take a path the site already serves", async (t) => {
-  const contentDir = mkdtempSync(join(tmpdir(), "morphy-site-"));
-  t.after(() => rmSync(contentDir, { recursive: true, force: true }));
-  writeFileSync(join(contentDir, "index.md"), "# Index\n", { encoding: "utf-8" });
-  await assert.rejects(
-    renderSitePages({ changelogPath: CHANGELOG, contentDir }),
-    /\/index is already served/,
+  for (const slug of ["index", "changelog", "banner", "models", "colyseus", "stats", "src"]) {
+    const contentDir = withContent(t, { [`${slug}.md`]: "# Taken\n" });
+    await assert.rejects(
+      renderSitePages(sources(contentDir)),
+      /is already served by the site/,
+      slug,
+    );
+  }
+});
+
+test("a content page the nav does not list fails the build", async (t) => {
+  const contentDir = withContent(t, { "faq.md": "# FAQ\n" });
+  await assert.rejects(renderSitePages(sources(contentDir)), /\/faq has no nav link/);
+});
+
+test("a build emits each page as <slug>.html", async () => {
+  const emitted = [];
+  await resolvedPlugin().generateBundle.call({ emitFile: (file) => emitted.push(file) });
+  assert.deepEqual(
+    emitted.map(({ type, fileName }) => ({ type, fileName })),
+    [
+      { type: "asset", fileName: "changelog.html" },
+      { type: "asset", fileName: "privacy.html" },
+    ],
   );
+  assert.match(emitted[0].source, /<title>Changelog - Morphy<\/title>/);
+});
+
+test("the dev server answers a page for GET and HEAD", async () => {
+  const request = devMiddleware();
+  const get = await request("GET", "/changelog?fresh=1");
+  assert.equal(get.served, true);
+  assert.equal(get.headers["content-type"], "text/html; charset=utf-8");
+  assert.match(get.body, /<title>Changelog - Morphy<\/title>/);
+  const head = await request("HEAD", "/privacy");
+  assert.equal(head.served, true);
+  assert.equal(head.body, undefined);
+});
+
+test("the dev server passes every other request on", async () => {
+  const request = devMiddleware();
+  for (const [method, url] of [
+    ["GET", "/"],
+    ["GET", "/colyseus"],
+    ["GET", "/stats"],
+    ["GET", "/assets/x"],
+    ["GET", "/nope"],
+    ["GET", "/privacy.md"],
+    ["POST", "/changelog"],
+  ]) {
+    assert.deepEqual(await request(method, url), { served: false }, `${method} ${url}`);
+  }
 });

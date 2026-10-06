@@ -2,11 +2,15 @@
  * The markdown subset the site pages are written in, rendered to HTML at build
  * time: `#`/`##`/`###` headings, paragraphs, `-` lists with two-space
  * continuation lines, `**bold**`, `` `code` `` and `[text](url)` links. Every
- * text and attribute is escaped; anything outside the subset renders as text.
+ * text and attribute is escaped; anything outside the subset renders as text,
+ * except an indented `-` line, which is refused because nested lists are not
+ * part of it. A link URL ends at the first `)` or whitespace, so it cannot hold
+ * either: a URL that needs one must be percent-encoded (`%29`, `%20`).
  */
 
-const RELEASE_HEADING = /^\[(\d+\.\d+\.\d+)\] - (\d{4}-\d{2}-\d{2})$/;
-const UNRELEASED_HEADING = "[Unreleased]";
+const RELEASE_HEADING =
+  /^\[(\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?)\] - (\d{4}-\d{2}-\d{2})$/;
+const UNRELEASED_HEADING = /^\[?unreleased\]?$/i;
 const HEADING = /^#{1,3} (?=\S)/;
 const LIST_MARKER = "- ";
 const CONTINUATION_INDENT = "  ";
@@ -14,6 +18,7 @@ const LINK_REFERENCE = /^\[[^\]]+\]:\s+\S+\s*$/;
 const INLINE = /`([^`]+)`|\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)/g;
 const SAFE_HREF = /^(https:\/\/\S|mailto:\S|\/(?![/\\]))/;
 const DESCRIPTION_MAX_CHARS = 160;
+const DEFAULT_DESCRIPTION = "Browser multiplayer prop hunt: morph into objects, then hunt or hide.";
 const ELLIPSIS = "...";
 const MONTHS = [
   "January",
@@ -71,8 +76,13 @@ export function escapeHtml(text: string): string {
 export function parseMarkdown(source: string): Block[] {
   const blocks: Block[] = [];
   let open: Extract<Block, { kind: "paragraph" | "list" }> | null = null;
-  for (const line of source.replace(/\r\n?/g, "\n").split("\n")) {
+  for (const [index, line] of source.replace(/\r\n?/g, "\n").split("\n").entries()) {
     const text = line.trim();
+    if (text.startsWith(LIST_MARKER) && !line.startsWith(LIST_MARKER)) {
+      throw new SiteMarkdownError(
+        `line ${index + 1} "${text}" is an indented list item: nested lists are not supported, start it at the margin`,
+      );
+    }
     if (text === "") {
       if (open?.kind === "paragraph") open = null;
       continue;
@@ -168,7 +178,7 @@ function withoutUnreleased(blocks: readonly Block[]): Block[] {
   let hidden = false;
   return blocks.filter((block) => {
     if (block.kind === "heading" && block.level <= 2) {
-      hidden = block.level === 2 && block.text === UNRELEASED_HEADING;
+      hidden = block.level === 2 && UNRELEASED_HEADING.test(block.text);
     }
     return !hidden;
   });
@@ -177,12 +187,14 @@ function withoutUnreleased(blocks: readonly Block[]): Block[] {
 /**
  * Render a Keep a Changelog document: each `## [x.y.z] - YYYY-MM-DD` becomes a
  * release section with its lead paragraphs above its groups, group headings take
- * their player-facing label, and the `[Unreleased]` section is left out.
+ * their player-facing label, and the `[Unreleased]` section (in any case, with or
+ * without brackets) is left out. A version listed twice is refused.
  */
 export function renderChangelog(source: string): string {
   const html: string[] = [];
   let section: "page" | "release" = "page";
   let inGroup = false;
+  const versions = new Set<string>();
   const closeRelease = () => {
     if (section === "release") html.push("</section>");
   };
@@ -193,11 +205,15 @@ export function renderChangelog(source: string): string {
       const release = block.level === 2 ? RELEASE_HEADING.exec(block.text) : null;
       if (release) {
         const [, version = "", iso = ""] = release;
+        if (versions.has(version)) {
+          throw new SiteMarkdownError(`release ${version} is listed twice: merge the two sections`);
+        }
+        versions.add(version);
         section = "release";
         inGroup = false;
         html.push(
-          `<section class="release" id="v${version}">`,
-          `<h2><span class="version">v${version}</span> <time datetime="${iso}">${formatReleaseDate(iso)}</time></h2>`,
+          `<section class="release" id="v${escapeHtml(version)}">`,
+          `<h2><span class="version">v${escapeHtml(version)}</span> <time datetime="${iso}">${formatReleaseDate(iso)}</time></h2>`,
         );
         continue;
       }
@@ -227,9 +243,10 @@ export function renderChangelog(source: string): string {
 
 function describe(blocks: readonly Block[]): string {
   const first = blocks.find((block) => block.kind === "paragraph");
-  const text = first ? plainText(first.text) : "";
-  if (text.length <= DESCRIPTION_MAX_CHARS) return text;
-  const cut = text.slice(0, DESCRIPTION_MAX_CHARS - ELLIPSIS.length);
+  if (!first) return DEFAULT_DESCRIPTION;
+  const characters = Array.from(plainText(first.text));
+  if (characters.length <= DESCRIPTION_MAX_CHARS) return characters.join("");
+  const cut = characters.slice(0, DESCRIPTION_MAX_CHARS - ELLIPSIS.length).join("");
   const lastSpace = cut.lastIndexOf(" ");
   return `${lastSpace > 0 ? cut.slice(0, lastSpace) : cut}${ELLIPSIS}`;
 }
@@ -242,7 +259,10 @@ function pageContent(blocks: readonly Block[], body: string): PageContent {
   return { title: plainText(heading.text), description: describe(blocks), body };
 }
 
-/** A plain page: its `#` heading names it, its first paragraph describes it. */
+/**
+ * A plain page: its `#` heading names it, its first paragraph describes it (the
+ * game's own description when it has none).
+ */
 export function markdownPage(source: string): PageContent {
   return pageContent(parseMarkdown(source), renderMarkdown(source));
 }
