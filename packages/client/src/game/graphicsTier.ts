@@ -22,7 +22,6 @@ export const GRAPHICS_LABEL: Record<GraphicsPreference, string> = {
 export interface ShadowSettings {
   mapSize: number;
   radius: number;
-  refreshHz: number;
 }
 
 /** A theme's bloom over bright pixels, see `BloomEffect` in `postprocessing` for the three parameters. */
@@ -66,9 +65,9 @@ export interface PostSettings {
  * What each tier turns on. Low drops everything a weak integrated GPU pays for
  * per pixel or per frame (supersampling, MSAA, the shadow pass, every post pass,
  * backdrop blur on the HUD); Medium keeps the look (bloom, grade, vignette) at a
- * quarter of the shadow texels and half the refresh, with ambient occlusion traced at
- * half resolution; High is the full look with a wider, sharper shadow area and
- * full-resolution occlusion.
+ * quarter of the shadow texels, with ambient occlusion traced at half resolution;
+ * High is the full look with a wider, sharper shadow area and full-resolution
+ * occlusion.
  */
 export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
   low: {
@@ -84,7 +83,7 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
   medium: {
     dpr: [1, 1],
     antialias: true,
-    shadows: { mapSize: 1024, radius: 25, refreshHz: 15 },
+    shadows: { mapSize: 1024, radius: 25 },
     glass: true,
     bloom: true,
     ao: { halfRes: true },
@@ -94,7 +93,7 @@ export const TIER_SETTINGS: Record<GraphicsTier, TierSettings> = {
   high: {
     dpr: [1, 1.25],
     antialias: true,
-    shadows: { mapSize: 2048, radius: 40, refreshHz: 30 },
+    shadows: { mapSize: 2048, radius: 40 },
     glass: true,
     bloom: true,
     ao: { halfRes: false },
