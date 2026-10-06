@@ -707,7 +707,6 @@ export const Scene = memo(function Scene({
           meta={meta}
           ids={ids}
           tauntPulseRef={tauntPulseRef}
-          refreshHz={shadows.refreshHz}
         />
       )}
       <SunLight
@@ -787,6 +786,13 @@ interface ShadowPose {
   rot: number;
 }
 
+/**
+ * Asks for a shadow pass on every frame until {@link SHADOW_SETTLE_S} after the last
+ * change to a caster (the local pose, a remote pose, the roster or a player's meta, a
+ * taunt pulse), then only on a heartbeat while the scene is still. Never at a lower
+ * rate while something moves: a body drawn at this frame's pose over a depth map from
+ * an earlier one leaves its shadow behind and falls into it, which reads as flicker.
+ */
 function ShadowRefresh({
   playersRef,
   localPos,
@@ -794,7 +800,6 @@ function ShadowRefresh({
   meta,
   ids,
   tauntPulseRef,
-  refreshHz,
 }: {
   playersRef: PlayersRef;
   localPos: PlayerPosRef;
@@ -802,10 +807,8 @@ function ShadowRefresh({
   meta: SceneMetaMap;
   ids: string[];
   tauntPulseRef: TauntPulseRef;
-  refreshHz: number;
 }) {
   const gl = useThree((state) => state.gl);
-  const checkAccum = useRef(0);
   const sinceRender = useRef(0);
   const sinceChange = useRef(0);
   const remotePoses = useRef(new Map<string, ShadowPose>());
@@ -830,11 +833,8 @@ function ShadowRefresh({
   }, [meta, ids]);
 
   useGuardedFrame((_, delta) => {
-    checkAccum.current += delta;
     sinceRender.current += delta;
     sinceChange.current += delta;
-    if (checkAccum.current < 1 / refreshHz) return;
-    checkAccum.current = 0;
 
     const pos = localPos.current;
     const yaw = motionRef.current.yaw;

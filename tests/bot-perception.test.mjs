@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { buildObstacles } from "../packages/bot/src/collision.ts";
 import {
   BOT_PROBE_INTERVAL_MAX_MS,
   BOT_TELL_WINDOW_MS,
@@ -376,6 +377,23 @@ test("a scene prop in sight reads exactly as a disguised player standing still",
   assert.equal(obs.entities.length, 2);
   const [a, b] = obs.entities;
   assert.deepEqual(shapeOf(a), shapeOf(b), "nothing but position tells the two apart");
+});
+
+test("decor nobody can wear, a parked car, is never shown as a disguise", () => {
+  const reflex = new Reflex(0.6, "limited");
+  reflex.setMap({
+    ...MAP,
+    props: [{ type: "car", position: { x: -5, y: 0, z: -2 }, rotation: 0 }],
+    propCatalog: [{ ...CRATE, id: "car", decor: true }],
+  });
+  reflex.syncPosition(0, 0, 0);
+  assert.deepEqual(reflex.buildObservation(world(GONE), 1, 1_000).entities, []);
+  const parked = buildObstacles({
+    ...MAP,
+    props: [{ type: "car", position: { x: -5, y: 0, z: -2 }, rotation: 0 }],
+    propCatalog: [{ ...CRATE, id: "car", decor: true }],
+  });
+  assert.equal(parked.length, 1, "but a bot still walks round it");
 });
 
 test("a prop is shown no scenery, since it hunts nobody", () => {

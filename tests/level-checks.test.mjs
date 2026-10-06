@@ -5,6 +5,7 @@ import { PLAYER_RADIUS, STEP_HEIGHT } from "../packages/client/src/game/movement
 import {
   FINDING_CODES,
   objectFootprint,
+  outdoorEntrances,
   parseLevelDocument,
   rectExtent,
   shapeExtent,
@@ -24,7 +25,7 @@ const CONTEXT = { catalog: SPACE_CATALOG, cards: ASSET_CARDS, tags: ASSET_TAGS }
 const TABLE = SPACE_CATALOG.find((def) => def.id === "table");
 const NEAR = 1e-9;
 
-/** Two 8 x 8 m rooms side by side with one door, three chairs in each, spawns in the open. */
+/** Two 8 x 8 m rooms side by side with one door, three chairs west and three armchairs east, spawns in the open. */
 function clean() {
   return {
     version: 1,
@@ -39,9 +40,9 @@ function clean() {
       { id: "west-1", type: "chair", x: -6, z: -2, yaw: 0 },
       { id: "west-2", type: "chair", x: -6, z: 0, yaw: 0 },
       { id: "west-3", type: "chair", x: -6, z: 2, yaw: 0 },
-      { id: "east-1", type: "chair", x: 6, z: -2, yaw: 0 },
-      { id: "east-2", type: "chair", x: 6, z: 0, yaw: 0 },
-      { id: "east-3", type: "chair", x: 6, z: 2, yaw: 0 },
+      { id: "east-1", type: "chair-armrest", x: 6, z: -2, yaw: 0 },
+      { id: "east-2", type: "chair-armrest", x: 6, z: 0, yaw: 0 },
+      { id: "east-3", type: "chair-armrest", x: 6, z: 2, yaw: 0 },
     ],
     spawns: { props: [{ x: 3, z: -2 }], hunters: [{ x: -3, z: -2 }] },
   };
@@ -144,6 +145,50 @@ test("a clean document has no findings and full metrics", () => {
   assert.ok(metrics["room.west.sightline.m"] > 0);
 });
 
+/** A paved street over a row of homes, with a chair on the street in front of the first door. */
+function blockedEntrance() {
+  const raw = {
+    version: 1,
+    id: "station",
+    setting: "outdoor",
+    grid: { cols: 4, rows: 4 },
+    rooms: [{ id: "street", ground: "paving", rects: [{ i0: 0, i1: 4, j0: 0, j1: 2 }] }],
+    doors: [],
+    blocks: [{ id: "homes", zone: "residential", rects: [{ i0: 0, i1: 4, j0: 2, j1: 4 }] }],
+    objects: [],
+    spawns: { props: [{ x: -6, z: -6 }], hunters: [{ x: 6, z: -6 }] },
+  };
+  const doc = parseLevelDocument(raw, { catalog: SPACE_CATALOG });
+  const [entrance] = outdoorEntrances(doc);
+  assert.ok(entrance, "the homes have a door onto the street");
+  raw.objects.push({
+    id: "street-1",
+    type: "chair",
+    x: entrance.x + entrance.nx,
+    z: entrance.z + entrance.nz,
+    yaw: 0,
+  });
+  return raw;
+}
+
+/** A 4 m lane between two blocks with a table left across the middle of it. */
+function blockedLane() {
+  return {
+    version: 1,
+    id: "station",
+    setting: "outdoor",
+    grid: { cols: 3, rows: 3 },
+    rooms: [{ id: "lane", ground: "paving", rects: [{ i0: 1, i1: 2, j0: 0, j1: 3 }] }],
+    doors: [],
+    blocks: [
+      { id: "west", zone: "residential", rects: [{ i0: 0, i1: 1, j0: 0, j1: 3 }] },
+      { id: "east", zone: "residential", rects: [{ i0: 2, i1: 3, j0: 0, j1: 3 }] },
+    ],
+    objects: [{ id: "lane-1", type: "table", x: 0, z: 0, yaw: 0 }],
+    spawns: { props: [{ x: 0, z: 5 }], hunters: [{ x: 0, z: -5 }] },
+  };
+}
+
 const CASES = [
   [
     "object.unmeasured",
@@ -151,7 +196,9 @@ const CASES = [
     {
       ...CONTEXT,
       cards: Object.fromEntries(
-        Object.entries(ASSET_CARDS).filter(([model]) => !model.endsWith("/chair.glb")),
+        Object.entries(ASSET_CARDS).filter(
+          ([model]) => !/\/station\/chair(-armrest)?\.glb$/.test(model),
+        ),
       ),
     },
   ],
@@ -181,11 +228,19 @@ const CASES = [
     }),
   ],
   ["room.few-disguises", edited((d) => d.objects.splice(0, 1))],
+  [
+    "map.few-disguise-types",
+    edited((d) => {
+      d.objects = d.objects.filter((object) => object.id.startsWith("west-"));
+    }),
+  ],
   ["object.unique-type", edited((d) => Object.assign(d.objects[0], { type: "barrel" }))],
   [
     "light.wall-clearance",
     edited((d) => Object.assign(d, { lights: [{ id: "light-1", x: -6, z: 0, kind: "room" }] })),
   ],
+  ["entrance.blocked", blockedEntrance()],
+  ["passage.blocked", blockedLane()],
 ];
 
 test("every finding code has a case", () => {
@@ -223,7 +278,11 @@ test("a door with a chair in its doorway names the side and the chair", () => {
 });
 
 test("a room with no door is unreachable as a whole", () => {
-  const result = report(CASES[7][1]);
+  const mirrored = edited((d) => {
+    d.doors.pop();
+    for (const object of d.objects) object.type = "chair";
+  });
+  const result = report(mirrored);
   const [finding] = result.findings.filter((f) => f.code === "floor.unreachable");
   assert.ok(finding.entities.includes("east"));
   assert.equal(finding.hint, "add a door into east");

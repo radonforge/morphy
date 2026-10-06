@@ -7,14 +7,22 @@ import {
   levelOverlays,
   moveLight,
   OUTDOOR_MODEL_PATHS,
+  objectFootprint,
+  outdoorEntrances,
   parseLevelDocument,
   proposeLights,
   TILE,
   validateLevel,
 } from "../packages/level/src/index.ts";
 import { wallRects } from "../packages/level/src/walls.ts";
+import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
 import { URBAN_CATALOG } from "../packages/server/src/urbanCatalog.ts";
-import { ASSET_CARDS, ASSET_TAGS, parseMapDefinition } from "../packages/shared/src/index.ts";
+import {
+  ASSET_CARDS,
+  ASSET_TAGS,
+  LEVEL_ENTRANCE_CLEARANCE_SIDE,
+  parseMapDefinition,
+} from "../packages/shared/src/index.ts";
 
 const OPTIONS = { catalog: URBAN_CATALOG };
 const CONTEXT = { catalog: URBAN_CATALOG, cards: ASSET_CARDS, tags: ASSET_TAGS };
@@ -418,4 +426,208 @@ test("a street lamp's light carries the height of its head", () => {
   const [light] = map.lights;
   assert.ok(light.y > top - 0.5 && light.y < top, `light at ${light.y} m under a ${top} m lamp`);
   assert.deepEqual(parseMapDefinition(map).lights[0], light);
+});
+
+const entranceFindings = (doc) =>
+  validateLevel(parse(doc), CONTEXT).findings.filter((f) => f.code === "entrance.blocked");
+
+/** The first entrance of the fixture's homes, and the point `depth` metres out in front of it. */
+function frontOf(depth) {
+  const [entrance] = outdoorEntrances(parse(fixture()));
+  assert.ok(entrance, "the fixture's homes have an entrance");
+  return {
+    entrance,
+    x: entrance.x + entrance.nx * depth,
+    z: entrance.z + entrance.nz * depth,
+  };
+}
+
+test("the homes open onto the street they face, at the edge of their lot", () => {
+  const { entrance } = frontOf(0);
+  assert.deepEqual([entrance.nx, entrance.nz], [0, -1], "it opens north, onto the park");
+  assert.equal(entrance.z, 0, "on the block's north edge");
+  assert.ok(entrance.width > 0.5 && entrance.width < 3, `a door ${entrance.width} m wide`);
+});
+
+/** A 2 x 2 cell home in the middle of a 6 x 6 map whose only ground is a street on `side`. */
+function lonelyHome(side) {
+  const turn = (r) => ({ i0: 6 - r.j1, i1: 6 - r.j0, j0: r.i0, j1: r.i1 });
+  let street = { i0: 2, i1: 4, j0: 0, j1: 2 };
+  for (let k = 0; k < side; k++) street = turn(street);
+  const cx = -12 + ((street.i0 + street.i1) / 2) * TILE;
+  const cz = -12 + ((street.j0 + street.j1) / 2) * TILE;
+  return parse({
+    version: 1,
+    id: "urban",
+    setting: "outdoor",
+    grid: { cols: 6, rows: 6 },
+    rooms: [{ id: "street", ground: "paving", rects: [street] }],
+    doors: [],
+    blocks: [{ id: "home", zone: "residential", rects: [{ i0: 2, i1: 4, j0: 2, j1: 4 }] }],
+    objects: [],
+    spawns: { props: [{ x: cx, z: cz }], hunters: [{ x: cx + 1, z: cz }] },
+  });
+}
+
+test("a home turned to each side opens onto its street, the same door turned with it", () => {
+  const north = outdoorEntrances(lonelyHome(0));
+  assert.ok(north.length > 0, "the home has a door on its street");
+  for (let side = 0; side < 4; side++) {
+    const entrances = outdoorEntrances(lonelyHome(side));
+    const back = entrances.map((e) => {
+      let [x, z, nx, nz] = [e.x, e.z, e.nx, e.nz];
+      for (let k = 0; k < side; k++) [x, z, nx, nz] = [z, -x, nz, -nx];
+      return [x, z, nx, nz, e.width];
+    });
+    assert.equal(back.length, north.length, `side ${side}: as many entrances`);
+    back.forEach(([x, z, nx, nz, width], k) => {
+      const want = north[k];
+      assert.ok(Math.abs(x - want.x) < 1e-6 && Math.abs(z - want.z) < 1e-6, `side ${side} at`);
+      assert.deepEqual([nx || 0, nz || 0], [want.nx, want.nz], `side ${side} facing`);
+      assert.ok(Math.abs(width - want.width) < 1e-6, `side ${side} width`);
+    });
+  }
+});
+
+test("an object or a street lamp in front of an entrance is reported", () => {
+  const front = frontOf(1.2);
+  const planted = edit((d) =>
+    Object.assign(d.objects[0], { type: "planter", x: front.x, z: front.z }),
+  )(fixture());
+  const [blocked] = entranceFindings(planted);
+  assert.deepEqual(blocked.entities.slice(1), ["tree-1"]);
+  assert.match(blocked.entities[0], /^entrance@/);
+  const lit = edit((d) => {
+    d.objects = [];
+    Object.assign(d.lights[0], { x: front.x, z: front.z });
+  })(fixture());
+  assert.deepEqual(entranceFindings(lit)[0].entities.slice(1), ["lamp-1"]);
+});
+
+test("a planter may flank a door, just past the side margin, but not stand in it", () => {
+  const front = frontOf(0.6);
+  const [card] = [ASSET_CARDS[URBAN_CATALOG.find((def) => def.id === "planter").model]];
+  assert.ok(card, "the planter has a card");
+  const planter = edit((d) => Object.assign(d.objects[0], { type: "planter", x: 0, z: 0 }))(
+    fixture(),
+  );
+  const half = objectFootprint(parse(planter).objects[0], CONTEXT).rect.halfX;
+  const edge = front.entrance.width / 2 + LEVEL_ENTRANCE_CLEARANCE_SIDE + half;
+  const at = (dx) =>
+    edit((d) => Object.assign(d.objects[0], { type: "planter", x: front.x + dx, z: front.z }))(
+      fixture(),
+    );
+  assert.deepEqual(entranceFindings(at(edge + 0.1)), [], "flanking the door");
+  assert.equal(entranceFindings(at(edge - 0.2)).length, 1, "inside the margin");
+});
+
+test("a parked car is decor: never a disguise, so never the only one of its type", () => {
+  const doc = edit((d) => Object.assign(d.objects[0], { type: "sedan", x: 0, z: -6 }))(fixture());
+  const report = validateLevel(parse(doc), CONTEXT);
+  assert.equal(report.metrics["room.street.objects"], 1);
+  assert.equal(report.findings.filter((f) => f.code === "object.unique-type").length, 0);
+  const planter = edit((d) => Object.assign(d.objects[0], { type: "planter", x: 0, z: -6 }))(
+    fixture(),
+  );
+  const worn = validateLevel(parse(planter), CONTEXT);
+  assert.equal(worn.findings.filter((f) => f.code === "object.unique-type").length, 1);
+});
+
+/**
+ * An 8 m street along the north edge and another along the south, joined by a 4 m lane
+ * between two blocks, so the lane is reachable from both ends.
+ */
+function lanes(objects) {
+  return {
+    version: 1,
+    id: "urban",
+    setting: "outdoor",
+    grid: { cols: 10, rows: 7 },
+    rooms: [
+      { id: "north", ground: "paving", rects: [{ i0: 0, i1: 10, j0: 0, j1: 2 }] },
+      { id: "lane", ground: "paving", rects: [{ i0: 4, i1: 5, j0: 2, j1: 5 }] },
+      { id: "south", ground: "paving", rects: [{ i0: 0, i1: 10, j0: 5, j1: 7 }] },
+    ],
+    doors: [],
+    blocks: [
+      { id: "west", zone: "residential", rects: [{ i0: 0, i1: 4, j0: 2, j1: 5 }] },
+      { id: "east", zone: "residential", rects: [{ i0: 5, i1: 10, j0: 2, j1: 5 }] },
+    ],
+    objects,
+    spawns: { props: [{ x: 14, z: 10 }], hunters: [{ x: -14, z: -10 }] },
+    lights: [],
+  };
+}
+
+const passages = (objects) =>
+  validateLevel(parse(lanes(objects)), CONTEXT).findings.filter(
+    (f) => f.code === "passage.blocked",
+  );
+
+test("a car parked along the kerb of a street leaves its way open", () => {
+  assert.deepEqual(passages([{ id: "car", type: "sedan", x: 0, z: -12.5, yaw: QUARTER }]), []);
+});
+
+test("a car left in a lane closes it, though a body squeezes past", () => {
+  const found = passages([{ id: "car", type: "sedan", x: -2, z: 0, yaw: 0 }]);
+  assert.equal(found.length, 1);
+  assert.deepEqual(found[0].entities, ["car"]);
+  assert.equal(found[0].severity, "warning");
+});
+
+test("a car across the mouth of a lane closes it", () => {
+  const found = passages([{ id: "car", type: "sedan", x: -2, z: -8.75, yaw: QUARTER }]);
+  assert.deepEqual(
+    found.map((f) => f.entities),
+    [["car"]],
+  );
+});
+
+test("a car left in the middle of an 8 m street is walked round, not reported", () => {
+  assert.deepEqual(passages([{ id: "car", type: "sedan", x: 0, z: -10, yaw: QUARTER }]), []);
+});
+
+test("a car at the side of a lane that keeps a wide enough way open is not reported", () => {
+  assert.deepEqual(passages([{ id: "car", type: "hatchback-sports", x: -3.2, z: 0, yaw: 0 }]), []);
+});
+
+test("indoors, furniture across a room is never reported as closing a passage", () => {
+  const doc = parseLevelDocument(
+    {
+      version: 1,
+      id: "station",
+      grid: { cols: 1, rows: 3 },
+      rooms: [{ id: "hall", rects: [{ i0: 0, i1: 1, j0: 0, j1: 3 }] }],
+      doors: [],
+      objects: [{ id: "hall-1", type: "table", x: 0, z: 0, yaw: 0 }],
+      spawns: { props: [{ x: 0, z: 5 }], hunters: [{ x: 0, z: -5 }] },
+    },
+    { catalog: SPACE_CATALOG },
+  );
+  const report = validateLevel(doc, {
+    catalog: SPACE_CATALOG,
+    cards: ASSET_CARDS,
+    tags: ASSET_TAGS,
+  });
+  assert.equal(
+    report.findings.some((f) => f.code === "passage.blocked"),
+    false,
+  );
+  const outdoors = parseLevelDocument(
+    {
+      ...doc,
+      setting: "outdoor",
+      rooms: [{ id: "hall", ground: "paving", rects: doc.rooms[0].rects }],
+      blocks: [],
+    },
+    { catalog: SPACE_CATALOG },
+  );
+  assert.equal(
+    validateLevel(outdoors, {
+      catalog: SPACE_CATALOG,
+      cards: ASSET_CARDS,
+      tags: ASSET_TAGS,
+    }).findings.some((f) => f.code === "passage.blocked"),
+    true,
+  );
 });

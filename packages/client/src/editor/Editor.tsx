@@ -213,6 +213,8 @@ function checkFromFinding(finding: Finding, doc: LevelDocument): CheckItem {
   for (const entity of finding.entities) {
     const object = doc.objects.find((candidate) => candidate.id === entity);
     if (object) return { at: object, ...item, select: { kind: "object", id: object.id } };
+    const light = doc.lights?.find((candidate) => candidate.id === entity);
+    if (light) return { at: light, ...item, select: { kind: "light", id: light.id } };
     const room = doc.rooms.find((candidate) => candidate.id === entity);
     if (room?.rects[0]) {
       return {

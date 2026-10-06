@@ -48,6 +48,25 @@ test("reference cards match the measured values", () => {
   near(barrel.center.z, 1.5, "barrel centre z");
 });
 
+test("a City Kit house reads its front and back doors, and nothing else carries any", () => {
+  assert.deepEqual(ASSET_CARDS["/models/urban/building-type-a.glb"].doors, [
+    { x: 0, z: -0.344, width: 0.14, facing: "-z" },
+    { x: 0, z: 0.456, width: 0.14, facing: "+z" },
+  ]);
+  const doorless = Object.values(ASSET_CARDS).filter(
+    (card) => !/^\/models\/urban\/(?:(?:commercial|industrial)\/)?building-/.test(card.model),
+  );
+  assert.ok(doorless.every((card) => card.doors === undefined));
+  const houses = Object.values(ASSET_CARDS).filter((card) =>
+    /^\/models\/urban\/building-type-/.test(card.model),
+  );
+  assert.ok(houses.length > 0 && houses.every((card) => (card.doors ?? []).length > 0));
+  const facings = new Set(["+x", "-x", "+z", "-z"]);
+  for (const card of Object.values(ASSET_CARDS)) {
+    for (const door of card.doors ?? []) assert.ok(facings.has(door.facing), card.model);
+  }
+});
+
 const GLB_MAGIC = 0x46546c67;
 const GLB_JSON_CHUNK = 0x4e4f534a;
 const GLB_BIN_CHUNK = 0x004e4942;
@@ -60,7 +79,9 @@ function chunk(type, body) {
   return Buffer.concat([head, body]);
 }
 
-function syntheticGlb() {
+function syntheticGlb(
+  node = { rotation: [0, Math.SQRT1_2, 0, Math.SQRT1_2], translation: [0, 1, 0] },
+) {
   const padding = [9, 9, 9];
   const corner = (x, z) => [x, 0, z, ...padding];
   const bin = Buffer.from(
@@ -77,7 +98,7 @@ function syntheticGlb() {
     asset: { version: "2.0" },
     scene: 0,
     scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, rotation: [0, Math.SQRT1_2, 0, Math.SQRT1_2], translation: [0, 1, 0] }],
+    nodes: [{ mesh: 0, ...node }],
     meshes: [{ primitives: [{ attributes: { POSITION: 0 } }] }],
     accessors: [
       {
@@ -110,6 +131,11 @@ test("a rotated node, an index-less primitive and an interleaved stride yield th
     minY: 1,
     surfaces: [{ y: 1, area: 4 }],
   });
+});
+
+test("a mirrored node still faces its floor up, its triangles read the other way round", () => {
+  const card = extractAssetCard(syntheticGlb({ scale: [-1, 1, 1] }), "/models/mirrored.glb");
+  assert.deepEqual(card.surfaces, [{ y: 0, area: 4 }]);
 });
 
 test("every catalog prop's model is tagged, and nothing else is", () => {

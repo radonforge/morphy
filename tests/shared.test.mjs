@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   colliderAabb,
+  disguiseTypes,
   isWeaponId,
   MapValidationError,
   parseMapDefinition,
@@ -88,4 +89,14 @@ test("shared ray/AABB geometry returns the nearest intersection", () => {
   const { min, max } = colliderAabb(collider);
   assert.equal(rayAabb({ x: 0, y: 1, z: 0 }, { x: 0, y: 0, z: 1 }, min, max, 20), 4);
   assert.equal(rayAabb({ x: 3, y: 1, z: 0 }, { x: 0, y: 0, z: 1 }, min, max, 20), null);
+});
+
+test("disguiseTypes lists the disguises a map places, in catalog order, and nothing else", () => {
+  const def = (id, decor) => ({ id, name: id, parts: [], ...(decor ? { decor } : {}) });
+  const at = (type) => ({ type, position: { x: 0, y: 0, z: 0 }, rotation: 0 });
+  const map = {
+    propCatalog: [def("crate"), def("fence"), def("car", true), def("barrel")],
+    props: [at("barrel"), at("car"), at("crate"), at("barrel")],
+  };
+  assert.deepEqual(disguiseTypes(map), ["crate", "barrel"]);
 });

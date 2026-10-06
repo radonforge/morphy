@@ -21,6 +21,31 @@ export interface PropDefinition {
   parts: PrimitiveSpec[];
   model?: string;
   modelScale?: number;
+  /**
+   * Dresses the map but nobody wears it (a parked car, a street sign): never dealt or
+   * rerolled into, never counted as a disguise, never suspected by a bot.
+   */
+  decor?: boolean;
+}
+
+/** Whether players can wear `def`, the catalog entries a round deals and a reroll draws from. */
+export function isDisguise(def: PropDefinition): boolean {
+  return def.decor !== true;
+}
+
+/**
+ * The types a round deals and a reroll draws from: the disguises `map` places at
+ * least once, in catalog order. A catalog entry the map never places is left
+ * out, since a prop wearing it would look like nothing around it.
+ */
+export function disguiseTypes(map: {
+  props: readonly { type: string }[];
+  propCatalog: readonly PropDefinition[];
+}): string[] {
+  const placed = new Set(map.props.map((prop) => prop.type));
+  return map.propCatalog
+    .filter((def) => isDisguise(def) && placed.has(def.id))
+    .map((def) => def.id);
 }
 
 export interface PropInstance {
@@ -223,7 +248,9 @@ function isPropDefinition(value: unknown): value is PropDefinition {
     Array.isArray(value.parts) &&
     value.parts.every(isPrimitive) &&
     (value.model === undefined || typeof value.model === "string") &&
-    (value.modelScale === undefined || (isFiniteNumber(value.modelScale) && value.modelScale > 0))
+    (value.modelScale === undefined ||
+      (isFiniteNumber(value.modelScale) && value.modelScale > 0)) &&
+    (value.decor === undefined || typeof value.decor === "boolean")
   );
 }
 

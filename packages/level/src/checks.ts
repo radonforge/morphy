@@ -1,11 +1,18 @@
 import {
+  disguiseTypes,
+  isDisguise,
   LEVEL_BODY_RADIUS,
+  LEVEL_ENTRANCE_CLEARANCE_DEPTH,
+  LEVEL_ENTRANCE_CLEARANCE_SIDE,
   LEVEL_MIN_DISGUISES,
   LEVEL_OVERLAP_TOLERANCE,
+  LEVEL_PASSAGE_DETOUR_SLACK,
+  LEVEL_PASSAGE_WIDTH,
   LEVEL_SAMPLE_CELL,
   LEVEL_SIGHT_BLOCK_HEIGHT,
   LEVEL_SIGHTLINE_MAX,
   LEVEL_UNREACHABLE_MIN_AREA,
+  MIN_DISGUISE_TYPES,
 } from "@morphy/shared";
 import { isOutdoor, type LevelDocument, type LevelObject, type LevelPoint } from "./document";
 import { TILE } from "./floorplan";
@@ -15,12 +22,15 @@ import {
   circleHitsRect,
   overlapDepth,
   penetration,
+  type Rect2,
   rectCorners,
   rectExtent,
+  rectFromExtent,
   snapToward,
   spansMeet,
 } from "./geometry";
 import { DECK_LIGHT_CLEARANCE_SLACK, DECK_LIGHT_WALL_CLEARANCE, wallClearance } from "./lights";
+import { LAMP_POLE_WIDTH, outdoorEntrances } from "./outdoor";
 import {
   components,
   floodReach,
@@ -30,6 +40,8 @@ import {
   type SampleGrid,
   type Sightline,
   sampleSpace,
+  stepDistances,
+  wideSamples,
 } from "./samples";
 import { buildSpace, type LevelSpace } from "./space";
 
@@ -64,10 +76,13 @@ export const FINDING_CODES = [
   "object.open-ground",
   "object.outside-room",
   "door.blocked",
+  "entrance.blocked",
   "spawn.blocked",
   "floor.unreachable",
+  "passage.blocked",
   "room.sightline",
   "room.few-disguises",
+  "map.few-disguise-types",
   "object.unique-type",
   "light.wall-clearance",
 ] as const;
@@ -209,6 +224,54 @@ function doorFindings(space: LevelSpace, findings: Finding[]): void {
   }
 }
 
+function entranceFindings(space: LevelSpace, findings: Finding[]): void {
+  if (!isOutdoor(space.doc)) return;
+  const half = LEVEL_ENTRANCE_CLEARANCE_SIDE;
+  const poles = (space.doc.lights ?? [])
+    .filter((light) => light.fixture !== undefined)
+    .map((light) => ({
+      id: light.id,
+      rect: rectFromExtent({
+        minX: light.x - LAMP_POLE_WIDTH / 2,
+        maxX: light.x + LAMP_POLE_WIDTH / 2,
+        minZ: light.z - LAMP_POLE_WIDTH / 2,
+        maxZ: light.z + LAMP_POLE_WIDTH / 2,
+      }),
+    }));
+  for (const entrance of outdoorEntrances(space.doc)) {
+    const across = entrance.width / 2 + half;
+    const farX = entrance.x + entrance.nx * LEVEL_ENTRANCE_CLEARANCE_DEPTH;
+    const farZ = entrance.z + entrance.nz * LEVEL_ENTRANCE_CLEARANCE_DEPTH;
+    const zone = rectFromExtent({
+      minX: entrance.nx === 0 ? entrance.x - across : Math.min(entrance.x, farX),
+      maxX: entrance.nx === 0 ? entrance.x + across : Math.max(entrance.x, farX),
+      minZ: entrance.nz === 0 ? entrance.z - across : Math.min(entrance.z, farZ),
+      maxZ: entrance.nz === 0 ? entrance.z + across : Math.max(entrance.z, farZ),
+    });
+    const blocks = (rect: Rect2) => overlapDepth(rect, zone) > LEVEL_OVERLAP_TOLERANCE;
+    const objects = space.doc.objects.filter((object) => {
+      const footprint = space.footprints.get(object.id);
+      return footprint !== undefined && blocks(footprint.rect);
+    });
+    const lamps = poles.filter((pole) => blocks(pole.rect));
+    if (objects.length === 0 && lamps.length === 0) continue;
+    const extent = rectExtent(zone);
+    const names = [...objects.map(label), ...lamps.map((lamp) => `${lamp.id} (street lamp)`)];
+    findings.push({
+      code: "entrance.blocked",
+      severity: "warning",
+      message: `the entrance at ${point(entrance)} is blocked by ${names.join(", ")}`,
+      entities: [
+        `entrance@${num(entrance.x)},${num(entrance.z)}`,
+        ...objects.map((object) => object.id),
+        ...lamps.map((lamp) => lamp.id),
+      ],
+      at: { x: zone.x, z: zone.z },
+      hint: `keep x ${num(extent.minX)}..${num(extent.maxX)}, z ${num(extent.minZ)}..${num(extent.maxZ)} free in front of the door`,
+    });
+  }
+}
+
 function spawnFindings(space: LevelSpace, findings: Finding[]): void {
   for (const kind of ["props", "hunters"] as const) {
     space.doc.spawns[kind].forEach((spawn, index) => {
@@ -325,12 +388,94 @@ function reachFindings(
   return grid;
 }
 
+function centralSample(grid: SampleGrid, group: readonly number[]): LevelPoint {
+  const points = group.map((index) => grid.centre(index));
+  const cx = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+  const cz = points.reduce((sum, p) => sum + p.z, 0) / points.length;
+  return points.reduce((best, p) =>
+    Math.hypot(p.x - cx, p.z - cz) < Math.hypot(best.x - cx, best.z - cz) ? p : best,
+  );
+}
+
+/**
+ * Outdoors, a `passage.blocked` warning where objects close a way a {@link LEVEL_PASSAGE_WIDTH} wide
+ * walker takes on the bare layout. Around each patch the objects take from that walker, a
+ * free-standing obstacle costs at most half its outline to walk round; a patch whose far side
+ * is further than that, plus {@link LEVEL_PASSAGE_DETOUR_SLACK}, has shut a lane or a gap.
+ */
+function passageFindings(space: LevelSpace, grid: SampleGrid, findings: Finding[]): void {
+  const bare = wideSamples(grid, grid.open, LEVEL_PASSAGE_WIDTH);
+  const dressed = wideSamples(grid, grid.walkable, LEVEL_PASSAGE_WIDTH);
+  const slack = LEVEL_PASSAGE_DETOUR_SLACK / LEVEL_SAMPLE_CELL;
+  for (const group of components(grid, (index) => !!bare[index] && !dressed[index])) {
+    const edge = new Set<number>();
+    const blockers = new Set<string>();
+    for (const index of group) {
+      for (const id of grid.blockers.get(index) ?? []) blockers.add(id);
+      for (const next of neighbours(grid, index)) {
+        if (dressed[next]) edge.add(next);
+        for (const id of grid.blockers.get(next) ?? []) blockers.add(id);
+      }
+    }
+    if (edge.size < 2 || blockers.size === 0) continue;
+    const sides = [...edge];
+    const from = sides[0]!;
+    const span = group.length + edge.size;
+    const straight = stepDistances(grid, bare, [from], span);
+    const allowed = edge.size / 2 + slack;
+    const around = stepDistances(grid, dressed, [from], span + allowed);
+    const excess = (index: number): number => {
+      const direct = straight[index]!;
+      if (direct < 0) return -Infinity;
+      const walked = around[index]!;
+      return walked < 0 ? Infinity : walked - direct;
+    };
+    const cut = sides.reduce((worst, index) => (excess(index) > excess(worst) ? index : worst));
+    if (excess(cut) <= allowed) continue;
+    const at = centralSample(grid, group);
+    const named = [...blockers].sort().slice(0, MAX_NAMED_BLOCKERS);
+    const objects = named.map((id) => {
+      const object = space.doc.objects.find((candidate) => candidate.id === id);
+      return object === undefined ? id : label(object);
+    });
+    const a = grid.centre(from);
+    const b = grid.centre(cut);
+    const walked = around[cut]!;
+    findings.push({
+      code: "passage.blocked",
+      severity: "warning",
+      message:
+        walked < 0
+          ? `${objects.join(", ")} close the way from ${point(a)} to ${point(b)} in ${regionName(space.regionAt(at.x, at.z))}: no way round under ${num((straight[cut]! + allowed) * LEVEL_SAMPLE_CELL)} m`
+          : `${objects.join(", ")} turn the ${num(straight[cut]! * LEVEL_SAMPLE_CELL)} m walk from ${point(a)} to ${point(b)} into ${num(walked * LEVEL_SAMPLE_CELL)} m in ${regionName(space.regionAt(at.x, at.z))}`,
+      entities: named,
+      at,
+      hint: `leave a gap of at least ${num(LEVEL_PASSAGE_WIDTH)} m through them, or move them against a wall`,
+    });
+  }
+}
+
+/** The server refuses a map placing fewer than `MIN_DISGUISE_TYPES` disguises, since a prop wears only those. */
+function disguiseTypeFindings(space: LevelSpace, findings: Finding[]): void {
+  const { doc } = space;
+  const types = disguiseTypes({ props: doc.objects, propCatalog: space.context.catalog });
+  if (types.length >= MIN_DISGUISE_TYPES) return;
+  findings.push({
+    code: "map.few-disguise-types",
+    severity: "error",
+    message: `${doc.id} places ${types.length} disguise types (${types.join(", ") || "none"}), fewer than ${MIN_DISGUISE_TYPES}, so a prop has no other shape to reroll into and the server refuses the map`,
+    entities: [doc.id],
+    hint: "place objects of another catalog type that is not decor",
+  });
+}
+
 function roomFindings(
   space: LevelSpace,
   grid: SampleGrid,
   findings: Finding[],
   metrics: Record<string, number>,
 ): void {
+  const worn = new Set(space.context.catalog.filter(isDisguise).map((def) => def.id));
   for (const room of space.doc.rooms) {
     const key = (name: string): string => `room.${room.id}.${name}`;
     const cells = room.rects.reduce((sum, r) => sum + (r.i1 - r.i0) * (r.j1 - r.j0), 0);
@@ -341,7 +486,7 @@ function roomFindings(
     metrics[key("objects")] = inside.length;
 
     const byType = new Map<string, LevelObject[]>();
-    for (const object of inside)
+    for (const object of inside.filter((entry) => worn.has(entry.type)))
       byType.set(object.type, [...(byType.get(object.type) ?? []), object]);
     let disguises = 0;
     for (const [type, group] of byType) {
@@ -411,9 +556,11 @@ function compareFindings(a: Finding, b: Finding): number {
 /**
  * Check a parsed document for layout problems an agent can fix without looking at
  * it: objects cutting into walls or each other (real rendered footprints), objects
- * off their room, blocked doorways, spawns inside geometry, room lights hung against a
- * wall, floor a hunter cannot reach, and per room the longest clear sightline and how well a disguise blends
- * in. Pure: it neither drops nor moves anything.
+ * off their room, blocked doorways and building entrances, spawns inside geometry,
+ * room lights hung against a wall, floor a hunter cannot reach, outdoor ways closed
+ * by objects, and per room the
+ * longest clear sightline and how well a disguise blends in. Pure: it neither drops
+ * nor moves anything.
  */
 export function validateLevel(doc: LevelDocument, context: LevelContext): LevelReport {
   const space = buildSpace(doc, context);
@@ -426,10 +573,13 @@ export function validateLevel(doc: LevelDocument, context: LevelContext): LevelR
   };
   objectFindings(space, findings, unplaced);
   doorFindings(space, findings);
+  entranceFindings(space, findings);
   spawnFindings(space, findings);
   lightFindings(space, findings);
   const grid = reachFindings(space, findings, metrics);
+  if (isOutdoor(doc)) passageFindings(space, grid, findings);
   roomFindings(space, grid, findings, metrics);
+  disguiseTypeFindings(space, findings);
   findings.sort(compareFindings);
   for (const severity of ["error", "warning", "info"] as const) {
     metrics[`findings.${severity}`] = findings.filter((f) => f.severity === severity).length;

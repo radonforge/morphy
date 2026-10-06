@@ -81,6 +81,8 @@ export const PROP_TURN_SNAP = Math.PI / 2;
 export const PROP_TURN_TAP_MS = 200;
 
 export const REROLL_BUDGET = 2;
+/** Fewest distinct disguises a map must place, so a reroll always has another shape to take. */
+export const MIN_DISGUISE_TYPES = 2;
 export const DECOY_BUDGET = 3;
 export const DECOY_COOLDOWN_MS = 1_500;
 /** Share of a weapon's miss damage a shot pays when all it breaks is a decoy. */
@@ -114,8 +116,22 @@ export const LEVEL_OVERLAP_TOLERANCE = 0.05;
 export const LEVEL_DOOR_CLEARANCE_WIDTH = 2;
 /** Depth, away from the wall, of the floor kept clear on each side of a doorway. */
 export const LEVEL_DOOR_CLEARANCE_DEPTH = 1.5;
+/**
+ * Floor kept clear beyond each side of a building's doorway, along its facade, in metres:
+ * narrow enough that a pair of planters may flank the door.
+ */
+export const LEVEL_ENTRANCE_CLEARANCE_SIDE = 0.3;
+/** Depth, out from the facade, of the floor kept clear in front of a building's doorway. */
+export const LEVEL_ENTRANCE_CLEARANCE_DEPTH = 2.5;
 /** A pocket of floor no hunter can reach is reported once it covers this many square metres. */
 export const LEVEL_UNREACHABLE_MIN_AREA = 1;
+/** Clear width, in metres, a way between buildings or furniture keeps once objects stand along it. */
+export const LEVEL_PASSAGE_WIDTH = 2.5;
+/**
+ * Metres a walk around objects may add to the way straight through where they stand, beyond
+ * half their outline: more than that and they close a passage instead of standing in it.
+ */
+export const LEVEL_PASSAGE_DETOUR_SLACK = 4;
 /** An object at least this tall hides a crouching prop, so it blocks a sightline. */
 export const LEVEL_SIGHT_BLOCK_HEIGHT = 1;
 /** A room whose longest clear sightline exceeds this many metres leaves props nowhere to hide. */
