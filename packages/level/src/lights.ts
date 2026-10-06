@@ -10,6 +10,8 @@ const CLEARANCE_PASSES = 2;
 export const DECK_LIGHT_WALL_CLEARANCE = 3;
 /** How many room lights a night map hangs unless its theme asks for another number. */
 export const DEFAULT_ROOM_LIGHT_COUNT = 14;
+/** How high a night deck's lights hang, in the match; the lobby's station stage scales it with its set. */
+export const DECK_LIGHT_HEIGHT = 3;
 /** How much closer than {@link DECK_LIGHT_WALL_CLEARANCE} a room light may sit before it is reported: the picker's two passes settle a touch short. */
 export const DECK_LIGHT_CLEARANCE_SLACK = 0.1;
 
