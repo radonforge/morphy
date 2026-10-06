@@ -376,8 +376,10 @@ const NIGHT_THEMES: Record<string, ThemePreset> = {
       altColor: LED,
       altEvery: 5,
       altPole: "/light-curved.glb",
-      intensity: 60,
+      intensity: 6.6,
+      altIntensity: 4,
       distance: 20,
+      decay: 1,
       lightDrop: 0.5,
       lightPull: 0.8,
       bulbGlow: 5,
@@ -385,6 +387,7 @@ const NIGHT_THEMES: Record<string, ThemePreset> = {
       backdropTint: 0.4,
       windowGlow: "#ffb768",
       budget: 8,
+      fade: 4,
     },
     bloom: { intensity: 7, radius: 0.75, threshold: 0.85 },
     grade: { lift: [0, 0.01, 0.03], gain: [1.02, 1, 0.97], contrast: 1, saturation: 1.05 },
@@ -694,7 +697,9 @@ export const Scene = memo(function Scene({
         />
       )}
       {theme.skyGlow && <SkyGlow preset={theme.skyGlow} />}
-      {theme.streetLamps && <StreetLamps map={map} preset={theme.streetLamps} />}
+      {theme.streetLamps && (
+        <StreetLamps map={map} preset={theme.streetLamps} focus={localGroundRef} />
+      )}
       <hemisphereLight args={[theme.hemiSky, theme.hemiGround, theme.hemiIntensity]} />
       <ambientLight intensity={theme.ambient} />
       {theme.deckLights && <DeckLights map={map} preset={theme.deckLights} />}

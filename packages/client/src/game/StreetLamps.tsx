@@ -1,8 +1,8 @@
 import type { MapDefinition, MapLight } from "@morphy/shared";
-import { useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useGuardedFrame } from "./guardedFrame";
+import { lampWeights } from "./lampBudget";
 import { tintGlow } from "./modelGlow";
 import { useSharedGLTF } from "./sharedTextures";
 
@@ -27,7 +27,11 @@ export interface StreetLampPreset {
   altEvery: number;
   altPole: string;
   intensity: number;
+  /** The alternate lamps' intensity: a white light reads brighter than sodium at the same value. */
+  altIntensity: number;
   distance: number;
+  /** Falloff exponent; below the physical 2, so a facade beside a lamp is not blown out. */
+  decay: number;
   /** How far below the head the light hangs, and how far past it along the arm. */
   lightDrop: number;
   lightPull: number;
@@ -39,8 +43,10 @@ export interface StreetLampPreset {
   backdropTint: number;
   /** What the building windows glow at night: lit rooms behind them. */
   windowGlow: string;
-  /** Real point lights, moved each frame onto the lamps nearest the camera; the rest only glow. */
+  /** Real point lights, moved each frame onto the lamps nearest the player; the rest only glow. */
   budget: number;
+  /** How many metres before the next lamp draws level a light starts dimming, see {@link lampWeights}. */
+  fade: number;
 }
 
 /** A gradient dome behind the stars: `horizon` at the skyline fading to `top` by `fade` (sine of elevation). */
@@ -99,6 +105,7 @@ interface Lamp {
   bulb: THREE.Vector3;
   light: THREE.Vector3;
   color: THREE.Color;
+  intensity: number;
 }
 
 /** Where each lamp's bulb glows and its light hangs: below the head, pulled along the arm away from the pole. */
@@ -132,6 +139,7 @@ function layLamps(map: MapDefinition, preset: StreetLampPreset): Lamp[] {
         light.z + dz * pull,
       ),
       color: new THREE.Color(alt ? preset.altColor : preset.color),
+      intensity: alt ? preset.altIntensity : preset.intensity,
     };
   });
 }
@@ -161,18 +169,28 @@ function ModelTint({ url, tint }: { url: string; tint: number }) {
 
 /**
  * A night street: every lamp's bulb glows (one instanced mesh, untoned so bloom
- * catches it), while only `budget` point lights exist, each frame moved onto the
- * lamps nearest the camera. A fixed count never recompiles a shader, and a forward
- * renderer pays for every light on every lit pixel, reach or not.
+ * catches it), while only `budget` point lights exist, held by the lamps nearest
+ * `focus` (the player, not the orbiting camera, so looking around moves nothing)
+ * and dimmed by {@link lampWeights} before they change lamp. A fixed count of
+ * always-visible lights never recompiles a shader, and a forward renderer pays for
+ * every light on every lit pixel, reach or not.
  */
-export function StreetLamps({ map, preset }: { map: MapDefinition; preset: StreetLampPreset }) {
+export function StreetLamps({
+  map,
+  preset,
+  focus,
+}: {
+  map: MapDefinition;
+  preset: StreetLampPreset;
+  focus: { readonly current: THREE.Vector3 };
+}) {
   const lamps = useMemo(() => layLamps(map, preset), [map, preset]);
   const lampModels = useMemo(() => modelsMarked(map, LAMP_MODEL_MARK), [map]);
   const backdropModels = useMemo(() => modelsMarked(map, BACKDROP_MODEL_MARK), [map]);
   const bulbs = useRef<THREE.InstancedMesh>(null);
   const lights = useRef<(THREE.PointLight | null)[]>([]);
-  const camera = useThree((state) => state.camera);
-  const order = useMemo(() => lamps.map((_, index) => index), [lamps]);
+  const slots = Math.min(preset.budget, lamps.length);
+  const held = useMemo<(number | undefined)[]>(() => Array(slots).fill(undefined), [slots]);
 
   useLayoutEffect(() => {
     const mesh = bulbs.current;
@@ -193,17 +211,31 @@ export function StreetLamps({ map, preset }: { map: MapDefinition; preset: Stree
   }, [preset.windowGlow]);
 
   useGuardedFrame(() => {
-    const eye = camera.position;
-    order.sort(
-      (a, b) => lamps[a]!.light.distanceToSquared(eye) - lamps[b]!.light.distanceToSquared(eye),
+    const at = focus.current;
+    const weights = lampWeights(
+      lamps.map((lamp) => lamp.light.distanceTo(at)),
+      slots,
+      preset.fade,
     );
+    held.forEach((index, slot) => {
+      if (index !== undefined && !(weights[index]! > 0)) held[slot] = undefined;
+    });
+    weights.forEach((weight, index) => {
+      if (weight <= 0 || held.includes(index)) return;
+      const free = held.indexOf(undefined);
+      if (free >= 0) held[free] = index;
+    });
     lights.current.forEach((light, slot) => {
       if (!light) return;
-      const lamp = lamps[order[slot]!];
-      light.visible = lamp !== undefined;
-      if (!lamp) return;
+      const index = held[slot];
+      const lamp = index === undefined ? undefined : lamps[index];
+      if (!lamp || index === undefined) {
+        light.intensity = 0;
+        return;
+      }
       light.position.copy(lamp.light);
       light.color.copy(lamp.color);
+      light.intensity = lamp.intensity * weights[index]!;
     });
   });
 
@@ -223,15 +255,16 @@ export function StreetLamps({ map, preset }: { map: MapDefinition; preset: Stree
           <meshBasicMaterial toneMapped={false} />
         </instancedMesh>
       )}
-      {Array.from({ length: Math.min(preset.budget, lamps.length) }, (_, slot) => (
+      {Array.from({ length: slots }, (_, slot) => (
         <pointLight
           // biome-ignore lint/suspicious/noArrayIndexKey: a fixed pool of light slots, never reordered
           key={slot}
           ref={(light) => {
             lights.current[slot] = light;
           }}
-          intensity={preset.intensity}
+          intensity={0}
           distance={preset.distance}
+          decay={preset.decay}
         />
       ))}
     </>
