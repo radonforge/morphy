@@ -100,8 +100,9 @@ import {
   storyLine,
   wonRound,
 } from "./roundStory";
-import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene, themeLook } from "./Scene";
+import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene } from "./Scene";
 import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
+import { themeLook } from "./themes";
 import type {
   BreaksRef,
   CatchMomentRef,

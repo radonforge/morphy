@@ -22,7 +22,8 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { type MutableRefObject, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { CeilingView } from "../game/CeilingView";
-import { DeckLights, GAME_FOV, MapView, SUN_POSITION, type ThemePreset } from "../game/Scene";
+import { DeckLights, GAME_FOV, MapView, SUN_POSITION } from "../game/Scene";
+import type { ThemePreset } from "../game/themes";
 import type { OverlayToggles } from "./ChecksPanel";
 import type { EditorView, Preview, Selection } from "./types";
 
