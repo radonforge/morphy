@@ -7,7 +7,7 @@ import {
   LEVEL_SIGHTLINE_MAX,
   LEVEL_UNREACHABLE_MIN_AREA,
 } from "@morphy/shared";
-import type { LevelDocument, LevelObject, LevelPoint } from "./document";
+import { isOutdoor, type LevelDocument, type LevelObject, type LevelPoint } from "./document";
 import { TILE } from "./floorplan";
 import type { LevelContext } from "./footprint";
 import { num, point } from "./format";
@@ -28,6 +28,7 @@ import {
   nearestWalkable,
   neighbours,
   type SampleGrid,
+  type Sightline,
   sampleSpace,
 } from "./samples";
 import { buildSpace, type LevelSpace } from "./space";
@@ -120,7 +121,7 @@ function objectFindings(space: LevelSpace, findings: Finding[], unplaced: string
         at,
         hint: "move it into a room or add a room around it",
       });
-    } else {
+    } else if (!isOutdoor(doc)) {
       const strays = new Set<string>();
       for (const corner of rectCorners(footprint.rect)) {
         const other = space.regionAt(corner.x, corner.z);
@@ -315,7 +316,7 @@ function reachFindings(
       entities: [...regions, ...named],
       at,
       hint:
-        sealed.length > 0
+        sealed.length > 0 && !isOutdoor(space.doc)
           ? `add a door into ${sealed.join(", ")}`
           : `widen a gap to at least ${num(2 * LEVEL_BODY_RADIUS + LEVEL_SAMPLE_CELL)} m between ${named.join(", ") || "the walls around it"}`,
     });
@@ -369,20 +370,34 @@ function roomFindings(
       });
     }
 
+    if (isOutdoor(space.doc)) continue;
     const line = longestSightline(grid, (p) => space.regionAt(p.x, p.z) === room.id);
     metrics[key("sightline.m")] = line?.length ?? 0;
-    if (line !== null && line.length > LEVEL_SIGHTLINE_MAX) {
-      const mid = { x: (line.from.x + line.to.x) / 2, z: (line.from.z + line.to.z) / 2 };
-      findings.push({
-        code: "room.sightline",
-        severity: "warning",
-        message: `${room.id} has a ${num(line.length)} m clear sightline from ${point(line.from)} to ${point(line.to)}, over ${LEVEL_SIGHTLINE_MAX} m`,
-        entities: [room.id],
-        at: line.from,
-        hint: `break it with an object at least ${num(LEVEL_SIGHT_BLOCK_HEIGHT)} m tall near ${point(mid)}`,
-      });
-    }
+    sightlineFinding(line, room.id, findings);
   }
+  if (!isOutdoor(space.doc)) return;
+  const line = longestSightline(grid, (p) => (space.regionAt(p.x, p.z) ?? null) !== null);
+  metrics["open.sightline.m"] = line?.length ?? 0;
+  if (line !== null)
+    sightlineFinding(line, regionName(space.regionAt(line.from.x, line.from.z)), findings);
+}
+
+/**
+ * A `room.sightline` warning when `line` runs past {@link LEVEL_SIGHTLINE_MAX}. Outdoors
+ * one line is measured over all the open ground, since nothing walls one ground region
+ * off from the next, and it is reported against the region it starts in.
+ */
+function sightlineFinding(line: Sightline | null, region: string, findings: Finding[]): void {
+  if (line === null || line.length <= LEVEL_SIGHTLINE_MAX) return;
+  const mid = { x: (line.from.x + line.to.x) / 2, z: (line.from.z + line.to.z) / 2 };
+  findings.push({
+    code: "room.sightline",
+    severity: "warning",
+    message: `${region} has a ${num(line.length)} m clear sightline from ${point(line.from)} to ${point(line.to)}, over ${LEVEL_SIGHTLINE_MAX} m`,
+    entities: [region],
+    at: line.from,
+    hint: `break it with an object at least ${num(LEVEL_SIGHT_BLOCK_HEIGHT)} m tall near ${point(mid)}`,
+  });
 }
 
 function compareFindings(a: Finding, b: Finding): number {

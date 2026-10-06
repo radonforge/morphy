@@ -1147,6 +1147,46 @@
       }
     ]
   },
+  "/models/urban/building-type-c.glb": {
+    "model": "/models/urban/building-type-c.glb",
+    "size": {
+      "x": 1.286,
+      "y": 1.034,
+      "z": 1.028
+    },
+    "center": {
+      "x": 0,
+      "y": 0.517,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.56,
+        "area": 0.014
+      },
+      {
+        "y": 0.46,
+        "area": 0.026
+      },
+      {
+        "y": 0.3,
+        "area": 0.022
+      },
+      {
+        "y": 0.14,
+        "area": 0.01
+      },
+      {
+        "y": 0.06,
+        "area": 0.08
+      },
+      {
+        "y": 0.04,
+        "area": 0.047
+      }
+    ]
+  },
   "/models/urban/building-type-d.glb": {
     "model": "/models/urban/building-type-d.glb",
     "size": {
@@ -1207,6 +1247,58 @@
       }
     ]
   },
+  "/models/urban/building-type-e.glb": {
+    "model": "/models/urban/building-type-e.glb",
+    "size": {
+      "x": 1.3,
+      "y": 1.138,
+      "z": 1.028
+    },
+    "center": {
+      "x": 0,
+      "y": 0.569,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.7,
+        "area": 0.031
+      },
+      {
+        "y": 0.56,
+        "area": 0.024
+      },
+      {
+        "y": 0.52,
+        "area": 0.029
+      },
+      {
+        "y": 0.46,
+        "area": 0.081
+      },
+      {
+        "y": 0.3,
+        "area": 0.027
+      },
+      {
+        "y": 0.14,
+        "area": 0.026
+      },
+      {
+        "y": 0.12,
+        "area": 0.02
+      },
+      {
+        "y": 0.06,
+        "area": 0.098
+      },
+      {
+        "y": 0.04,
+        "area": 0.092
+      }
+    ]
+  },
   "/models/urban/building-type-f.glb": {
     "model": "/models/urban/building-type-f.glb",
     "size": {
@@ -1263,6 +1355,254 @@
       }
     ]
   },
+  "/models/urban/building-type-g.glb": {
+    "model": "/models/urban/building-type-g.glb",
+    "size": {
+      "x": 1.45,
+      "y": 0.768,
+      "z": 1.178
+    },
+    "center": {
+      "x": 0,
+      "y": 0.384,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.3,
+        "area": 0.023
+      },
+      {
+        "y": 0.18,
+        "area": 0.01
+      },
+      {
+        "y": 0.14,
+        "area": 0.024
+      },
+      {
+        "y": 0.12,
+        "area": 0.016
+      },
+      {
+        "y": 0.06,
+        "area": 0.121
+      },
+      {
+        "y": 0.04,
+        "area": 0.265
+      }
+    ]
+  },
+  "/models/urban/building-type-h.glb": {
+    "model": "/models/urban/building-type-h.glb",
+    "size": {
+      "x": 1.3,
+      "y": 0.737,
+      "z": 0.916
+    },
+    "center": {
+      "x": 0,
+      "y": 0.369,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.3,
+        "area": 0.019
+      },
+      {
+        "y": 0.06,
+        "area": 0.068
+      }
+    ]
+  },
+  "/models/urban/building-type-j.glb": {
+    "model": "/models/urban/building-type-j.glb",
+    "size": {
+      "x": 1.37,
+      "y": 1.038,
+      "z": 0.916
+    },
+    "center": {
+      "x": 0,
+      "y": 0.519,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.04,
+        "area": 0.014
+      },
+      {
+        "y": 0.56,
+        "area": 0.021
+      },
+      {
+        "y": 0.48,
+        "area": 0.016
+      },
+      {
+        "y": 0.46,
+        "area": 0.019
+      },
+      {
+        "y": 0.3,
+        "area": 0.026
+      },
+      {
+        "y": 0.14,
+        "area": 0.01
+      },
+      {
+        "y": 0.12,
+        "area": 0.013
+      },
+      {
+        "y": 0.06,
+        "area": 0.076
+      }
+    ]
+  },
+  "/models/urban/building-type-k.glb": {
+    "model": "/models/urban/building-type-k.glb",
+    "size": {
+      "x": 0.921,
+      "y": 1.15,
+      "z": 1.02
+    },
+    "center": {
+      "x": 0,
+      "y": 0.575,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.72,
+        "area": 0.01
+      },
+      {
+        "y": 0.56,
+        "area": 0.014
+      },
+      {
+        "y": 0.46,
+        "area": 0.065
+      },
+      {
+        "y": 0.18,
+        "area": 0.012
+      },
+      {
+        "y": 0.06,
+        "area": 0.07
+      },
+      {
+        "y": 0.04,
+        "area": 0.046
+      }
+    ]
+  },
+  "/models/urban/building-type-l.glb": {
+    "model": "/models/urban/building-type-l.glb",
+    "size": {
+      "x": 1.034,
+      "y": 1.049,
+      "z": 1.02
+    },
+    "center": {
+      "x": 0,
+      "y": 0.525,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.86,
+        "area": 0.032
+      },
+      {
+        "y": 0.8,
+        "area": 0.32
+      },
+      {
+        "y": 0.7,
+        "area": 0.013
+      },
+      {
+        "y": 0.52,
+        "area": 0.011
+      },
+      {
+        "y": 0.46,
+        "area": 0.065
+      },
+      {
+        "y": 0.3,
+        "area": 0.013
+      },
+      {
+        "y": 0.14,
+        "area": 0.014
+      },
+      {
+        "y": 0.06,
+        "area": 0.084
+      },
+      {
+        "y": 0.04,
+        "area": 0.12
+      }
+    ]
+  },
+  "/models/urban/building-type-m.glb": {
+    "model": "/models/urban/building-type-m.glb",
+    "size": {
+      "x": 1.428,
+      "y": 0.737,
+      "z": 1.428
+    },
+    "center": {
+      "x": 0,
+      "y": 0.369,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.4,
+        "area": 0.16
+      },
+      {
+        "y": 0.3,
+        "area": 0.029
+      },
+      {
+        "y": 0.18,
+        "area": 0.01
+      },
+      {
+        "y": 0.14,
+        "area": 0.02
+      },
+      {
+        "y": 0.12,
+        "area": 0.016
+      },
+      {
+        "y": 0.06,
+        "area": 0.108
+      },
+      {
+        "y": 0.04,
+        "area": 0.093
+      }
+    ]
+  },
   "/models/urban/building-type-n.glb": {
     "model": "/models/urban/building-type-n.glb",
     "size": {
@@ -1316,6 +1656,198 @@
       {
         "y": 0.06,
         "area": 0.105
+      },
+      {
+        "y": 0.04,
+        "area": 0.047
+      }
+    ]
+  },
+  "/models/urban/building-type-o.glb": {
+    "model": "/models/urban/building-type-o.glb",
+    "size": {
+      "x": 1.27,
+      "y": 1.138,
+      "z": 1.028
+    },
+    "center": {
+      "x": 0,
+      "y": 0.569,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.7,
+        "area": 0.013
+      },
+      {
+        "y": 0.46,
+        "area": 0.108
+      },
+      {
+        "y": 0.44,
+        "area": 0.046
+      },
+      {
+        "y": 0.4,
+        "area": 0.32
+      },
+      {
+        "y": 0.3,
+        "area": 0.022
+      },
+      {
+        "y": 0.06,
+        "area": 0.076
+      },
+      {
+        "y": 0.04,
+        "area": 0.047
+      }
+    ]
+  },
+  "/models/urban/building-type-p.glb": {
+    "model": "/models/urban/building-type-p.glb",
+    "size": {
+      "x": 1.24,
+      "y": 0.918,
+      "z": 0.99
+    },
+    "center": {
+      "x": 0,
+      "y": 0.459,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.86,
+        "area": 0.073
+      },
+      {
+        "y": 0.8,
+        "area": 0.96
+      },
+      {
+        "y": 0.76,
+        "area": 0.01
+      },
+      {
+        "y": 0.72,
+        "area": 0.021
+      },
+      {
+        "y": 0.6,
+        "area": 0.016
+      },
+      {
+        "y": 0.56,
+        "area": 0.019
+      },
+      {
+        "y": 0.46,
+        "area": 0.086
+      },
+      {
+        "y": 0.3,
+        "area": 0.019
+      },
+      {
+        "y": 0.14,
+        "area": 0.016
+      },
+      {
+        "y": 0.12,
+        "area": 0.015
+      },
+      {
+        "y": 0.06,
+        "area": 0.092
+      },
+      {
+        "y": 0.04,
+        "area": 0.046
+      }
+    ]
+  },
+  "/models/urban/building-type-r.glb": {
+    "model": "/models/urban/building-type-r.glb",
+    "size": {
+      "x": 1.028,
+      "y": 1.141,
+      "z": 1.02
+    },
+    "center": {
+      "x": 0,
+      "y": 0.571,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.46,
+        "area": 0.081
+      },
+      {
+        "y": 0.4,
+        "area": 0.16
+      },
+      {
+        "y": 0.14,
+        "area": 0.01
+      },
+      {
+        "y": 0.06,
+        "area": 0.091
+      },
+      {
+        "y": 0.04,
+        "area": 0.092
+      }
+    ]
+  },
+  "/models/urban/building-type-s.glb": {
+    "model": "/models/urban/building-type-s.glb",
+    "size": {
+      "x": 1.406,
+      "y": 1.138,
+      "z": 1.086
+    },
+    "center": {
+      "x": 0,
+      "y": 0.569,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.7,
+        "area": 0.021
+      },
+      {
+        "y": 0.56,
+        "area": 0.016
+      },
+      {
+        "y": 0.52,
+        "area": 0.019
+      },
+      {
+        "y": 0.46,
+        "area": 0.065
+      },
+      {
+        "y": 0.4,
+        "area": 0.08
+      },
+      {
+        "y": 0.3,
+        "area": 0.017
+      },
+      {
+        "y": 0.06,
+        "area": 0.104
       },
       {
         "y": 0.04,
@@ -1383,6 +1915,66 @@
       }
     ]
   },
+  "/models/urban/building-type-u.glb": {
+    "model": "/models/urban/building-type-u.glb",
+    "size": {
+      "x": 1.428,
+      "y": 1.138,
+      "z": 1.087
+    },
+    "center": {
+      "x": 0,
+      "y": 0.569,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.7,
+        "area": 0.019
+      },
+      {
+        "y": 0.56,
+        "area": 0.012
+      },
+      {
+        "y": 0.52,
+        "area": 0.015
+      },
+      {
+        "y": 0.46,
+        "area": 0.093
+      },
+      {
+        "y": 0.4,
+        "area": 0.32
+      },
+      {
+        "y": 0.3,
+        "area": 0.022
+      },
+      {
+        "y": 0.18,
+        "area": 0.01
+      },
+      {
+        "y": 0.14,
+        "area": 0.016
+      },
+      {
+        "y": 0.12,
+        "area": 0.01
+      },
+      {
+        "y": 0.06,
+        "area": 0.106
+      },
+      {
+        "y": 0.04,
+        "area": 0.121
+      }
+    ]
+  },
   "/models/urban/commercial/building-a.glb": {
     "model": "/models/urban/commercial/building-a.glb",
     "size": {
@@ -1428,6 +2020,74 @@
       {
         "y": 0.06,
         "area": 0.053
+      }
+    ]
+  },
+  "/models/urban/commercial/building-b.glb": {
+    "model": "/models/urban/commercial/building-b.glb",
+    "size": {
+      "x": 0.97,
+      "y": 1.293,
+      "z": 0.94
+    },
+    "center": {
+      "x": 0,
+      "y": 0.646,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.28,
+        "area": 0.222
+      },
+      {
+        "y": 1.24,
+        "area": 0.079
+      },
+      {
+        "y": 1.2,
+        "area": 0.515
+      },
+      {
+        "y": 1.1,
+        "area": 0.013
+      },
+      {
+        "y": 0.94,
+        "area": 0.032
+      },
+      {
+        "y": 0.86,
+        "area": 0.067
+      },
+      {
+        "y": 0.82,
+        "area": 0.047
+      },
+      {
+        "y": 0.7,
+        "area": 0.013
+      },
+      {
+        "y": 0.54,
+        "area": 0.013
+      },
+      {
+        "y": 0.52,
+        "area": 0.011
+      },
+      {
+        "y": 0.46,
+        "area": 0.067
+      },
+      {
+        "y": 0.42,
+        "area": 0.047
+      },
+      {
+        "y": 0.06,
+        "area": 0.063
       }
     ]
   },
@@ -1536,6 +2196,78 @@
       {
         "y": 0.06,
         "area": 0.053
+      }
+    ]
+  },
+  "/models/urban/commercial/building-e.glb": {
+    "model": "/models/urban/commercial/building-e.glb",
+    "size": {
+      "x": 1.64,
+      "y": 0.893,
+      "z": 1.008
+    },
+    "center": {
+      "x": 0,
+      "y": 0.447,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.88,
+        "area": 0.222
+      },
+      {
+        "y": 0.84,
+        "area": 0.039
+      },
+      {
+        "y": 0.8,
+        "area": 0.515
+      },
+      {
+        "y": 0.7,
+        "area": 0.021
+      },
+      {
+        "y": 0.56,
+        "area": 0.014
+      },
+      {
+        "y": 0.52,
+        "area": 0.052
+      },
+      {
+        "y": 0.48,
+        "area": 0.163
+      },
+      {
+        "y": 0.46,
+        "area": 0.067
+      },
+      {
+        "y": 0.44,
+        "area": 0.038
+      },
+      {
+        "y": 0.4,
+        "area": 0.525
+      },
+      {
+        "y": 0.3,
+        "area": 0.034
+      },
+      {
+        "y": 0.14,
+        "area": 0.019
+      },
+      {
+        "y": 0.12,
+        "area": 0.069
+      },
+      {
+        "y": 0.06,
+        "area": 0.099
       }
     ]
   },
@@ -1979,6 +2711,86 @@
       }
     ]
   },
+  "/models/urban/commercial/building-k.glb": {
+    "model": "/models/urban/commercial/building-k.glb",
+    "size": {
+      "x": 2.084,
+      "y": 1.47,
+      "z": 0.942
+    },
+    "center": {
+      "x": 0,
+      "y": 0.735,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.28,
+        "area": 0.383
+      },
+      {
+        "y": 1.24,
+        "area": 0.078
+      },
+      {
+        "y": 1.2,
+        "area": 1.332
+      },
+      {
+        "y": 1.1,
+        "area": 0.048
+      },
+      {
+        "y": 0.94,
+        "area": 0.102
+      },
+      {
+        "y": 0.88,
+        "area": 0.058
+      },
+      {
+        "y": 0.86,
+        "area": 0.113
+      },
+      {
+        "y": 0.7,
+        "area": 0.046
+      },
+      {
+        "y": 0.56,
+        "area": 0.02
+      },
+      {
+        "y": 0.52,
+        "area": 0.082
+      },
+      {
+        "y": 0.5,
+        "area": 0.07
+      },
+      {
+        "y": 0.46,
+        "area": 0.113
+      },
+      {
+        "y": 0.4,
+        "area": 0.122
+      },
+      {
+        "y": 0.3,
+        "area": 0.032
+      },
+      {
+        "y": 0.06,
+        "area": 0.079
+      },
+      {
+        "y": 0.02,
+        "area": 0.028
+      }
+    ]
+  },
   "/models/urban/commercial/building-l.glb": {
     "model": "/models/urban/commercial/building-l.glb",
     "size": {
@@ -2080,6 +2892,118 @@
       {
         "y": 0.4,
         "area": 0.259
+      },
+      {
+        "y": 0.3,
+        "area": 0.019
+      },
+      {
+        "y": 0.06,
+        "area": 0.075
+      },
+      {
+        "y": 0.02,
+        "area": 0.012
+      }
+    ]
+  },
+  "/models/urban/commercial/building-m.glb": {
+    "model": "/models/urban/commercial/building-m.glb",
+    "size": {
+      "x": 1.24,
+      "y": 3.15,
+      "z": 1.242
+    },
+    "center": {
+      "x": 0,
+      "y": 1.575,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 2.96,
+        "area": 0.015
+      },
+      {
+        "y": 2.66,
+        "area": 0.506
+      },
+      {
+        "y": 2.48,
+        "area": 0.327
+      },
+      {
+        "y": 2.46,
+        "area": 0.506
+      },
+      {
+        "y": 2.4,
+        "area": 1.21
+      },
+      {
+        "y": 2.3,
+        "area": 0.026
+      },
+      {
+        "y": 2.16,
+        "area": 0.016
+      },
+      {
+        "y": 2.04,
+        "area": 0.087
+      },
+      {
+        "y": 1.9,
+        "area": 0.026
+      },
+      {
+        "y": 1.76,
+        "area": 0.016
+      },
+      {
+        "y": 1.64,
+        "area": 0.087
+      },
+      {
+        "y": 1.5,
+        "area": 0.026
+      },
+      {
+        "y": 1.36,
+        "area": 0.016
+      },
+      {
+        "y": 1.24,
+        "area": 0.087
+      },
+      {
+        "y": 1.1,
+        "area": 0.026
+      },
+      {
+        "y": 0.94,
+        "area": 0.016
+      },
+      {
+        "y": 0.86,
+        "area": 0.087
+      },
+      {
+        "y": 0.7,
+        "area": 0.026
+      },
+      {
+        "y": 0.56,
+        "area": 0.016
+      },
+      {
+        "y": 0.46,
+        "area": 0.087
+      },
+      {
+        "y": 0.4,
+        "area": 0.16
       },
       {
         "y": 0.3,
@@ -2315,6 +3239,130 @@
       }
     ]
   },
+  "/models/urban/commercial/building-skyscraper-b.glb": {
+    "model": "/models/urban/commercial/building-skyscraper-b.glb",
+    "size": {
+      "x": 1.36,
+      "y": 4.48,
+      "z": 1.36
+    },
+    "center": {
+      "x": 0,
+      "y": 2.24,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 4.48,
+        "area": 0.319
+      },
+      {
+        "y": 4.44,
+        "area": 0.157
+      },
+      {
+        "y": 4.4,
+        "area": 1.207
+      },
+      {
+        "y": 4.34,
+        "area": 0.072
+      },
+      {
+        "y": 3.92,
+        "area": 0.257
+      },
+      {
+        "y": 3.88,
+        "area": 0.128
+      },
+      {
+        "y": 3.58,
+        "area": 0.257
+      },
+      {
+        "y": 3.54,
+        "area": 0.128
+      },
+      {
+        "y": 3.22,
+        "area": 0.257
+      },
+      {
+        "y": 3.18,
+        "area": 0.128
+      },
+      {
+        "y": 2.88,
+        "area": 0.257
+      },
+      {
+        "y": 2.84,
+        "area": 0.128
+      },
+      {
+        "y": 2.54,
+        "area": 0.257
+      },
+      {
+        "y": 2.5,
+        "area": 0.128
+      },
+      {
+        "y": 2.18,
+        "area": 0.257
+      },
+      {
+        "y": 2.14,
+        "area": 0.128
+      },
+      {
+        "y": 1.84,
+        "area": 0.257
+      },
+      {
+        "y": 1.8,
+        "area": 0.128
+      },
+      {
+        "y": 1.5,
+        "area": 0.257
+      },
+      {
+        "y": 1.46,
+        "area": 0.128
+      },
+      {
+        "y": 1.14,
+        "area": 0.257
+      },
+      {
+        "y": 1.1,
+        "area": 0.128
+      },
+      {
+        "y": 0.96,
+        "area": 0.059
+      },
+      {
+        "y": 0.94,
+        "area": 0.064
+      },
+      {
+        "y": 0.4,
+        "area": 0.12
+      },
+      {
+        "y": 0.3,
+        "area": 0.017
+      },
+      {
+        "y": 0.06,
+        "area": 0.105
+      }
+    ]
+  },
   "/models/urban/commercial/building-skyscraper-c.glb": {
     "model": "/models/urban/commercial/building-skyscraper-c.glb",
     "size": {
@@ -2435,6 +3483,246 @@
       }
     ]
   },
+  "/models/urban/commercial/building-skyscraper-d.glb": {
+    "model": "/models/urban/commercial/building-skyscraper-d.glb",
+    "size": {
+      "x": 1.28,
+      "y": 5.47,
+      "z": 1.388
+    },
+    "center": {
+      "x": 0,
+      "y": 2.735,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 5.28,
+        "area": 0.327
+      },
+      {
+        "y": 5.24,
+        "area": 0.039
+      },
+      {
+        "y": 5.2,
+        "area": 1.21
+      },
+      {
+        "y": 5.14,
+        "area": 0.082
+      },
+      {
+        "y": 4.92,
+        "area": 0.299
+      },
+      {
+        "y": 4.88,
+        "area": 0.128
+      },
+      {
+        "y": 4.58,
+        "area": 0.299
+      },
+      {
+        "y": 4.54,
+        "area": 0.128
+      },
+      {
+        "y": 4.22,
+        "area": 0.299
+      },
+      {
+        "y": 4.18,
+        "area": 0.128
+      },
+      {
+        "y": 3.86,
+        "area": 0.299
+      },
+      {
+        "y": 3.82,
+        "area": 0.128
+      },
+      {
+        "y": 3.5,
+        "area": 0.299
+      },
+      {
+        "y": 3.46,
+        "area": 0.128
+      },
+      {
+        "y": 3.16,
+        "area": 0.299
+      },
+      {
+        "y": 3.12,
+        "area": 0.128
+      },
+      {
+        "y": 2.8,
+        "area": 0.299
+      },
+      {
+        "y": 2.76,
+        "area": 0.128
+      },
+      {
+        "y": 2.44,
+        "area": 0.299
+      },
+      {
+        "y": 2.4,
+        "area": 0.128
+      },
+      {
+        "y": 2.08,
+        "area": 0.299
+      },
+      {
+        "y": 2.04,
+        "area": 0.128
+      },
+      {
+        "y": 1.72,
+        "area": 0.299
+      },
+      {
+        "y": 1.68,
+        "area": 0.128
+      },
+      {
+        "y": 1.38,
+        "area": 0.299
+      },
+      {
+        "y": 1.34,
+        "area": 0.128
+      },
+      {
+        "y": 1,
+        "area": 0.128
+      },
+      {
+        "y": 0.94,
+        "area": 0.075
+      },
+      {
+        "y": 0.8,
+        "area": 0.097
+      },
+      {
+        "y": 0.54,
+        "area": 0.024
+      },
+      {
+        "y": 0.4,
+        "area": 0.12
+      },
+      {
+        "y": 0.3,
+        "area": 0.019
+      },
+      {
+        "y": 0.06,
+        "area": 0.091
+      },
+      {
+        "y": 0.02,
+        "area": 0.012
+      }
+    ]
+  },
+  "/models/urban/commercial/building-skyscraper-e.glb": {
+    "model": "/models/urban/commercial/building-skyscraper-e.glb",
+    "size": {
+      "x": 1.295,
+      "y": 4.08,
+      "z": 1.242
+    },
+    "center": {
+      "x": 0,
+      "y": 2.04,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 4.08,
+        "area": 0.327
+      },
+      {
+        "y": 4.04,
+        "area": 0.088
+      },
+      {
+        "y": 4,
+        "area": 1.21
+      },
+      {
+        "y": 3.94,
+        "area": 0.027
+      },
+      {
+        "y": 3.6,
+        "area": 0.014
+      },
+      {
+        "y": 3.5,
+        "area": 0.047
+      },
+      {
+        "y": 3.12,
+        "area": 0.047
+      },
+      {
+        "y": 2.74,
+        "area": 0.047
+      },
+      {
+        "y": 2.36,
+        "area": 0.047
+      },
+      {
+        "y": 2,
+        "area": 0.03
+      },
+      {
+        "y": 1.98,
+        "area": 0.047
+      },
+      {
+        "y": 1.6,
+        "area": 0.047
+      },
+      {
+        "y": 1.2,
+        "area": 0.047
+      },
+      {
+        "y": 0.46,
+        "area": 0.097
+      },
+      {
+        "y": 0.4,
+        "area": 0.16
+      },
+      {
+        "y": 0.3,
+        "area": 0.019
+      },
+      {
+        "y": 0.06,
+        "area": 0.075
+      },
+      {
+        "y": 0.02,
+        "area": 0.012
+      }
+    ]
+  },
   "/models/urban/commercial/detail-parasol-a.glb": {
     "model": "/models/urban/commercial/detail-parasol-a.glb",
     "size": {
@@ -2480,6 +3768,466 @@
       {
         "y": 0.02,
         "area": 0.018
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-a.glb": {
+    "model": "/models/urban/commercial/low-detail-building-a.glb",
+    "size": {
+      "x": 0.5,
+      "y": 2,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 1,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 2,
+        "area": 0.178
+      },
+      {
+        "y": 1.96,
+        "area": 0.16
+      },
+      {
+        "y": 1.5,
+        "area": 0.249
+      },
+      {
+        "y": 0.2,
+        "area": 0.06
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-b.glb": {
+    "model": "/models/urban/commercial/low-detail-building-b.glb",
+    "size": {
+      "x": 0.5,
+      "y": 2.225,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 1.113,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 2.02,
+        "area": 0.01
+      },
+      {
+        "y": 1.94,
+        "area": 0.049
+      },
+      {
+        "y": 1.92,
+        "area": 0.04
+      },
+      {
+        "y": 1,
+        "area": 0.089
+      },
+      {
+        "y": 0.94,
+        "area": 0.16
+      },
+      {
+        "y": 0.5,
+        "area": 0.249
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-c.glb": {
+    "model": "/models/urban/commercial/low-detail-building-c.glb",
+    "size": {
+      "x": 0.5,
+      "y": 2.25,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 1.125,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 2,
+        "area": 0.103
+      },
+      {
+        "y": 1.94,
+        "area": 0.136
+      },
+      {
+        "y": 0.5,
+        "area": 0.249
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-d.glb": {
+    "model": "/models/urban/commercial/low-detail-building-d.glb",
+    "size": {
+      "x": 0.5,
+      "y": 1.75,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 0.875,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.6,
+        "area": 0.023
+      },
+      {
+        "y": 1.5,
+        "area": 0.089
+      },
+      {
+        "y": 1.46,
+        "area": 0.16
+      },
+      {
+        "y": 1,
+        "area": 0.249
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-e.glb": {
+    "model": "/models/urban/commercial/low-detail-building-e.glb",
+    "size": {
+      "x": 0.5,
+      "y": 1.8,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 0.9,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.56,
+        "area": 0.02
+      },
+      {
+        "y": 1.52,
+        "area": 0.163
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-f.glb": {
+    "model": "/models/urban/commercial/low-detail-building-f.glb",
+    "size": {
+      "x": 0.5,
+      "y": 2,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 1,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 2,
+        "area": 0.049
+      },
+      {
+        "y": 1.98,
+        "area": 0.04
+      },
+      {
+        "y": 1.5,
+        "area": 0.159
+      },
+      {
+        "y": 1,
+        "area": 0.249
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-g.glb": {
+    "model": "/models/urban/commercial/low-detail-building-g.glb",
+    "size": {
+      "x": 0.5,
+      "y": 2,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 1,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 2,
+        "area": 0.159
+      },
+      {
+        "y": 1.96,
+        "area": 0.07
+      },
+      {
+        "y": 1.5,
+        "area": 0.229
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-h.glb": {
+    "model": "/models/urban/commercial/low-detail-building-h.glb",
+    "size": {
+      "x": 0.5,
+      "y": 2.1,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 1.05,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 2.1,
+        "area": 0.109
+      },
+      {
+        "y": 2.04,
+        "area": 0.16
+      },
+      {
+        "y": 2,
+        "area": 0.249
+      },
+      {
+        "y": 1.76,
+        "area": 0.047
+      },
+      {
+        "y": 1.5,
+        "area": 0.249
+      },
+      {
+        "y": 1.24,
+        "area": 0.047
+      },
+      {
+        "y": 1,
+        "area": 0.249
+      },
+      {
+        "y": 0.76,
+        "area": 0.047
+      },
+      {
+        "y": 0.5,
+        "area": 0.249
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-i.glb": {
+    "model": "/models/urban/commercial/low-detail-building-i.glb",
+    "size": {
+      "x": 0.5,
+      "y": 1.775,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 0.887,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.58,
+        "area": 0.01
+      },
+      {
+        "y": 1.5,
+        "area": 0.049
+      },
+      {
+        "y": 1.48,
+        "area": 0.04
+      },
+      {
+        "y": 1,
+        "area": 0.154
+      },
+      {
+        "y": 0.5,
+        "area": 0.237
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-j.glb": {
+    "model": "/models/urban/commercial/low-detail-building-j.glb",
+    "size": {
+      "x": 0.5,
+      "y": 1.75,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 0.875,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.5,
+        "area": 0.103
+      },
+      {
+        "y": 1.46,
+        "area": 0.136
+      },
+      {
+        "y": 0.5,
+        "area": 0.249
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-k.glb": {
+    "model": "/models/urban/commercial/low-detail-building-k.glb",
+    "size": {
+      "x": 0.5,
+      "y": 1.55,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 0.775,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.54,
+        "area": 0.02
+      },
+      {
+        "y": 1.5,
+        "area": 0.089
+      },
+      {
+        "y": 1.46,
+        "area": 0.16
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-l.glb": {
+    "model": "/models/urban/commercial/low-detail-building-l.glb",
+    "size": {
+      "x": 0.5,
+      "y": 1.85,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 0.925,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.7,
+        "area": 0.023
+      },
+      {
+        "y": 1.6,
+        "area": 0.079
+      },
+      {
+        "y": 1.54,
+        "area": 0.122
+      },
+      {
+        "y": 1.5,
+        "area": 0.224
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-m.glb": {
+    "model": "/models/urban/commercial/low-detail-building-m.glb",
+    "size": {
+      "x": 0.5,
+      "y": 1.975,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 0.988,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.78,
+        "area": 0.01
+      },
+      {
+        "y": 1.7,
+        "area": 0.049
+      },
+      {
+        "y": 1.68,
+        "area": 0.04
+      },
+      {
+        "y": 1.5,
+        "area": 0.159
+      },
+      {
+        "y": 1,
+        "area": 0.249
+      },
+      {
+        "y": 0.2,
+        "area": 0.06
+      }
+    ]
+  },
+  "/models/urban/commercial/low-detail-building-n.glb": {
+    "model": "/models/urban/commercial/low-detail-building-n.glb",
+    "size": {
+      "x": 0.5,
+      "y": 0.7,
+      "z": 0.5
+    },
+    "center": {
+      "x": 0,
+      "y": 0.35,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.7,
+        "area": 0.05
+      },
+      {
+        "y": 0.64,
+        "area": 0.04
+      },
+      {
+        "y": 0.5,
+        "area": 0.249
       }
     ]
   },
@@ -2599,6 +4347,86 @@
       }
     ]
   },
+  "/models/urban/industrial/building-b.glb": {
+    "model": "/models/urban/industrial/building-b.glb",
+    "size": {
+      "x": 2.084,
+      "y": 1.47,
+      "z": 1.262
+    },
+    "center": {
+      "x": 0.001,
+      "y": 0.735,
+      "z": -0.008
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.28,
+        "area": 0.405
+      },
+      {
+        "y": 1.24,
+        "area": 0.018
+      },
+      {
+        "y": 1.2,
+        "area": 1.215
+      },
+      {
+        "y": 1.18,
+        "area": 0.02
+      },
+      {
+        "y": 1.1,
+        "area": 0.026
+      },
+      {
+        "y": 0.94,
+        "area": 0.035
+      },
+      {
+        "y": 0.86,
+        "area": 0.097
+      },
+      {
+        "y": 0.7,
+        "area": 0.016
+      },
+      {
+        "y": 0.58,
+        "area": 0.219
+      },
+      {
+        "y": 0.56,
+        "area": 0.021
+      },
+      {
+        "y": 0.52,
+        "area": 0.014
+      },
+      {
+        "y": 0.5,
+        "area": 0.525
+      },
+      {
+        "y": 0.46,
+        "area": 0.097
+      },
+      {
+        "y": 0.4,
+        "area": 0.322
+      },
+      {
+        "y": 0.3,
+        "area": 0.027
+      },
+      {
+        "y": 0.06,
+        "area": 0.098
+      }
+    ]
+  },
   "/models/urban/industrial/building-c.glb": {
     "model": "/models/urban/industrial/building-c.glb",
     "size": {
@@ -2667,6 +4495,74 @@
       }
     ]
   },
+  "/models/urban/industrial/building-e.glb": {
+    "model": "/models/urban/industrial/building-e.glb",
+    "size": {
+      "x": 1.684,
+      "y": 1.65,
+      "z": 1.29
+    },
+    "center": {
+      "x": 0,
+      "y": 0.825,
+      "z": 0.249
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.64,
+        "area": 0.037
+      },
+      {
+        "y": 1.58,
+        "area": 0.04
+      },
+      {
+        "y": 0.98,
+        "area": 0.241
+      },
+      {
+        "y": 0.94,
+        "area": 0.039
+      },
+      {
+        "y": 0.9,
+        "area": 0.49
+      },
+      {
+        "y": 0.72,
+        "area": 0.011
+      },
+      {
+        "y": 0.58,
+        "area": 0.245
+      },
+      {
+        "y": 0.56,
+        "area": 0.094
+      },
+      {
+        "y": 0.5,
+        "area": 0.788
+      },
+      {
+        "y": 0.4,
+        "area": 0.162
+      },
+      {
+        "y": 0.3,
+        "area": 0.019
+      },
+      {
+        "y": 0.18,
+        "area": 0.042
+      },
+      {
+        "y": 0.06,
+        "area": 0.095
+      }
+    ]
+  },
   "/models/urban/industrial/building-f.glb": {
     "model": "/models/urban/industrial/building-f.glb",
     "size": {
@@ -2732,6 +4628,110 @@
       {
         "y": 0.06,
         "area": 0.121
+      }
+    ]
+  },
+  "/models/urban/industrial/building-g.glb": {
+    "model": "/models/urban/industrial/building-g.glb",
+    "size": {
+      "x": 1.678,
+      "y": 1.28,
+      "z": 1.284
+    },
+    "center": {
+      "x": 0,
+      "y": 0.64,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.28,
+        "area": 0.215
+      },
+      {
+        "y": 1.24,
+        "area": 0.088
+      },
+      {
+        "y": 1.2,
+        "area": 0.49
+      },
+      {
+        "y": 1.1,
+        "area": 0.013
+      },
+      {
+        "y": 0.94,
+        "area": 0.025
+      },
+      {
+        "y": 0.86,
+        "area": 0.073
+      },
+      {
+        "y": 0.7,
+        "area": 0.013
+      },
+      {
+        "y": 0.56,
+        "area": 0.012
+      },
+      {
+        "y": 0.52,
+        "area": 0.013
+      },
+      {
+        "y": 0.46,
+        "area": 0.073
+      },
+      {
+        "y": 0.4,
+        "area": 0.162
+      },
+      {
+        "y": 0.3,
+        "area": 0.026
+      },
+      {
+        "y": 0.22,
+        "area": 0.011
+      },
+      {
+        "y": 0.14,
+        "area": 0.012
+      },
+      {
+        "y": 0.12,
+        "area": 0.013
+      },
+      {
+        "y": 0.06,
+        "area": 0.104
+      }
+    ]
+  },
+  "/models/urban/industrial/building-k.glb": {
+    "model": "/models/urban/industrial/building-k.glb",
+    "size": {
+      "x": 1.303,
+      "y": 0.773,
+      "z": 0.914
+    },
+    "center": {
+      "x": 0,
+      "y": 0.386,
+      "z": -0.007
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.3,
+        "area": 0.018
+      },
+      {
+        "y": 0.06,
+        "area": 0.068
       }
     ]
   },
@@ -2820,6 +4820,98 @@
       {
         "y": 0.06,
         "area": 0.125
+      }
+    ]
+  },
+  "/models/urban/industrial/building-m.glb": {
+    "model": "/models/urban/industrial/building-m.glb",
+    "size": {
+      "x": 1.316,
+      "y": 1.519,
+      "z": 1.7
+    },
+    "center": {
+      "x": 0,
+      "y": 0.76,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.52,
+        "area": 0.024
+      },
+      {
+        "y": 1.44,
+        "area": 0.024
+      },
+      {
+        "y": 0.7,
+        "area": 0.01
+      },
+      {
+        "y": 0.46,
+        "area": 0.081
+      },
+      {
+        "y": 0.4,
+        "area": 0.32
+      },
+      {
+        "y": 0.3,
+        "area": 0.053
+      },
+      {
+        "y": 0.14,
+        "area": 0.032
+      },
+      {
+        "y": 0.12,
+        "area": 0.038
+      },
+      {
+        "y": 0.06,
+        "area": 0.1
+      }
+    ]
+  },
+  "/models/urban/industrial/building-p.glb": {
+    "model": "/models/urban/industrial/building-p.glb",
+    "size": {
+      "x": 1.684,
+      "y": 0.715,
+      "z": 0.992
+    },
+    "center": {
+      "x": 0,
+      "y": 0.357,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.58,
+        "area": 0.327
+      },
+      {
+        "y": 0.56,
+        "area": 0.066
+      },
+      {
+        "y": 0.5,
+        "area": 1.05
+      },
+      {
+        "y": 0.3,
+        "area": 0.018
+      },
+      {
+        "y": 0.06,
+        "area": 0.088
+      },
+      {
+        "y": 0.04,
+        "area": 0.048
       }
     ]
   },
@@ -2951,6 +5043,90 @@
       }
     ]
   },
+  "/models/urban/industrial/building-s.glb": {
+    "model": "/models/urban/industrial/building-s.glb",
+    "size": {
+      "x": 2.12,
+      "y": 0.837,
+      "z": 0.916
+    },
+    "center": {
+      "x": -0.01,
+      "y": 0.418,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.3,
+        "area": 0.023
+      },
+      {
+        "y": 0.18,
+        "area": 0.05
+      },
+      {
+        "y": 0.06,
+        "area": 0.087
+      }
+    ]
+  },
+  "/models/urban/industrial/building-t.glb": {
+    "model": "/models/urban/industrial/building-t.glb",
+    "size": {
+      "x": 1.722,
+      "y": 1.015,
+      "z": 1.39
+    },
+    "center": {
+      "x": 0,
+      "y": 0.507,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.88,
+        "area": 0.271
+      },
+      {
+        "y": 0.86,
+        "area": 0.041
+      },
+      {
+        "y": 0.8,
+        "area": 0.772
+      },
+      {
+        "y": 0.7,
+        "area": 0.012
+      },
+      {
+        "y": 0.46,
+        "area": 0.081
+      },
+      {
+        "y": 0.4,
+        "area": 0.322
+      },
+      {
+        "y": 0.3,
+        "area": 0.025
+      },
+      {
+        "y": 0.14,
+        "area": 0.016
+      },
+      {
+        "y": 0.06,
+        "area": 0.123
+      },
+      {
+        "y": 0.04,
+        "area": 0.121
+      }
+    ]
+  },
   "/models/urban/industrial/chimney-basic.glb": {
     "model": "/models/urban/industrial/chimney-basic.glb",
     "size": {
@@ -2965,6 +5141,30 @@
     },
     "minY": 0,
     "surfaces": []
+  },
+  "/models/urban/industrial/chimney-large.glb": {
+    "model": "/models/urban/industrial/chimney-large.glb",
+    "size": {
+      "x": 1,
+      "y": 1.7,
+      "z": 1
+    },
+    "center": {
+      "x": 0,
+      "y": 0.85,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 1.7,
+        "area": 0.205
+      },
+      {
+        "y": 1.5,
+        "area": 0.231
+      }
+    ]
   },
   "/models/urban/industrial/chimney-small.glb": {
     "model": "/models/urban/industrial/chimney-small.glb",
@@ -3122,6 +5322,46 @@
     "minY": 0,
     "surfaces": []
   },
+  "/models/urban/roads/light-curved-cross.glb": {
+    "model": "/models/urban/roads/light-curved-cross.glb",
+    "size": {
+      "x": 0.4,
+      "y": 0.675,
+      "z": 0.4
+    },
+    "center": {
+      "x": 0,
+      "y": 0.337,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.68,
+        "area": 0.02
+      }
+    ]
+  },
+  "/models/urban/roads/light-curved-double.glb": {
+    "model": "/models/urban/roads/light-curved-double.glb",
+    "size": {
+      "x": 0.05,
+      "y": 0.675,
+      "z": 0.4
+    },
+    "center": {
+      "x": 0,
+      "y": 0.337,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.68,
+        "area": 0.01
+      }
+    ]
+  },
   "/models/urban/roads/light-curved.glb": {
     "model": "/models/urban/roads/light-curved.glb",
     "size": {
@@ -3133,6 +5373,61 @@
       "x": 0,
       "y": 0.337,
       "z": -0.088
+    },
+    "minY": 0,
+    "surfaces": []
+  },
+  "/models/urban/roads/light-square-cross.glb": {
+    "model": "/models/urban/roads/light-square-cross.glb",
+    "size": {
+      "x": 0.425,
+      "y": 0.6,
+      "z": 0.425
+    },
+    "center": {
+      "x": 0,
+      "y": 0.3,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.6,
+        "area": 0.027
+      }
+    ]
+  },
+  "/models/urban/roads/light-square-double.glb": {
+    "model": "/models/urban/roads/light-square-double.glb",
+    "size": {
+      "x": 0.05,
+      "y": 0.6,
+      "z": 0.425
+    },
+    "center": {
+      "x": 0,
+      "y": 0.3,
+      "z": 0
+    },
+    "minY": 0,
+    "surfaces": [
+      {
+        "y": 0.6,
+        "area": 0.014
+      }
+    ]
+  },
+  "/models/urban/roads/light-square.glb": {
+    "model": "/models/urban/roads/light-square.glb",
+    "size": {
+      "x": 0.05,
+      "y": 0.6,
+      "z": 0.237
+    },
+    "center": {
+      "x": 0,
+      "y": 0.3,
+      "z": -0.094
     },
     "minY": 0,
     "surfaces": []

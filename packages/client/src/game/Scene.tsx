@@ -37,6 +37,7 @@ import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio
 import { CeilingView } from "./CeilingView";
 import { capUnderCeiling, ceilingBetween } from "./ceiling";
 import type { ColorGrade } from "./colorGrade";
+import { GroundView } from "./GroundView";
 import type { BloomSettings, PostLook, ShadowSettings } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
 import { fitModel, MODEL_MIN_SIZE } from "./modelFit";
@@ -1674,6 +1675,7 @@ export const MapView = memo(function MapView({
         <planeGeometry args={[floorSize.width, floorSize.depth]} />
         <meshStandardMaterial color={groundColor} />
       </mesh>
+      {map.ground !== undefined && <GroundView ground={map.ground} />}
 
       <Suspense fallback={null}>
         {tileGroups.map(([url, group]) => (

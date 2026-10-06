@@ -1,6 +1,12 @@
 import { LEVEL_SAMPLE_CELL } from "@morphy/shared";
 import { type Finding, type LevelReport, OPEN_GROUND } from "./checks";
-import type { CellRect, LevelDocument, LevelObject } from "./document";
+import {
+  type CellRect,
+  DEFAULT_GROUND,
+  isOutdoor,
+  type LevelDocument,
+  type LevelObject,
+} from "./document";
 import { TILE, WALL_HALF_THICKNESS } from "./floorplan";
 import type { Footprint, LevelContext } from "./footprint";
 import { degrees, num, point } from "./format";
@@ -47,13 +53,17 @@ function typeCounts(objects: readonly LevelObject[]): string {
 export function summarizeLevel(doc: LevelDocument, context: LevelContext): string {
   const space = buildSpace(doc, context);
   const { cols, rows } = doc.grid;
+  const outdoor = isOutdoor(doc);
   const lines = [
-    `${doc.id}: ${cols}x${rows} cells of ${TILE} m (${cols * TILE} x ${rows * TILE} m), ${doc.rooms.length} rooms, ${doc.doors.length} doors, ${doc.objects.length} objects, spawns ${doc.spawns.props.length} props / ${doc.spawns.hunters.length} hunters, ${doc.lights?.length ?? 0} lights`,
+    `${doc.id}: ${outdoor ? "outdoor, " : ""}${cols}x${rows} cells of ${TILE} m (${cols * TILE} x ${rows * TILE} m), ${doc.rooms.length} rooms, ${outdoor ? `${doc.blocks?.length ?? 0} blocks` : `${doc.doors.length} doors`}, ${doc.objects.length} objects, spawns ${doc.spawns.props.length} props / ${doc.spawns.hunters.length} hunters, ${doc.lights?.length ?? 0} lights`,
     "rooms:",
   ];
   for (const room of doc.rooms) {
     const objects = doc.objects.filter((object) => roomOf(space, object) === room.id);
-    lines.push(`  ${room.id}: ${room.rects.map((rect) => rectText(doc, rect)).join("; ")}`);
+    const ground = outdoor ? ` (${room.ground ?? DEFAULT_GROUND})` : "";
+    lines.push(
+      `  ${room.id}${ground}: ${room.rects.map((rect) => rectText(doc, rect)).join("; ")}`,
+    );
     lines.push(
       `    ${objects.length} objects${objects.length > 0 ? `: ${typeCounts(objects)}` : ""}`,
     );
@@ -61,6 +71,16 @@ export function summarizeLevel(doc: LevelDocument, context: LevelContext): strin
   const loose = doc.objects.filter((object) => roomOf(space, object) === OPEN_GROUND);
   if (loose.length > 0)
     lines.push(`  ${OPEN_GROUND}: ${loose.length} objects: ${typeCounts(loose)}`);
+  if (outdoor) {
+    lines.push("blocks:");
+    for (const block of doc.blocks ?? []) {
+      const what = block.building === undefined ? block.zone : `${block.zone}, ${block.building}`;
+      lines.push(
+        `  ${block.id} (${what}): ${block.rects.map((rect) => rectText(doc, rect)).join("; ")}`,
+      );
+    }
+    return lines.join("\n");
+  }
   lines.push("doors:");
   for (const zone of space.doors) {
     const [a, b] = zone.sides.map((side) => side.region ?? OPEN_GROUND);
@@ -84,12 +104,12 @@ export function listObjects(doc: LevelDocument, context: LevelContext, room?: st
   return lines.length > 0 ? lines.join("\n") : "no objects";
 }
 
-/** One line per light: id, kind, position and the room it hangs in. */
+/** One line per light: id, kind, position, its street lamp if it stands on one, and the room it hangs in. */
 export function listLights(doc: LevelDocument, context: LevelContext): string {
   const space = buildSpace(doc, context);
   const lines = (doc.lights ?? []).map(
     (light) =>
-      `${light.id} ${light.kind} ${point(light)} in ${space.regionAt(light.x, light.z) ?? OPEN_GROUND}`,
+      `${light.id} ${light.kind} ${point(light)}${light.fixture === undefined ? "" : ` on a ${light.fixture} lamp, yaw ${degrees(light.yaw ?? 0)}`} in ${space.regionAt(light.x, light.z) ?? OPEN_GROUND}`,
   );
   return lines.length > 0 ? lines.join("\n") : "no lights";
 }
