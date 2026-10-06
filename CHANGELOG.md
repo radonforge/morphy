@@ -37,6 +37,8 @@ props get a taunt, and bots now play with only what a player could see.
 - A changelog page at /changelog with the notes for every release, linked
   from the menu footer, and a What's new chip in the menu when the game has
   changed since your last visit.
+- Privacy and terms pages at /privacy and /terms, and a Reset my stats button
+  in the Stats pane that erases your stats and callsign from the server.
 - The lobby credits the studio: a Radon Forge link to radonforge.com sits
   under the version stamp in the menu header.
 

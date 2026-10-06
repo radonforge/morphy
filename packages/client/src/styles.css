@@ -282,6 +282,16 @@ canvas {
   gap: 0.5rem;
 }
 
+.stats-reset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 .stats-cell {
   display: flex;
   flex-direction: column;
