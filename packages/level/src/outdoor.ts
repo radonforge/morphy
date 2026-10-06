@@ -7,6 +7,7 @@ import {
   type GroundPatch,
   type MapLight,
   type SceneryInstance,
+  type Vec3,
 } from "@morphy/shared";
 import type {
   BlockZone,
@@ -94,8 +95,8 @@ export const OUTDOOR_MODEL_PATHS: readonly string[] = [
 /** Kit units to metres for a street lamp: a 5.4 m pole for the curved one. */
 const LAMP_SCALE = 8;
 export const LAMP_POLE_WIDTH = 0.3;
-/** How far below the top of a lamp model its head's underside hangs, where the bulb glows. */
-const LAMP_HEAD_DEPTH = 0.2;
+/** How far below the top of a lamp model its head's underside hangs, where the bulb glows, in model units. */
+const LAMP_HEAD_DEPTH = 0.025;
 /** How far past its lot's edge the ground must be walkable for a doorway to be an entrance. */
 const ENTRANCE_PROBE = 0.5;
 const FACING_AXIS: Record<DoorFacing, { x: number; z: number }> = {
@@ -499,23 +500,49 @@ function emitLamps(
   return lights.map((light) => {
     const mapLight: MapLight = { id: light.id, x: light.x, z: light.z, kind: light.kind };
     if (light.fixture === undefined) return mapLight;
-    const fixture = FIXTURES[light.fixture];
-    const card = cardFor(fixture.model);
-    const yaw = light.yaw ?? 0;
-    const height = card.size.y * LAMP_SCALE;
-    out.scenery.push({
-      model: fixture.model,
-      position: { x: light.x, y: 0, z: light.z },
-      rotationY: yaw,
-      scale: LAMP_SCALE,
-    });
+    const lamp = streetLamp(light.fixture, light.x, light.z, light.yaw ?? 0);
+    out.scenery.push(lamp.scenery);
     out.colliders.push({
-      position: { x: light.x, y: height / 2, z: light.z },
-      size: { x: LAMP_POLE_WIDTH, y: height, z: LAMP_POLE_WIDTH },
+      position: { x: light.x, y: lamp.height / 2, z: light.z },
+      size: { x: LAMP_POLE_WIDTH, y: lamp.height, z: LAMP_POLE_WIDTH },
     });
-    const head = turn(fixture.head.x * LAMP_SCALE, fixture.head.z * LAMP_SCALE, yaw);
-    return { ...mapLight, x: light.x + head.x, z: light.z + head.z, y: height - LAMP_HEAD_DEPTH };
+    return { ...mapLight, x: lamp.head.x, z: lamp.head.z, y: lamp.head.y };
   });
+}
+
+/** A street lamp as it stands in a map: its model, its height and where its head's light hangs. */
+export interface StreetLamp {
+  scenery: SceneryInstance;
+  height: number;
+  head: Vec3;
+  /** The centre of the lamp's footprint, which its arm pulls off the pole. */
+  centre: { x: number; z: number };
+}
+
+/**
+ * The lamp of `fixture` with its pole at `x`/`z`, turned by `yaw`, at `scale`: what a
+ * document's lamp compiles to, and what the lobby stands in its North District diorama
+ * (at the diorama's own scale, placed by `centre`), so the two hang their light from the
+ * same head.
+ */
+export function streetLamp(
+  fixture: LampFixture,
+  x: number,
+  z: number,
+  yaw: number,
+  scale = LAMP_SCALE,
+): StreetLamp {
+  const { model, head } = FIXTURES[fixture];
+  const card = cardFor(model);
+  const height = card.size.y * scale;
+  const arm = turn(head.x * scale, head.z * scale, yaw);
+  const centre = turn(card.center.x * scale, card.center.z * scale, yaw);
+  return {
+    scenery: { model, position: { x, y: 0, z }, rotationY: yaw, scale },
+    height,
+    head: { x: x + arm.x, y: height - LAMP_HEAD_DEPTH * scale, z: z + arm.z },
+    centre: { x: x + centre.x, z: z + centre.z },
+  };
 }
 
 /**

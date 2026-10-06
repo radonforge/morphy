@@ -12,6 +12,8 @@ export {
   OUTDOOR_BUILDING_MODELS,
   OUTDOOR_MODEL_PATHS,
   outdoorEntrances,
+  type StreetLamp,
+  streetLamp,
 } from "./outdoor";
 export * from "./overlays";
 export * from "./serialize";

@@ -11,6 +11,7 @@ import {
   outdoorEntrances,
   parseLevelDocument,
   proposeLights,
+  streetLamp,
   TILE,
   validateLevel,
 } from "../packages/level/src/index.ts";
@@ -426,6 +427,36 @@ test("a street lamp's light carries the height of its head", () => {
   const [light] = map.lights;
   assert.ok(light.y > top - 0.5 && light.y < top, `light at ${light.y} m under a ${top} m lamp`);
   assert.deepEqual(parseMapDefinition(map).lights[0], light);
+});
+
+test("streetLamp is what a document's lamp compiles to, for both North District fixtures", () => {
+  for (const [name, yaw] of [
+    ["curved", QUARTER],
+    ["square-cross", 0],
+  ]) {
+    const map = compiled(
+      edit((d) => Object.assign(d.lights[0], { fixture: name, yaw }))(fixture()),
+    );
+    const lamp = streetLamp(name, -6, -10, yaw);
+    assert.deepEqual(
+      map.scenery.find((s) => s.model.includes("/roads/light-")),
+      lamp.scenery,
+    );
+    const [light] = map.lights;
+    assert.deepEqual([light.x, light.y, light.z], [lamp.head.x, lamp.head.y, lamp.head.z]);
+  }
+  const curved = streetLamp("curved", 0, 0, QUARTER);
+  assert.ok(Math.abs(curved.head.x + 1.4) < NEAR, "a quarter turn swings the 1.4 m arm to -X");
+  assert.ok(Math.abs(curved.head.z) < NEAR);
+  const cross = streetLamp("square-cross", 3, 4, 0);
+  assert.deepEqual([cross.head.x, cross.head.z], [3, 4], "a cross lamp hangs over its pole");
+  assert.equal(cross.head.y, cross.height - 0.2);
+  const small = streetLamp("curved", 0, 0, 0, 6);
+  assert.equal(small.scenery.scale, 6);
+  assert.ok(Math.abs(small.height - (curved.height * 6) / 8) < NEAR, "height follows the scale");
+  assert.ok(Math.abs(small.head.z + 1.05) < NEAR, "and so do the arm and the head's depth");
+  assert.ok(Math.abs(small.head.y - (small.height - 0.15)) < NEAR);
+  assert.ok(Math.abs(small.centre.z + 0.528) < NEAR, "the footprint centre sits along the arm");
 });
 
 const entranceFindings = (doc) =>
