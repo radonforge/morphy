@@ -12,6 +12,9 @@
     "runtimeAssets.ts",
     "viteRuntimeAssets.ts",
     "viteLevelBridge.ts",
-    "buildInfo.ts"
+    "buildInfo.ts",
+    "siteMarkdown.ts",
+    "sitePage.ts",
+    "viteSitePages.ts"
   ]
 }
