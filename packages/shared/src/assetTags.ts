@@ -489,11 +489,11 @@ export const ASSET_TAGS: Readonly<Record<string, AssetTags>> = {
     },
   },
   "/models/urban/street/dumpster.glb": {
-    front: "pz",
+    front: "nx",
     symmetry: 1,
     mount: "floor",
     source: {
-      front: "auto",
+      front: "human",
       symmetry: "auto",
       mount: "auto",
     },
