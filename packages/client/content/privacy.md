@@ -36,7 +36,7 @@ Both act as processors on our behalf.
 
 ## How long we keep it
 
-Stats and callsign are kept for [[STATS_RETENTION]], or until you erase them. Chat is not kept. Access logs are kept only as long as the web server's log rotation holds them.
+Stats and callsign are erased automatically 12 months after your last round, or sooner if you erase them yourself. Chat is not kept. Access logs are kept only as long as the web server's log rotation holds them.
 
 ## Your rights
 

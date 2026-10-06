@@ -9,6 +9,9 @@ process.env.MORPHY_DB_PATH = databasePath;
 
 const { registerStatsRoute } = await import("../packages/server/src/http.ts");
 const { playerStats } = await import("../packages/server/src/stats/repository.ts");
+const { STATS_RETENTION_MS, purgeInactiveStats } = await import(
+  "../packages/server/src/stats/retention.ts"
+);
 
 const DEVICE_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
 const OTHER_DEVICE_ID = "11111111-2222-4333-8444-555555555555";
@@ -129,4 +132,20 @@ test("DELETE /stats answers 500 and logs only a truncated id when the store fail
   assert.equal(logged.length, 1);
   assert.ok(logged[0].includes(DEVICE_ID.slice(0, 8)));
   assert.ok(!logged[0].includes(DEVICE_ID));
+});
+
+test("the retention sweep keeps a device that played within twelve months", () => {
+  playerStats.recordRound(DEVICE_ID, "fox", WON_ROUND);
+  const erased = purgeInactiveStats(playerStats, Date.now() + STATS_RETENTION_MS - 60_000);
+  assert.equal(erased, 0);
+  assert.equal(playerStats.get(DEVICE_ID).rounds, 1);
+  playerStats.delete(DEVICE_ID);
+});
+
+test("the retention sweep erases a device idle past twelve months", () => {
+  playerStats.recordRound(DEVICE_ID, "fox", WON_ROUND);
+  const cutoffNow = Date.now() + STATS_RETENTION_MS + 60_000;
+  const erased = purgeInactiveStats(playerStats, cutoffNow);
+  assert.equal(erased, 1);
+  assert.deepEqual(playerStats.get(DEVICE_ID), ZERO);
 });

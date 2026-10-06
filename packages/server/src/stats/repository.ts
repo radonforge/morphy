@@ -27,6 +27,8 @@ export interface PlayerStatsRepository {
   recordRound(deviceId: string, name: string, outcome: RoundOutcome): PlayerStatTotals;
   /** Erase everything stored for a device. A device that never played is a no-op. */
   delete(deviceId: string): void;
+  /** Erase every device whose last round finished before `cutoffMs`; returns how many were erased. */
+  deleteInactiveBefore(cutoffMs: number): number;
   close(): void;
 }
 
@@ -51,6 +53,10 @@ const SELECT_TOTALS = `
 
 const DELETE_DEVICE = `
   DELETE FROM player_stats WHERE device_id = ?;
+`;
+
+const DELETE_INACTIVE = `
+  DELETE FROM player_stats WHERE updated_at < ?;
 `;
 
 const UPSERT_ROUND = `
@@ -81,6 +87,7 @@ export class SqlitePlayerStatsRepository implements PlayerStatsRepository {
   private readonly selectStmt: ReturnType<DatabaseSync["prepare"]>;
   private readonly upsertStmt: ReturnType<DatabaseSync["prepare"]>;
   private readonly deleteStmt: ReturnType<DatabaseSync["prepare"]>;
+  private readonly deleteInactiveStmt: ReturnType<DatabaseSync["prepare"]>;
 
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
@@ -90,6 +97,7 @@ export class SqlitePlayerStatsRepository implements PlayerStatsRepository {
     this.selectStmt = this.db.prepare(SELECT_TOTALS);
     this.upsertStmt = this.db.prepare(UPSERT_ROUND);
     this.deleteStmt = this.db.prepare(DELETE_DEVICE);
+    this.deleteInactiveStmt = this.db.prepare(DELETE_INACTIVE);
   }
 
   get(deviceId: string): PlayerStatTotals {
@@ -110,6 +118,10 @@ export class SqlitePlayerStatsRepository implements PlayerStatsRepository {
 
   delete(deviceId: string): void {
     this.deleteStmt.run(deviceId);
+  }
+
+  deleteInactiveBefore(cutoffMs: number): number {
+    return Number(this.deleteInactiveStmt.run(cutoffMs).changes);
   }
 
   close(): void {
