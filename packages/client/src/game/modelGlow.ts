@@ -47,6 +47,9 @@ const GLOW_RULES: readonly GlowRule[] = [
 
 const masks = new WeakMap<THREE.Texture["source"], Map<string, THREE.Texture>>();
 const glowing = new WeakSet<THREE.Object3D>();
+const glowMaterials = new Map<string, Set<THREE.MeshStandardMaterial>>();
+const glowTints = new Map<string, THREE.Color>();
+const UNTINTED = new THREE.Color(1, 1, 1);
 
 function maskFor(rule: GlowRule, map: THREE.Texture): THREE.Texture | null {
   const image = map.source.data as CanvasImageSource & { width?: number; height?: number };
@@ -76,7 +79,19 @@ function maskFor(rule: GlowRule, map: THREE.Texture): THREE.Texture | null {
   return mask;
 }
 
-function glowMaterial(material: THREE.MeshStandardMaterial, mask: THREE.Texture): void {
+function tintFor(ids: readonly string[]): THREE.Color {
+  for (const id of ids) {
+    const tint = glowTints.get(id);
+    if (tint) return tint;
+  }
+  return UNTINTED;
+}
+
+function glowMaterial(
+  material: THREE.MeshStandardMaterial,
+  mask: THREE.Texture,
+  ids: readonly string[],
+): void {
   const map = material.map;
   if (!map) return;
   const emissiveMap = mask.clone();
@@ -86,9 +101,29 @@ function glowMaterial(material: THREE.MeshStandardMaterial, mask: THREE.Texture)
   emissiveMap.center.copy(map.center);
   emissiveMap.channel = map.channel;
   material.emissiveMap = emissiveMap;
-  material.emissive.setRGB(1, 1, 1);
+  material.emissive.copy(tintFor(ids));
   material.emissiveIntensity = GLOW_INTENSITY;
   material.needsUpdate = true;
+  for (const id of ids) {
+    let set = glowMaterials.get(id);
+    if (!set) {
+      set = new Set();
+      glowMaterials.set(id, set);
+    }
+    set.add(material);
+  }
+}
+
+/**
+ * Colour the glow of one rule (`windows`, `screens`, ...) on every model that has it,
+ * loaded now or later; `null` gives the swatch its own colour back.
+ */
+export function tintGlow(id: string, color: string | null): void {
+  if (color) glowTints.set(id, new THREE.Color(color));
+  else glowTints.delete(id);
+  for (const material of glowMaterials.get(id) ?? []) {
+    material.emissive.copy(tintFor([id]));
+  }
 }
 
 function combined(rules: readonly GlowRule[]): GlowRule {
@@ -112,6 +147,7 @@ export function applyModelGlow(scene: THREE.Object3D, url: string): void {
   );
   if (rules.length === 0) return;
   const rule = combined(rules);
+  const ids = rules.map((r) => r.id);
   scene.traverse((child) => {
     const mesh = child as THREE.Mesh;
     if (!mesh.isMesh) return;
@@ -120,7 +156,7 @@ export function applyModelGlow(scene: THREE.Object3D, url: string): void {
       const standard = material as THREE.MeshStandardMaterial;
       if (!standard.isMeshStandardMaterial || !standard.map || standard.emissiveMap) continue;
       const mask = maskFor(rule, standard.map);
-      if (mask) glowMaterial(standard, mask);
+      if (mask) glowMaterial(standard, mask, ids);
     }
   });
 }
