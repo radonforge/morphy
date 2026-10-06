@@ -208,13 +208,7 @@ export function components(grid: SampleGrid, member: (index: number) => boolean)
   return groups;
 }
 
-function allWithin(
-  grid: SampleGrid,
-  index: number,
-  radius: number,
-  member: Uint8Array,
-  offGrid: boolean,
-): boolean {
+function allWithin(grid: SampleGrid, index: number, radius: number, member: Uint8Array): boolean {
   const a = Math.floor(index / grid.nz);
   const b = index % grid.nz;
   const reach = Math.ceil(radius / LEVEL_SAMPLE_CELL);
@@ -223,8 +217,9 @@ function allWithin(
       if (Math.hypot(da, db) * LEVEL_SAMPLE_CELL >= radius) continue;
       const na = a + da;
       const nb = b + db;
-      const on = na >= 0 && na < grid.nx && nb >= 0 && nb < grid.nz;
-      if (on ? !member[na * grid.nz + nb] : !offGrid) return false;
+      if (na < 0 || na >= grid.nx || nb < 0 || nb >= grid.nz || !member[na * grid.nz + nb]) {
+        return false;
+      }
     }
   }
   return true;
@@ -239,7 +234,7 @@ export function wideSamples(grid: SampleGrid, member: Uint8Array, width: number)
   const inset = width / 2 - LEVEL_BODY_RADIUS;
   const wide = new Uint8Array(grid.nx * grid.nz);
   for (let index = 0; index < wide.length; index++) {
-    if (member[index] && allWithin(grid, index, inset, member, false)) wide[index] = 1;
+    if (member[index] && allWithin(grid, index, inset, member)) wide[index] = 1;
   }
   return wide;
 }

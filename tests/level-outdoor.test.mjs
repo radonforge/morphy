@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   addRoom,
@@ -584,11 +583,27 @@ test("a car across the mouth of a lane closes it", () => {
   );
 });
 
-test("indoors, furniture is never reported as closing a passage", () => {
-  const station = JSON.parse(
-    readFileSync(new URL("./fixtures/station-seven-rooms.level.json", import.meta.url), "utf8"),
+test("a car left in the middle of an 8 m street is walked round, not reported", () => {
+  assert.deepEqual(passages([{ id: "car", type: "sedan", x: 0, z: -10, yaw: QUARTER }]), []);
+});
+
+test("a car at the side of a lane that keeps a wide enough way open is not reported", () => {
+  assert.deepEqual(passages([{ id: "car", type: "hatchback-sports", x: -3.2, z: 0, yaw: 0 }]), []);
+});
+
+test("indoors, furniture across a room is never reported as closing a passage", () => {
+  const doc = parseLevelDocument(
+    {
+      version: 1,
+      id: "station",
+      grid: { cols: 1, rows: 3 },
+      rooms: [{ id: "hall", rects: [{ i0: 0, i1: 1, j0: 0, j1: 3 }] }],
+      doors: [],
+      objects: [{ id: "hall-1", type: "table", x: 0, z: 0, yaw: 0 }],
+      spawns: { props: [{ x: 0, z: 5 }], hunters: [{ x: 0, z: -5 }] },
+    },
+    { catalog: SPACE_CATALOG },
   );
-  const doc = parseLevelDocument(station, { catalog: SPACE_CATALOG });
   const report = validateLevel(doc, {
     catalog: SPACE_CATALOG,
     cards: ASSET_CARDS,
@@ -597,5 +612,22 @@ test("indoors, furniture is never reported as closing a passage", () => {
   assert.equal(
     report.findings.some((f) => f.code === "passage.blocked"),
     false,
+  );
+  const outdoors = parseLevelDocument(
+    {
+      ...doc,
+      setting: "outdoor",
+      rooms: [{ id: "hall", ground: "paving", rects: doc.rooms[0].rects }],
+      blocks: [],
+    },
+    { catalog: SPACE_CATALOG },
+  );
+  assert.equal(
+    validateLevel(outdoors, {
+      catalog: SPACE_CATALOG,
+      cards: ASSET_CARDS,
+      tags: ASSET_TAGS,
+    }).findings.some((f) => f.code === "passage.blocked"),
+    true,
   );
 });

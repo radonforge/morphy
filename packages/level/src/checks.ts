@@ -421,13 +421,14 @@ function passageFindings(space: LevelSpace, grid: SampleGrid, findings: Finding[
     const straight = stepDistances(grid, bare, [from], span);
     const allowed = edge.size / 2 + slack;
     const around = stepDistances(grid, dressed, [from], span + allowed);
-    const cut = sides.find((index) => {
+    const excess = (index: number): number => {
       const direct = straight[index]!;
-      if (direct < 0) return false;
+      if (direct < 0) return -Infinity;
       const walked = around[index]!;
-      return walked < 0 || walked - direct > allowed;
-    });
-    if (cut === undefined) continue;
+      return walked < 0 ? Infinity : walked - direct;
+    };
+    const cut = sides.reduce((worst, index) => (excess(index) > excess(worst) ? index : worst));
+    if (excess(cut) <= allowed) continue;
     const at = centralSample(grid, group);
     const named = [...blockers].sort().slice(0, MAX_NAMED_BLOCKERS);
     const objects = named.map((id) => {
@@ -442,7 +443,7 @@ function passageFindings(space: LevelSpace, grid: SampleGrid, findings: Finding[
       severity: "warning",
       message:
         walked < 0
-          ? `${objects.join(", ")} close the way from ${point(a)} to ${point(b)} in ${regionName(space.regionAt(at.x, at.z))}`
+          ? `${objects.join(", ")} close the way from ${point(a)} to ${point(b)} in ${regionName(space.regionAt(at.x, at.z))}: no way round under ${num((straight[cut]! + allowed) * LEVEL_SAMPLE_CELL)} m`
           : `${objects.join(", ")} turn the ${num(straight[cut]! * LEVEL_SAMPLE_CELL)} m walk from ${point(a)} to ${point(b)} into ${num(walked * LEVEL_SAMPLE_CELL)} m in ${regionName(space.regionAt(at.x, at.z))}`,
       entities: named,
       at,
