@@ -12,17 +12,22 @@ interface StatsRequest {
 interface StatsResponse {
   status(code: number): StatsResponse;
   json(body: unknown): void;
+  end(): void;
 }
 
+type StatsHandler = (req: StatsRequest, res: StatsResponse) => void;
+
 interface StatsApp {
-  get(path: string, handler: (req: StatsRequest, res: StatsResponse) => void): void;
+  get(path: string, handler: StatsHandler): void;
+  delete(path: string, handler: StatsHandler): void;
 }
 
 /**
  * Serve a device's cumulative lifetime stats so the menu can show them without
  * joining a room. The device id travels in a header, never the URL, so it stays
  * out of access logs. Unknown devices get zeroed totals; a malformed id is a
- * client error. Typed against the minimal Express surface used here, so the
+ * client error. `DELETE` on the same path erases the device's row (204, also for a
+ * device with nothing stored). Typed against the minimal Express surface used here, so the
  * server needs no `@types/express`.
  */
 export function registerStatsRoute(app: StatsApp): void {
@@ -38,6 +43,21 @@ export function registerStatsRoute(app: StatsApp): void {
     } catch (error) {
       const safeId = deviceId.slice(0, DEVICE_ID_LOG_PREFIX);
       console.error(`[morphy] stats query failed for ${safeId}…:`, error);
+      res.status(500).json({ error: "stats unavailable" });
+    }
+  });
+  app.delete(STATS_PATH, (req, res) => {
+    const deviceId = parseDeviceId(req.header(DEVICE_ID_HEADER));
+    if (!deviceId) {
+      res.status(400).json({ error: "invalid or missing device id" });
+      return;
+    }
+    try {
+      playerStats.delete(deviceId);
+      res.status(204).end();
+    } catch (error) {
+      const safeId = deviceId.slice(0, DEVICE_ID_LOG_PREFIX);
+      console.error(`[morphy] stats delete failed for ${safeId}…:`, error);
       res.status(500).json({ error: "stats unavailable" });
     }
   });

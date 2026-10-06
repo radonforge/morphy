@@ -38,3 +38,22 @@ export async function fetchStats(deviceId: string): Promise<PlayerStatsPayload> 
     clearTimeout(timer);
   }
 }
+
+/**
+ * Erase this device's lifetime stats on the server. The device id itself is
+ * kept. Throws on network error, non-2xx or timeout.
+ */
+export async function resetStats(deviceId: string): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), STATS_TIMEOUT_MS);
+  try {
+    const res = await fetch(STATS_URL, {
+      method: "DELETE",
+      headers: { [DEVICE_ID_HEADER]: deviceId },
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`stats reset failed: ${res.status}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}

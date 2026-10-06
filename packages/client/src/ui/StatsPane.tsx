@@ -1,7 +1,11 @@
 import type { PlayerStatsPayload } from "@morphy/shared";
 import { useEffect, useState } from "react";
-import { fetchStats } from "../net/stats";
+import { fetchStats, resetStats } from "../net/stats";
 import { getDeviceId } from "../storage";
+
+type ResetStep = "idle" | "confirm" | "working" | "failed";
+
+const ZERO_STATS: PlayerStatsPayload = { rounds: 0, wins: 0, kills: 0, survivals: 0 };
 
 type State = { kind: "loading" } | { kind: "error" } | { kind: "ready"; stats: PlayerStatsPayload };
 
@@ -11,6 +15,17 @@ function winRate(stats: PlayerStatsPayload): number {
 
 export function StatsPane() {
   const [state, setState] = useState<State>({ kind: "loading" });
+  const [resetStep, setResetStep] = useState<ResetStep>("idle");
+
+  const confirmReset = () => {
+    setResetStep("working");
+    resetStats(getDeviceId())
+      .then(() => {
+        setState({ kind: "ready", stats: ZERO_STATS });
+        setResetStep("idle");
+      })
+      .catch(() => setResetStep("failed"));
+  };
 
   useEffect(() => {
     let active = true;
@@ -52,6 +67,42 @@ export function StatsPane() {
           </div>
         ))}
       </dl>
+      <div className="stats-reset">
+        {resetStep === "idle" && (
+          <button type="button" className="menu-party-btn" onClick={() => setResetStep("confirm")}>
+            Reset my stats
+          </button>
+        )}
+        {(resetStep === "confirm" || resetStep === "working") && (
+          <>
+            <span>Erase your stats and callsign from the server? This cannot be undone.</span>
+            <button
+              type="button"
+              className="menu-party-btn"
+              disabled={resetStep === "working"}
+              onClick={confirmReset}
+            >
+              Yes, erase
+            </button>
+            <button
+              type="button"
+              className="menu-party-btn"
+              disabled={resetStep === "working"}
+              onClick={() => setResetStep("idle")}
+            >
+              Cancel
+            </button>
+          </>
+        )}
+        {resetStep === "failed" && (
+          <>
+            <span>Couldn't reset your stats. Try again later.</span>
+            <button type="button" className="menu-party-btn" onClick={() => setResetStep("idle")}>
+              Back
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

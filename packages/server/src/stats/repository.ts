@@ -25,6 +25,8 @@ export interface PlayerStatsRepository {
   get(deviceId: string): PlayerStatTotals;
   /** Fold one round's outcome into the device's totals and return the new totals. */
   recordRound(deviceId: string, name: string, outcome: RoundOutcome): PlayerStatTotals;
+  /** Erase everything stored for a device. A device that never played is a no-op. */
+  delete(deviceId: string): void;
   close(): void;
 }
 
@@ -45,6 +47,10 @@ const CREATE_TABLE = `
 
 const SELECT_TOTALS = `
   SELECT rounds, wins, kills, survivals FROM player_stats WHERE device_id = ?;
+`;
+
+const DELETE_DEVICE = `
+  DELETE FROM player_stats WHERE device_id = ?;
 `;
 
 const UPSERT_ROUND = `
@@ -74,6 +80,7 @@ export class SqlitePlayerStatsRepository implements PlayerStatsRepository {
   private readonly db: DatabaseSync;
   private readonly selectStmt: ReturnType<DatabaseSync["prepare"]>;
   private readonly upsertStmt: ReturnType<DatabaseSync["prepare"]>;
+  private readonly deleteStmt: ReturnType<DatabaseSync["prepare"]>;
 
   constructor(path: string) {
     mkdirSync(dirname(path), { recursive: true });
@@ -82,6 +89,7 @@ export class SqlitePlayerStatsRepository implements PlayerStatsRepository {
     this.db.exec(CREATE_TABLE);
     this.selectStmt = this.db.prepare(SELECT_TOTALS);
     this.upsertStmt = this.db.prepare(UPSERT_ROUND);
+    this.deleteStmt = this.db.prepare(DELETE_DEVICE);
   }
 
   get(deviceId: string): PlayerStatTotals {
@@ -98,6 +106,10 @@ export class SqlitePlayerStatsRepository implements PlayerStatsRepository {
       now: Date.now(),
     });
     return this.get(deviceId);
+  }
+
+  delete(deviceId: string): void {
+    this.deleteStmt.run(deviceId);
   }
 
   close(): void {
