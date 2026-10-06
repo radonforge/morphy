@@ -1,8 +1,8 @@
 # Terms of use
 
-Last updated: 2026-10-06
+Last updated: 2026-10-07
 
-By playing Morphy you agree to these terms. Morphy is operated by [[LEGAL_NAME]], VAT number [[VAT_NUMBER]], registered at [[REGISTERED_ADDRESS]].
+By playing Morphy you agree to these terms. Morphy is made by Radon Forge, an independent, non-commercial project run by two private individuals in Italy.
 
 ## The service
 
@@ -39,4 +39,4 @@ We may update these terms as the game changes. The "Last updated" date at the to
 
 ## Contact
 
-Write to [[PRIVACY_EMAIL]] or to [[LEGAL_NAME]] at [[REGISTERED_ADDRESS]]. How we handle personal data is in the [privacy notice](/privacy).
+Write to [privacy@radonforge.com](mailto:privacy@radonforge.com). How we handle personal data is in the [privacy notice](/privacy).

@@ -1,12 +1,12 @@
 # Privacy notice
 
-Last updated: 2026-10-06
+Last updated: 2026-10-07
 
 Morphy is an early-alpha browser game. It has no accounts, no sign-up and no login. This notice explains what personal data the game handles and why, as required by articles 13 and 14 of the GDPR.
 
 ## Who is responsible
 
-The controller is [[LEGAL_NAME]], VAT number [[VAT_NUMBER]], registered at [[REGISTERED_ADDRESS]]. You can reach us about anything in this notice at [[PRIVACY_EMAIL]].
+The controller is Radon Forge, an independent, non-commercial project run by two private individuals in Italy. It is not a registered company. You can reach us about anything in this notice at [privacy@radonforge.com](mailto:privacy@radonforge.com).
 
 ## What we process and why
 
@@ -40,8 +40,8 @@ Stats and callsign are erased automatically 12 months after your last round, or 
 
 ## Your rights
 
-- **Erasure.** Open the Stats pane in the menu and press **Reset my stats**. This deletes your stats and callsign from the server. Your browser keeps its device ID and settings; clear your browser's site data to remove them too. You can also ask us by email at [[PRIVACY_EMAIL]]. Tell us your device ID, which you can read in your browser's local storage under `morphy:deviceId`, so we can find your row.
-- **Other rights.** You can ask for access to your data, correction, restriction, portability, and object to processing, by email at [[PRIVACY_EMAIL]].
+- **Erasure.** Open the Stats pane in the menu and press **Reset my stats**. This deletes your stats and callsign from the server. Your browser keeps its device ID and settings; clear your browser's site data to remove them too. You can also ask us by email at [privacy@radonforge.com](mailto:privacy@radonforge.com). Tell us your device ID, which you can read in your browser's local storage under `morphy:deviceId`, so we can find your row.
+- **Other rights.** You can ask for access to your data, correction, restriction, portability, and object to processing, by email at [privacy@radonforge.com](mailto:privacy@radonforge.com).
 - **Complaints.** You can complain to the Italian data protection authority, the [Garante per la protezione dei dati personali](https://www.garanteprivacy.it).
 
 ## Changes
