@@ -1,149 +1,146 @@
 # Changelog
 
-All notable changes to Morphy are documented here.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
-(0.x releases are pre-1.0).
+Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
-### Added
-
-- The lobby credits the studio: a `© Radon Forge` link to radonforge.com sits
-  under the version stamp in the menu header. Nothing in the client pointed at
-  the studio before: the only copyright notice lived in `LICENSE`, which no
-  player ever opens.
-- The README opens on the showcase banner and closes on the license.
-
-### Changed
-
-- A shared link previews as the key art instead of a favicon: `og:image` is the
-  1600×800 showcase banner and `twitter:card` is `summary_large_image`, where
-  before the card was a small square of the maskable app icon, the variant
-  padded for Android icon masking and the wrong one to hand a scraper. The
-  card also carries `og:url`, `og:site_name`, the image dimensions and alt
-  text, so a crawler can lay it out without fetching the image first.
-
-## [0.3.0] - 2026-09-16
-
-The avatar is no longer picked from a grid: you click the pet on the stage and
-morph through the catalog in place, with the same burst a real disguise change
-fires. The menu is rebuilt as glass and reaches first paint at a quarter of the
-weight. A long frame or a shove no longer pushes the player through a wall, and
-the bots stop stalling: a failed path, a lost sighting, a cornered flight and
-a hide spot behind a wall each had their own way of parking one in place.
+Two maps, back-to-back rounds and a much louder catch. North District is rebuilt
+as a park ringed by courtyards and plays by day or by night, Kepler-9 is a
+night station with a new layout, and Ares Outpost is gone. Hunters get a sonar,
+props get a taunt, and bots now play with only what a player could see.
 
 ### Added
 
-- The avatar is chosen by morphing through the catalog on the lobby stage.
-  Clicking the pet dollies the camera in, and the catalog steps with the arrow
-  keys, the wheel or the rail arrows; every step fires the materialize burst
-  and the morph cue the game already plays for a real disguise change. The
-  neighbours either side render as the actual GLBs under an additive override,
-  which doubles as the preload, so the next morph is warm, and a cold model
-  loads under cover of the beam instead of leaving a hole. The Identity pane
-  keeps the callsign, written once where the avatar changes often, and trades
-  its grid of twenty-one emoji for a Change avatar button. Clicking anywhere
-  outside the rail closes the picker, and the hint that says so sits in a
-  click-through dock, so neither it nor the gap around it forms a dead strip
-  above the backdrop.
-- The lobby panels are a glass surface. The old chamfer was a `clip-path`,
-  which clipped every shadow to the box and made elevation impossible; a
-  radius instead lets the surface carry a contact shadow, an ambient one and a
-  specular rim. Geometry now says what a thing does (round is passive glass,
-  chamfered is hardware you can actuate), so the map cards keep their chamfer
-  on a surface of their own. The glass takes a per-map tint because mars and
-  urban sit under bright skies: worst case, with full sky behind a panel and
-  the sheen hotspot on it, body text holds 6.5:1 on mars and 6.8:1 on urban,
-  against 11.4:1 on station.
+- North District is a new map: four courtyards around a central park, with
+  hunters starting at the town gates. Each round is drawn by day or by night,
+  with glowing street lamps and lit windows after dark.
+- Kepler-9 is a night station with starlight, glowing deck lamps and a glass
+  ceiling. It is relaid as thirteen rooms around a central atrium joined by
+  short covered corridors, and the furniture stands in the same place every
+  round.
+- Props can taunt with F to score points, and score more with a hunter close
+  by. A prop that has been quiet too long is made to honk, for no points.
+- Hunters have a sonar on F: every prop nearby honks, decoys stay silent.
+  Props hear a hunter's sonar from a distance, and you hear props rustle as
+  they move.
+- Bot props drop a decoy when they break cover, like a player would.
+- The game tells you your role, your goal and the phase in big type. The catch
+  is the loudest moment of the round for the shooter, the victim and everyone
+  nearby, and the result card tells your round by the role you started with.
+- A look sensitivity slider in the lobby options and the match menu.
+- Graphics quality: Auto, Low, Medium and High. Auto picks from your graphics
+  card and steps down if a round runs slowly. Higher tiers add ambient
+  shading, colour grading and a vignette.
+- A Copy diagnostics link in the match menus gathers frame rate and graphics
+  details to paste into a bug report. Nothing is uploaded.
+- An Early alpha badge in the menu header, beside the version.
+- A changelog page at /changelog with the notes for every release, linked
+  from the menu footer, and a What's new chip in the menu when the game has
+  changed since your last visit.
+- The lobby credits the studio: a Radon Forge link to radonforge.com sits
+  under the version stamp in the menu header.
 
 ### Changed
 
-- The menu no longer loads the 3D stack before it can paint. The route split
-  deferred almost nothing, because the lobby stage imports three and
-  react-three eagerly and the entry chunk carried all of it: 419 kB gzip to
-  first paint, against 115 kB now that the stage loads lazily over the
-  background the menu CSS already draws.
-- The combat HUD sits on a flat surface instead of the glass. Glass is for
-  when the game is waiting on you, not for reading your health under fire.
+- The menu opens on one slice per map. Click a slice, or press the arrow
+  keys or its number, and it opens with your avatar inside; Play always plays
+  the map you have open. In a party only the host picks the map. Your callsign
+  now lives in the avatar picker.
+- Quick play joins the busiest room on the map you picked, and opens one there
+  if none exists. Your map choice is no longer a hint.
+- North District is the first map you see.
+- Public rounds follow each other without a trip back to the lobby, and every
+  wait is shorter.
+- Every round deals each player their own prop spawn, so a room no longer
+  starts where the last round ended. Hunters are released at the spawn
+  furthest from the props, and hunters who run out of health respawn after a
+  short wait instead of sitting out.
+- A wrong shot costs less health, and half as much if it only breaks a decoy.
+  A capture turns the prop into a hunter and heals the one who caught it.
+- Bots play with a player's information. Hunter bots have to spot a prop by
+  line of sight and by the tells a player would see: moving, spinning,
+  changing shape or honking. Otherwise they test objects one at a time and pay
+  for each miss. Bot props hold still while a hunter can see them.
+- Props only disguise as objects the map actually contains, and the list of
+  North District disguises is wider.
+- The menu and avatar picker lose their Close buttons. Clicking away or
+  pressing Escape closes them. Glass now covers buttons and map cards too.
+- Cars and a work-site fence dress North District. They never count as
+  disguises, and a hunter will not mistake them for one.
+- The match runs smoother on modest hardware, and the game is capped at 60
+  frames per second.
+- A shared link previews as the key art instead of a small icon, with a title
+  and description around it.
 
 ### Fixed
 
-- The frame the client integrates is bounded, so coming back to a backgrounded
-  tab no longer flings the player across the map. `requestAnimationFrame`
-  stops while a tab is hidden and the clock does not, so the first frame back
-  integrated the whole pause in one step, held input and all. Capping the
-  frame also caps one step's displacement, which is what keeps collision sound
-  when the integrator only tests where a step lands.
-- Collision puts the body back against the face it came in by, instead of the
-  side it ended up nearest. Judging by the landing point put a body on the far
-  side of anything it had overshot the midline of, reachable by a long frame,
-  and by the shove that separates two players, which no frame cap bounds. The
-  movement and collider code is now a pure module with tests that pin that
-  margin against the real maps, so a prop thin enough to slip through fails
-  the suite instead of the player walking through a wall.
-- Held keys are released when the window loses focus. A window that loses
-  focus never delivers the matching keyup, so a key held while switching away
-  stayed held on return and the player kept walking. Each action is now
-  derived from the set of held codes, which also fixes W and ArrowUp clearing
-  one another: releasing either used to drop the action while the other was
-  still down.
-- The weapon on screen is the one the server resolves hits with. The local
-  pick was React state seeded from the default, so any remount (a reconnect,
-  or coming back from the party screen) reset the viewmodel, the cooldown and
-  the shot audio to the pistol while the server kept firing the real weapon.
-- The morph burst plays around the player rather than at floor level. The
-  effect and the remote pose cache carried only x and z, so a disguise changed
-  mid-jump or on a crate fired the beam and its shards under the player.
-- A taunt pulse expires on time instead of waiting for the mesh that owns it.
-  The pulse stored the time it had left and was decremented by the player's
-  own mesh, so one interrupted by a leave or a death stayed positive with
-  nobody to consume it, and any positive value reads as motion, which pinned
-  the shadow map to a per-frame refresh for the rest of the session.
-- A refused pointer lock is handled where the scene asks for it. The browser
-  declines the lock routinely, and the refusal arrives as a promise rejection.
-- The avatar stays on stage when the picker opens, the camera damps onto its
-  new aim instead of cutting to it, and the wheel steps once per gesture on
-  whichever axis the gesture opens on: a sideways trackpad swipe never
-  reached the carousel at all, and inertia went on stepping after the gesture
-  ended. The stage's frame-rate boost is bounded to the frames that move.
-- A bot no longer reads a failed path plan as an arrival. A failed plan and a
-  fully walked one both leave the follower empty, so a goal behind a wall
-  settled on the first tick, and settling stopped the replan counter, so the
-  blocked-path signal never rose and the policy kept re-issuing the spot.
-- A bot's motor stays inside the bot's own senses. The reflex ran an intent
-  for a whole decision cycle against the room's live players, so a target that
-  broke line of sight was still pathed to by its true coordinates. The motor
-  now shares the observation's sight and hearing gate, and falls back to the
-  last position it was entitled to see.
-- A fleeing prop keeps running. Recomputing the escape point on every decision
-  let a cornered prop re-issue a goal that drifted past the arrival epsilon,
-  resetting the replan counter so the blocked path never latched, measured at
-  52 decisions per ten seconds against a cadence of fourteen, with the prop
-  glued in place. Holding the point exposed the other half: the reflex parks
-  on a goal it has arrived at and the policy kept re-issuing that same goal,
-  which the driver reads as no change, so a prop that reached its escape point
-  stood there for the rest of the round. Arrival now reaches the policy
-  through the observation, and a blocked escape swings to a new angle.
-- A prop caps how often it re-picks a hide spot it cannot reach. A blocked
-  path wakes the policy off-cycle, so clearing the plan on every blocked
-  decision let a bot sealed off from every nearby prop cycle at nearly seven
-  times the ordinary decision rate; after a bounded number of tries it hides
-  where it stands.
-- A motionless contact no longer sounds like a noise. A first sighting
-  recorded the moment it was seen as the moment it last moved, so any second
-  observation inside the recently-moved window reported a contact that had
-  never moved as audible, and event-driven decisions land well inside that
-  window. Samples and remembered positions are dropped when a player leaves
-  the room.
-- A hunter runs down a disguise it has seen fleeing instead of walking after
-  it. It is gated on a contact seen disguised and moving: a noise could be a
-  teammate, and sprinting at every one rebuilds the hunter pack.
-- A room's bot fill stops at the first bot it cannot seat. Every bot in a room
-  takes the same map, so one a driver rejects none will accept: the loop asked
-  forever, and being synchronous it pinned the event loop and took every other
-  room on the process down with it.
+- A walking prop no longer flickers its shadow.
+- Night lamps in North District no longer pop in and out as you walk or blow
+  out the building fronts, and Kepler-9's lamps no longer glare through the
+  ceiling or wash out the lobby stage.
+- Roads in North District lay the right way, and the lobby stage's scenery
+  stands where it was placed.
+- A match that hits an unexpected error shows a rejoin screen instead of a
+  blank page.
+- A dumpster placed against a wall faces the street, not its side.
+- Meteors and loose bones no longer clutter the station.
+
+### Removed
+
+- Ares Outpost. Open ground with long sightlines is the opposite of what a
+  prop hunt needs, and two maps split a small player pool less than three.
+- The pedestrian figures that were meant to be scenery in North District. They
+  never rendered, and a reroll into one left you invisible.
+
+## [0.3.0] - 2026-09-16
+
+You now pick your avatar by clicking the pet on the lobby stage and morphing
+through the catalog in place, with the same burst a real disguise change
+makes. The menu is rebuilt as glass and appears much faster. You can no longer
+be pushed through a wall, and bots stop getting stuck.
+
+### Added
+
+- Choose your avatar by morphing through the catalog on the lobby stage. Click
+  the pet and the camera moves in; step with the arrow keys, the mouse wheel or
+  the arrows on the rail. Every step plays the materialize burst and morph
+  sound the game uses for a real disguise change, and the next avatars load
+  ahead of time. Clicking anywhere outside the rail closes the picker, and a
+  hint says so.
+- Lobby panels are glass, with soft shadows and a lit edge, tinted to suit
+  each map so text stays easy to read.
+
+### Changed
+
+- The menu appears much faster, because the 3D backdrop now loads after it
+  paints.
+- The combat HUD sits on a flat surface instead of glass, so your health is
+  easy to read under fire.
+
+### Fixed
+
+- Coming back to a hidden browser tab no longer flings you across the map.
+- You can no longer be pushed through a thin prop or wall, even by a long
+  frame or another player shoving you.
+- Held keys are released when the window loses focus, so you stop walking
+  after switching away. Releasing W or the up arrow no longer cancels the
+  other while it is still held.
+- The weapon on screen matches the one that hits, including after a reconnect
+  or returning from the party screen.
+- The morph burst plays around you instead of at floor level when you change
+  disguise mid-jump or on a crate.
+- A taunt no longer leaves the game stuck redrawing shadows for the rest of
+  the session.
+- A refused mouse capture no longer raises an error.
+- The avatar stays on stage when the picker opens, the camera glides rather
+  than cuts, and a sideways trackpad swipe works. One swipe steps once and
+  does not keep going.
+- Bots stop getting stuck. They no longer treat a blocked route as arrival, no
+  longer chase a target they have lost sight of by its true position, keep
+  running when fleeing, and give up on a hide spot they cannot reach. A
+  motionless contact no longer sounds like a noise, and hunters run down a
+  disguise they saw fleeing instead of walking after it.
+- A room full of bots no longer freezes every other match on the server.
 
 ## [0.2.5] - 2026-09-11
 
@@ -153,284 +150,180 @@ phone gets says its piece in one line.
 
 ### Added
 
-- A public lobby counts down the wait for its bots. The room pads itself to
-  four presences ten seconds after someone arrives, but the auto-start clock
-  only arms once there are enough players to start, so a player alone had no
-  countdown at all for those ten seconds and then met three bots arriving
-  together. The room now publishes that deadline and the lobby reads
-  `Searching for players · bots join · 9s`, handing over to the auto-start
-  clock as soon as there is one.
+- A public lobby counts down the wait for bots, so you see
+  "Searching for players" with a timer instead of a quiet screen, handing over
+  to the start countdown as soon as there is one.
 
 ### Fixed
 
-- iOS no longer shows a white band above and below the page. Every dark
-  surface was painted by an absolutely positioned child, so the CSS canvas
-  kept the user-agent default, and Safari both fills the safe areas with that
-  colour and tints its own toolbar from it, which framed the page in white
-  whatever `theme-color` asked for. The background and `color-scheme` now sit
-  on the root itself, where a stray uncovered pixel cannot be white again.
-- The desktop-only notice stops explaining itself. It spelled out why a
-  browser withholds the pointer and which keys the game moves on, to a reader
-  holding a phone who can act on neither.
-- The lobby's player threshold counts only connected seats, the way the server
-  does. A seat held open for a dropped player made the client say there were
-  enough players to start while the server, which counts presence, would not.
+- iOS no longer shows a white band above and below the page.
+- The desktop-only notice no longer explains why your phone cannot play.
+- The lobby counts only players who are still connected, so it no longer
+  claims there are enough to start when the room disagrees.
 
 ## [0.2.4] - 2026-09-09
 
 Hunter bots now tell a teammate from a disguise by shape, which ends the pack
-0.2.3 only bounded at arm's reach. Morphy also turns away a device it cannot be
+that formed in the last release. Morphy also turns away a device it cannot be
 played on instead of leading it into a match, and the hunter's health bar is
 readable again on a narrow window.
 
 ### Added
 
 - Morphy asks to be opened on a PC when it is opened on a phone or a tablet,
-  instead of showing a lobby that leads to a game those devices cannot run:
-  aiming needs the pointer locked, which no mobile browser grants, and movement
-  is on WASD. The test is a capability, not a width: `(pointer: fine)`, so a
-  desktop window dragged narrow still plays and a tablet held wide does not,
-  and it is re-evaluated live, so plugging in a mouse lifts the notice without
-  a reload.
+  since aiming needs a mouse and movement is on the keyboard. A desktop window
+  dragged narrow still plays, and plugging in a mouse lifts the notice.
 
 ### Fixed
 
-- A hunter bot no longer treats another hunter as something to identify. The
-  0.2.3 inspect budget bounded the symptom at arm's reach and left the chase
-  untouched: a contact that keeps more than two metres away never spends the
-  budget, so a bot hunter followed a human hunter around the map for the whole
-  round, and a pack re-formed every time a park expired. The cause was the one
-  perception signal the policy had, `looksLikeProp`, which folded "wears a
-  disguise" together with "is standing still", leaving a moving disguise and an
-  undisguised teammate indistinguishable. Perception now reports the shape
-  itself (`ObservedEntity.disguised`: whether a contact wears a disguise, never
-  which one, which is the shape a player reads off the screen), a hunter is
-  excluded from suspect selection because it can only ever be a teammate, and
-  the budget and its park are gone rather than kept alongside the fix. The shape
-  is reported only for a contact in line of sight: footsteps through a wall tell
-  a player nothing about who is making them, so a heard contact still gets
-  investigated whoever it is. A prop bot reads a threat the same way: a seen
-  disguise is a fellow prop and no reason to break cover, an unseen noise still
-  is.
-- The hunter's health bar no longer sits on top of the controls bar. Both were
-  positioned from the bottom of the screen by hand, eight pixels apart in the
-  wrong direction, and the controls bar wraps to two or three rows on a narrow
-  window and buried the bar completely. They are now one bottom-centred stack,
-  so the spacing holds however many rows the controls take.
+- Hunter bots no longer follow other hunters around for the whole round. They
+  tell a teammate from a disguise by shape, as a player does, but only when
+  they can see it: footsteps through a wall tell them nothing. A prop bot
+  likewise ignores a disguise it can see and still reacts to an unseen noise.
+- The hunter's health bar no longer sits on top of the controls bar on a
+  narrow window.
 
 ## [0.2.3] - 2026-09-09
 
 Hunter bots no longer deadlock on each other. A round that filled with bots
-could stall completely: the hunters converged on one spot and stayed there,
+could stall completely: the hunters gathered in one spot and stayed there,
 leaving props unhunted until the timer ran out.
 
 ### Fixed
 
-- A hunter bot gives up on a contact it cannot identify. Under `"limited"`
-  visibility it picked the nearest sensed contact and walked up to it, and
-  because a hunter is never disguised it can never come to look like a prop,
-  so two hunters chose each other, met, and stayed there staring for the rest
-  of the round, growing into a pack on every infection. An `inspect` that has
-  stood at arm's reach in clear line of sight for six decisions now parks that
-  contact and moves on. The budget only runs at contact range and in sight, so
-  an approach, a chase, or a contact known only by sound is never cut short,
-  and a park is released the moment the contact reads as a prop. Measured over
-  a 150-second run of six bots: not one round finished before, three finished
-  after, and the worst hunter went from 122 seconds pinned inside a 1.5-metre
-  circle to 4.
+- A hunter bot gives up on a contact it cannot identify. Two hunters used to
+  pick each other, meet and stare at each other for the rest of the round,
+  growing into a pack with every capture. They now move on, and rounds with
+  bots finish again.
 
 ## [0.2.2] - 2026-09-09
 
-The lobby now names the build it is running: a tagged deploy shows the tag
-itself, and any other build shows the release it sits past rather than claiming
-to be it.
+The lobby now names the build it is running, so a bug report can say exactly
+what you were playing.
 
 ### Added
 
-- The lobby shows the client's version and build under the wordmark, so a bug
-  report can name the exact build it came from. A tagged build reads its
-  version from the tag (`0.2.2 · 1a2b3c4`), which makes the tag authoritative
-  rather than the manifest on disk. Every other build sits *past* a release
-  instead of being it, and says so: `0.2.1+ · a49e58f`. That distinction is
-  what earns the stamp its place, because production also deploys on
-  `workflow_dispatch`, so one version can ship from more than one commit. A
-  build made outside a checkout reads `dev` rather than claiming a commit.
+- The lobby shows the game's version under the wordmark. A release reads as
+  its version, and any build past a release says so with a plus sign.
 
 ## [0.2.1] - 2026-09-08
 
-Fairness release: a room-filling bot no longer knows anything a player could
-not, a decoy no longer gives itself away on the wire, and the hunter's weapon
-points downrange instead of at its owner.
+Fairness release: a bot no longer knows anything a player could not, a decoy
+no longer gives itself away, and the hunter's weapon points downrange instead
+of at its owner.
 
 ### Changed
 
-- Room-filling bots play with a player's information instead of the server's.
-  They ran on the `"full"` visibility mode, which reads `role`, `alive` and
-  `propType` straight off every contact: a bot hunter never had to *find* a
-  prop, it targeted the disguise through the disguise. They now run `"limited"`:
-  line of sight, distance, and whether a contact moved recently. `"full"`
-  remains as a measuring anchor and is not wired into any live room.
-- A bot also no longer gets a privileged *reaction time*: the trigger that woke
-  its policy early filtered contacts by `role`, so it slept through a teammate
-  and woke the instant an enemy entered its line of sight, decided before the
-  policy had been shown anything about either. It now wakes for any contact that
-  comes into view, and works out who they are from the observation it is allowed
-  to see.
-- A bot no longer gets a heard contact's exact coordinates. A contact sensed by
-  sound alone (moving within earshot, with no line of sight) is reported at a
-  4 m cell rather than a point, and its distance is derived from that cell, so a
-  noise through a wall becomes a neighbourhood to search instead of a
-  destination to walk onto. A contact actually in view is still exact. This was
-  the last place a filling bot knew something a player could not.
-
-### Security
-
-- A decoy no longer travels with its owner on it. `DecoyState.owner` was a
-  broadcast schema field, so any client could read which props in the room were
-  fake and whose they were, and deception is the whole point of the mechanic.
-  The server still tracks it to expire a player's decoys; the owner now learns
-  which decoy is theirs from a `decoy_placed` ack sent to them alone.
+- Bots that fill a room play with a player's information. A bot hunter used to
+  read which objects were props straight from the game, so it never had to find
+  one. It now relies on line of sight, distance and whether a contact moved
+  recently, and wakes up for any contact that comes into view rather than only
+  enemies.
+- A bot that only hears a contact through a wall is told roughly where it is,
+  not the exact spot, so a noise is an area to search rather than a place to
+  walk onto.
 
 ### Fixed
 
-- The hunter's weapon pointed backwards. The first-person viewmodel carried a
-  180° yaw, but every blaster in the kit is authored with its muzzle along `-Z`
-  (already the direction a three.js camera looks), so the correction turned the
-  gun around and aimed it at the player. Present since the viewmodel was added.
-
-### Removed
-
-- The `parseIntent` / `parseObservation` validators in `shared/agent.ts`. They
-  guarded output from an out-of-process agent policy that does not exist (the
-  server drives its bots in-process), so `parseObservation` had no caller at all
-  and `parseIntent` only had a test. The contract is types only now.
+- The hunter's weapon no longer points backwards at its owner.
+- A decoy no longer reveals who placed it, so only its owner knows which
+  decoys are theirs.
 
 ## [0.2.0] - 2026-09-08
 
 A public match is now playable alone and leavable from every screen: rounds
 start on their own, bots fill a quiet room, a lost connection no longer costs
-the round, and a room's own failure no longer takes the server down with it.
+the round, and one match's failure no longer takes the others down with it.
 
 ### Added
 
-- A match menu on `Escape` during a round, with `Leave match`, plus a leave
-  button on the results screen and in the public lobby overlay. Leaving a match
-  was previously only possible by reloading or closing the tab.
-- Public rounds start on their own: reaching the minimum player count arms a
-  20 s clock, and `Ready` now shortens that clock instead of authorising the
-  start, so one idle player can no longer hold a lobby hostage.
-- Quiet public rooms pad themselves with server-driven bots after 10 s and hand
-  a bot's seat back the moment a human joins, so a lone player still gets a
-  match. Private rooms are never filled.
-- Losing the connection mid-round no longer costs the round: the seat, role and
-  position are held for 30 s while the client rejoins, and the scoreboard shows
-  the player as `Reconnecting…` in the meantime. A round that outlives the
-  window ends exactly as an abandoned one always did. Leaving on purpose is
-  still immediate.
+- A match menu on Escape during a round, with a Leave match button, plus a
+  leave button on the results screen and in the public lobby. Before, leaving a
+  match meant closing the tab.
+- Public rounds start on their own once enough players are in, and Ready now
+  shortens the wait, so one idle player can no longer hold a lobby hostage.
+- Quiet public rooms fill with bots after a few seconds and hand a bot's seat
+  back the moment a human joins, so a lone player still gets a match. Private
+  rooms are never filled.
+- If your connection drops mid-round, your seat, role and position are held
+  for 30 seconds while the game rejoins you, and the scoreboard shows you as
+  Reconnecting. Leaving on purpose is still immediate.
 
 ### Changed
 
-- The name shown to players is now `Morphy`, with no TLD: browser title, Open
-  Graph title, PWA install name and the lobby wordmark. The game has never been
-  served from `morphy.lol` and there are no plans to buy it, so the brand no
-  longer names a domain it does not own. Stored player prefs are untouched: the
-  `morphy:` localStorage namespace already carried no TLD.
-- Quick play pools everyone into the busiest room instead of splitting the pool
-  three ways by map. The lobby's map pick now only decides the map of a newly
-  created room; private rooms are unaffected.
-- A round interrupted below the minimum player count awards the win to the
-  player left in it, instead of ending without touching anyone's record.
+- The game is now called Morphy, with no domain attached, in the browser tab,
+  link previews, the install name and the lobby wordmark.
+- Quick play puts everyone in the busiest room instead of splitting players by
+  map. Your map choice only decides the map of a room you create.
+- If a round is interrupted because too few players remain, the win goes to
+  the player left in it.
 
 ### Fixed
 
-- A throw inside a room's own clock callback (a phase timer, the 2 s ping
-  interval, a bot's brain) no longer exits the server process and takes every
-  other match down with it. Failures inside message handlers, previously
-  swallowed silently, are now logged (without their payloads).
-- The match menu no longer paints over the results screen at the end of a round,
-  and no longer leaves chat, weapon-switch and mute keys live underneath itself.
-- Bots no longer inherit the host seat when the last human leaves a filled room,
-  and no longer deliver a chat line a round after they meant to say it.
+- A fault inside one match no longer shuts down every other match.
+- The match menu no longer paints over the results screen, and chat, weapon
+  switching and mute no longer react to keys while it is open.
+- Bots no longer take over as host when the last human leaves, and no longer
+  speak a line late.
 
 ### Removed
 
-- The `morphy.smyile.com` redirect and its tunnel route. The old host no longer
-  resolves, so links that predate the move now fail at DNS instead of landing on
-  the game.
+- The old morphy.smyile.com address. Links that predate the move now fail
+  instead of landing on the game.
 
 ## [0.1.1] - 2026-09-07
 
-Infrastructure release: the game moved to its own domain under the Radon Forge
-org, and the deployed edge config caught up with what 0.1.0 had claimed.
-
-### Security
-
-- The nginx security headers (`X-Frame-Options`, `X-Content-Type-Options`,
-  `Referrer-Policy`, `Permissions-Policy`) now reach the HTML document and the
-  static assets. nginx only inherits `add_header` where a level declares none of
-  its own, so the four locations that set `Cache-Control` had been silently
-  dropping them.
-- Transitive dependencies refreshed to clear four advisories (`nanoid`,
-  `postcss`, `qs`, `fflate`). None was reachable from this deployment.
-
-### Added
-
-- `LICENSE`: proprietary, copyright Radon Forge.
+The game moved to its own domain, and the server's protections caught up with
+what 0.1.0 had claimed.
 
 ### Changed
 
-- The game moved to `morphy.radonforge.com`. The old host answers `301` with the
-  path and query preserved, so existing links keep working.
-- **Lifetime stats restart from zero.** They are keyed by a device id kept in
-  browser storage, which is scoped to the origin and therefore does not follow
-  the move; the stored rows survive but no longer match any player.
-- Production ships on a version tag (`v*`) or a manual dispatch, no longer on
-  every push to `master`. CI still runs on pushes and pull requests.
-- The `ci` script is now `check:ci`: pnpm has its own built-in `ci` command,
-  which shadowed the script and ran a clean reinstall instead of Biome.
+- The game moved to morphy.radonforge.com. The old address forwards to the new
+  one with your link intact, so existing links keep working.
+- Your lifetime stats restart from zero. They are tied to your browser on the
+  old address, so they do not follow the move.
 
 ### Fixed
 
-- The deployed nginx config now applies the model and sound revalidation policy
-  that 0.1.0 claimed: the live file had kept the year-long `immutable` headers,
-  so a deploy could not invalidate a changed GLB.
+- Sounds and models refresh after an update instead of staying cached, as
+  0.1.0 promised.
+
+### Security
+
+- Browser protections that were meant to cover every page now do.
+- Libraries were updated to clear four known advisories. None was reachable
+  from the game.
 
 ## [0.1.0] - 2026-07-21
 
-First tracked release: server-authority hardening, a slimmer asset pipeline,
-and the initial automated test suite.
-
-### Security
-
-- Hit resolution derives the shot origin from the authoritative server-side
-  player position + eye height; the client no longer sends an origin, closing a
-  shoot-through-walls vector.
-- Weapon-id validation uses own-property checks, rejecting prototype-chain values.
+First tracked release: fairer hit detection, a lighter download, and a more
+robust match.
 
 ### Added
 
-- Automated test suite (20 tests) across validators, map generation, geometry,
-  storage, endpoints, bot scheduling and room lifecycle; CI runs the tests and
-  the production build.
+- Automated checks now cover the rules, maps, hit detection, stats and room
+  lifecycle.
 
 ### Changed
 
-- Runtime assets are fingerprinted by a Vite manifest plugin that prunes
-  unreferenced models from the build (~558 → 135 GLBs shipped).
-- The game route is lazy-loaded; menu/HUD state is driven by schema listeners
-  instead of a 200 ms poll.
-- Map validation rejects non-finite numbers, empty spawn lists and duplicate ids.
-- Production deploys pin the immutable commit-tagged server image.
+- The game downloads only the models it uses, and menus update as things
+  change instead of on a timer.
+- Maps with broken or missing data are rejected instead of loading.
 
 ### Fixed
 
-- localStorage is guarded with an in-memory fallback; device ids fall back to
-  `getRandomValues` on insecure LAN origins.
-- The stats endpoint follows `VITE_SERVER_URL` instead of the page origin.
-- Weapon cooldown is tracked as an absolute timestamp, so switching weapons
-  mid-cooldown no longer shortens the fire window.
-- Joining or leaving mid-round no longer corrupts the round; disconnects
-  re-check the win condition.
-- Public model and sound assets revalidate after a deploy instead of being
-  cached for a year.
-- Lobby music retries after a transient playback failure.
+- Joining or leaving mid-round no longer corrupts the round, and a player
+  disconnecting re-checks who has won.
+- Switching weapons mid-cooldown no longer shortens the time before your next
+  shot.
+- Stats load correctly when the game is served from another address.
+- Lobby music retries after a playback failure.
+- Your settings are remembered even where the browser blocks storage, and the
+  game starts on local networks without a secure connection.
+- Sounds and models refresh after an update.
+
+### Security
+
+- Shots now start from where the server knows you are, closing a way to shoot
+  through walls.
+- Weapon choices are validated more strictly, so invalid ones are rejected.
