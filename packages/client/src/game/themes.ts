@@ -1,4 +1,4 @@
-import { DEFAULT_ROOM_LIGHT_COUNT } from "@morphy/level";
+import { DECK_LIGHT_HEIGHT, DEFAULT_ROOM_LIGHT_COUNT } from "@morphy/level";
 import { MAP_CATALOG } from "@morphy/shared";
 import { MAP_THEME_BASE } from "../theme";
 import type { ColorGrade } from "./colorGrade";
@@ -97,7 +97,7 @@ const THEMES: Record<string, ThemePreset> = {
       roomIntensity: 32,
       corridorIntensity: 16,
       distance: 20,
-      height: 3,
+      height: DECK_LIGHT_HEIGHT,
     },
     bloom: { intensity: 7, radius: 0.75, threshold: 0.85 },
     grade: { lift: [0, 0.01, 0.03], gain: [1.02, 1, 0.97], contrast: 1, saturation: 1.05 },

@@ -1,4 +1,4 @@
-import { type StreetLamp, streetLamp, TILE, WALL_HEIGHT } from "@morphy/level";
+import { DECK_LIGHT_HEIGHT, type StreetLamp, streetLamp, TILE, WALL_HEIGHT } from "@morphy/level";
 import type { CeilingPanel, MapDefinition, MapId } from "@morphy/shared";
 
 export interface SetPiece {
@@ -140,7 +140,11 @@ export interface StageDressing {
 const STATION_SCALE = 1.25;
 const STATION_PANEL = TILE * STATION_SCALE;
 const STATION_CEILING_Y = WALL_HEIGHT * STATION_SCALE;
-const STATION_LAMP_Y = STATION_CEILING_Y - 0.9;
+/**
+ * The match's deck light height at the stage's scale, with every lamp clear of the set pieces:
+ * the nearest surface gets about 5 times the floor's light, as the match's beams do.
+ */
+const STATION_LAMP_Y = DECK_LIGHT_HEIGHT * STATION_SCALE;
 const STATION_PANEL_XS = [-15, -10, -5, 0, 5, 10, 15];
 const STATION_PANEL_ZS = [-10.5, -5.5, -0.5];
 const WARM = "#ffc27a";
@@ -149,16 +153,16 @@ const COOL = "#8ad8ff";
 export const LOBBY_DRESSING: Record<MapId, StageDressing> = {
   station: {
     lights: [
-      { position: [-8.5, STATION_LAMP_Y, -8], color: WARM, intensity: 34, distance: 16 },
+      { position: [-8.5, STATION_LAMP_Y, -6], color: WARM, intensity: 25, distance: 16 },
       {
-        position: [9, STATION_LAMP_Y, -8],
+        position: [7.5, STATION_LAMP_Y, -5],
         color: WARM,
-        intensity: 34,
+        intensity: 25,
         distance: 16,
         flicker: true,
       },
-      { position: [0, STATION_LAMP_Y, -10.5], color: COOL, intensity: 10, distance: 10 },
-      { position: [2.6, 2.6, -9.4], color: COOL, intensity: 12, distance: 7, bare: true },
+      { position: [0, STATION_LAMP_Y, -8.5], color: COOL, intensity: 7, distance: 10 },
+      { position: [2.6, 3.2, -9.4], color: COOL, intensity: 5, distance: 7, bare: true },
       { position: [-1.35, 3, 3.5], color: "#fff1e0", intensity: 14, distance: 9, bare: true },
     ],
     ceiling: STATION_PANEL_XS.flatMap((x) =>

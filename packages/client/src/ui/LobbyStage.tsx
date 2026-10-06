@@ -112,6 +112,7 @@ const DIORAMA_SETTLE_MS = DIORAMA_TRANSITION_S * 1000;
 const UNSCALED = 1;
 
 const LAMP_GLOW = 1.6;
+const LAMP_OFF = "#000000";
 const LAMP_PANEL_OFFSET_Y = 0.35;
 const LAMP_PANEL_SIZE: [number, number, number] = [1.1, 0.1, 0.45];
 
@@ -748,7 +749,8 @@ function Diorama({
 
 /**
  * A deck lamp: the point light and the panel it hangs from, whose glow follows the light so a
- * failing lamp reads as a fault in the fixture rather than a pulse from nowhere.
+ * failing lamp reads as a fault in the fixture rather than a pulse from nowhere. The panel is
+ * unlit: a lit one took its own light from 0.3 m below and bloomed far past its glow.
  */
 function StageLamp({
   light,
@@ -760,7 +762,8 @@ function StageLamp({
   transition: RefObject<DioramaTransition>;
 }) {
   const lightRef = useRef<THREE.PointLight>(null);
-  const panel = useRef<THREE.MeshStandardMaterial>(null);
+  const panel = useRef<THREE.MeshBasicMaterial>(null);
+  const glow = useMemo(() => new THREE.Color(light.color), [light.color]);
   const flicker = useRef<FlickerState | null>(light.flicker ? beginFlicker(Math.random) : null);
 
   useFrame((_, delta) => {
@@ -768,7 +771,7 @@ function StageLamp({
     if (flicker.current) flicker.current = advanceFlicker(flicker.current, delta, Math.random);
     const level = fade * (flicker.current?.level ?? 1);
     if (lightRef.current) lightRef.current.intensity = light.intensity * level;
-    if (panel.current) panel.current.emissiveIntensity = LAMP_GLOW * level;
+    panel.current?.color.copy(glow).multiplyScalar(LAMP_GLOW * level);
   });
 
   return (
@@ -777,13 +780,7 @@ function StageLamp({
       {!light.bare && (
         <mesh position-y={LAMP_PANEL_OFFSET_Y}>
           <boxGeometry args={LAMP_PANEL_SIZE} />
-          <meshStandardMaterial
-            ref={panel}
-            color={light.color}
-            emissive={light.color}
-            emissiveIntensity={0}
-            toneMapped={false}
-          />
+          <meshBasicMaterial ref={panel} color={LAMP_OFF} toneMapped={false} />
         </mesh>
       )}
     </group>
