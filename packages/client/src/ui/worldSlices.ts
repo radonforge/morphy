@@ -206,6 +206,56 @@ export function frameShift(
   return clamp(target - anchor, shape.right - width, shape.left);
 }
 
+/** A slice's horizontal extent in device pixels, snapped outward to cover every pixel of it. */
+export interface DeviceBox {
+  left: number;
+  right: number;
+}
+
+/** The canvas in CSS pixels, and how many device pixels it draws per CSS pixel. */
+export interface Viewport {
+  width: number;
+  height: number;
+  pixelRatio: number;
+}
+
+export function deviceBox(shape: SliceShape, pixelRatio: number): DeviceBox {
+  return {
+    left: Math.floor(shape.left * pixelRatio),
+    right: Math.ceil(shape.right * pixelRatio),
+  };
+}
+
+/**
+ * How the stage treats slice `index` this frame when it is not the open one. `visible` says
+ * whether it is closed and on screen at all, so laid down from its copy; `key` is everything the
+ * copy depends on, in device pixels so the box it is drawn in, the box it is cut by and the box
+ * it is cached by are one and the same: the canvas size, the slice's box, how far its frame is
+ * slid, and `world` (how far it has formed, and its look). A copy whose key still matches is
+ * reused; any other is drawn again.
+ */
+export function closedSlice(
+  layout: WorldsLayout,
+  index: number,
+  open: number,
+  viewport: Viewport,
+  shift: number,
+  world: string,
+): { visible: boolean; box: DeviceBox; key: string } {
+  const { width, height, pixelRatio } = viewport;
+  const shape = sliceShape(layout, index, width, height);
+  const box = deviceBox(shape, pixelRatio);
+  const key = [
+    Math.round(width * pixelRatio),
+    Math.round(height * pixelRatio),
+    box.left,
+    box.right,
+    Math.round(shift * pixelRatio),
+    world,
+  ].join(":");
+  return { visible: index !== open && shape.right > shape.left, box, key };
+}
+
 /**
  * The slice a key opens from `current`, or null when it opens none: the arrows step to a
  * neighbour without wrapping, since the slices sit side by side, and a digit names a slice.

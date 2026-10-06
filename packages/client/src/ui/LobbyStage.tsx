@@ -29,10 +29,19 @@ import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { avatarNeighbors } from "./carousel";
 import { DIORAMA_FORM_S, pieceScale } from "./dioramaForm";
 import { advanceFlicker, beginFlicker, type FlickerState } from "./flicker";
-import { LOBBY_DIORAMAS, LOBBY_DRESSING, type SetPiece, type StageLight } from "./lobbyDioramas";
+import {
+  AVATAR_SLOT_X,
+  LOBBY_DIORAMAS,
+  LOBBY_DRESSING,
+  type SetPiece,
+  type StageLight,
+} from "./lobbyDioramas";
 import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
 import { useReducedMotion } from "./useReducedMotion";
 import {
+  closedSlice,
+  type DeviceBox,
+  deviceBox,
   frameShift,
   layoutAt,
   type Point,
@@ -49,11 +58,7 @@ const StagePost = lazy(() =>
 const avatarModel = (id: AvatarId): string => `/models/pets/animal-${id}.glb`;
 
 const AVATAR_HEIGHT = 1.5;
-/**
- * The avatar stands right of centre, facing back across it, so the open slice's name and Play
- * have the left of the frame to themselves.
- */
-const AVATAR_X = 1.35;
+/** Turned back across the stage, toward the centre it stands right of. */
 const AVATAR_YAW = -0.35;
 const MODEL_MIN_SIZE = 0.001;
 const CLIP_FADE_SECONDS = 0.3;
@@ -151,7 +156,7 @@ interface StageSlot {
   yaw: number;
 }
 
-const SOLO_SLOT: StageSlot = { x: AVATAR_X, z: 0, yaw: AVATAR_YAW };
+const SOLO_SLOT: StageSlot = { x: AVATAR_SLOT_X, z: 0, yaw: AVATAR_YAW };
 
 function computeStageSlots(count: number, inParty: boolean): StageSlot[] {
   if (!inParty) return [SOLO_SLOT];
@@ -197,8 +202,11 @@ const STARS_SPEED = 0.4;
 /** Where the night stage's lamps are ranked from: the street, so every lamp of it is lit. */
 const LAMP_FOCUS = { current: new THREE.Vector3(0, 0, -4) };
 
-/** Rounding of a closed slice's framing before it counts as changed, in CSS pixels. */
-const FRAMING_STEP_PX = 0.5;
+/**
+ * How long the canvas must hold one size before closed slices are drawn again for it: a window
+ * being dragged would otherwise redraw every closed world, and reallocate its copy, every frame.
+ */
+const RESIZE_SETTLE_MS = 150;
 
 const BLIT_VERTEX = `
 void main() {
@@ -1060,10 +1068,12 @@ function World({ view, open, night, reduced, pointer, post, signature, ...cast }
   const theme = stageTheme(view.map, night);
   const street = LOBBY_DRESSING[view.map].street;
   const [loaded, setLoaded] = useState(false);
+  const reducedRef = useRef(reduced);
+  reducedRef.current = reduced;
   const handleReady = useCallback(() => {
-    view.age.current = reduced ? DIORAMA_FORM_S : 0;
+    view.age.current = reducedRef.current ? DIORAMA_FORM_S : 0;
     setLoaded(true);
-  }, [view, reduced]);
+  }, [view]);
 
   return createPortal(
     <>
@@ -1128,7 +1138,7 @@ interface SliceBlit {
   mesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   uniforms: { map: { value: THREE.Texture | null }; resolution: { value: THREE.Vector2 } };
   texture: THREE.FramebufferTexture | null;
-  /** What the copy was drawn at: framing and formation. */
+  /** What the copy was drawn at: canvas, box, framing, formation and look. */
   key: string;
   /** How far formed the world was when its shadows were last baked. */
   baked: string;
@@ -1164,8 +1174,19 @@ function placeBlit(blit: SliceBlit, polygon: readonly Point[]): void {
   position.needsUpdate = true;
 }
 
-function snap(value: number): number {
-  return Math.round(value / FRAMING_STEP_PX) * FRAMING_STEP_PX;
+/**
+ * Scissors to `box`, given in device pixels. three takes a scissor in CSS pixels, scales it by
+ * the pixel ratio and floors it, so each value carries half a device pixel to land on the
+ * intended pixel whatever the ratio's rounding does.
+ */
+function scissorTo(gl: THREE.WebGLRenderer, box: DeviceBox, deviceHeight: number): void {
+  const ratio = gl.getPixelRatio();
+  gl.setScissor(
+    (box.left + 0.5) / ratio,
+    0,
+    (box.right - box.left + 0.5) / ratio,
+    (deviceHeight + 0.5) / ratio,
+  );
 }
 
 function formKey(age: number | null): string {
@@ -1204,12 +1225,14 @@ function focusOf(slots: readonly StageSlot[], aspect: number, camera: THREE.Pers
 function Compositor({
   views,
   open,
+  night,
   motion,
   slots,
   post,
 }: {
   views: readonly WorldView[];
   open: number;
+  night: boolean;
   motion: RefObject<WorldsMotion>;
   slots: readonly StageSlot[];
   post: RefObject<PostComposer | null>;
@@ -1229,6 +1252,7 @@ function Compositor({
   }, []);
   const frame = useRef<WorldsLayout | null>(null);
   const buffer = useMemo(() => new THREE.Vector2(), []);
+  const sized = useRef({ width: 0, height: 0, at: 0 });
 
   useEffect(() => {
     const autoClear = gl.autoClear;
@@ -1239,16 +1263,27 @@ function Compositor({
     };
   }, [gl]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const canvas = gl.domElement;
+    const forget = () => {
+      for (const blit of overlay.blits) {
+        blit.key = "";
+        blit.baked = "";
+      }
+    };
+    canvas.addEventListener("webglcontextrestored", forget);
+    return () => {
+      canvas.removeEventListener("webglcontextrestored", forget);
       for (const blit of overlay.blits) {
         blit.texture?.dispose();
+        blit.texture = null;
+        blit.uniforms.map.value = null;
         blit.mesh.geometry.dispose();
         blit.mesh.material.dispose();
       }
-    },
-    [overlay],
-  );
+      forget();
+    };
+  }, [gl, overlay]);
 
   useFrame(({ size }) => {
     const { width, height } = size;
@@ -1266,7 +1301,14 @@ function Compositor({
     const layout = frame.current;
     if (layout === null) return;
     const { width, height } = size;
+    const now = performance.now();
     gl.getDrawingBufferSize(buffer);
+    if (buffer.x !== sized.current.width || buffer.y !== sized.current.height) {
+      sized.current = { width: buffer.x, height: buffer.y, at: now };
+    }
+    const settling = now - sized.current.at < RESIZE_SETTLE_MS;
+    const viewport = { width, height, pixelRatio: gl.getPixelRatio() };
+    const look = night ? "night" : "day";
     const pendingBake = gl.shadowMap.needsUpdate;
     gl.setRenderTarget(null);
     gl.setScissorTest(true);
@@ -1274,9 +1316,19 @@ function Compositor({
     views.forEach((view, index) => {
       const blit = overlay.blits[index];
       if (blit === undefined) return;
-      const shape = sliceShape(layout, index, width, height);
-      blit.mesh.visible = index !== open && shape.right > shape.left;
-      if (!blit.mesh.visible) return;
+      const form = formKey(view.age.current);
+      const slice = closedSlice(
+        layout,
+        index,
+        open,
+        viewport,
+        -(view.camera.view?.offsetX ?? 0),
+        `${form}:${look}`,
+      );
+      blit.mesh.visible = slice.visible;
+      if (!slice.visible) return;
+      placeBlit(blit, sliceShape(layout, index, width, height).polygon);
+      if (blit.texture !== null && (settling || slice.key === blit.key)) return;
       if (
         blit.texture === null ||
         blit.texture.image.width !== buffer.x ||
@@ -1285,34 +1337,25 @@ function Compositor({
         blit.texture?.dispose();
         blit.texture = new THREE.FramebufferTexture(buffer.x, buffer.y);
         blit.uniforms.map.value = blit.texture;
-        blit.key = "";
+        blit.uniforms.resolution.value.copy(buffer);
       }
-      blit.uniforms.resolution.value.copy(buffer);
-      placeBlit(blit, shape.polygon);
-      const form = formKey(view.age.current);
-      const key = [
-        buffer.x,
-        buffer.y,
-        snap(shape.left),
-        snap(shape.right),
-        snap(view.camera.view?.offsetX ?? 0),
-        form,
-      ].join(":");
-      if (key === blit.key) return;
-      gl.setScissor(shape.left, 0, shape.right - shape.left, height);
+      scissorTo(gl, slice.box, buffer.y);
       gl.shadowMap.needsUpdate = form !== blit.baked;
       gl.clear();
       gl.render(view.scene, view.camera);
       gl.copyFramebufferToTexture(blit.texture);
-      blit.key = key;
+      blit.key = slice.key;
       blit.baked = form;
     });
     gl.shadowMap.needsUpdate = pendingBake;
 
     const live = views[open];
     if (live !== undefined) {
-      const shape = sliceShape(layout, open, width, height);
-      gl.setScissor(shape.left, 0, shape.right - shape.left, height);
+      scissorTo(
+        gl,
+        deviceBox(sliceShape(layout, open, width, height), viewport.pixelRatio),
+        buffer.y,
+      );
       const composer = post.current;
       if (composer) {
         composer.render();
@@ -1350,7 +1393,14 @@ function Worlds({
   const pointer = useThree((state) => state.pointer);
   return (
     <>
-      <Compositor views={views} open={openIndex} motion={motion} slots={world.slots} post={post} />
+      <Compositor
+        views={views}
+        open={openIndex}
+        night={world.night}
+        motion={motion}
+        slots={world.slots}
+        post={post}
+      />
       {views.map((view, index) => (
         <World
           key={view.map}
@@ -1394,7 +1444,7 @@ export function LobbyStage({
   const views = useMemo(() => WORLD_IDS.map(createWorldView), []);
   const post = useRef<PostComposer | null>(null);
   const openIndex = Math.max(0, WORLD_IDS.indexOf(open));
-  const slots = computeStageSlots(actors.length, inParty);
+  const slots = useMemo(() => computeStageSlots(actors.length, inParty), [actors.length, inParty]);
   const signature = `${inParty}:${actors.map((a) => `${a.id}:${a.avatar}`).join("|")}`;
   const boosted = useMotionBoost(`${picking}:${open}:${signature}`);
   /**

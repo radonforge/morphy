@@ -14,6 +14,7 @@ import {
 } from "./worldSlices";
 
 const SLICE_OPEN_MS = SLICE_OPEN_S * 1000;
+const HOST_PICKS = "Host picks the map";
 
 /** A map's tag as the lobby shows it: a day/night map also says which one this visit drew. */
 export function mapTag(info: MapInfo, night: boolean): string {
@@ -21,8 +22,9 @@ export function mapTag(info: MapInfo, night: boolean): string {
 }
 
 /**
- * The menu's half of the worlds: one clipped, labelled button per map over the stage that draws
- * them. It owns `motion`, the one record of where the slices are going, and the stage reads the
+ * The menu's half of the worlds: one clipped, labelled button per closed map over the stage that
+ * draws them; the open map's only control is its Play. A party guest's closed slices stay
+ * focusable but say the host picks the map instead of opening it. It owns `motion`, the one record of where the slices are going, and the stage reads the
  * same record, so the clip paths here and the viewports there follow one curve. Positions are
  * written straight to the elements every animation frame of a move rather than through React,
  * which re-renders only when the open slice or the chrome changes.
@@ -35,7 +37,6 @@ export function MapSlices({
   canChoose,
   reduced,
   onOpen,
-  onPlay,
   children,
 }: {
   open: number;
@@ -45,7 +46,6 @@ export function MapSlices({
   canChoose: boolean;
   reduced: boolean;
   onOpen: (index: number) => void;
-  onPlay: (() => void) | null;
   children: ReactNode;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -99,18 +99,22 @@ export function MapSlices({
               slices.current[index] = node;
             }}
           >
-            <button
-              type="button"
-              className="world-slice-hit"
-              aria-label={isOpen ? `${info.name}, open` : `Open ${info.name}`}
-              aria-current={isOpen}
-              disabled={isOpen ? onPlay === null : !canChoose}
-              onClick={() => (isOpen ? onPlay?.() : onOpen(index))}
-              onPointerEnter={isOpen ? undefined : playUiHover}
-            />
+            {!isOpen && (
+              <button
+                type="button"
+                className="world-slice-hit"
+                aria-label={canChoose ? `Open ${info.name}` : `${info.name}: ${HOST_PICKS}`}
+                aria-disabled={!canChoose}
+                onClick={() => {
+                  if (canChoose) onOpen(index);
+                }}
+                onPointerEnter={canChoose ? playUiHover : undefined}
+              />
+            )}
             <span className="world-slice-v" aria-hidden="true">
               {info.name}
               <small>{tag}</small>
+              {!canChoose && <small className="world-slice-lock">{HOST_PICKS}</small>}
             </span>
             {isOpen && (
               <div className="world-slice-open">

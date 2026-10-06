@@ -1,6 +1,13 @@
 import { DECK_LIGHT_HEIGHT, type StreetLamp, streetLamp, TILE, WALL_HEIGHT } from "@morphy/level";
 import type { CeilingPanel, MapDefinition, MapId } from "@morphy/shared";
 
+/**
+ * Where the avatar stands across the stage: right of centre, so the open slice's name and Play
+ * have the left of the frame to themselves. The stage stands it here and each world hangs its
+ * fill light over it.
+ */
+export const AVATAR_SLOT_X = 1.35;
+
 export interface SetPiece {
   url: string;
   position: [number, number, number];
@@ -148,8 +155,6 @@ const STATION_LAMP_Y = DECK_LIGHT_HEIGHT * STATION_SCALE;
 const STATION_PANEL_XS = [-15, -10, -5, 0, 5, 10, 15];
 const STATION_PANEL_ZS = [-10.5, -5.5, -0.5];
 const WARM = "#ffc27a";
-/** Over the avatar's slot, which stands right of centre to leave the left to the menu. */
-const ACTOR_FILL_X = 1.35;
 const COOL = "#8ad8ff";
 
 export const LOBBY_DRESSING: Record<MapId, StageDressing> = {
@@ -166,7 +171,7 @@ export const LOBBY_DRESSING: Record<MapId, StageDressing> = {
       { position: [0, STATION_LAMP_Y, -8.5], color: COOL, intensity: 7, distance: 10 },
       { position: [2.6, 3.2, -9.4], color: COOL, intensity: 5, distance: 7, bare: true },
       {
-        position: [ACTOR_FILL_X, 3, 3.5],
+        position: [AVATAR_SLOT_X, 3, 3.5],
         color: "#fff1e0",
         intensity: 14,
         distance: 9,
@@ -188,7 +193,7 @@ export const LOBBY_DRESSING: Record<MapId, StageDressing> = {
   urban: {
     lights: [
       {
-        position: [ACTOR_FILL_X, 3, 3.5],
+        position: [AVATAR_SLOT_X, 3, 3.5],
         color: "#ffe8cc",
         intensity: 10,
         distance: 9,
@@ -197,7 +202,7 @@ export const LOBBY_DRESSING: Record<MapId, StageDressing> = {
     ],
     nightLights: [
       {
-        position: [ACTOR_FILL_X, 3, 3.5],
+        position: [AVATAR_SLOT_X, 3, 3.5],
         color: "#ffd9b0",
         intensity: 24,
         distance: 6,

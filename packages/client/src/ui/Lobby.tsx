@@ -160,6 +160,20 @@ const FOOTER_LINKS = [
 /** The last client version this browser opened the changelog for, or saw the notice of. */
 const SEEN_VERSION_KEY = "morphy:seen-version";
 
+/**
+ * Whether this client is newer than the last one this browser saw. A browser that has seen none
+ * is a first visit, with nothing to catch up on, so it is recorded as seen without a notice; if
+ * storage is blocked the record lives only for the page and the notice never shows.
+ */
+function hasUnseenVersion(): boolean {
+  const seen = storageGet(SEEN_VERSION_KEY);
+  if (seen === null) {
+    storageSet(SEEN_VERSION_KEY, __MORPHY_VERSION__);
+    return false;
+  }
+  return seen !== __MORPHY_VERSION__;
+}
+
 /** Whether the lobby is drawn by night, once per page load: coming back from a match keeps it. */
 const LOBBY_NIGHT = Math.random() < NIGHT_CHANCE;
 
@@ -204,14 +218,13 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const [copied, setCopied] = useState(false);
   const [picking, setPicking] = useState(false);
   const [chipHost, setChipHost] = useState<HTMLDivElement | null>(null);
-  const [unseenVersion, setUnseenVersion] = useState(
-    () => storageGet(SEEN_VERSION_KEY) !== __MORPHY_VERSION__,
-  );
+  const [unseenVersion, setUnseenVersion] = useState(hasUnseenVersion);
+  const [hostPick, setHostPick] = useState<MapId | null>(null);
   const reduced = useReducedMotion();
 
   const inParty = party !== null;
   const isHost = party !== null && party.selfId === party.hostId;
-  const activeMap = party ? party.mapId : selectedMap;
+  const activeMap = party ? (hostPick ?? party.mapId) : selectedMap;
   const openIndex = mapIndex(activeMap);
   const motion = useRef<WorldsMotion>(
     settledMotion(worldsLayout(WORLD_IDS.length, openIndex, false)),
@@ -224,6 +237,11 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   useEffect(() => {
     if (inParty) setPane(null);
   }, [inParty]);
+
+  const serverMap = party?.mapId ?? null;
+  useEffect(() => {
+    if (!isHost || serverMap === hostPick) setHostPick(null);
+  }, [isHost, serverMap, hostPick]);
 
   useEffect(() => {
     if (!copied) return;
@@ -313,7 +331,6 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const connecting = status.kind === "connecting";
   const canChoose = !inParty || isHost;
   const canStart = party !== null && isHost && party.members.length >= MIN_PLAYERS_TO_START;
-  const canPlay = party ? canStart : !connecting;
 
   /**
    * Play always plays the open map, so choosing a world and starting are one gesture. In a party
@@ -331,13 +348,23 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     onConnect(name, activeMap, selectedAvatar);
   }, [party, canStart, connecting, onConnect, name, activeMap, selectedAvatar]);
 
+  /**
+   * Opens slice `index`. Solo, that is the saved pick. A party's map is the server's, so the
+   * host's pick opens at once and is held until the server says the room's map is that one, which
+   * lets a second press step on from it instead of from the map before; it never touches the solo
+   * pick saved for the next public match.
+   */
   const openSlice = useCallback(
     (index: number) => {
       const next = WORLD_IDS[index];
       if (next === undefined || next === activeMap || !canChoose) return;
       playMorph();
-      setSelectedMap(next);
-      party?.onSetMap(next);
+      if (party) {
+        setHostPick(next);
+        party.onSetMap(next);
+      } else {
+        setSelectedMap(next);
+      }
     },
     [activeMap, canChoose, party],
   );
@@ -507,7 +534,6 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         canChoose={canChoose}
         reduced={reduced}
         onOpen={openSlice}
-        onPlay={canPlay ? play : null}
       >
         <div className="world-play-row">
           {party && !isHost ? (
@@ -641,7 +667,13 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
       <footer className={`menu-foot ${chromeClass}`} inert={picking}>
         {unseenVersion && (
-          <a className="menu-new" href={CHANGELOG_PATH} onClick={markVersionSeen}>
+          <a
+            className="menu-new"
+            href={CHANGELOG_PATH}
+            target="_blank"
+            rel="noopener"
+            onClick={markVersionSeen}
+          >
             What's new
           </a>
         )}
@@ -650,6 +682,8 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             key={link.href}
             className="menu-foot-link"
             href={link.href}
+            target="_blank"
+            rel="noopener"
             onClick={link.href === CHANGELOG_PATH ? markVersionSeen : undefined}
           >
             {link.label}

@@ -364,7 +364,8 @@ canvas {
 .world-slice:not(.open) {
   pointer-events: auto;
 }
-.world-slice:not(.open):has(.world-slice-hit:hover:enabled) {
+.world-slice:not(.open):has(.world-slice-hit:not([aria-disabled="true"]):hover),
+.world-slice:not(.open):has(.world-slice-hit:focus-visible) {
   -webkit-backdrop-filter: saturate(0.55) brightness(0.6);
   backdrop-filter: saturate(0.55) brightness(0.6);
 }
@@ -385,15 +386,8 @@ canvas {
   background: transparent;
   cursor: pointer;
 }
-.world-slice-hit:disabled {
+.world-slice-hit[aria-disabled="true"] {
   cursor: default;
-}
-.world-slice.open .world-slice-hit {
-  pointer-events: none;
-}
-.world-slice-hit:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: -6px;
 }
 .world-slice-v {
   position: absolute;
@@ -420,6 +414,11 @@ canvas {
   font-weight: 700;
   letter-spacing: 0.2em;
   color: var(--cyan);
+}
+.world-slice-v .world-slice-lock {
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: rgba(219, 231, 242, 0.7);
 }
 .world-slice.open .world-slice-v,
 .worlds-focus .world-slice-v {
@@ -1238,6 +1237,19 @@ canvas {
   .morph-rail-dock {
     animation: none;
   }
+}
+
+/*
+ * The button is the whole screen, clipped to the slice, so an outline on it would be cut away:
+ * focus is drawn round the slice's standing name instead, which is always inside the shape.
+ */
+.world-slice-hit:focus-visible {
+  outline: none;
+}
+.world-slice:has(.world-slice-hit:focus-visible) .world-slice-v {
+  outline: 2px solid var(--cyan);
+  outline-offset: 0.6vw;
+  border-radius: 6px;
 }
 
 /* ---------- Top status bar ---------- */

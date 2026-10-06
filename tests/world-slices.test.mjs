@@ -4,6 +4,8 @@ import { test } from "node:test";
 const {
   CLOSED_FOCUS,
   clipPath,
+  closedSlice,
+  deviceBox,
   easeOpen,
   frameShift,
   isMoving,
@@ -18,96 +20,178 @@ const {
   worldsLayout,
 } = await import("../packages/client/src/ui/worldSlices.ts");
 
-const WIDTH = 1440;
-const HEIGHT = 900;
+const VIEWPORTS = [
+  { width: 1440, height: 900 },
+  { width: 2560, height: 1080 },
+];
+const [{ width: WIDTH, height: HEIGHT }] = VIEWPORTS;
 const EPSILON = 1e-6;
 const AVATAR_FOCUS = 0.7;
+const PIXEL_RATIO = 1.25;
+const FORMED = "formed:day";
 
-const shapes = (layout) =>
-  layout.openness.map((_, index) => sliceShape(layout, index, WIDTH, HEIGHT));
+const shapes = (layout, width, height) =>
+  layout.openness.map((_, index) => sliceShape(layout, index, width, height));
 const midWidth = (shape) =>
   (shape.polygon[1][0] + shape.polygon[2][0]) / 2 - (shape.polygon[0][0] + shape.polygon[3][0]) / 2;
 const close = (actual, expected, message) =>
   assert.ok(Math.abs(actual - expected) < EPSILON, `${message}: ${actual} != ${expected}`);
+const closePoint = (actual, expected, message) => {
+  close(actual[0], expected[0], `${message} x`);
+  close(actual[1], expected[1], `${message} y`);
+};
+const midEdges = (layout, index, width) => ({
+  left: index === 0 ? 0 : layout.edges[index - 1] * width,
+  right: index === layout.openness.length - 1 ? width : layout.edges[index] * width,
+});
 
 test("with two maps the open slice takes about 70% of the screen, either way round", () => {
-  for (const open of [0, 1]) {
-    const widths = shapes(worldsLayout(2, open, false)).map(midWidth);
-    const share = widths[open] / WIDTH;
-    assert.ok(share > 0.68 && share < 0.72, `open share ${share}`);
+  for (const { width, height } of VIEWPORTS) {
+    for (const open of [0, 1]) {
+      const widths = shapes(worldsLayout(2, open, false), width, height).map(midWidth);
+      const share = widths[open] / width;
+      assert.ok(share > 0.68 && share < 0.72, `open share ${share} at ${width}`);
+    }
   }
 });
 
 test("three and four maps keep every slice on screen, the open one widest", () => {
-  for (const count of [3, 4]) {
-    for (let open = 0; open < count; open++) {
-      const widths = shapes(worldsLayout(count, open, false)).map(midWidth);
-      const closed = widths.filter((_, index) => index !== open);
-      assert.ok(Math.min(...closed) > SLICE_SLANT * WIDTH * 2, `closed ${closed}`);
-      assert.ok(widths[open] > Math.max(...closed) * 3, `open ${widths[open]}`);
-      for (const width of closed) close(width, closed[0], "closed slices share the rest");
+  for (const { width, height } of VIEWPORTS) {
+    for (const count of [3, 4]) {
+      for (let open = 0; open < count; open++) {
+        const widths = shapes(worldsLayout(count, open, false), width, height).map(midWidth);
+        const closed = widths.filter((_, index) => index !== open);
+        assert.ok(Math.min(...closed) > SLICE_SLANT * width * 2, `closed ${closed}`);
+        assert.ok(widths[open] > Math.max(...closed) * 3, `open ${widths[open]}`);
+        for (const value of closed) close(value, closed[0], "closed slices share the rest");
+      }
     }
   }
 });
 
 test("slices tile the screen: neighbours share an edge and the ends meet its sides", () => {
-  for (const count of [1, 2, 3, 4]) {
-    const all = shapes(worldsLayout(count, 0, false));
-    assert.deepEqual(all[0].polygon[0], [0, 0]);
-    assert.deepEqual(all[0].polygon[3], [0, HEIGHT]);
-    assert.deepEqual(all[count - 1].polygon[1], [WIDTH, 0]);
-    assert.deepEqual(all[count - 1].polygon[2], [WIDTH, HEIGHT]);
-    for (let index = 0; index < count - 1; index++) {
-      assert.deepEqual(all[index].polygon[1], all[index + 1].polygon[0]);
-      assert.deepEqual(all[index].polygon[2], all[index + 1].polygon[3]);
+  for (const { width, height } of VIEWPORTS) {
+    for (const count of [1, 2, 3, 4]) {
+      const all = shapes(worldsLayout(count, 0, false), width, height);
+      closePoint(all[0].polygon[0], [0, 0], "top left");
+      closePoint(all[0].polygon[3], [0, height], "bottom left");
+      closePoint(all[count - 1].polygon[1], [width, 0], "top right");
+      closePoint(all[count - 1].polygon[2], [width, height], "bottom right");
+      for (let index = 0; index < count - 1; index++) {
+        closePoint(all[index].polygon[1], all[index + 1].polygon[0], `top edge ${index}`);
+        closePoint(all[index].polygon[2], all[index + 1].polygon[3], `bottom edge ${index}`);
+      }
     }
   }
 });
 
 test("every edge leans right toward the top by the slant", () => {
-  const [first] = shapes(worldsLayout(2, 0, false));
-  close(first.polygon[1][0] - first.polygon[2][0], SLICE_SLANT * WIDTH, "slant run");
+  for (const { width, height } of VIEWPORTS) {
+    const [first] = shapes(worldsLayout(2, 0, false), width, height);
+    close(first.polygon[1][0] - first.polygon[2][0], SLICE_SLANT * width, "slant run");
+  }
 });
 
 test("focus gives the open slice the whole screen and takes every other off it", () => {
-  const layout = worldsLayout(4, 2, true);
-  const all = shapes(layout);
-  assert.equal(all[2].left, 0);
-  assert.equal(all[2].right, WIDTH);
-  assert.ok(all[2].polygon[0][0] <= 0 && all[2].polygon[3][0] <= 0);
-  assert.ok(all[2].polygon[1][0] >= WIDTH && all[2].polygon[2][0] >= WIDTH);
-  for (const index of [0, 1, 3]) assert.ok(all[index].right <= all[index].left, `slice ${index}`);
+  for (const { width, height } of VIEWPORTS) {
+    const all = shapes(worldsLayout(4, 2, true), width, height);
+    assert.equal(all[2].left, 0);
+    assert.equal(all[2].right, width);
+    assert.ok(all[2].polygon[0][0] <= 0 && all[2].polygon[3][0] <= 0);
+    assert.ok(all[2].polygon[1][0] >= width && all[2].polygon[2][0] >= width);
+    for (const index of [0, 1, 3]) assert.ok(all[index].right <= all[index].left, `${index}`);
+  }
 });
 
 test("a slice that covers the screen shows exactly today's frame", () => {
-  const layout = worldsLayout(2, 1, true);
-  assert.equal(frameShift(layout, 1, WIDTH, HEIGHT, AVATAR_FOCUS), 0);
+  for (const { width, height } of VIEWPORTS) {
+    const layout = worldsLayout(2, 1, true);
+    close(frameShift(layout, 1, width, height, AVATAR_FOCUS), 0, "shift");
+  }
 });
 
-test("the open slice puts the avatar at its focus point, the frame edges never inside it", () => {
-  for (const count of [2, 3, 4]) {
-    for (let open = 0; open < count; open++) {
-      const layout = worldsLayout(count, open, false);
-      const shape = sliceShape(layout, open, WIDTH, HEIGHT);
-      const shift = frameShift(layout, open, WIDTH, HEIGHT, AVATAR_FOCUS);
-      assert.ok(shift <= shape.left + EPSILON, "frame's left edge left of the slice");
-      assert.ok(shift + WIDTH >= shape.right - EPSILON, "frame's right edge right of the slice");
-      const leftMid = open === 0 ? 0 : layout.edges[open - 1] * WIDTH;
-      const rightMid = open === count - 1 ? WIDTH : layout.edges[open] * WIDTH;
-      const wanted = leftMid + (rightMid - leftMid) * OPEN_FOCUS_IN_SLICE;
-      const landed = AVATAR_FOCUS * WIDTH + shift;
-      const clamped = shift === shape.left || shift === shape.right - WIDTH;
-      if (!clamped) close(landed, wanted, `avatar in slice ${open} of ${count}`);
+test("the open slice puts the avatar at its focus point when the frame allows it", () => {
+  for (const { width, height } of VIEWPORTS) {
+    const layout = worldsLayout(2, 0, false);
+    const { left, right } = midEdges(layout, 0, width);
+    const shift = frameShift(layout, 0, width, height, AVATAR_FOCUS);
+    const shape = sliceShape(layout, 0, width, height);
+    assert.ok(shift > shape.right - width + EPSILON && shift < shape.left - EPSILON, "unclamped");
+    close(AVATAR_FOCUS * width + shift, left + (right - left) * OPEN_FOCUS_IN_SLICE, "avatar");
+  }
+});
+
+test("a focus the frame cannot reach is held at the frame's edge, never inside the slice", () => {
+  for (const { width, height } of VIEWPORTS) {
+    const layout = worldsLayout(2, 0, false);
+    const shape = sliceShape(layout, 0, width, height);
+    close(frameShift(layout, 0, width, height, 0.05), shape.left, "held at the left edge");
+    close(frameShift(layout, 0, width, height, 0.99), shape.right - width, "held at the right");
+  }
+});
+
+test("every open slice keeps the frame's edges outside it", () => {
+  for (const { width, height } of VIEWPORTS) {
+    for (const count of [2, 3, 4]) {
+      for (let open = 0; open < count; open++) {
+        const layout = worldsLayout(count, open, false);
+        const shape = sliceShape(layout, open, width, height);
+        const shift = frameShift(layout, open, width, height, AVATAR_FOCUS);
+        assert.ok(shift <= shape.left + EPSILON, `left edge, ${open} of ${count}`);
+        assert.ok(shift + width >= shape.right - EPSILON, `right edge, ${open} of ${count}`);
+      }
     }
   }
 });
 
 test("a closed slice centres the middle of the frame when it can", () => {
-  const layout = worldsLayout(3, 0, false);
-  const shape = sliceShape(layout, 1, WIDTH, HEIGHT);
-  const shift = frameShift(layout, 1, WIDTH, HEIGHT, AVATAR_FOCUS);
-  close(CLOSED_FOCUS * WIDTH + shift, (layout.edges[0] + layout.edges[1]) * (WIDTH / 2), "centre");
-  assert.ok(shift <= shape.left && shift + WIDTH >= shape.right);
+  for (const { width, height } of VIEWPORTS) {
+    const layout = worldsLayout(3, 0, false);
+    const shape = sliceShape(layout, 1, width, height);
+    const shift = frameShift(layout, 1, width, height, AVATAR_FOCUS);
+    const { left, right } = midEdges(layout, 1, width);
+    close(CLOSED_FOCUS * width + shift, (left + right) / 2, "centre");
+    assert.ok(shift <= shape.left && shift + width >= shape.right);
+  }
+});
+
+test("a slice's device box covers every device pixel of its shape", () => {
+  const box = deviceBox({ polygon: [], left: 10.3, right: 99.1 }, PIXEL_RATIO);
+  assert.deepEqual(box, { left: 12, right: 124 });
+  assert.ok(box.left <= 10.3 * PIXEL_RATIO && box.right >= 99.1 * PIXEL_RATIO);
+});
+
+test("only a closed slice on screen is laid down from its copy", () => {
+  const viewport = { width: WIDTH, height: HEIGHT, pixelRatio: PIXEL_RATIO };
+  const layout = worldsLayout(3, 1, false);
+  assert.equal(closedSlice(layout, 1, 1, viewport, 0, FORMED).visible, false);
+  assert.equal(closedSlice(layout, 0, 1, viewport, 0, FORMED).visible, true);
+  const focused = worldsLayout(3, 1, true);
+  for (const index of [0, 2]) {
+    assert.equal(closedSlice(focused, index, 1, viewport, 0, FORMED).visible, false);
+  }
+});
+
+test("a closed slice's copy is kept until its box, framing, canvas or world changes", () => {
+  const viewport = { width: WIDTH, height: HEIGHT, pixelRatio: PIXEL_RATIO };
+  const layout = worldsLayout(2, 0, false);
+  const key = (overrides = {}) =>
+    closedSlice(
+      overrides.layout ?? layout,
+      1,
+      0,
+      overrides.viewport ?? viewport,
+      overrides.shift ?? -300,
+      overrides.world ?? FORMED,
+    ).key;
+  assert.equal(key(), key());
+  assert.equal(key({ shift: -300.1 }), key(), "a sub-pixel slide is not a change");
+  assert.notEqual(key({ shift: -310 }), key());
+  assert.notEqual(key({ world: "formed:night" }), key());
+  assert.notEqual(key({ world: "0.400:day" }), key());
+  assert.notEqual(key({ viewport: { ...viewport, width: WIDTH + 40 } }), key());
+  assert.notEqual(key({ viewport: { ...viewport, pixelRatio: 1 } }), key());
+  assert.notEqual(key({ layout: mixLayouts(layout, worldsLayout(2, 1, false), 0.5) }), key());
 });
 
 test("the opening curve starts at 0, ends at 1 and never runs backwards", () => {
