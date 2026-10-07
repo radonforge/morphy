@@ -14,9 +14,6 @@ import {
   type Phase,
   PLAYER_EYE_HEIGHT,
   PLAYER_HEIGHT,
-  PROP_TURN_SNAP,
-  PROP_TURN_SPEED,
-  PROP_TURN_TAP_MS,
   type PrimitiveSpec,
   type PropBounds,
   type PropDefinition,
@@ -55,6 +52,7 @@ import {
 } from "./movement";
 import { lockPointer } from "./pointerLock";
 import { lookSensitivity } from "./prefs";
+import { advancePropTurn, PROP_TURN_IDLE, type PropTurnPress } from "./propTurn";
 import { SkyGlow, StreetLamps } from "./StreetLamps";
 import { useSharedGLTF } from "./sharedTextures";
 import { StaticModels } from "./staticModels";
@@ -1807,8 +1805,7 @@ function LocalPlayer({
   const camDistRef = useRef(CAMERA_DISTANCE);
   const ceiling = map.ceiling ?? NO_CEILING;
   const propRot = useRef(0);
-  const turnHeldMs = useRef(0);
-  const lastTurnDir = useRef(0);
+  const turnPress = useRef<PropTurnPress>(PROP_TURN_IDLE);
   const prevPropType = useRef("");
 
   const frozen = !alive || (role === "hunter" && phase === "hiding") || caughtCam !== null;
@@ -1891,25 +1888,21 @@ function LocalPlayer({
 
     if (propType && propType !== prevPropType.current) {
       propRot.current = body.heading;
+      turnPress.current = PROP_TURN_IDLE;
     }
     prevPropType.current = propType;
     if (role === "prop") {
-      const turnDir = (keys.current.turnRight ? 1 : 0) - (keys.current.turnLeft ? 1 : 0);
-      if (turnDir !== 0) {
-        propRot.current += turnDir * PROP_TURN_SPEED * delta;
-        turnHeldMs.current += delta * 1000;
-        lastTurnDir.current = turnDir;
-      } else if (lastTurnDir.current !== 0) {
-        if (turnHeldMs.current < PROP_TURN_TAP_MS) {
-          propRot.current =
-            lastTurnDir.current > 0
-              ? Math.ceil(propRot.current / PROP_TURN_SNAP) * PROP_TURN_SNAP
-              : Math.floor(propRot.current / PROP_TURN_SNAP) * PROP_TURN_SNAP;
-        }
-        turnHeldMs.current = 0;
-        lastTurnDir.current = 0;
-      }
-      propRot.current = wrapAngle(propRot.current);
+      const k = keys.current;
+      const turned = advancePropTurn(
+        turnPress.current,
+        propRot.current,
+        { dir: k.turnRight === k.turnLeft ? 0 : k.turnRight ? 1 : -1, coarse: k.run },
+        delta,
+      );
+      turnPress.current = turned.press;
+      propRot.current = turned.rot;
+    } else {
+      turnPress.current = PROP_TURN_IDLE;
     }
 
     if (alive) {
