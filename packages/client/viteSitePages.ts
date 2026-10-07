@@ -2,7 +2,7 @@ import type { Dirent } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { basename, extname, resolve } from "node:path";
 import type { Plugin, ResolvedConfig } from "vite";
-import { COLYSEUS_PROXY_PATH, STATS_PATH } from "../shared/src/constants";
+import { COLYSEUS_PROXY_PATH, PLAYER_COUNTS_PATH, STATS_PATH } from "../shared/src/constants";
 import { changelogPage, markdownPage, type PageContent } from "./siteMarkdown";
 import { renderSitePage } from "./sitePage";
 
@@ -14,7 +14,7 @@ const MARKDOWN_EXTENSION = ".md";
 const HTML_CONTENT_TYPE = "text/html; charset=utf-8";
 const SLUG = /^[a-z0-9][a-z0-9-]*$/;
 const DEV_ROOTS = ["src", "node_modules", "public", "content", "assets"];
-const SERVER_PATHS = [COLYSEUS_PROXY_PATH, STATS_PATH];
+const SERVER_PATHS = [COLYSEUS_PROXY_PATH, STATS_PATH, PLAYER_COUNTS_PATH];
 const DEV_URL_BASE = "http://dev.invalid";
 const SERVED_METHODS = new Set(["GET", "HEAD"]);
 const HEAD_METHOD = "HEAD";

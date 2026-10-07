@@ -176,6 +176,15 @@ export interface PlayerStatsPayload {
   survivals: number;
 }
 
+/**
+ * One entry of the `GET /player-counts` endpoint: the humans in public rooms on one map. Bots and
+ * private rooms are never counted.
+ */
+export interface MapPlayerCount {
+  map: MapId;
+  players: number;
+}
+
 /** Options for public matchmaking (`joinOrCreate`, filtered by map). */
 export interface PublicJoinOptions extends RoomJoinOptions {
   map: MapId;

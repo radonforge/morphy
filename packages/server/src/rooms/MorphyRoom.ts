@@ -443,6 +443,9 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.state.night = false;
     this.propBounds = new Map(map.propCatalog.map((def) => [def.id, computePropBounds(def)]));
     this.state.mapId = map.id;
+    void this.setMetadata({ map: map.id }).catch((error: unknown) => {
+      console.error(`[morphy] failed to publish map of room ${this.roomId}:`, error);
+    });
   }
 
   private handleChat(client: Actor, payload: unknown): void {

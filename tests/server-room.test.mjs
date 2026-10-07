@@ -9,6 +9,7 @@ import {
   CONVERTED_HUNTER_HP,
   DECOY_BUDGET,
   DECOY_MISS_DAMAGE_FACTOR,
+  DEFAULT_MAP_ID,
   disguiseTypes,
   HIDE_DURATION_MS,
   HUNTER_CAPTURE_HEAL,
@@ -81,6 +82,7 @@ function publicRoom() {
   room.map = buildMap("station", 1);
   room.propBounds = new Map();
   room.lock = async () => {};
+  room._listing = {};
   return room;
 }
 
@@ -940,6 +942,22 @@ test("a host's map switch moves the disguise pool to the new map", () => {
     assert.ok(placed.has(type), `${type} is placed on North District`);
     assert.ok(!stale.has(type), `${type} is a Kepler-9 disguise`);
   }
+});
+
+test("a room publishes the map it runs, and a host's switch republishes it", async () => {
+  const room = new MorphyRoom();
+  room.clock = fakeClock();
+  room._listing = { metadata: { map: "nowhere" } };
+  await room.onCreate({ map: "nowhere" });
+  assert.equal(room._listing.metadata.map, DEFAULT_MAP_ID);
+  room.state.isPrivate = true;
+  room.state.mapId = "urban";
+  joinRoom(room, "host");
+  room.state.hostId = "host";
+  room.broadcast = () => {};
+  room.clients = [];
+  room.handleSetMap({ sessionId: "host" }, { map: "station" });
+  assert.equal(room._listing.metadata.map, "station");
 });
 
 test("with exactly two disguises placed, a reroll always swaps to the other", () => {
