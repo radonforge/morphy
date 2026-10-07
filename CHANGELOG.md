@@ -4,6 +4,11 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- Each map in the menu shows how many people are playing it right now, so you
+  can pick the map where the others are.
+
 ## [0.4.0] - 2026-10-07
 
 Two maps, back-to-back rounds and a much louder catch. North District is rebuilt

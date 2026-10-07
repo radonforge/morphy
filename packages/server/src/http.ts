@@ -1,4 +1,9 @@
-import { type PlayerStatsPayload, STATS_PATH } from "@morphy/shared";
+import {
+  type MapPlayerCount,
+  PLAYER_COUNTS_PATH,
+  type PlayerStatsPayload,
+  STATS_PATH,
+} from "@morphy/shared";
 import { parseDeviceId } from "./identity";
 import { type PlayerStatsRepository, playerStats } from "./stats/repository";
 
@@ -64,5 +69,29 @@ export function registerStatsRoute(
       console.error(`[morphy] stats delete failed for ${safeId}…:`, error);
       res.status(500).json({ error: "stats unavailable" });
     }
+  });
+}
+
+interface PlayerCountsApp {
+  get(path: string, handler: StatsHandler): void;
+}
+
+/**
+ * Serve the humans playing on each map, so the menu can show where people are before a pick. The
+ * counts come from `counts`, which the caller caches (`cachedFor`) so the rooms are queried once
+ * per TTL however many menus poll. No room ids leave the server: matchmaking joins by map.
+ */
+export function registerPlayerCountsRoute(
+  app: PlayerCountsApp,
+  counts: () => Promise<MapPlayerCount[]>,
+): void {
+  app.get(PLAYER_COUNTS_PATH, (_req, res) => {
+    counts().then(
+      (body) => res.json(body),
+      (error: unknown) => {
+        console.error("[morphy] player count query failed:", error);
+        res.status(500).json({ error: "player counts unavailable" });
+      },
+    );
   });
 }

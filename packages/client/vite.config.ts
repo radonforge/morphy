@@ -1,6 +1,11 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { COLYSEUS_PROXY_PATH, DEFAULT_PORT, STATS_PATH } from "../shared/src/constants";
+import {
+  COLYSEUS_PROXY_PATH,
+  DEFAULT_PORT,
+  PLAYER_COUNTS_PATH,
+  STATS_PATH,
+} from "../shared/src/constants";
 import { resolveBuildInfo } from "./buildInfo";
 import { levelBridgePlugin } from "./viteLevelBridge";
 import { runtimeAssetsPlugin } from "./viteRuntimeAssets";
@@ -47,6 +52,10 @@ export default defineConfig({
         rewrite: (path) => path.slice(COLYSEUS_PROXY_PATH.length),
       },
       [STATS_PATH]: {
+        target: serverTarget,
+        changeOrigin: true,
+      },
+      [PLAYER_COUNTS_PATH]: {
         target: serverTarget,
         changeOrigin: true,
       },
