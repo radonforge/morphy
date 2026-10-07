@@ -74,6 +74,7 @@ import {
   gpuInfo,
   recordFrame,
 } from "./diagnostics";
+import { FieldOfViewSlider } from "./FieldOfViewSlider";
 import {
   type GraphicsTier,
   MAX_RENDER_FPS,
@@ -89,7 +90,7 @@ import { LookSensitivitySlider } from "./LookSensitivitySlider";
 import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
 import { usePostFx } from "./postFx";
-import { graphicsPreference, isPerfHudEnabled } from "./prefs";
+import { fieldOfView, graphicsPreference, isPerfHudEnabled } from "./prefs";
 import {
   type CaptureRecord,
   nextStartingRoles,
@@ -100,7 +101,7 @@ import {
   storyLine,
   wonRound,
 } from "./roundStory";
-import { CAUGHT_CAM_MS, DEFAULT_PITCH, GAME_FOV, Scene } from "./Scene";
+import { CAUGHT_CAM_MS, DEFAULT_PITCH, Scene } from "./Scene";
 import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
 import { themeLook } from "./themes";
 import type {
@@ -1428,7 +1429,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         dpr={tierSettings.dpr}
         gl={glConfig}
         shadows={tierSettings.shadows ? GAME_SHADOW_TYPE : false}
-        camera={{ position: [0, 12, 18], fov: GAME_FOV }}
+        camera={{ position: [0, 12, 18], fov: fieldOfView() }}
         onCreated={({ gl }) => {
           glRef.current = gl;
         }}
@@ -1747,6 +1748,10 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
             <div className="pause-setting">
               <span>Look sensitivity</span>
               <LookSensitivitySlider />
+            </div>
+            <div className="pause-setting">
+              <span>Field of view</span>
+              <FieldOfViewSlider />
             </div>
             <button type="button" className="btn-ghost" onClick={onLeaveMatch}>
               Leave match

@@ -871,12 +871,12 @@ canvas {
   width: clamp(120px, 12vw, 170px);
   accent-color: var(--cyan);
 }
-.look-sensitivity {
+.pref-slider {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-.look-sensitivity-value {
+.pref-slider-value {
   min-width: 3.4em;
   font-family: var(--font-mono);
   font-size: 0.8rem;

@@ -34,6 +34,7 @@ import {
   stopLobbyMusic,
   unlockAudio,
 } from "../game/audio";
+import { FieldOfViewSlider } from "../game/FieldOfViewSlider";
 import {
   GRAPHICS_LABEL,
   GRAPHICS_PREFERENCES,
@@ -880,6 +881,13 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
                   <span>Mouse and trackpad aim speed</span>
                 </span>
                 <LookSensitivitySlider />
+              </div>
+              <div className="menu-opt-row">
+                <span className="l">
+                  <b>Field of view</b>
+                  <span>How wide the match camera sees</span>
+                </span>
+                <FieldOfViewSlider />
               </div>
               <div className="menu-opt-row">
                 <span className="l">

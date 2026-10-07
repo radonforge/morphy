@@ -51,7 +51,7 @@ import {
   supportHeightAt,
 } from "./movement";
 import { lockPointer } from "./pointerLock";
-import { lookSensitivity } from "./prefs";
+import { FIELD_OF_VIEW_DEFAULT, fieldOfView, lookSensitivity } from "./prefs";
 import { advancePropTurn, PROP_TURN_IDLE, type PropTurnPress } from "./propTurn";
 import { SkyGlow, StreetLamps } from "./StreetLamps";
 import { useSharedGLTF } from "./sharedTextures";
@@ -198,7 +198,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 const SCREEN_CENTER = new THREE.Vector2(0, 0);
 const noRaycast = () => {};
 
-export const GAME_FOV = 55;
+export const GAME_FOV = FIELD_OF_VIEW_DEFAULT;
 const SPRINT_FOV_ADD = 7;
 const FOV_DAMP = 0.02;
 const FOV_EPSILON = 0.05;
@@ -1941,7 +1941,7 @@ function LocalPlayer({
     motion.pitch = pitch;
 
     const perspective = camera as THREE.PerspectiveCamera;
-    const targetFov = GAME_FOV + (sprinting ? SPRINT_FOV_ADD : 0);
+    const targetFov = fieldOfView() + (sprinting ? SPRINT_FOV_ADD : 0);
     if (Math.abs(perspective.fov - targetFov) > FOV_EPSILON) {
       perspective.fov += (targetFov - perspective.fov) * (1 - FOV_DAMP ** delta);
       perspective.updateProjectionMatrix();

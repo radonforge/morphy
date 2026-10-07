@@ -19,7 +19,7 @@ export function LookSensitivitySlider() {
   const label = `${value.toFixed(VALUE_DECIMALS)}x`;
 
   return (
-    <span className="look-sensitivity">
+    <span className="pref-slider">
       <input
         type="range"
         className="menu-slider"
@@ -34,7 +34,7 @@ export function LookSensitivitySlider() {
         aria-label="Look sensitivity"
         aria-valuetext={label}
       />
-      <output className="look-sensitivity-value" aria-hidden="true">
+      <output className="pref-slider-value" aria-hidden="true">
         {label}
       </output>
     </span>
