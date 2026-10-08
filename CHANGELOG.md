@@ -15,9 +15,9 @@ Every Morphy release and what it changed for you, newest first.
 
 ### Changed
 
-- As a prop, a tap of Q or E now turns your disguise by a step you choose and
-  holding the key spins it as before. Press X to switch the step between 90,
-  45 and 15 degrees; the choice is remembered.
+- As a prop, a tap of Q or E now snaps your disguise to the next 90, 45 or 15
+  degree mark, the step you choose, and holding the key spins it as before.
+  Press X to switch the step; the choice is remembered.
 - The controls bar at the bottom of the screen now shows only your role's own
   actions and fits on one line. Every other key is in All controls, behind ?.
 - The Graphics quality choice in the options is now a dropdown in the game's
