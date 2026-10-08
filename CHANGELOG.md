@@ -4,6 +4,11 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- Props turn their disguise smoothly and slowly with Q and E by default. X cycles the
+  turn mode through free, 90, 45 and 15 degrees, and the controls bar shows it.
+
 ## [0.4.2] - 2026-10-08
 
 Bot props that hide like players. They pick a spot beside objects of their own

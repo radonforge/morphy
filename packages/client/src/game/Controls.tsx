@@ -1,6 +1,7 @@
 import type { Phase, Role } from "@morphy/shared";
 import { useEffect, useState } from "react";
 import { Kbd } from "../ui/Kbd";
+import { type PropTurnMode, turnModeLabel } from "./propTurn";
 
 const COOLDOWN_TICK_MS = 250;
 const MS_PER_SECOND = 1_000;
@@ -38,8 +39,8 @@ export const CONTROL_GROUPS: ControlGroup[] = [
     title: "Prop",
     items: [
       { keys: ["R"], label: "Swap disguise (random)" },
-      { keys: ["Q", "E"], label: "Turn (tap) or spin (hold)" },
-      { keys: ["X"], label: "Turn step: 90° / 45° / 15°" },
+      { keys: ["Q", "E"], label: "Turn disguise (hold)" },
+      { keys: ["X"], label: "Turn mode: free / 90° / 45° / 15°" },
       { keys: ["C"], label: "Drop decoy" },
       { keys: ["V"], label: "First / third person view" },
       { keys: ["F"], label: "Taunt (+1, +3 near a hunter)" },
@@ -84,6 +85,8 @@ export interface BarState {
   tauntReadyAt: number;
   /** `Date.now()` at which the local hunter's sonar comes off cooldown; 0 when it is ready. */
   sonarReadyAt: number;
+  /** How Q/E turn the local prop's disguise. */
+  turnMode: PropTurnMode;
 }
 
 function cooldownLabel(label: string, readyAt: number, now: number): string {
@@ -122,6 +125,7 @@ export function mainControls(s: BarState, now: number): { note?: string; items: 
     return {
       items: [
         { keys: ["R"], label: `Swap (${s.rerollsLeft})` },
+        { keys: ["Q", "E"], label: `Turn ${turnModeLabel(s.turnMode)}` },
         { keys: ["C"], label: `Decoy (${s.decoysLeft})` },
         ...(s.phase === "hunting"
           ? [{ keys: ["F"], label: cooldownLabel("Taunt", s.tauntReadyAt, now) }]

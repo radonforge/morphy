@@ -92,7 +92,7 @@ import { lockPointer } from "./pointerLock";
 import { usePostFx } from "./postFx";
 import { fieldOfView, graphicsPreference, isPerfHudEnabled } from "./prefs";
 import { cappedVerticalFov } from "./propCamera";
-import { nextTurnStep, setTurnStep, turnStep as storedTurnStep } from "./propTurn";
+import { nextTurnMode, setTurnMode, turnMode as storedTurnMode, turnModeLabel } from "./propTurn";
 import {
   type CaptureRecord,
   nextStartingRoles,
@@ -812,7 +812,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [turnStep, setTurnStepState] = useState(storedTurnStep);
+  const [turnMode, setTurnModeState] = useState(storedTurnMode);
   const [contextLost, setContextLost] = useState(false);
   const [decoys, setDecoys] = useState<DecoyView[]>([]);
   const [tauntReadyAt, setTauntReadyAt] = useState(0);
@@ -1332,21 +1332,21 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
   const showCrosshair = (canTransform || canShoot) && !inputBlocked && !caught;
-  const canCycleTurnStep = canTransform && !inputBlocked && !caught;
+  const canCycleTurnMode = canTransform && !inputBlocked && !caught;
 
   useEffect(() => {
-    if (!canCycleTurnStep) return;
+    if (!canCycleTurnMode) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "KeyX" || e.repeat) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const next = nextTurnStep(turnStep);
-      setTurnStep(next);
-      setTurnStepState(next);
-      pushFeed(`Turn step ${next}°`);
+      const next = nextTurnMode(turnMode);
+      setTurnMode(next);
+      setTurnModeState(next);
+      pushFeed(`Turn ${turnModeLabel(next)}`);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [canCycleTurnStep, turnStep, pushFeed]);
+  }, [canCycleTurnMode, turnMode, pushFeed]);
   const blinded = localRole === "hunter" && phase === "hiding";
 
   const closeChat = () => {
@@ -1477,7 +1477,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           catchRef={catchRef}
           caughtCam={caught}
           night={night}
-          turnStep={turnStep}
+          turnMode={turnMode}
         />
         <RenderGate skip={blinded} post={post} antialias={tierSettings.antialias} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
@@ -1735,6 +1735,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
             decoysLeft={localMeta?.decoysLeft ?? 0}
             tauntReadyAt={tauntReadyAt}
             sonarReadyAt={sonarReadyAt}
+            turnMode={turnMode}
             onOpen={() => setControlsOpen(true)}
           />
         </div>

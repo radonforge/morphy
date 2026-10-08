@@ -63,8 +63,8 @@ import {
 import {
   advancePropTurn,
   idlePropTurn,
+  type PropTurnMode,
   type PropTurnPress,
-  type PropTurnStep,
   resetPropTurn,
 } from "./propTurn";
 import { type PropView, propEyeHeight, propView, setPropView } from "./propView";
@@ -412,7 +412,7 @@ interface SceneProps {
   catchRef: CatchMomentRef;
   caughtCam: CaughtCam | null;
   night: boolean;
-  turnStep: PropTurnStep;
+  turnMode: PropTurnMode;
 }
 
 export const Scene = memo(function Scene({
@@ -436,7 +436,7 @@ export const Scene = memo(function Scene({
   catchRef,
   caughtCam,
   night,
-  turnStep,
+  turnMode,
 }: SceneProps) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
@@ -601,7 +601,7 @@ export const Scene = memo(function Scene({
         motionRef={motionRef}
         catchRef={catchRef}
         caughtCam={caughtCam}
-        turnStep={turnStep}
+        turnMode={turnMode}
       />
       {ids
         .filter((id) => id !== localId && (meta[id]?.alive ?? true))
@@ -1770,7 +1770,7 @@ interface LocalPlayerProps {
   motionRef: LocalMotionRef;
   catchRef: CatchMomentRef;
   caughtCam: CaughtCam | null;
-  turnStep: PropTurnStep;
+  turnMode: PropTurnMode;
 }
 
 function LocalPlayer({
@@ -1794,7 +1794,7 @@ function LocalPlayer({
   motionRef,
   catchRef,
   caughtCam,
-  turnStep,
+  turnMode,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!inputBlocked);
@@ -1974,7 +1974,7 @@ function LocalPlayer({
         turnPress.current,
         propRot.current,
         k.turnRight === k.turnLeft ? 0 : k.turnRight ? 1 : -1,
-        turnStep,
+        turnMode,
         delta,
       );
     } else {
