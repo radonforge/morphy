@@ -64,14 +64,28 @@ let bots play on their own (handy as a server smoke test).
   hears a hunter's footsteps, bot or player. A
   taunt it hears is run to, and with nothing to follow for a while it sounds
   its sonar.
-- **Prop**: picks a prop type that exists in the scene, hides next to a matching
-  cluster, transforms and holds still. With a hunter in plain sight it keeps
-  holding still, since moving is what gives a disguise away, and bolts only when
-  that hunter is on top of it or when it hears a rustle close by, dropping a
-  decoy where it stood. It sees all round, as a player's camera orbits a
-  disguise, but not through walls or furniture. Once hidden it taunts for points now and then, never
-  with a hunter in sight. A sonar pulse close by sends it running; one further
-  off keeps it still and quiet.
+- **Prop**: hides as the object it was dealt (it never rerolls). From the map
+  alone (`policy/hiding.ts`, never where anyone else is) it scores spots beside
+  objects of its own kind, turned like them, where the shape belongs by its
+  asset tags (a wall-mounted one backed onto a wall), in cover from the open
+  ground and the hunter spawns, with a way out, never in a doorway's clearance
+  (the one the level checks keep furniture out of), and draws one among the
+  good ones so it does not take the same spot every round; a spot it cannot
+  step onto, a decoy standing there, it gives up for another. It walks there with its
+  disguise facing the way it was dealt and turns it once it stands there, never
+  with a hunter in sight. In the hunt a hunter merely looking its way from a
+  distance keeps it still; one aiming at it from point blank, one closing in
+  while it keeps it in sight, or one that watched it move or honk a moment ago
+  sends it running to the waypoint that best breaks sight of every hunter it
+  perceived (`policy/escape.ts`), committed for a while and for as long as a
+  hunter stays on it, then it hides again after a calm. It drops a decoy on its
+  hiding spot as it breaks cover, keeping the last one for a hunter at point
+  blank, and ignores rustles, which only props make. It sees all round, as a
+  player's camera orbits a disguise, but not through walls or furniture. It
+  taunts on the hunt's clock (first 8 to 15 s in, then a draw past each
+  cooldown, ahead of the forced honk), from its spot and never with a hunter in
+  sight, and moves to a new spot after a honk it did not choose: the room's
+  forced one, or one a sonar drew.
 
 Movement integrates at `MOVE_SPEED` (times `RUN_MULTIPLIER_HUNTER` or
 `RUN_MULTIPLIER_PROP` while running) with the client's wall/furniture push-out,
@@ -107,5 +121,11 @@ round), shots per capture, the share of captures on a prop moving when the
 shot landed (read off its latest input), the share on one that had moved within
 `MOVED_RECENTLY_MS` (which also counts a prop that had just stopped), captures
 per round, how often a hunter ran its HP out, and the wall time one bot tick
-costs during the hunt (mean and p99). It is not part of
+costs during the hunt (mean and p99). A second table judges the props from
+ground truth the bots never see: the share no hunter spawn sees as the hunt
+opens, how exposed their spots are to the open ground round them, the share
+that finished hiding in time, objects of their own type within 3 m and the
+share turned like one, the median time to a prop's first taunt of its own, the
+share of honks a prop outlives by 10 s, decoys hunters shot, and chases with
+the run/stand switches in each. It is not part of
 `pnpm test`; run it before and after a change to bot behaviour or pacing.

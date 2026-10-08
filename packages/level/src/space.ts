@@ -1,6 +1,10 @@
-import { LEVEL_DOOR_CLEARANCE_DEPTH, LEVEL_DOOR_CLEARANCE_WIDTH } from "@morphy/shared";
+import {
+  LEVEL_DOOR_CLEARANCE_DEPTH,
+  LEVEL_DOOR_CLEARANCE_WIDTH,
+  type TileInstance,
+} from "@morphy/shared";
 import type { LevelDocument, LevelDoor } from "./document";
-import { doorKey, TILE, WALL_HALF_THICKNESS } from "./floorplan";
+import { doorKey, gateDoors, TILE, WALL_HALF_THICKNESS } from "./floorplan";
 import { type Footprint, type LevelContext, objectFootprint, objectHitboxes } from "./footprint";
 import { type Rect2, rectFromExtent } from "./geometry";
 import { wallRects } from "./walls";
@@ -50,39 +54,43 @@ export function lineZ(doc: LevelDocument, line: number): number {
   return -(doc.grid.rows * TILE) / 2 + line * TILE;
 }
 
-function doorZone(doc: LevelDocument, door: LevelDoor, space: LevelSpace): DoorZone {
+/**
+ * The floor kept clear either side of a doorway centred at (`x`, `z`) in a wall
+ * along grid lines of `axis` (`v` for a wall running along Z): what `door.blocked`
+ * measures collision boxes against, before side then after side.
+ */
+function doorClearance(x: number, z: number, axis: LevelDoor["axis"]): [Rect2, Rect2] {
   const halfWidth = LEVEL_DOOR_CLEARANCE_WIDTH / 2;
   const near = WALL_HALF_THICKNESS;
   const far = WALL_HALF_THICKNESS + LEVEL_DOOR_CLEARANCE_DEPTH;
-  const [before, after] = doorRegions(door, space.cellRegion) ?? [null, null];
-  if (door.axis === "v") {
-    const x = lineX(doc, door.line);
-    const z = lineZ(doc, door.cell) + TILE / 2;
+  if (axis === "v") {
     const zone = (from: number, to: number): Rect2 =>
       rectFromExtent({ minX: from, maxX: to, minZ: z - halfWidth, maxZ: z + halfWidth });
-    return {
-      door,
-      key: doorKey(door),
-      x,
-      z,
-      sides: [
-        { region: before, zone: zone(x - far, x - near) },
-        { region: after, zone: zone(x + near, x + far) },
-      ],
-    };
+    return [zone(x - far, x - near), zone(x + near, x + far)];
   }
-  const x = lineX(doc, door.cell) + TILE / 2;
-  const z = lineZ(doc, door.line);
   const zone = (from: number, to: number): Rect2 =>
     rectFromExtent({ minX: x - halfWidth, maxX: x + halfWidth, minZ: from, maxZ: to });
+  return [zone(z - far, z - near), zone(z + near, z + far)];
+}
+
+/** The door clearance zones of a compiled map, read off the gates its floorplan stands in its doorways. */
+export function gateClearances(tiles: readonly TileInstance[]): Rect2[] {
+  return gateDoors(tiles).flatMap((gate) => doorClearance(gate.x, gate.z, gate.axis));
+}
+
+function doorZone(doc: LevelDocument, door: LevelDoor, space: LevelSpace): DoorZone {
+  const [before, after] = doorRegions(door, space.cellRegion) ?? [null, null];
+  const x = door.axis === "v" ? lineX(doc, door.line) : lineX(doc, door.cell) + TILE / 2;
+  const z = door.axis === "v" ? lineZ(doc, door.cell) + TILE / 2 : lineZ(doc, door.line);
+  const [beforeZone, afterZone] = doorClearance(x, z, door.axis);
   return {
     door,
     key: doorKey(door),
     x,
     z,
     sides: [
-      { region: before, zone: zone(z - far, z - near) },
-      { region: after, zone: zone(z + near, z + far) },
+      { region: before, zone: beforeZone },
+      { region: after, zone: afterZone },
     ],
   };
 }

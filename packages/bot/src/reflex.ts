@@ -1,8 +1,6 @@
 import {
-  ASSET_CARDS,
   type BotAct,
-  computePropBounds,
-  fittedExtent,
+  DECOY_COOLDOWN_MS,
   type InputMessage,
   type Intent,
   isDisguise,
@@ -14,19 +12,17 @@ import {
   type ObservedSelf,
   type ObservedSound,
   type Phase,
-  type PropBounds,
+  PROP_TURN_SPEED,
   type PropInstance,
   type Role,
   RUN_MULTIPLIER_HUNTER,
   RUN_MULTIPLIER_PROP,
-  type ShapeExtent,
   SONAR_COOLDOWN_MS,
   SONAR_HEARING_RADIUS,
   type SoundKind,
   TAUNT_COOLDOWN_MS,
   TAUNT_HEARING_RADIUS,
   UNTRANSFORMED_PROP_HEIGHT,
-  UNTRANSFORMED_PROP_RADIUS,
   type Visibility,
 } from "@morphy/shared";
 import {
@@ -42,13 +38,7 @@ import {
   reactionDelayMs,
   VelocityEstimate,
 } from "./aim";
-import {
-  buildObstacles,
-  buildWalls,
-  type Obstacle,
-  resolveCollisions,
-  type Wall,
-} from "./collision";
+import { type Obstacle, resolveCollisions, type Wall } from "./collision";
 import {
   AIM_OVERSHOOT_SETTLE_RAD,
   AIM_PITCH_SPREAD_SHARE,
@@ -72,6 +62,7 @@ import {
   FACING_CONE_COS,
   HEARD_POSITION_CELL,
   HEARD_SOUND_MEMORY_MS,
+  HIDE_ARRIVE_EPSILON,
   HUNTER_VIEW_HALF_ANGLE_RAD,
   lerp,
   MAX_REPLANS_BEFORE_BLOCKED,
@@ -80,7 +71,7 @@ import {
   MOVED_RECENTLY_MS,
   NAV_CELL_SIZE,
   NAV_SNAP_RADIUS_CELLS,
-  NEARBY_PROP_RADIUS,
+  OWN_TAUNT_ECHO_MS,
   PATH_REPLAN_MS,
   PATROL_PICK_ATTEMPTS,
   STUCK_PROGRESS_FRACTION,
@@ -97,16 +88,17 @@ import {
 } from "./contacts";
 import { findPath } from "./nav/astar";
 import {
-  buildNavGrid,
   cellCenter,
+  isBlocked,
   type NavGrid,
   nearestFreeCell,
   type Point2,
   worldToCell,
 } from "./nav/grid";
 import { PathFollower, smoothPath } from "./nav/path";
-import { type Body, Glance, inscribedExtent, SightIndex, sightOf, type Viewer } from "./perception";
+import { type Body, Glance, type SightIndex, sightOf, type Viewer } from "./perception";
 import { canHitTarget, normalize3, type Vec3 } from "./raycast";
+import { Terrain, UNTRANSFORMED_BOUNDS, UNTRANSFORMED_EXTENT } from "./terrain";
 import type { BotDecoy, BotPlayer } from "./view";
 
 const STEER_MIN_DIST = 1e-4;
@@ -115,14 +107,6 @@ const STEER_MIN_DIST = 1e-4;
 function wrapAngle(angle: number): number {
   return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
-
-const UNTRANSFORMED_BOUNDS: PropBounds = {
-  radius: UNTRANSFORMED_PROP_RADIUS,
-  yMin: 0,
-  yMax: UNTRANSFORMED_PROP_HEIGHT,
-};
-
-const UNTRANSFORMED_EXTENT = inscribedExtent(UNTRANSFORMED_BOUNDS);
 
 /** Which way a player's model is turned: a prop's disguise by its own turn, anyone else by their heading. */
 function modelYaw(player: BotPlayer): number {
@@ -232,13 +216,12 @@ const HOLD = (x: number, z: number, rot: number): MotorOutput => ({
  * tick). It never blocks and never decides *what* to do, only *how/when*.
  */
 export class Reflex {
+  private land: Terrain | null = null;
   private map: MapDefinition | null = null;
   private grid: NavGrid | null = null;
   private walls: Wall[] = [];
   private obstacles: Obstacle[] = [];
   private activeObstacles: Obstacle[] = [];
-  private propBounds = new Map<string, PropBounds>();
-  private propExtents = new Map<string, ShapeExtent>();
   private sceneProps = new Map<string, { prop: PropInstance; index: number }>();
   private sight: SightIndex | null = null;
   private doorways: Point2[] = [];
@@ -249,6 +232,15 @@ export class Reflex {
   private lastShotAt = 0;
   private lastShotTargetId: string | null = null;
   private probeMissed = false;
+  /**
+   * Which way the disguise faces, turned only by the bot's own turn key:
+   * walking and looking about move the camera and leave it alone, as they do
+   * for a player.
+   */
+  private disguiseYaw = 0;
+  private wornType = "";
+  private phase: Phase | null = null;
+  private phaseStartedAt = 0;
 
   private readonly follower = new PathFollower();
   private pathGoal: Point2 | null = null;
@@ -290,6 +282,8 @@ export class Reflex {
   private soundSeq = 0;
   private heardEdge = false;
   private readonly pressedAt = new Map<BotAct, number>();
+  /** When the bot's disguise last honked without it pressing the key this hunt, or null. */
+  private forcedHonkAt: number | null = null;
 
   /** `rng` draws the aim's noise; tests pass a seeded `makeRng` to replay it. */
   constructor(
@@ -300,6 +294,11 @@ export class Reflex {
 
   get ready(): boolean {
     return this.grid !== null;
+  }
+
+  /** The map as the bot knows it before perceiving anything, once one is set. */
+  get terrain(): Terrain | null {
+    return this.land;
   }
 
   get x(): number {
@@ -376,7 +375,7 @@ export class Reflex {
       y: thing.y,
       z: thing.z,
       yaw,
-      extent: this.propExtents.get(thing.propType) ?? UNTRANSFORMED_EXTENT,
+      extent: this.land?.extentOf(thing.propType) ?? UNTRANSFORMED_EXTENT,
       owner,
     };
   }
@@ -497,30 +496,20 @@ export class Reflex {
   /** Rebuild navigation from a freshly received map. One source of truth: the
    * grid is inflated from the same wall/obstacle arrays the physics resolves. */
   setMap(map: MapDefinition): void {
+    const land = new Terrain(map);
+    this.land = land;
     this.map = map;
-    this.walls = buildWalls(map);
-    this.obstacles = buildObstacles(map);
+    this.walls = land.walls;
+    this.obstacles = land.obstacles;
     this.activeObstacles = this.obstacles;
-    this.grid = buildNavGrid(map.bounds, this.walls, this.obstacles);
-    this.propBounds = new Map(
-      map.propCatalog.map((def) => [def.id, computePropBounds(def)] as const),
-    );
-    this.propExtents = new Map(
-      map.propCatalog.map(
-        (def) =>
-          [
-            def.id,
-            fittedExtent(def, ASSET_CARDS) ?? inscribedExtent(computePropBounds(def)),
-          ] as const,
-      ),
-    );
+    this.grid = land.grid;
     const worn = new Set(map.propCatalog.filter(isDisguise).map((def) => def.id));
     this.sceneProps = new Map(
       map.props.flatMap((prop, index) =>
         worn.has(prop.type) ? [[scenePropSource(index), { prop, index }] as const] : [],
       ),
     );
-    this.sight = new SightIndex(map);
+    this.sight = land.sight;
     this.doorways = map.tiles
       .filter((tile) => tile.model.includes(DOORWAY_TILE_MARKER))
       .map((tile) => ({ x: tile.position.x, z: tile.position.z }));
@@ -586,6 +575,26 @@ export class Reflex {
   /** Record a key the bot pressed, for the cooldowns its own HUD would show. */
   notePressed(act: BotAct, now: number): void {
     this.pressedAt.set(act, now);
+  }
+
+  /**
+   * Hear the bot's own disguise honk. One that follows its own press of the
+   * key within {@link OWN_TAUNT_ECHO_MS} is the taunt it chose; any other the
+   * room forced on it, on its clock or for a hunter's sonar.
+   */
+  hearOwnHonk(now: number): void {
+    if (this.sincePressed("taunt", now) > OWN_TAUNT_ECHO_MS) this.forcedHonkAt = now;
+  }
+
+  /**
+   * Note when the phase changed, which the round clock on a player's HUD
+   * restarts on; a honk from an earlier round is forgotten with it.
+   */
+  private notePhase(phase: Phase, now: number): void {
+    if (phase === this.phase) return;
+    this.phase = phase;
+    this.phaseStartedAt = now;
+    this.forcedHonkAt = null;
   }
 
   private sincePressed(act: BotAct, now: number): number {
@@ -655,6 +664,7 @@ export class Reflex {
    */
   buildObservation(world: ReflexWorld, seq: number, now: number): Observation {
     const self = world.self;
+    this.notePhase(world.phase, now);
     const probeInterval = lerp(
       BOT_PROBE_INTERVAL_MAX_MS,
       BOT_PROBE_INTERVAL_MIN_MS,
@@ -670,6 +680,9 @@ export class Reflex {
       propType: self.propType,
       canShootNow: now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS,
       canTauntNow: this.sincePressed("taunt", now) >= TAUNT_COOLDOWN_MS,
+      forcedHonkMsAgo: this.forcedHonkAt === null ? null : now - this.forcedHonkAt,
+      decoysLeft: self.decoysLeft,
+      canDecoyNow: self.decoysLeft > 0 && this.sincePressed("decoy", now) >= DECOY_COOLDOWN_MS,
       canSonarNow: this.sincePressed("sonar", now) >= SONAR_COOLDOWN_MS,
       canProbeNow: now - this.lastShotAt >= (this.probeMissed ? BOT_PROBE_RETRY_MS : probeInterval),
       lastShotTargetId: this.lastShotTargetId,
@@ -687,6 +700,7 @@ export class Reflex {
       seq,
       visibility: this.visibility,
       phase: world.phase,
+      phaseMs: now - this.phaseStartedAt,
       pathBlocked: this.pathBlocked,
       arrived: this.settled,
       self: selfObs,
@@ -873,22 +887,9 @@ export class Reflex {
   private buildObservedMap(): ObservedMap {
     const map = this.map;
     if (!map) {
-      return {
-        bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } },
-        doorways: [],
-        nearbyProps: [],
-      };
+      return { bounds: { min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } }, doorways: [] };
     }
-    const nearbyProps = map.props
-      .filter(
-        (p) => Math.hypot(p.position.x - this.posX, p.position.z - this.posZ) <= NEARBY_PROP_RADIUS,
-      )
-      .map((p) => ({ type: p.type, x: p.position.x, z: p.position.z }));
-    return {
-      bounds: map.bounds,
-      doorways: this.doorways.map((d) => ({ x: d.x, z: d.z })),
-      nearbyProps,
-    };
+    return { bounds: map.bounds, doorways: this.doorways.map((d) => ({ x: d.x, z: d.z })) };
   }
 
   /**
@@ -1018,7 +1019,9 @@ export class Reflex {
 
   executeIntent(intent: Intent, world: ReflexWorld, dt: number, now: number): MotorOutput {
     if (!this.grid || !this.map) return HOLD(this.posX, this.posZ, this.rot);
+    this.notePhase(world.phase, now);
     this.sense(world, now);
+    this.wear(world.self);
     this.rot = wrapAngle(this.rot - this.glanceApplied);
     this.glanceApplied = 0;
     this.tracking = false;
@@ -1029,7 +1032,7 @@ export class Reflex {
         .map((decoy) => ({
           x: decoy.x,
           z: decoy.z,
-          radius: (this.propBounds.get(decoy.propType) ?? UNTRANSFORMED_BOUNDS).radius,
+          radius: (this.land?.shape(decoy.propType)?.bounds ?? UNTRANSFORMED_BOUNDS).radius,
         })),
     ];
     let shoot: MotorOutput["shoot"] = null;
@@ -1048,9 +1051,12 @@ export class Reflex {
       case "moveTo":
         this.runMoveTo(intent.x, intent.z, intent.run, world, dt, now);
         break;
-      case "hideAs":
+      case "hideAs": {
+        const standing = this.settled;
         this.runHideAs(intent.x, intent.z, world, dt, now);
+        if (standing && intent.yaw !== undefined) this.turnDisguise(intent.yaw, world, dt);
         break;
+      }
       case "inspect":
         this.runApproach(intent.targetId, intent.run, world, dt, now);
         break;
@@ -1069,10 +1075,42 @@ export class Reflex {
         z: this.posZ,
         rot: this.rot,
         aim: this.rot,
-        propRot: this.rot,
+        propRot: world.self.role === "prop" ? this.disguiseYaw : this.rot,
       },
       shoot,
     };
+  }
+
+  /**
+   * Take on the disguise just dealt facing the way the bot looks, as a
+   * player's client turns a new disguise to the camera's heading.
+   */
+  private wear(self: BotPlayer): void {
+    if (self.propType === this.wornType) return;
+    this.wornType = self.propType;
+    this.disguiseYaw = this.rot;
+  }
+
+  /**
+   * Turn the disguise toward `yaw` at the pace a player's held turn key does,
+   * once the bot has stood where it hides for a tick, never on the step that
+   * gets it there, and only while no possible hunter is in sight to watch it
+   * turn: a disguise seen turning is a tell. While the hunters are blind it
+   * turns freely.
+   */
+  private turnDisguise(yaw: number, world: ReflexWorld, dt: number): void {
+    if (world.self.role !== "prop") return;
+    if (world.phase !== "hiding" && this.huntersInSight(world.others)) return;
+    const delta = wrapAngle(yaw - this.disguiseYaw);
+    const step = PROP_TURN_SPEED * dt;
+    this.disguiseYaw = wrapAngle(this.disguiseYaw + Math.max(-step, Math.min(step, delta)));
+  }
+
+  /** Whether the bot sees a player wearing no disguise, which can only be a hunter. */
+  private huntersInSight(others: readonly BotPlayer[]): boolean {
+    return others.some(
+      (other) => other.propType === "" && this.sightings.has(playerSource(other.id)),
+    );
   }
 
   /**
@@ -1147,8 +1185,13 @@ export class Reflex {
     this.runStatic(gx, gz, run, world.self.role, dt, now);
   }
 
+  /**
+   * Walk to a hiding spot, or run while the hunters are blind, and stand on it
+   * exactly: a disguise set beside another of its kind is only convincing
+   * where it was meant to stand, not on the nearest navigation cell.
+   */
   private runHideAs(gx: number, gz: number, world: ReflexWorld, dt: number, now: number): void {
-    this.runStatic(gx, gz, world.phase === "hiding", world.self.role, dt, now);
+    this.runStatic(gx, gz, world.phase === "hiding", world.self.role, dt, now, true);
   }
 
   /**
@@ -1172,19 +1215,71 @@ export class Reflex {
     role: BotPlayer["role"],
     dt: number,
     now: number,
+    exact = false,
   ): void {
     if (this.settled) return;
-    if (this.arrivedAt(gx, gz)) {
+    if (this.reached(gx, gz, exact)) {
       this.settle();
       return;
     }
-    this.ensurePath(gx, gz, now, false);
-    const wp = this.follower.advance(this.posX, this.posZ);
-    if (wp) {
-      this.steer(wp, run, role, dt);
-      return;
+    if (!this.follower.consumed) {
+      this.ensurePath(gx, gz, now, false);
+      const wp = this.follower.advance(this.posX, this.posZ);
+      if (wp) {
+        this.steer(wp, run, role, dt);
+        if (this.reached(gx, gz, exact)) this.settle();
+        return;
+      }
+      if (!this.follower.consumed) return;
     }
-    if (this.follower.consumed) this.settle();
+    if (exact || this.walkable(gx, gz)) this.stepOnto(gx, gz, exact, run, role, dt);
+    else this.settle();
+  }
+
+  private walkable(x: number, z: number): boolean {
+    const grid = this.grid;
+    if (!grid) return false;
+    const cell = worldToCell(grid, x, z);
+    return !isBlocked(grid, cell.i, cell.j);
+  }
+
+  private reached(gx: number, gz: number, exact: boolean): boolean {
+    return exact
+      ? Math.hypot(this.posX - gx, this.posZ - gz) <= HIDE_ARRIVE_EPSILON
+      : this.arrivedAt(gx, gz);
+  }
+
+  /**
+   * The last step from the end of a planned path onto the goal, which the
+   * navigation grid only reaches to the nearest cell centre: taken in the
+   * same tick the path runs out, so a bot running through a string of goals
+   * never stands for a tick at each. A hiding spot is always stepped onto;
+   * any other goal only when it stands on walkable ground, so a hunter sent
+   * to a spot heard beside furniture stops at the path's end instead of
+   * shouldering into it. Furniture in the way stops it where it stands; on a
+   * hiding spot it reports the spot blocked instead, since a disguise short of
+   * where it was meant to stand is not the hide the policy chose.
+   */
+  private stepOnto(
+    gx: number,
+    gz: number,
+    exact: boolean,
+    run: boolean,
+    role: Role,
+    dt: number,
+  ): void {
+    this.steer({ x: gx, z: gz }, run, role, dt);
+    if (this.reached(gx, gz, exact)) this.settle();
+    else if (this.stuckTicks < STUCK_TICK_LIMIT) return;
+    else if (exact) this.blockGoal();
+    else this.settle();
+  }
+
+  /** Stop short of a goal something stands on and report it blocked, until the next replan tries it again. */
+  private blockGoal(): void {
+    this.follower.clear();
+    if (!this.pathBlocked) this.blockedEdge = true;
+    this.pathBlocked = true;
   }
 
   private runPatrol(world: ReflexWorld, dt: number, now: number): void {
@@ -1243,7 +1338,7 @@ export class Reflex {
       return null;
     }
     const origin: Vec3 = { x: this.posX, y: BOT_EYE_HEIGHT, z: this.posZ };
-    const bounds = this.propBounds.get(target.propType) ?? UNTRANSFORMED_BOUNDS;
+    const bounds = this.land?.shape(target.propType)?.bounds ?? UNTRANSFORMED_BOUNDS;
     const seenAt = this.sightOfContact(target);
     const dir = seenAt
       ? normalize3({ x: seenAt.x - origin.x, y: seenAt.y - origin.y, z: seenAt.z - origin.z })

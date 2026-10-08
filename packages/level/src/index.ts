@@ -17,4 +17,5 @@ export {
 } from "./outdoor";
 export * from "./overlays";
 export * from "./serialize";
+export { gateClearances } from "./space";
 export * from "./views";

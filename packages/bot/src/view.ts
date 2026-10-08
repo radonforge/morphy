@@ -14,6 +14,7 @@ export interface BotPlayer {
   hp: number;
   kills: number;
   propType: string;
+  decoysLeft: number;
   ready: boolean;
 }
 

@@ -14,6 +14,10 @@ export const BOT_BODY_RADIUS = 0.4;
 export const FURNITURE_MIN_RADIUS = 0.3;
 
 export const ARRIVE_EPSILON = 0.45;
+/** A honk of the bot's own disguise this soon after it pressed the taunt key is that taunt, not a forced one. */
+export const OWN_TAUNT_ECHO_MS = 1_000;
+/** How close a prop gets to the exact spot it hides on before it counts as there. */
+export const HIDE_ARRIVE_EPSILON = 0.1;
 
 export const STUCK_TICK_LIMIT = 6;
 export const STUCK_PROGRESS_FRACTION = 0.3;
@@ -25,29 +29,139 @@ export const MAX_REPLANS_BEFORE_BLOCKED = 2;
  * the policy off-cycle, measured at ~6.7x the ordinary decision rate.
  */
 export const MAX_HIDE_REPICKS = 4;
-/** How far each blocked escape rotates the away-vector before the prop tries again. */
-export const FLEE_DEFLECTION_RAD = (2 * Math.PI) / 5;
-/**
- * Blocked escape angles a cornered prop tries before it gives up and stands
- * still. A held escape point matters more than the angle: recomputing it every
- * decision made the goal drift past ARRIVE_EPSILON, which reset the reflex's
- * replan counter so a blocked path never latched.
- */
-export const MAX_FLEE_DEFLECTIONS = 4;
 
 /**
- * Per-decision chance that a hidden prop with no hunter in sight taunts once it
- * can, lerped by difficulty: at the default a taunt comes some ten seconds after
- * the cooldown, ahead of the forced one but not on the dot.
+ * How far from where it stands a prop looks for a spot: while the hunters are
+ * blind, and when it hides again during the hunt, on foot and closer.
  */
-export const TAUNT_CHANCE_MIN = 0.03;
-export const TAUNT_CHANCE_MAX = 0.1;
+export const HIDE_SEARCH_RADIUS = 30;
+export const REHIDE_SEARCH_RADIUS = 14;
+/** The longest walk a prop takes to hide again during the hunt. */
+export const REHIDE_MAX_PATH = 18;
+/** The share of the hide phase left that the walk to a spot may take, the rest kept for turning and slack. */
+export const HIDE_TRAVEL_SHARE = 0.6;
+/** Gaps a prop leaves beside an object of its own kind, as a row or a cluster would. */
+export const HIDE_ROW_GAPS: readonly number[] = [0.25, 0.6];
+/** How far from a wall a wall-mounted disguise looks for one to back onto, and the gap it leaves. */
+export const HIDE_WALL_REACH = 3;
+export const HIDE_WALL_GAP = 0.05;
+/** Ground points sampled for spots beside a wall or other furniture, on top of those beside its own kind. */
+export const HIDE_SAMPLES = 24;
+/** How much a disguise may overlap furniture or a wall by before the spot counts as inside it. */
+export const HIDE_OVERLAP_TOLERANCE = 0.05;
+/** The objects of its own kind within this radius a disguise is judged against, the radius the sim counts in. */
+export const HIDE_SAME_TYPE_RADIUS = 3;
+/** Same-type objects that count toward a spot's score; more are no more convincing. */
+export const HIDE_SAME_TYPE_CAP = 3;
+/** The yaw within which a disguise is turned like an object beside it, its symmetry allowed for. */
+export const HIDE_ALIGN_TOLERANCE_RAD = (10 * Math.PI) / 180;
+/** A wall-mounted disguise counts as backed onto a wall when one stands within this of its back. */
+export const HIDE_WALL_BACK_REACH = 0.3;
+/** A surface object counts as beside furniture when one stands within this. */
+export const HIDE_SURFACE_REACH = 0.8;
+/** The ring of open ground a spot's cover is judged from: its radius and the bearings on it. */
+export const HIDE_COVER_RADIUS = 8;
+export const HIDE_COVER_BEARINGS = 8;
+/** A spot has a way out along a bearing when the ground this far along it is walkable in a straight line. */
+export const HIDE_EXIT_RADIUS = 2.5;
+export const HIDE_EXIT_BEARINGS = 8;
+export const HIDE_EXITS_WANTED = 3;
+/** Candidates kept, nearest first, before any is checked against the scenery: the bound on a pick's cost. */
+export const HIDE_MAX_CANDIDATES = 96;
+/** Candidates judged for cover, the best by everything cheaper first. */
+export const HIDE_SCORED_CANDIDATES = 16;
+/** Every candidate scoring within this share of the best is in the draw, so spots do not repeat. */
+export const HIDE_PICK_SHARE = 0.75;
+/** Candidates drawn and found unreachable before a prop gives up and hides where it stands. */
+export const HIDE_PICK_ATTEMPTS = 6;
+/** A new spot keeps at least this far from the one a prop gives up. */
+export const HIDE_MOVE_AWAY = 3;
+/** What each quality of a spot is worth to its score. */
+export const HIDE_WEIGHT_SAME_TYPE = 3;
+export const HIDE_WEIGHT_ALIGNED = 1.5;
+export const HIDE_WEIGHT_MOUNT = 1;
+export const HIDE_WEIGHT_COVER = 2;
+export const HIDE_WEIGHT_SPAWN_COVER = 2;
+export const HIDE_WEIGHT_THREAT_COVER = 2;
+export const HIDE_WEIGHT_EXITS = 0.5;
+export const HIDE_WEIGHT_TRAVEL = 0.5;
+/** The least a spot scores, so a draw weighted by score always has something to draw. */
+export const HIDE_SCORE_FLOOR = 0.01;
+
+/** A hunter in sight aiming at a prop this close makes it run: holding still at point blank only waits for the shot. */
+export const POINT_BLANK_RADIUS = 1.8;
 /**
- * The same with a possible hunter inside the daring radius that has not seen
- * the prop: three times the points for a far likelier capture, so taken rarely.
+ * A hunter kept in sight this long that has closed this far on the prop, and
+ * is now within the radius looking its way, is after it: the prop runs.
  */
-export const TAUNT_DARING_CHANCE_MIN = 0.01;
-export const TAUNT_DARING_CHANCE_MAX = 0.05;
+export const PURSUIT_MS = 2_000;
+export const PURSUIT_CLOSING = 3;
+export const PURSUIT_RADIUS = 6;
+/**
+ * A prop that moved or honked with a hunter in sight looking its way was
+ * seen doing it: for this long, a hunter in sight within the radius makes it
+ * run rather than freeze into the suspect it just made itself.
+ */
+export const EXPOSED_MS = 2_500;
+export const EXPOSED_RADIUS = 12;
+/** A sonar pulse this close is a hunter on top of the prop: it runs. */
+export const SONAR_FLEE_RADIUS = 5;
+/** How long a prop keeps a hunter it lost sight of, or a pulse it heard, among the threats it runs and hides from. */
+export const THREAT_MEMORY_MS = 4_000;
+/** How long an escape runs before the prop may stop, drawn between the two. */
+export const ESCAPE_COMMIT_MIN_MS = 1_500;
+export const ESCAPE_COMMIT_MAX_MS = 3_000;
+/**
+ * A hunter this close, seen within the clear time, keeps an escaping prop
+ * running past its commitment: stopping in view, or just round the corner it
+ * is coming round, only makes a still suspect.
+ */
+export const ESCAPE_KEEP_RADIUS = 14;
+export const ESCAPE_CLEAR_MS = 1_500;
+/** How long a prop that stopped running waits with no hunter in sight before it hides again, drawn between the two. */
+export const REHIDE_CALM_MIN_MS = 1_000;
+export const REHIDE_CALM_MAX_MS = 2_000;
+/** The rings and bearings an escape waypoint is drawn from. */
+export const ESCAPE_DISTANCES: readonly number[] = [4, 7, 10];
+export const ESCAPE_BEARINGS = 12;
+/** An escape never runs past a threat closer than this to its line. */
+export const ESCAPE_CROSSING_RADIUS = 2.5;
+/** Waypoints with no straight run to them tried by planned path before the prop is cornered. */
+export const ESCAPE_ROUTE_ATTEMPTS = 3;
+/** A planned path to a waypoint may be at most this many times the straight distance. */
+export const ESCAPE_DETOUR_FACTOR = 2;
+/** How long a prop that found nowhere to run waits before it looks again, which bounds what a cornered prop spends. */
+export const ESCAPE_RETRY_MS = 1_000;
+/** A waypoint a prop gave up on, blocked or reached under pressure, is not drawn again within this. */
+export const ESCAPE_AVOID_RADIUS = 1.5;
+/** What breaking sight, getting away and a short run are each worth to an escape waypoint. */
+export const ESCAPE_WEIGHT_HIDDEN = 3;
+export const ESCAPE_WEIGHT_GAIN = 1.5;
+export const ESCAPE_WEIGHT_TRAVEL = 0.5;
+/** Decoys a prop keeps back for running from a hunter at point blank. */
+export const DECOY_RESERVE = 1;
+/** A prop counts as on its hiding spot, where a decoy it drops stays believable, within this of where it settled. */
+export const DECOY_SPOT_RADIUS = 1;
+
+/**
+ * When a hidden prop taunts of its own accord: first some time into the hunt,
+ * drawn between the two, then a draw between the gaps after each taunt's
+ * cooldown, always ahead of the room's forced one. The clock is the hunt's,
+ * never the decision count, so how often the policy is asked does not change
+ * how often it honks.
+ */
+export const FIRST_TAUNT_MIN_MS = 8_000;
+export const FIRST_TAUNT_MAX_MS = 15_000;
+export const TAUNT_GAP_MIN_MS = 2_000;
+export const TAUNT_GAP_MAX_MS = 12_000;
+/**
+ * The chance a taunt that falls due with a hunter known to be close is taken
+ * anyway, lerped by difficulty: three times the points for a far likelier
+ * capture. One not taken waits this long before it is weighed again.
+ */
+export const TAUNT_DARING_CHANCE_MIN = 0.15;
+export const TAUNT_DARING_CHANCE_MAX = 0.4;
+export const TAUNT_POSTPONE_MS = 3_000;
 
 /**
  * Decisions in a row a hunter spends searching with nothing to follow before it
@@ -55,21 +169,10 @@ export const TAUNT_DARING_CHANCE_MAX = 0.05;
  */
 export const SONAR_PATIENCE_DECISIONS = 7;
 
-export const HIDE_OFFSET_MIN = 1.2;
-export const HIDE_OFFSET_MAX = 2.4;
-export const PANIC_RADIUS = 7;
-/**
- * In plain sight of a hunter during the hunt, a prop bolts only when it is this
- * close: anywhere further, moving is the one thing that gives a disguise away,
- * so it holds still and lets the hunter guess.
- */
-export const PANIC_SEEN_RADIUS = 2;
 export const WAYPOINT_MARGIN = 1.5;
 
 /** A contact counts as "watching me" when its aim is within this half-angle cone of the bearing to the bot. */
 export const FACING_CONE_COS = Math.cos((35 * Math.PI) / 180);
-/** A watched prop freezes (rather than relocating) only when the watcher is within this range. */
-export const FREEZE_RADIUS = 20;
 
 export const ENGAGE_RANGE_MIN = 14;
 export const ENGAGE_RANGE_MAX = WEAPONS[DEFAULT_WEAPON].range;
@@ -237,7 +340,6 @@ export const BOT_PROBE_INTERVAL_MIN_MS = 2_500;
  * crosshair is back on it rather than waiting out a whole probe interval.
  */
 export const BOT_PROBE_RETRY_MS = 1_500;
-export const NEARBY_PROP_RADIUS = 12;
 
 export const DEFAULT_BOT_COUNT = 3;
 export const DEFAULT_DIFFICULTY = 0.6;

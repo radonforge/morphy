@@ -698,13 +698,15 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
 
   /**
    * Hand a broadcast sound to every room-filling bot but its source, as the
-   * position a player's client plays it from. Bots are not clients, so a
+   * position a player's client plays it from, and tell a bot whose own
+   * disguise honked, as a player hears their own. Bots are not clients, so a
    * broadcast alone never reaches them.
    */
   private letBotsHear(kind: SoundKind, x: number, z: number, sourceId: string): void {
     const now = Date.now();
     for (const [sessionId, bot] of this.bots) {
       if (sessionId !== sourceId) bot.driver.hear({ kind, x, z }, now);
+      else if (kind === "taunt") bot.driver.hearOwnHonk(now);
     }
   }
 

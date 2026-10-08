@@ -5,7 +5,7 @@ import {
   ENGAGE_RANGE_MAX,
   ENGAGE_RANGE_MIN,
   lerp,
-  PANIC_SEEN_RADIUS,
+  POINT_BLANK_RADIUS,
 } from "../packages/bot/src/config.ts";
 import { BotDriver } from "../packages/bot/src/driver.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
@@ -35,7 +35,7 @@ const CHASE_SLACK = 1;
 
 const FLEE_TICKS = 200;
 const FLEE_SETTLE_TICKS = 40;
-const FLEE_GAP = PANIC_SEEN_RADIUS * 0.75;
+const FLEE_GAP = POINT_BLANK_RADIUS * 0.75;
 const MIN_FLEE_TRAVEL = 20;
 
 const PROBE_TICKS = 200;
@@ -90,6 +90,7 @@ function recordingPolicy(log) {
   const policy = new ScriptedPolicy(DIFFICULTY);
   return {
     name: policy.name,
+    setTerrain: (terrain) => policy.setTerrain(terrain),
     async decide(obs, signal) {
       const intent = await policy.decide(obs, signal);
       log.push({ obs, intent });
@@ -257,14 +258,16 @@ test("a hunter keeps a disguise running at a prop's top speed in reach", async (
  * reached. Each part is defensible on its own; together they stopped the prop
  * dead at its first escape point with the hunter still on it.
  *
- * The hunter looks sideways so the deliberate freeze branch (hold still when a
- * hunter is looking straight at you) never fires and the prop has no reason to
- * stand still other than the defect.
+ * The hunter aims straight at the prop the whole way, the realistic pursuit:
+ * a prop that froze whenever it was looked at used to stand still for it.
  */
 test("a prop under chase keeps fleeing past its first escape point", async () => {
   const driver = driverFor("Prey", ARENA, []);
   const self = body("bot:1", ARENA.spawnPoints.props[0], { role: "prop", propType: "barrel" });
-  const chaser = body("hunter:1", ARENA.spawnPoints.props[0], { rot: Math.PI / 2 });
+  const chaser = body("hunter:1", ARENA.spawnPoints.props[0], {
+    rot: Math.PI / 2,
+    aim: Math.PI / 2,
+  });
 
   let now = 1_000;
   let settledAt = null;

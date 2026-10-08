@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fitModel } from "../packages/client/src/game/modelFit.ts";
 import { PLAYER_RADIUS, STEP_HEIGHT } from "../packages/client/src/game/movement.ts";
 import {
   FINDING_CODES,
+  gateClearances,
   objectFootprint,
   outdoorEntrances,
   parseLevelDocument,
@@ -11,6 +13,8 @@ import {
   shapeExtent,
   validateLevel,
 } from "../packages/level/src/index.ts";
+import { buildSpace } from "../packages/level/src/space.ts";
+import { buildMap } from "../packages/server/src/maps/index.ts";
 import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
 import {
   ASSET_CARDS,
@@ -275,6 +279,20 @@ test("a door with a chair in its doorway names the side and the chair", () => {
   const [finding] = report(CASES[5][1]).findings.filter((f) => f.code === "door.blocked");
   assert.deepEqual(finding.entities, ["v:2:1", "west-3"]);
   assert.match(finding.message, /on the west side/);
+});
+
+test("a compiled map's gates give the door clearance door.blocked measures", () => {
+  const raw = JSON.parse(
+    readFileSync(
+      new URL("../packages/server/src/maps/station.level.json", import.meta.url),
+      "utf8",
+    ),
+  );
+  const doc = parseLevelDocument(raw, { catalog: SPACE_CATALOG });
+  const byPlace = (a, b) => a.x - b.x || a.z - b.z;
+  const zones = buildSpace(doc, CONTEXT).doors.flatMap((door) => door.sides.map((s) => s.zone));
+  assert.ok(zones.length > 0);
+  assert.deepEqual(gateClearances(buildMap("station", 1).tiles).sort(byPlace), zones.sort(byPlace));
 });
 
 test("a room with no door is unreachable as a whole", () => {
