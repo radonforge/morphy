@@ -71,7 +71,8 @@ of props no hunter spawn sees as the hunt opens, the share of the open ground
 within ${EXPOSURE_RADII.at(-1)} m that sees them then, the share still for the last
 ${SETTLED_MS} ms of the hide, objects of the prop's own type within ${SAME_TYPE_RADIUS} m of it then and
 the share turned like one of them, the median time to a prop's first taunt of
-its own, the share of honks a prop outlives by ${HONK_SURVIVAL_MS / MS_PER_SECOND} s, decoys hunters shot, and
+its own, the share of honks a prop outlives by ${HONK_SURVIVAL_MS / MS_PER_SECOND} s (of those with that long
+left in the round), decoys hunters shot, and
 chases (a hunter within ${CHASE_RADIUS} m seeing the prop) with the times per chase the prop
 went from running to standing or back. Needs at least ${MIN_PLAYERS_TO_START} bots, the players a
 round needs to start. Same seed, same rounds.`;
@@ -468,7 +469,12 @@ async function simulate(mapId) {
       judgeHiding();
     } else if (phase === "round_end" && current) {
       for (const id of [...chases.keys()]) endChase(id);
-      played.push({ ...current, winner: room.state.winner, huntMs: clock.now - huntStart });
+      played.push({
+        ...current,
+        endedAt: clock.now,
+        winner: room.state.winner,
+        huntMs: clock.now - huntStart,
+      });
       current = null;
     } else if (phase === "lobby") {
       throw new Error(`the ${mapId} room fell back to its lobby after ${played.length} rounds`);
@@ -477,10 +483,14 @@ async function simulate(mapId) {
   return summarize(mapId, played);
 }
 
-/** Whether a prop that honked at `at` was still uncaptured {@link HONK_SURVIVAL_MS} later. */
+/**
+ * Whether a prop that honked at `at` was still uncaptured {@link HONK_SURVIVAL_MS} later,
+ * or null when the round ended uncaptured before then, which says nothing either way.
+ */
 function outlived(round, honk) {
   const capturedAt = round.capturedAt.get(honk.id);
-  return capturedAt === undefined || capturedAt - honk.at > HONK_SURVIVAL_MS;
+  if (capturedAt !== undefined) return capturedAt - honk.at > HONK_SURVIVAL_MS;
+  return round.endedAt - honk.at >= HONK_SURVIVAL_MS ? true : null;
 }
 
 function summarize(mapId, played) {
@@ -495,7 +505,9 @@ function summarize(mapId, played) {
     .flatMap((round) => [...round.firstTaunt.values()])
     .map((ms) => ms / MS_PER_SECOND)
     .sort((a, b) => a - b);
-  const honks = played.flatMap((round) => round.honks.map((honk) => outlived(round, honk)));
+  const honks = played
+    .flatMap((round) => round.honks.map((honk) => outlived(round, honk)))
+    .filter((survived) => survived !== null);
   const chases = sum("chases");
   return {
     map: mapId,
