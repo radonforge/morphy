@@ -9,6 +9,12 @@ Every Morphy release and what it changed for you, newest first.
 - Each map in the menu shows how many people are playing it right now, so you
   can pick the map where the others are.
 
+### Changed
+
+- As a prop, a tap of Q or E now turns your disguise by 15 degrees for fine
+  lining up, a tap with Shift held snaps it to the next quarter turn, and
+  holding the key spins it as before.
+
 ## [0.4.0] - 2026-10-07
 
 Two maps, back-to-back rounds and a much louder catch. North District is rebuilt
