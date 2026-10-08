@@ -1182,7 +1182,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (chatOpenRef.current || paused) return;
+      if (chatOpenRef.current || paused || controlsOpen) return;
       if (e.code === "KeyT") {
         e.preventDefault();
         if (document.pointerLockElement) {
@@ -1200,7 +1200,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [pickWeapon, paused]);
+  }, [pickWeapon, paused, controlsOpen]);
 
   useEffect(() => {
     preloadSamples();
@@ -1315,7 +1315,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     return player && player.role === "prop" && player.alive ? n + 1 : n;
   }, 0);
 
-  const inputBlocked = chatOpen || paused;
+  const inputBlocked = chatOpen || paused || controlsOpen;
   const callRole = localAlive && phase === "hunting" && !inputBlocked ? localRole : null;
 
   useEffect(() => {

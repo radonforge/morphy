@@ -9,7 +9,10 @@ const TURN_STEP_STORAGE_KEY = "morphy:turn-step";
 /** How many degrees a tap of Q/E turns the disguise by. */
 export type PropTurnStep = (typeof PROP_TURN_STEPS_DEG)[number];
 
-/** The Q/E press in progress: its direction, how long it has been held, the yaw it began at and the step it taps by. */
+/**
+ * The Q/E press in progress: its direction, how long it has been held, the yaw it began at and the
+ * step it taps by. One object per player, updated in place every frame by `advancePropTurn`.
+ */
 export interface PropTurnPress {
   dir: -1 | 0 | 1;
   heldMs: number;
@@ -17,12 +20,16 @@ export interface PropTurnPress {
   step: PropTurnStep;
 }
 
-export const PROP_TURN_IDLE: PropTurnPress = {
-  dir: 0,
-  heldMs: 0,
-  from: 0,
-  step: PROP_TURN_STEPS_DEG[0],
-};
+/** A press with no key down. */
+export function idlePropTurn(): PropTurnPress {
+  return { dir: 0, heldMs: 0, from: 0, step: PROP_TURN_STEPS_DEG[0] };
+}
+
+/** Drops the press in progress, as if its key had never been down. */
+export function resetPropTurn(press: PropTurnPress): void {
+  press.dir = 0;
+  press.heldMs = 0;
+}
 
 function isTurnStep(value: number): value is PropTurnStep {
   return (PROP_TURN_STEPS_DEG as readonly number[]).includes(value);
@@ -66,7 +73,8 @@ export function nextGridAngle(from: number, dir: 1 | -1, step: number): number {
 
 /**
  * Advances the disguise's yaw by one frame of Q/E, where `dir` is +1 for E,
- * -1 for Q and 0 for neither.
+ * -1 for Q and 0 for neither, and returns the new yaw. `press` is updated in
+ * place, so a frame allocates nothing.
  *
  * While a key is held the disguise spins at `PROP_TURN_SPEED`. A press released
  * within `PROP_TURN_TAP_MS` is a tap instead: the yaw lands on the next multiple
@@ -80,22 +88,27 @@ export function advancePropTurn(
   dir: -1 | 0 | 1,
   step: PropTurnStep,
   deltaSeconds: number,
-): { press: PropTurnPress; rot: number } {
+): number {
   if (dir !== 0) {
-    const current = press.dir === dir ? press : { dir, heldMs: 0, from: rot, step };
-    const next = { ...current, heldMs: current.heldMs + deltaSeconds * MS_PER_SECOND };
+    if (press.dir !== dir) {
+      press.dir = dir;
+      press.heldMs = 0;
+      press.from = rot;
+      press.step = step;
+    }
+    press.heldMs += deltaSeconds * MS_PER_SECOND;
     const spun = wrapAngle(rot + dir * PROP_TURN_SPEED * deltaSeconds);
-    if (next.heldMs >= PROP_TURN_TAP_MS) return { press: next, rot: spun };
-    const target = nextGridAngle(next.from, dir, stepRadians(next.step));
-    const reach = wrapAngle(target - next.from) * dir;
-    const travelled = wrapAngle(spun - next.from) * dir;
-    return { press: next, rot: travelled > reach ? target : spun };
+    if (press.heldMs >= PROP_TURN_TAP_MS) return spun;
+    const target = nextGridAngle(press.from, dir, stepRadians(press.step));
+    const reach = wrapAngle(target - press.from) * dir;
+    const travelled = wrapAngle(spun - press.from) * dir;
+    return travelled > reach ? target : spun;
   }
-  if (press.dir !== 0 && press.heldMs < PROP_TURN_TAP_MS) {
-    return {
-      press: PROP_TURN_IDLE,
-      rot: nextGridAngle(press.from, press.dir, stepRadians(press.step)),
-    };
-  }
-  return { press: PROP_TURN_IDLE, rot: wrapAngle(rot) };
+  if (press.dir === 0) return wrapAngle(rot);
+  const landed =
+    press.heldMs < PROP_TURN_TAP_MS
+      ? nextGridAngle(press.from, press.dir, stepRadians(press.step))
+      : wrapAngle(rot);
+  resetPropTurn(press);
+  return landed;
 }

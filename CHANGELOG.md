@@ -28,6 +28,8 @@ Every Morphy release and what it changed for you, newest first.
   by its size: further back for a dumpster, nearer for a cone. Scroll the mouse
   wheel to pull it in or out. On screens wider than 16:9 the view no longer
   stretches sideways, and sprinting widens it less.
+- While the list of controls behind ? is open, your keys and mouse no longer
+  move, aim or act in the match behind it.
 
 ## [0.4.0] - 2026-10-07
 
