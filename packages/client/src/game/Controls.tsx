@@ -38,9 +38,8 @@ export const CONTROL_GROUPS: ControlGroup[] = [
     title: "Prop",
     items: [
       { keys: ["R"], label: "Swap disguise (random)" },
-      { keys: ["Q", "E"], label: "Turn disguise 15° (tap)" },
-      { keys: ["Shift+Q", "Shift+E"], label: "Snap 90° (tap)" },
-      { keys: ["Q", "E"], label: "Spin disguise (hold)" },
+      { keys: ["Q", "E"], label: "Turn (tap) or spin (hold)" },
+      { keys: ["X"], label: "Turn step: 90° / 45° / 15°" },
       { keys: ["C"], label: "Drop decoy" },
       { keys: ["V"], label: "First / third person view" },
       { keys: ["F"], label: "Taunt (+1, +3 near a hunter)" },

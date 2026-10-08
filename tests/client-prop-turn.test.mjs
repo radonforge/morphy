@@ -1,26 +1,36 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { advancePropTurn, PROP_TURN_IDLE } from "../packages/client/src/game/propTurn.ts";
 import {
-  PROP_TURN_FINE_STEP,
-  PROP_TURN_SNAP,
+  advancePropTurn,
+  nextTurnStep,
+  PROP_TURN_IDLE,
+  parseTurnStep,
+  setTurnStep,
+  turnStep,
+} from "../packages/client/src/game/propTurn.ts";
+import {
   PROP_TURN_SPEED,
+  PROP_TURN_STEPS_DEG,
   PROP_TURN_TAP_MS,
 } from "../packages/shared/src/constants.ts";
 
 const FRAME_S = 1 / 60;
 const TAP_FRAMES = 6;
 const HOLD_FRAMES = Math.ceil(PROP_TURN_TAP_MS / 1000 / FRAME_S) + 30;
-const RIGHT = { dir: 1, coarse: false };
-const LEFT = { dir: -1, coarse: false };
-const RELEASED = { dir: 0, coarse: false };
+const RIGHT = 1;
+const LEFT = -1;
+const RELEASED = 0;
 
-function press(rot, input, frames) {
+function rad(degrees) {
+  return (degrees * Math.PI) / 180;
+}
+
+function press(rot, dir, step, frames) {
   let state = { press: PROP_TURN_IDLE, rot };
   for (let i = 0; i < frames; i += 1) {
-    state = advancePropTurn(state.press, state.rot, input, FRAME_S);
+    state = advancePropTurn(state.press, state.rot, dir, step, FRAME_S);
   }
-  return advancePropTurn(state.press, state.rot, RELEASED, FRAME_S).rot;
+  return advancePropTurn(state.press, state.rot, RELEASED, step, FRAME_S).rot;
 }
 
 function assertAngle(actual, expected) {
@@ -28,48 +38,40 @@ function assertAngle(actual, expected) {
   assert.ok(Math.abs(diff) < 1e-9, `expected ${expected}, got ${actual}`);
 }
 
-test("a tap of E turns the disguise one fine step right", () => {
-  assertAngle(press(0, RIGHT, TAP_FRAMES), PROP_TURN_FINE_STEP);
+test("a tap of E or Q turns the disguise by the current step", () => {
+  for (const step of PROP_TURN_STEPS_DEG) {
+    assertAngle(press(0, RIGHT, step, TAP_FRAMES), rad(step));
+    assertAngle(press(0, LEFT, step, TAP_FRAMES), -rad(step));
+  }
 });
 
-test("a tap of Q turns the disguise one fine step left", () => {
-  assertAngle(press(0, LEFT, TAP_FRAMES), -PROP_TURN_FINE_STEP);
-});
-
-test("a tap off the grid lands on the next fine step in its direction", () => {
-  assertAngle(press(0.1, RIGHT, TAP_FRAMES), PROP_TURN_FINE_STEP);
-  assertAngle(press(0.1, LEFT, TAP_FRAMES), 0);
-});
-
-test("a Shift tap snaps to the next quarter turn in its direction", () => {
-  assertAngle(press(0, { dir: 1, coarse: true }, TAP_FRAMES), PROP_TURN_SNAP);
-  assertAngle(press(0, { dir: -1, coarse: true }, TAP_FRAMES), -PROP_TURN_SNAP);
-  assertAngle(press(PROP_TURN_FINE_STEP, { dir: 1, coarse: true }, TAP_FRAMES), PROP_TURN_SNAP);
-});
-
-test("Shift down for any frame of a tap makes it a quarter turn", () => {
-  let state = advancePropTurn(PROP_TURN_IDLE, 0, { dir: 1, coarse: true }, FRAME_S);
-  state = advancePropTurn(state.press, state.rot, RIGHT, FRAME_S);
-  assertAngle(advancePropTurn(state.press, state.rot, RELEASED, FRAME_S).rot, PROP_TURN_SNAP);
+test("a tap off the grid lands on the next multiple of the step in its direction", () => {
+  for (const step of PROP_TURN_STEPS_DEG) {
+    assertAngle(press(0.1, RIGHT, step, TAP_FRAMES), rad(step));
+    assertAngle(press(0.1, LEFT, step, TAP_FRAMES), 0);
+  }
+  assertAngle(press(rad(15), RIGHT, 90, TAP_FRAMES), rad(90));
+  assertAngle(press(rad(60), LEFT, 45, TAP_FRAMES), rad(45));
 });
 
 test("a tap wraps across the back of the circle", () => {
-  assertAngle(press(Math.PI, RIGHT, TAP_FRAMES), -Math.PI + PROP_TURN_FINE_STEP);
-  assertAngle(press(-Math.PI, LEFT, TAP_FRAMES), Math.PI - PROP_TURN_FINE_STEP);
-  assertAngle(press(Math.PI, { dir: 1, coarse: true }, TAP_FRAMES), -PROP_TURN_SNAP);
+  for (const step of PROP_TURN_STEPS_DEG) {
+    assertAngle(press(Math.PI, RIGHT, step, TAP_FRAMES), -Math.PI + rad(step));
+    assertAngle(press(-Math.PI, LEFT, step, TAP_FRAMES), Math.PI - rad(step));
+  }
 });
 
 test("holding spins continuously and the release keeps the yaw where it is", () => {
-  for (const coarse of [false, true]) {
-    for (const dir of [1, -1]) {
+  for (const step of PROP_TURN_STEPS_DEG) {
+    for (const dir of [RIGHT, LEFT]) {
       let state = { press: PROP_TURN_IDLE, rot: 0 };
       let previous = 0;
       for (let i = 0; i < HOLD_FRAMES; i += 1) {
         previous = state.rot;
-        state = advancePropTurn(state.press, state.rot, { dir, coarse }, FRAME_S);
+        state = advancePropTurn(state.press, state.rot, dir, step, FRAME_S);
       }
       assertAngle(state.rot - previous, dir * PROP_TURN_SPEED * FRAME_S);
-      assertAngle(advancePropTurn(state.press, state.rot, RELEASED, FRAME_S).rot, state.rot);
+      assertAngle(advancePropTurn(state.press, state.rot, RELEASED, step, FRAME_S).rot, state.rot);
     }
   }
 });
@@ -77,51 +79,77 @@ test("holding spins continuously and the release keeps the yaw where it is", () 
 test("the yaw stays inside [-PI, PI] while spinning", () => {
   let state = { press: PROP_TURN_IDLE, rot: 0 };
   for (let i = 0; i < 600; i += 1) {
-    state = advancePropTurn(state.press, state.rot, RIGHT, FRAME_S);
+    state = advancePropTurn(state.press, state.rot, RIGHT, 90, FRAME_S);
     assert.ok(Math.abs(state.rot) <= Math.PI);
   }
 });
 
 test("reversing without a release starts a new tap from the current yaw", () => {
-  let state = advancePropTurn(PROP_TURN_IDLE, 0, RIGHT, FRAME_S);
-  state = advancePropTurn(state.press, state.rot, LEFT, FRAME_S);
-  assertAngle(advancePropTurn(state.press, state.rot, RELEASED, FRAME_S).rot, 0);
+  let state = advancePropTurn(PROP_TURN_IDLE, 0, RIGHT, 15, FRAME_S);
+  state = advancePropTurn(state.press, state.rot, LEFT, 15, FRAME_S);
+  assertAngle(advancePropTurn(state.press, state.rot, RELEASED, 15, FRAME_S).rot, 0);
 });
 
 test("no key held leaves the yaw alone", () => {
-  assertAngle(advancePropTurn(PROP_TURN_IDLE, 1.234, RELEASED, FRAME_S).rot, 1.234);
+  assertAngle(advancePropTurn(PROP_TURN_IDLE, 1.234, RELEASED, 90, FRAME_S).rot, 1.234);
 });
 
 test("a tap never spins past its target or swings back against its direction", () => {
-  for (const dir of [1, -1]) {
-    let state = { press: PROP_TURN_IDLE, rot: 0 };
-    let previous = 0;
-    for (let i = 0; i < 11; i += 1) {
-      state = advancePropTurn(state.press, state.rot, { dir, coarse: false }, FRAME_S);
-      assert.ok(state.rot * dir >= previous * dir - 1e-12);
-      assert.ok(state.rot * dir <= PROP_TURN_FINE_STEP + 1e-12);
-      previous = state.rot;
+  for (const step of PROP_TURN_STEPS_DEG) {
+    for (const dir of [RIGHT, LEFT]) {
+      let state = { press: PROP_TURN_IDLE, rot: 0 };
+      let previous = 0;
+      for (let i = 0; i < 11; i += 1) {
+        state = advancePropTurn(state.press, state.rot, dir, step, FRAME_S);
+        assert.ok(state.rot * dir >= previous * dir - 1e-12);
+        assert.ok(state.rot * dir <= rad(step) + 1e-12);
+        previous = state.rot;
+      }
+      const released = advancePropTurn(state.press, state.rot, RELEASED, step, FRAME_S).rot;
+      assert.ok(released * dir >= previous * dir - 1e-12);
+      assertAngle(released, dir * rad(step));
     }
-    const released = advancePropTurn(state.press, state.rot, RELEASED, FRAME_S).rot;
-    assert.ok(released * dir >= previous * dir - 1e-12);
-    assertAngle(released, dir * PROP_TURN_FINE_STEP);
   }
 });
 
 test("a press shorter than the tap window is a tap and one that reaches it is a hold", () => {
   const justUnder = (PROP_TURN_TAP_MS - 1) / 1000;
   const atWindow = PROP_TURN_TAP_MS / 1000;
-  let state = advancePropTurn(PROP_TURN_IDLE, 0, RIGHT, justUnder);
-  assertAngle(advancePropTurn(state.press, state.rot, RELEASED, FRAME_S).rot, PROP_TURN_FINE_STEP);
-  state = advancePropTurn(PROP_TURN_IDLE, 0, RIGHT, atWindow);
+  let state = advancePropTurn(PROP_TURN_IDLE, 0, RIGHT, 45, justUnder);
+  assertAngle(advancePropTurn(state.press, state.rot, RELEASED, 45, FRAME_S).rot, rad(45));
+  state = advancePropTurn(PROP_TURN_IDLE, 0, RIGHT, 45, atWindow);
   assertAngle(
-    advancePropTurn(state.press, state.rot, RELEASED, FRAME_S).rot,
+    advancePropTurn(state.press, state.rot, RELEASED, 45, FRAME_S).rot,
     PROP_TURN_SPEED * atWindow,
   );
 });
 
-test("Shift pressed partway through a tap still snaps to the quarter turn", () => {
-  let state = advancePropTurn(PROP_TURN_IDLE, 0, RIGHT, FRAME_S);
-  state = advancePropTurn(state.press, state.rot, { dir: 1, coarse: true }, FRAME_S);
-  assertAngle(advancePropTurn(state.press, state.rot, RELEASED, FRAME_S).rot, PROP_TURN_SNAP);
+test("a step changed mid-tap leaves the press in progress on the step it began with", () => {
+  let state = advancePropTurn(PROP_TURN_IDLE, 0, RIGHT, 15, FRAME_S);
+  state = advancePropTurn(state.press, state.rot, RIGHT, 90, FRAME_S);
+  assertAngle(advancePropTurn(state.press, state.rot, RELEASED, 90, FRAME_S).rot, rad(15));
+});
+
+test("the step cycles 90, 45, 15 and back to 90", () => {
+  assert.deepEqual(PROP_TURN_STEPS_DEG, [90, 45, 15]);
+  assert.equal(nextTurnStep(90), 45);
+  assert.equal(nextTurnStep(45), 15);
+  assert.equal(nextTurnStep(15), 90);
+});
+
+test("a missing or unknown stored step is the 90 degree default", () => {
+  for (const raw of [null, "", "0", "30", "90.5", "abc", " 45x"]) {
+    assert.equal(parseTurnStep(raw), 90, String(raw));
+  }
+});
+
+test("a stored step is kept", () => {
+  for (const step of PROP_TURN_STEPS_DEG) assert.equal(parseTurnStep(String(step)), step);
+});
+
+test("a set step is read back", () => {
+  setTurnStep(15);
+  assert.equal(turnStep(), 15);
+  setTurnStep(90);
+  assert.equal(turnStep(), 90);
 });
