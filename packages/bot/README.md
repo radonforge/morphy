@@ -68,8 +68,10 @@ let bots play on their own (handy as a server smoke test).
   alone (`policy/hiding.ts`, never where anyone else is) it scores spots beside
   objects of its own kind, turned like them, where the shape belongs by its
   asset tags (a wall-mounted one backed onto a wall), in cover from the open
-  ground and the hunter spawns, with a way out, and draws one among the good
-  ones so it does not take the same spot every round. It walks there with its
+  ground and the hunter spawns, with a way out, never in a doorway's clearance
+  (the one the level checks keep furniture out of), and draws one among the
+  good ones so it does not take the same spot every round; a spot it cannot
+  step onto, a decoy standing there, it gives up for another. It walks there with its
   disguise facing the way it was dealt and turns it once it stands there, never
   with a hunter in sight. In the hunt a hunter merely looking its way from a
   distance keeps it still; one aiming at it from point blank, one closing in

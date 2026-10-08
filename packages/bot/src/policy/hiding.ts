@@ -1,4 +1,11 @@
-import { PLAYER_HEIGHT, type PropInstance } from "@morphy/shared";
+import { type LevelContext, objectHitboxes, overlapDepth } from "@morphy/level";
+import {
+  ASSET_CARDS,
+  ASSET_TAGS,
+  LEVEL_OVERLAP_TOLERANCE,
+  PLAYER_HEIGHT,
+  type PropInstance,
+} from "@morphy/shared";
 import { resolveCollisions } from "../collision";
 import {
   BOT_EYE_HEIGHT,
@@ -91,6 +98,7 @@ interface Placed {
 interface Prepared {
   furniture: Placed[];
   walls: Footprint[];
+  context: LevelContext;
 }
 
 interface Scored extends HideSite {
@@ -168,7 +176,8 @@ function prepare(terrain: Terrain): Prepared {
       (wall.maxZ - wall.minZ) / 2,
     ),
   );
-  const made = { furniture, walls };
+  const context = { catalog: terrain.map.propCatalog, cards: ASSET_CARDS, tags: ASSET_TAGS };
+  const made = { furniture, walls, context };
   prepared.set(terrain, made);
   return made;
 }
@@ -309,9 +318,16 @@ function besideFurniture(
 /**
  * Whether a disguise can stand at a site: inside the map, its body clear of
  * walls and furniture as the bot moves, its model overlapping none of the
- * scenery, and next to walkable ground.
+ * scenery, its collision boxes out of every doorway's clearance as the level
+ * checks keep furniture out of it, and next to walkable ground.
  */
-function fits(terrain: Terrain, land: Prepared, shape: Shape, site: HideSite): boolean {
+function fits(
+  terrain: Terrain,
+  land: Prepared,
+  shape: Shape,
+  type: string,
+  site: HideSite,
+): boolean {
   const { bounds } = terrain.map;
   const reach = Math.max(shape.extent.halfX, shape.extent.halfZ);
   if (site.x - reach < bounds.min.x || site.x + reach > bounds.max.x) return false;
@@ -324,6 +340,10 @@ function fits(terrain: Terrain, land: Prepared, shape: Shape, site: HideSite): b
   }
   for (const { footprint } of land.furniture) {
     if (overlaps(mine, footprint, HIDE_OVERLAP_TOLERANCE)) return false;
+  }
+  const boxes = objectHitboxes({ id: type, type, ...site }, land.context);
+  for (const zone of terrain.doorClearance) {
+    if (boxes.some((box) => overlapDepth(box, zone) > LEVEL_OVERLAP_TOLERANCE)) return false;
   }
   return nearestFreeCell(terrain.grid, worldToCell(terrain.grid, site.x, site.z), 1) !== null;
 }
@@ -471,7 +491,7 @@ export function scoreHideSites(terrain: Terrain, query: HideQuery, rng: () => nu
     ) {
       continue;
     }
-    if (!fits(terrain, land, shape, site)) continue;
+    if (!fits(terrain, land, shape, query.type, site)) continue;
     const kind = ownKindAround(land, shape, query.type, site);
     const travel = away(site) / Math.max(query.radius, query.maxPath);
     cheap.push({

@@ -170,6 +170,19 @@ function pushGate(
   }
 }
 
+/** Where the gates among `tiles` stand and the axis of the grid line each sits on, as {@link pushGate} placed them. */
+export function gateDoors(
+  tiles: readonly TileInstance[],
+): { x: number; z: number; axis: LevelDoor["axis"] }[] {
+  return tiles
+    .filter((tile) => tile.model === GATE_MODEL)
+    .map((tile) => ({
+      x: tile.position.x,
+      z: tile.position.z,
+      axis: tile.rotationY === WALL_ROTATION_Z ? "v" : "h",
+    }));
+}
+
 /** Stable identity of a door's edge, `axis:line:cell`, as the parser reports it and the emitter matches it. */
 export function doorKey(door: LevelDoor): string {
   return `${door.axis}:${door.line}:${door.cell}`;

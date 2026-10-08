@@ -10,6 +10,8 @@ import {
   HIDE_ALIGN_TOLERANCE_RAD,
   HIDE_MOVE_AWAY,
   HIDE_SAME_TYPE_RADIUS,
+  HIDE_SEARCH_RADIUS,
+  HIDE_TRAVEL_SHARE,
   HIDE_WALL_BACK_REACH,
   MAX_HIDE_REPICKS,
   POINT_BLANK_RADIUS,
@@ -19,14 +21,20 @@ import {
   TAUNT_GAP_MAX_MS,
 } from "../packages/bot/src/config.ts";
 import { BotDriver } from "../packages/bot/src/driver.ts";
-import { yawGap } from "../packages/bot/src/policy/hiding.ts";
+import { pickHideSite, yawGap } from "../packages/bot/src/policy/hiding.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
 import { Reflex } from "../packages/bot/src/reflex.ts";
 import { Terrain } from "../packages/bot/src/terrain.ts";
+import { objectHitboxes, overlapDepth } from "../packages/level/src/index.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
 import {
+  ASSET_CARDS,
+  ASSET_TAGS,
   HIDE_DURATION_MS,
+  LEVEL_OVERLAP_TOLERANCE,
+  MOVE_SPEED,
   makeRng,
+  RUN_MULTIPLIER_PROP,
   SONAR_RADIUS,
   TAUNT_COOLDOWN_MS,
   TAUNT_DARING_RADIUS,
@@ -774,6 +782,35 @@ test("a prop whose hiding spot holds a decoy hides somewhere else", async (t) =>
     Math.hypot(self.x - decoy.x, self.z - decoy.z) >= HIDE_MOVE_AWAY,
     "it gave up the spot instead of settling short of it",
   );
+});
+
+test("a prop never hides in a doorway's clearance", () => {
+  const terrainOf = new Terrain(STATION);
+  const type = "bed-single";
+  const site = pickHideSite(
+    terrainOf,
+    {
+      type,
+      from: STATION.spawnPoints.props[8],
+      radius: HIDE_SEARCH_RADIUS,
+      maxPath: (HIDE_DURATION_MS / 1_000) * MOVE_SPEED * RUN_MULTIPLIER_PROP * HIDE_TRAVEL_SHARE,
+      threats: [],
+      leaving: null,
+    },
+    makeRng(7),
+  );
+  assert.ok(site, "it found a spot");
+  const context = { catalog: STATION.propCatalog, cards: ASSET_CARDS, tags: ASSET_TAGS };
+  const boxes = objectHitboxes({ id: type, type, ...site }, context);
+  assert.ok(terrainOf.doorClearance.length > 0, "the station has doorways");
+  for (const zone of terrainOf.doorClearance) {
+    for (const box of boxes) {
+      assert.ok(
+        overlapDepth(box, zone) <= LEVEL_OVERLAP_TOLERANCE,
+        `the ${type} at ${site.x.toFixed(2)}, ${site.z.toFixed(2)} stands in a doorway`,
+      );
+    }
+  }
 });
 
 function ownKindNear(type, at) {

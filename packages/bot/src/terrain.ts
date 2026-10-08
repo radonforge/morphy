@@ -1,3 +1,4 @@
+import { gateClearances, type Rect2 } from "@morphy/level";
 import {
   ASSET_CARDS,
   ASSET_TAGS,
@@ -55,6 +56,8 @@ export class Terrain {
   readonly obstacles: Obstacle[];
   readonly grid: NavGrid;
   readonly sight: SightIndex;
+  /** The floor kept clear either side of each doorway, as the level checks keep it. */
+  readonly doorClearance: Rect2[];
   private readonly shapes = new Map<string, Shape>();
 
   constructor(readonly map: MapDefinition) {
@@ -62,6 +65,7 @@ export class Terrain {
     this.obstacles = buildObstacles(map);
     this.grid = buildNavGrid(map.bounds, this.walls, this.obstacles);
     this.sight = new SightIndex(map);
+    this.doorClearance = gateClearances(map.tiles);
     for (const def of map.propCatalog) {
       const bounds = computePropBounds(def);
       const tags = ASSET_TAGS[def.model ?? ""];
