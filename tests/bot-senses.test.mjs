@@ -602,6 +602,40 @@ test("a honk from a disguise behind a hunter is heard roughly and pins nothing",
   assert.equal(seen.tellRecently, false, "turning round, it cannot tell which object honked");
 });
 
+test("a honk after the motor turns a hunter away from its maker is heard, not seen", () => {
+  const honkAfter = (turnAway) => {
+    const reflex = new Reflex(0.6, "limited", makeRng(1));
+    reflex.setMap(arena());
+    reflex.syncPosition(0, 0, FACING_NORTH);
+    const world = {
+      phase: "hunting",
+      self: hunterAt(0, 0, FACING_NORTH),
+      others: [prop("crate", -3, 5.3)],
+      decoys: [],
+    };
+    assert.equal(reflex.buildObservation(world, 1, 1_000).entities.length, 1, "seen at first");
+    if (turnAway) {
+      reflex.executeIntent(
+        { kind: "moveTo", seq: 1, x: 0, z: -10, run: false },
+        world,
+        TICK_S,
+        1_050,
+      );
+    }
+    reflex.hear("taunt", -3, 5.3, 1_051);
+    const [sound] = reflex.buildObservation(world, 2, 1_100).sounds;
+    reflex.syncPosition(0, 0, FACING_NORTH);
+    const [seen] = reflex.buildObservation(world, 3, 1_150).entities;
+    return { sound, seen };
+  };
+  const watched = honkAfter(false);
+  assert.equal(watched.sound.hasLineOfSight, true, "a honk in sight is seen");
+  assert.equal(watched.seen.tellRecently, true, "and pins its maker");
+  const behind = honkAfter(true);
+  assert.equal(behind.sound.hasLineOfSight, false, "turned away, the honk is only heard");
+  assert.equal(behind.seen.tellRecently, false, "so turning back pins nothing");
+});
+
 test("a glance turns the view at a bounded rate and no more often than its interval", () => {
   const glance = new Glance();
   const rng = makeRng(7);

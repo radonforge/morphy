@@ -206,10 +206,9 @@ interface PlayerTrack {
   steppedAt: number | null;
 }
 
-/** A player or decoy the bot sees this tick: where it stands and the first point of it seen. */
+/** A player or decoy the bot sees this tick: the body seen and the first point of it seen. */
 interface Sighting {
-  x: number;
-  z: number;
+  body: Body;
   at: Vec3;
   player: boolean;
 }
@@ -317,7 +316,8 @@ export class Reflex {
    * perception (the observation, the policy's wake-up, the motor chasing a
    * target, the attribution of a honk) reads this one result, so no path can
    * see what another would hide. Runs once per tick, however often it is
-   * asked, from where the bot stood and looked as the tick began.
+   * asked, from where the bot stood and looked as the tick began; a honk is
+   * matched to it, then looked at again from where the bot looks as it plays.
    *
    * A limited-vision hunter sees only what lies in the cone it faces, as a
    * player sees only the screen; a prop sees all round, since a player prop
@@ -334,17 +334,16 @@ export class Reflex {
     this.sensedFrom = viewer;
     const sightings = new Map<string, Sighting>();
     for (const other of world.others) {
-      const at =
-        this.blind || !other.alive
-          ? null
-          : sightOf(sight, viewer, this.bodyOf(other, modelYaw(other)));
-      if (at) sightings.set(playerSource(other.id), { x: other.x, z: other.z, at, player: true });
+      const body = this.bodyOf(other, modelYaw(other));
+      const at = this.blind || !other.alive ? null : sightOf(sight, viewer, body);
+      if (at) sightings.set(playerSource(other.id), { body, at, player: true });
       this.track(other, at !== null, now);
     }
     if (this.visibility === "limited" && !this.blind) {
       for (const decoy of world.decoys) {
-        const at = sightOf(sight, viewer, this.bodyOf(decoy, decoy.rot));
-        if (at) sightings.set(decoySource(decoy.id), { x: decoy.x, z: decoy.z, at, player: false });
+        const body = this.bodyOf(decoy, decoy.rot);
+        const at = sightOf(sight, viewer, body);
+        if (at) sightings.set(decoySource(decoy.id), { body, at, player: false });
       }
     }
     this.sightings = sightings;
@@ -449,16 +448,25 @@ export class Reflex {
   }
 
   /**
-   * Whether a sound the room played at (x, z) came from a player the bot saw on
-   * its last {@link sense}: a player sees a honk as the disguise pulsing, so
-   * one whose source stands hidden is only heard. The sound carries no source,
-   * so it is matched by place, within {@link BOT_TELL_MATCH_RADIUS}; two
-   * players' bodies push apart further than that, so the match is the honker.
+   * Whether the bot sees, as a sound plays at (x, z), the player it came from:
+   * a player sees a honk as the disguise pulsing, so one whose source stands
+   * hidden is only heard. The sound carries no source, so it is matched by
+   * place to a player seen on the last {@link sense}, within
+   * {@link BOT_TELL_MATCH_RADIUS}; two players' bodies push apart further than
+   * that, so the match is the honker. The match is then looked at again, where
+   * the sound played, from where the bot stands and looks now: the motor may
+   * have turned or moved it since the tick began, and a honk behind its new
+   * view is not seen.
    */
   private seesSourceAt(x: number, z: number): boolean {
+    const sight = this.sight;
+    const sensed = this.sensedFrom;
+    if (!sight || !sensed) return false;
+    const viewer: Viewer = { ...sensed, x: this.posX, z: this.posZ, heading: this.rot };
     for (const sighting of this.sightings.values()) {
       if (!sighting.player) continue;
-      if (Math.hypot(sighting.x - x, sighting.z - z) <= BOT_TELL_MATCH_RADIUS) return true;
+      if (Math.hypot(sighting.body.x - x, sighting.body.z - z) > BOT_TELL_MATCH_RADIUS) continue;
+      if (sightOf(sight, viewer, { ...sighting.body, x, z })) return true;
     }
     return false;
   }
