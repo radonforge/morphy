@@ -60,7 +60,13 @@ import {
   propCameraTargetY,
   zoomByWheel,
 } from "./propCamera";
-import { advancePropTurn, PROP_TURN_IDLE, type PropTurnPress, type PropTurnStep } from "./propTurn";
+import {
+  advancePropTurn,
+  idlePropTurn,
+  type PropTurnPress,
+  type PropTurnStep,
+  resetPropTurn,
+} from "./propTurn";
 import { type PropView, propEyeHeight, propView, setPropView } from "./propView";
 import { SkyGlow, StreetLamps } from "./StreetLamps";
 import { useSharedGLTF } from "./sharedTextures";
@@ -1707,8 +1713,11 @@ function PropActions({
   return null;
 }
 
-function useMouseLook(look: LookRef): LookRef {
+/** Turns `look` by the locked pointer's movement while `enabled`, and locks the pointer on a canvas click. */
+function useMouseLook(look: LookRef, enabled: boolean): LookRef {
   const { gl } = useThree();
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   useEffect(() => {
     const el = gl.domElement;
@@ -1718,7 +1727,7 @@ function useMouseLook(look: LookRef): LookRef {
       }
     };
     const onMove = (event: MouseEvent) => {
-      if (document.pointerLockElement !== el) {
+      if (!enabledRef.current || document.pointerLockElement !== el) {
         return;
       }
       const sensitivity = LOOK_SENSITIVITY * lookSensitivity();
@@ -1789,7 +1798,7 @@ function LocalPlayer({
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!inputBlocked);
-  const look = useMouseLook(lookRef);
+  const look = useMouseLook(lookRef, !inputBlocked);
   const { camera, gl } = useThree();
 
   const spawn = map.spawnPoints.props[0] ?? map.bounds.min;
@@ -1823,7 +1832,7 @@ function LocalPlayer({
   const zoomTargetRef = useRef(PROP_ZOOM_DEFAULT);
   const ceiling = map.ceiling ?? NO_CEILING;
   const propRot = useRef(0);
-  const turnPress = useRef<PropTurnPress>(PROP_TURN_IDLE);
+  const turnPress = useRef<PropTurnPress>(idlePropTurn());
   const prevPropType = useRef("");
 
   const frozen = !alive || (role === "hunter" && phase === "hiding") || caughtCam !== null;
@@ -1950,7 +1959,7 @@ function LocalPlayer({
 
     if (propType && propType !== prevPropType.current) {
       propRot.current = body.heading;
-      turnPress.current = PROP_TURN_IDLE;
+      resetPropTurn(turnPress.current);
       zoomTargetRef.current = PROP_ZOOM_DEFAULT;
     }
     prevPropType.current = propType;
@@ -1961,17 +1970,15 @@ function LocalPlayer({
     wasDealing.current = dealing;
     if (role === "prop") {
       const k = keys.current;
-      const turned = advancePropTurn(
+      propRot.current = advancePropTurn(
         turnPress.current,
         propRot.current,
         k.turnRight === k.turnLeft ? 0 : k.turnRight ? 1 : -1,
         turnStep,
         delta,
       );
-      turnPress.current = turned.press;
-      propRot.current = turned.rot;
     } else {
-      turnPress.current = PROP_TURN_IDLE;
+      resetPropTurn(turnPress.current);
     }
 
     if (alive) {
