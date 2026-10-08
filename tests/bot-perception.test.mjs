@@ -44,6 +44,7 @@ const contact = (x, z) => ({
   z,
   rot: 0,
   aim: 0,
+  propRot: 0,
   role: "prop",
   alive: true,
   hp: 0,
@@ -228,7 +229,7 @@ test("a limited contact is named by a handle, never by its session id", () => {
   assert.equal(again.id, first.id, "the same contact keeps the same handle");
 });
 
-const decoyAt = (x, z, id = "d0") => ({ id, x, y: 0, z, propType: "crate" });
+const decoyAt = (x, z, id = "d0") => ({ id, x, y: 0, z, rot: 0, propType: "crate" });
 
 const withDecoys = (others, decoys) => ({ ...world(contact(0, 0)), others, decoys });
 

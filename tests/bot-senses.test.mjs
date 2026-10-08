@@ -10,11 +10,14 @@ import {
   SIGHT_CELL_SIZE,
 } from "../packages/bot/src/config.ts";
 import { BotDriver } from "../packages/bot/src/driver.ts";
-import { Glance, SightIndex, sightOf } from "../packages/bot/src/perception.ts";
+import { bodySamples, Glance, SightIndex, sightOf } from "../packages/bot/src/perception.ts";
 import { Reflex } from "../packages/bot/src/reflex.ts";
 import { FIELD_OF_VIEW_DEFAULT } from "../packages/client/src/game/prefs.ts";
+import { SPACE_CATALOG } from "../packages/server/src/spaceCatalog.ts";
 import {
+  ASSET_CARDS,
   FOOTSTEP_HEARING_RADIUS,
+  fittedExtent,
   MOVE_SPEED,
   makeRng,
   RUN_MULTIPLIER_PROP,
@@ -356,7 +359,8 @@ test("the part of a disguise that shows past furniture is enough to see it, and 
     x: 0,
     y: 0,
     z: 8,
-    bounds: { radius: 0.5, yMin: 0, yMax: 1 },
+    yaw: 0,
+    extent: { halfX: 0.5, halfZ: 0.5, yMin: 0, yMax: 1 },
   });
   assert.ok(at && at.x !== 0, "the point seen, and aimed at, is off the pillar's line");
 });
@@ -375,11 +379,62 @@ test("a piece of furniture never hides itself", () => {
 
 test("furniture turned with its placement blocks sight by its turned shape", () => {
   const view = { x: 0, y: 1.6, z: 0, heading: FACING_NORTH, halfAngle: null, range: 30 };
-  const target = { x: 1.5, y: 0, z: 8, bounds: { radius: 0.3, yMin: 0, yMax: 1 } };
+  const target = {
+    x: 1.5,
+    y: 0,
+    z: 8,
+    yaw: 0,
+    extent: { halfX: 0.3, halfZ: 0.3, yMin: 0, yMax: 1 },
+  };
   const along = new SightIndex(arena({ props: [placed("cabinet", 0, 5)] }));
   const turned = new SightIndex(arena({ props: [placed("cabinet", 0, 5, Math.PI / 2)] }));
   assert.equal(sightOf(along, view, target), null, "laid across the view, it covers the target");
   assert.ok(sightOf(turned, view, target), "turned end-on, the view passes beside it");
+});
+
+test("every point looked for on a disguise lies inside the model it renders as, however turned", () => {
+  const viewer = { x: 0, y: 1.6, z: 0, heading: FACING_NORTH, halfAngle: null, range: 30 };
+  const rng = makeRng(7);
+  for (const def of SPACE_CATALOG) {
+    const extent = fittedExtent(def, ASSET_CARDS);
+    for (let i = 0; i < 20; i++) {
+      const body = { x: 10 * rng() - 5, y: 0, z: 10 * rng() + 3, yaw: 2 * Math.PI * rng(), extent };
+      for (const sample of bodySamples(viewer, body)) {
+        const dx = sample.x - body.x;
+        const dz = sample.z - body.z;
+        const localX = dx * Math.cos(body.yaw) - dz * Math.sin(body.yaw);
+        const localZ = dx * Math.sin(body.yaw) + dz * Math.cos(body.yaw);
+        assert.ok(Math.abs(localX) <= extent.halfX + 1e-9, `${def.id} x`);
+        assert.ok(Math.abs(localZ) <= extent.halfZ + 1e-9, `${def.id} z`);
+        assert.ok(sample.y >= extent.yMin && sample.y <= extent.yMax, `${def.id} y`);
+      }
+    }
+  }
+});
+
+test("a disguise whose whole model a container hides is not seen spinning, though its hitbox sticks out", () => {
+  const spinBehind = (furniture) => {
+    const reflex = new Reflex(0.6, "limited", makeRng(1));
+    reflex.setMap({ ...arena({ props: furniture }), propCatalog: SPACE_CATALOG });
+    reflex.syncPosition(0, 0, FACING_NORTH);
+    const hidden = prop("hidden", 0, 6.5, { propType: "container-wide" });
+    const world = {
+      phase: "hunting",
+      self: hunterAt(0, 0, FACING_NORTH),
+      others: [hidden],
+      decoys: [],
+    };
+    reflex.buildObservation(world, 1, 1_000);
+    hidden.propRot = 0.21;
+    return reflex.buildObservation(world, 2, 1_050).entities.find((e) => e.distance === 6.5);
+  };
+  const open = spinBehind([]);
+  assert.equal(open?.tellRecently, true, "in the open the spin is seen");
+  assert.equal(
+    spinBehind([placed("container-tall", 0, 5)]),
+    undefined,
+    "behind the tall container nothing of the wide one shows",
+  );
 });
 
 /**
@@ -391,7 +446,7 @@ test("furniture turned with its placement blocks sight by its turned shape", () 
 test("still players, decoys and furniture are never a suspect, in sight or after a gap", async (t) => {
   t.mock.method(Math, "random", makeRng(5));
   const map = arena({ props: [placed("crate", 6, 6)] });
-  const decoy = { id: "d1", x: -6, y: 0, z: 6, propType: "crate" };
+  const decoy = { id: "d1", x: -6, y: 0, z: 6, rot: 0, propType: "crate" };
   const observations = await observe({
     map,
     self: hunterAt(0, 0, FACING_NORTH),

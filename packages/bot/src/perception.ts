@@ -1,4 +1,4 @@
-import type { MapDefinition, PropBounds, Vec3 } from "@morphy/shared";
+import type { MapDefinition, PropBounds, ShapeExtent, Vec3 } from "@morphy/shared";
 import type { Rng } from "./aim";
 import {
   GLANCE_ANGLE_MAX_RAD,
@@ -48,13 +48,27 @@ export interface Viewer {
   range: number;
 }
 
-/** A body the bot might see: where it stands, its visible bounds, and the furniture it is (if any). */
+/**
+ * A body the bot might see: where it stands, the extent it renders at, turned
+ * by `yaw` as the client turns its model, and the furniture it is (if any).
+ */
 export interface Body {
   x: number;
   y: number;
   z: number;
-  bounds: PropBounds;
+  yaw: number;
+  extent: ShapeExtent;
   owner?: number;
+}
+
+/**
+ * The square standing inside a bounding cylinder: the extent of a body whose
+ * rendered model cannot be measured, so that every point looked for on it lies
+ * within the cylinder whatever its model fills.
+ */
+export function inscribedExtent(bounds: PropBounds): ShapeExtent {
+  const half = bounds.radius / Math.SQRT2;
+  return { halfX: half, halfZ: half, yMin: bounds.yMin, yMax: bounds.yMax };
 }
 
 /**
@@ -219,21 +233,36 @@ function segmentHits(box: Occluder, from: Vec3, to: Vec3): boolean {
   );
 }
 
+/** How far a body's rendered extent reaches from its axis along a unit direction (ux, uz). */
+function reachAlong(body: Body, ux: number, uz: number): number {
+  const cos = Math.cos(body.yaw);
+  const sin = Math.sin(body.yaw);
+  const acrossX = Math.abs(ux * cos - uz * sin);
+  const acrossZ = Math.abs(ux * sin + uz * cos);
+  return Math.min(
+    acrossX > SEGMENT_EPSILON ? body.extent.halfX / acrossX : Number.POSITIVE_INFINITY,
+    acrossZ > SEGMENT_EPSILON ? body.extent.halfZ / acrossZ : Number.POSITIVE_INFINITY,
+  );
+}
+
 /**
  * The points of a body a viewer looks for, nearest first in the order a
  * player's eye finds them: its middle, near its top, then its two sides
- * across the line of sight.
+ * across the line of sight. Every one lies inside the extent the body renders
+ * at, so none shows past furniture that hides the whole model.
  */
 export function bodySamples(viewer: Viewer, body: Body): Vec3[] {
-  const { bounds } = body;
-  const mid = body.y + (bounds.yMin + bounds.yMax) / 2;
-  const top = body.y + bounds.yMin + (bounds.yMax - bounds.yMin) * SIGHT_SAMPLE_TOP_SHARE;
+  const { extent } = body;
+  const mid = body.y + (extent.yMin + extent.yMax) / 2;
+  const top = body.y + extent.yMin + (extent.yMax - extent.yMin) * SIGHT_SAMPLE_TOP_SHARE;
   const dx = body.x - viewer.x;
   const dz = body.z - viewer.z;
   const len = Math.hypot(dx, dz) || 1;
-  const side = bounds.radius * SIGHT_SAMPLE_EDGE_SHARE;
-  const sx = (-dz / len) * side;
-  const sz = (dx / len) * side;
+  const ux = -dz / len;
+  const uz = dx / len;
+  const side = reachAlong(body, ux, uz) * SIGHT_SAMPLE_EDGE_SHARE;
+  const sx = ux * side;
+  const sz = uz * side;
   return [
     { x: body.x, y: mid, z: body.z },
     { x: body.x, y: top, z: body.z },

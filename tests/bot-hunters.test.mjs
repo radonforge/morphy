@@ -73,6 +73,7 @@ const body = (id, spawn, over = {}) => ({
   z: spawn.z,
   rot: 0,
   aim: 0,
+  propRot: 0,
   role: "hunter",
   alive: true,
   hp: 100,

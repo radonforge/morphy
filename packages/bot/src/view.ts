@@ -22,6 +22,7 @@ export interface BotDecoy {
   x: number;
   y: number;
   z: number;
+  rot: number;
   propType: string;
 }
 
@@ -60,7 +61,14 @@ export function snapshot(rawState: unknown, selfId: string): WorldSnapshot {
     if (key !== selfId) others.push(player);
   });
   state.decoys.forEach((decoy, key) => {
-    decoys.push({ id: key, x: decoy.x, y: decoy.y, z: decoy.z, propType: decoy.propType });
+    decoys.push({
+      id: key,
+      x: decoy.x,
+      y: decoy.y,
+      z: decoy.z,
+      rot: decoy.rot,
+      propType: decoy.propType,
+    });
   });
   return {
     phase: state.phase,

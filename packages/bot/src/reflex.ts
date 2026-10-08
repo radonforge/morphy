@@ -1,6 +1,8 @@
 import {
+  ASSET_CARDS,
   type BotAct,
   computePropBounds,
+  fittedExtent,
   type InputMessage,
   type Intent,
   isDisguise,
@@ -17,6 +19,7 @@ import {
   type Role,
   RUN_MULTIPLIER_HUNTER,
   RUN_MULTIPLIER_PROP,
+  type ShapeExtent,
   SONAR_COOLDOWN_MS,
   SONAR_HEARING_RADIUS,
   type SoundKind,
@@ -102,7 +105,7 @@ import {
   worldToCell,
 } from "./nav/grid";
 import { PathFollower, smoothPath } from "./nav/path";
-import { type Body, Glance, SightIndex, sightOf, type Viewer } from "./perception";
+import { type Body, Glance, inscribedExtent, SightIndex, sightOf, type Viewer } from "./perception";
 import { canHitTarget, normalize3, type Vec3 } from "./raycast";
 import type { BotDecoy, BotPlayer } from "./view";
 
@@ -118,6 +121,13 @@ const UNTRANSFORMED_BOUNDS: PropBounds = {
   yMin: 0,
   yMax: UNTRANSFORMED_PROP_HEIGHT,
 };
+
+const UNTRANSFORMED_EXTENT = inscribedExtent(UNTRANSFORMED_BOUNDS);
+
+/** Which way a player's model is turned: a prop's disguise by its own turn, anyone else by their heading. */
+function modelYaw(player: BotPlayer): number {
+  return player.role === "prop" && player.propType !== "" ? player.propRot : player.rot;
+}
 
 /** What the bot perceives this tick; the reflex's input alongside the current intent. */
 export interface ReflexWorld {
@@ -143,6 +153,8 @@ interface Contact {
   y: number;
   z: number;
   propType: string;
+  /** Which way its model is turned. */
+  yaw: number;
   /** For a scene prop, its index in the map's prop list: the furniture that must not hide itself. */
   owner?: number;
   /** A spot footsteps were heard from: a place to go, never seen and never shot at. */
@@ -227,6 +239,7 @@ export class Reflex {
   private obstacles: Obstacle[] = [];
   private activeObstacles: Obstacle[] = [];
   private propBounds = new Map<string, PropBounds>();
+  private propExtents = new Map<string, ShapeExtent>();
   private sceneProps = new Map<string, { prop: PropInstance; index: number }>();
   private sight: SightIndex | null = null;
   private doorways: Point2[] = [];
@@ -321,13 +334,16 @@ export class Reflex {
     this.sensedFrom = viewer;
     const sightings = new Map<string, Sighting>();
     for (const other of world.others) {
-      const at = this.blind || !other.alive ? null : sightOf(sight, viewer, this.bodyOf(other));
+      const at =
+        this.blind || !other.alive
+          ? null
+          : sightOf(sight, viewer, this.bodyOf(other, modelYaw(other)));
       if (at) sightings.set(playerSource(other.id), { x: other.x, z: other.z, at, player: true });
       this.track(other, at !== null, now);
     }
     if (this.visibility === "limited" && !this.blind) {
       for (const decoy of world.decoys) {
-        const at = sightOf(sight, viewer, this.bodyOf(decoy));
+        const at = sightOf(sight, viewer, this.bodyOf(decoy, decoy.rot));
         if (at) sightings.set(decoySource(decoy.id), { x: decoy.x, z: decoy.z, at, player: false });
       }
     }
@@ -351,12 +367,18 @@ export class Reflex {
     };
   }
 
-  private bodyOf(thing: { x: number; y: number; z: number; propType: string }): Body {
+  private bodyOf(
+    thing: { x: number; y: number; z: number; propType: string },
+    yaw: number,
+    owner?: number,
+  ): Body {
     return {
       x: thing.x,
       y: thing.y,
       z: thing.z,
-      bounds: this.propBounds.get(thing.propType) ?? UNTRANSFORMED_BOUNDS,
+      yaw,
+      extent: this.propExtents.get(thing.propType) ?? UNTRANSFORMED_EXTENT,
+      owner,
     };
   }
 
@@ -473,6 +495,15 @@ export class Reflex {
     this.grid = buildNavGrid(map.bounds, this.walls, this.obstacles);
     this.propBounds = new Map(
       map.propCatalog.map((def) => [def.id, computePropBounds(def)] as const),
+    );
+    this.propExtents = new Map(
+      map.propCatalog.map(
+        (def) =>
+          [
+            def.id,
+            fittedExtent(def, ASSET_CARDS) ?? inscribedExtent(computePropBounds(def)),
+          ] as const,
+      ),
     );
     const worn = new Set(map.propCatalog.filter(isDisguise).map((def) => def.id));
     this.sceneProps = new Map(
@@ -781,20 +812,17 @@ export class Reflex {
     if (!sight || !viewer) return [];
     const seen: Sensed[] = [];
     for (const [source, { prop, index }] of this.sceneProps) {
-      if (!sightOf(sight, viewer, this.scenePropBody(prop, index))) continue;
+      if (
+        !sightOf(
+          sight,
+          viewer,
+          this.bodyOf({ ...prop.position, propType: prop.type }, prop.rotation, index),
+        )
+      )
+        continue;
       seen.push(this.stillDisguise(source, { x: prop.position.x, z: prop.position.z }, now));
     }
     return seen;
-  }
-
-  private scenePropBody(prop: PropInstance, index: number): Body {
-    return {
-      x: prop.position.x,
-      y: prop.position.y,
-      z: prop.position.z,
-      bounds: this.propBounds.get(prop.type) ?? UNTRANSFORMED_BOUNDS,
-      owner: index,
-    };
   }
 
   /** A shape in sight that never moves. */
@@ -901,15 +929,31 @@ export class Reflex {
     for (const other of world.others) {
       if (playerSource(other.id) !== source) continue;
       if (!other.alive) return null;
-      return { source, x: other.x, y: other.y, z: other.z, propType: other.propType, spot: false };
+      return {
+        source,
+        x: other.x,
+        y: other.y,
+        z: other.z,
+        propType: other.propType,
+        yaw: modelYaw(other),
+        spot: false,
+      };
     }
     for (const decoy of world.decoys) {
       if (decoySource(decoy.id) !== source) continue;
-      return { source, x: decoy.x, y: decoy.y, z: decoy.z, propType: decoy.propType, spot: false };
+      return {
+        source,
+        x: decoy.x,
+        y: decoy.y,
+        z: decoy.z,
+        propType: decoy.propType,
+        yaw: decoy.rot,
+        spot: false,
+      };
     }
     const spot = this.spots.get(source);
     if (spot !== undefined) {
-      return { source, x: spot.x, y: 0, z: spot.z, propType: "", spot: true };
+      return { source, x: spot.x, y: 0, z: spot.z, propType: "", yaw: 0, spot: true };
     }
     const scene = this.sceneProps.get(source);
     if (scene === undefined) return null;
@@ -920,6 +964,7 @@ export class Reflex {
       y: prop.position.y,
       z: prop.position.z,
       propType: prop.type,
+      yaw: prop.rotation,
       owner: index,
       spot: false,
     };
@@ -933,7 +978,7 @@ export class Reflex {
   private sightOfContact(contact: Contact): Vec3 | null {
     if (contact.spot || !this.sight || !this.sensedFrom) return null;
     if (contact.owner === undefined) return this.sightings.get(contact.source)?.at ?? null;
-    return sightOf(this.sight, this.sensedFrom, { ...this.bodyOf(contact), owner: contact.owner });
+    return sightOf(this.sight, this.sensedFrom, this.bodyOf(contact, contact.yaw, contact.owner));
   }
 
   /**

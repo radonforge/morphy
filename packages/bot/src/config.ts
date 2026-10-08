@@ -192,8 +192,9 @@ export const GLANCE_TURN_RATE = 6;
 /**
  * Where on a body the bot looks for it: its middle, near its top
  * ({@link SIGHT_SAMPLE_TOP_SHARE} of its height) and both sides at mid height
- * ({@link SIGHT_SAMPLE_EDGE_SHARE} of its radius off the middle), so a disguise
- * half behind a cabinet is still seen by the half that shows.
+ * ({@link SIGHT_SAMPLE_EDGE_SHARE} of the way from its middle to the edge of the
+ * model it renders as), so a disguise half behind a cabinet is still seen by
+ * the half that shows.
  */
 export const SIGHT_SAMPLE_TOP_SHARE = 0.85;
 export const SIGHT_SAMPLE_EDGE_SHARE = 0.8;
