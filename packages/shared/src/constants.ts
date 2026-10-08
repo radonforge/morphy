@@ -6,6 +6,8 @@ export const STATS_PATH = "/stats";
 export const PLAYER_COUNTS_PATH = "/player-counts";
 /** How long the server reuses one count of the players on each map before querying the rooms again. */
 export const PLAYER_COUNTS_TTL_MS = 5_000;
+/** How long the server answers with a failed count of the players before querying the rooms again. */
+export const PLAYER_COUNTS_RETRY_MS = 2_000;
 /** How often the menu asks for the players on each map while it is on screen. */
 export const PLAYER_COUNTS_POLL_MS = 10_000;
 
