@@ -29,6 +29,7 @@ import { useThree } from "@react-three/fiber";
 import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { MORPH_COLOR } from "../theme";
+import { wheelDeltaPx } from "../ui/carouselWheel";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
 import { CeilingView } from "./CeilingView";
 import { capUnderCeiling, ceilingBetween, ceilingHeightAt } from "./ceiling";
@@ -52,6 +53,13 @@ import {
 } from "./movement";
 import { lockPointer } from "./pointerLock";
 import { FIELD_OF_VIEW_DEFAULT, fieldOfView, lookSensitivity } from "./prefs";
+import {
+  cappedVerticalFov,
+  PROP_ZOOM_DEFAULT,
+  propCameraDistance,
+  propCameraTargetY,
+  zoomByWheel,
+} from "./propCamera";
 import { advancePropTurn, PROP_TURN_IDLE, type PropTurnPress, type PropTurnStep } from "./propTurn";
 import { type PropView, propEyeHeight, propView, setPropView } from "./propView";
 import { SkyGlow, StreetLamps } from "./StreetLamps";
@@ -128,11 +136,12 @@ const NAMEPLATE_OUTLINE_COLOR = "#11161f";
 const NAMEPLATE_OUTLINE_WIDTH = 0.03;
 const NAMEPLATE_MIN_DISTANCE = 4;
 
-const CAMERA_DISTANCE = 8;
 const CAMERA_TARGET_Y = 1.2;
 const CAMERA_DAMP = 0.0008;
+const PROP_ZOOM_DAMP = 1e-4;
 const CAMERA_WALL_MARGIN = 0.35;
 const CAMERA_CEILING_MARGIN = 0.35;
+const CAMERA_FLOOR_MARGIN = 0.25;
 const NO_CEILING: readonly CeilingPanel[] = [];
 const CAMERA_MIN_DISTANCE = 0.2;
 const CAMERA_SLAB_EPSILON = 1e-4;
@@ -181,7 +190,8 @@ const LOOK_SENSITIVITY = 0.0025;
 const PITCH_MIN = -1.4;
 const PITCH_MAX = 1.4;
 const TP_PITCH_MIN = -0.15;
-const TP_PITCH_MAX = 1.2;
+const TP_PITCH_MAX = 0.87;
+const TP_DEFAULT_PITCH = 0.26;
 export const DEFAULT_PITCH = 0.5;
 export const SUN_POSITION: [number, number, number] = [14, 26, 10];
 const STARS_RADIUS = 120;
@@ -200,7 +210,7 @@ const SCREEN_CENTER = new THREE.Vector2(0, 0);
 const noRaycast = () => {};
 
 export const GAME_FOV = FIELD_OF_VIEW_DEFAULT;
-const SPRINT_FOV_ADD = 7;
+const SPRINT_FOV_ADD = 3;
 const FOV_DAMP = 0.02;
 const FOV_EPSILON = 0.05;
 const RECOIL_MAX_PITCH = 0.045;
@@ -1780,7 +1790,7 @@ function LocalPlayer({
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!inputBlocked);
   const look = useMouseLook(lookRef);
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
 
   const spawn = map.spawnPoints.props[0] ?? map.bounds.min;
   const body = useMemo<MovementBody>(
@@ -1808,7 +1818,9 @@ function LocalPlayer({
     aim: Number.NaN,
     propRot: Number.NaN,
   });
-  const camDistRef = useRef(CAMERA_DISTANCE);
+  const camDistRef = useRef(propCameraDistance(null));
+  const zoomRef = useRef(PROP_ZOOM_DEFAULT);
+  const zoomTargetRef = useRef(PROP_ZOOM_DEFAULT);
   const ceiling = map.ceiling ?? NO_CEILING;
   const propRot = useRef(0);
   const turnPress = useRef<PropTurnPress>(PROP_TURN_IDLE);
@@ -1817,10 +1829,12 @@ function LocalPlayer({
   const frozen = !alive || (role === "hunter" && phase === "hiding") || caughtCam !== null;
   const [view, setView] = useState<PropView>(propView);
   const firstPerson = role === "prop" && view === "first";
-  const eyeHeight = useMemo(() => {
+  const disguiseHeight = useMemo(() => {
     const def = propType ? catalog.get(propType) : undefined;
-    return def ? propEyeHeight(computePropBounds(def).yMax) : PLAYER_EYE_HEIGHT;
+    return def ? computePropBounds(def).yMax : null;
   }, [catalog, propType]);
+  const eyeHeight = disguiseHeight === null ? PLAYER_EYE_HEIGHT : propEyeHeight(disguiseHeight);
+  const thirdPersonProp = role === "prop" && !firstPerson;
 
   const canSwitchView = role === "prop" && alive && caughtCam === null && !inputBlocked;
   useEffect(() => {
@@ -1840,7 +1854,23 @@ function LocalPlayer({
 
   useEffect(() => {
     if (firstPerson) lookRef.current.pitch = 0;
-  }, [firstPerson, lookRef]);
+    else if (thirdPersonProp) lookRef.current.pitch = TP_DEFAULT_PITCH;
+  }, [firstPerson, thirdPersonProp, lookRef]);
+
+  const dealing = phase === "hiding";
+  const wasDealing = useRef(false);
+
+  const canZoom = thirdPersonProp && alive && caughtCam === null && !inputBlocked;
+  useEffect(() => {
+    if (!canZoom) return;
+    const el = gl.domElement;
+    const onWheel = (event: WheelEvent) => {
+      if (document.pointerLockElement !== el || event.ctrlKey) return;
+      zoomTargetRef.current = zoomByWheel(zoomTargetRef.current, wheelDeltaPx(event).y);
+    };
+    window.addEventListener("wheel", onWheel);
+    return () => window.removeEventListener("wheel", onWheel);
+  }, [canZoom, gl]);
 
   useEffect(() => {
     if (!caughtCam) return;
@@ -1921,8 +1951,14 @@ function LocalPlayer({
     if (propType && propType !== prevPropType.current) {
       propRot.current = body.heading;
       turnPress.current = PROP_TURN_IDLE;
+      zoomTargetRef.current = PROP_ZOOM_DEFAULT;
     }
     prevPropType.current = propType;
+    if (dealing && !wasDealing.current) {
+      zoomTargetRef.current = PROP_ZOOM_DEFAULT;
+      if (thirdPersonProp) look.current.pitch = TP_DEFAULT_PITCH;
+    }
+    wasDealing.current = dealing;
     if (role === "prop") {
       const k = keys.current;
       const turned = advancePropTurn(
@@ -1974,7 +2010,8 @@ function LocalPlayer({
     motion.pitch = pitch;
 
     const perspective = camera as THREE.PerspectiveCamera;
-    const targetFov = fieldOfView() + (sprinting ? SPRINT_FOV_ADD : 0);
+    const targetFov =
+      cappedVerticalFov(fieldOfView(), perspective.aspect) + (sprinting ? SPRINT_FOV_ADD : 0);
     if (Math.abs(perspective.fov - targetFov) > FOV_EPSILON) {
       perspective.fov += (targetFov - perspective.fov) * (1 - FOV_DAMP ** delta);
       perspective.updateProjectionMatrix();
@@ -2026,25 +2063,28 @@ function LocalPlayer({
       camDistRef.current = CAMERA_MIN_DISTANCE;
     } else {
       const localPitch = THREE.MathUtils.clamp(pitch, TP_PITCH_MIN, TP_PITCH_MAX);
+      look.current.pitch = localPitch;
       const cosPitch = Math.cos(localPitch);
       const dirX = Math.sin(yaw) * cosPitch;
       const dirY = Math.sin(localPitch);
       const dirZ = Math.cos(yaw) * cosPitch;
 
-      let desired = CAMERA_DISTANCE;
+      zoomRef.current += (zoomTargetRef.current - zoomRef.current) * (1 - PROP_ZOOM_DAMP ** delta);
+      const reach = propCameraDistance(disguiseHeight) * zoomRef.current;
+      let desired = reach;
       const hitXZ = nearestWallDistanceXZ(
         body.x,
         body.z,
         Math.sin(yaw),
         Math.cos(yaw),
-        CAMERA_DISTANCE * cosPitch,
+        reach * cosPitch,
         walls,
       );
       const wallDistance = hitXZ / cosPitch;
       if (wallDistance < desired) {
         desired = Math.max(wallDistance - CAMERA_WALL_MARGIN, CAMERA_MIN_DISTANCE);
       }
-      const pivotY = body.y + CAMERA_TARGET_Y;
+      const pivotY = body.y + propCameraTargetY(disguiseHeight);
       desired = capUnderCeiling(
         desired,
         pivotY,
@@ -2059,7 +2099,11 @@ function LocalPlayer({
         desired < current ? desired : current + (desired - current) * (1 - CAMERA_DAMP ** delta);
       const d = camDistRef.current;
 
-      camera.position.set(body.x + dirX * d, pivotY + dirY * d, body.z + dirZ * d);
+      camera.position.set(
+        body.x + dirX * d,
+        Math.max(pivotY + dirY * d, body.y + CAMERA_FLOOR_MARGIN),
+        body.z + dirZ * d,
+      );
       camera.lookAt(body.x, pivotY, body.z);
     }
 

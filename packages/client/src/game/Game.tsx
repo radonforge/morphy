@@ -91,6 +91,7 @@ import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
 import { usePostFx } from "./postFx";
 import { fieldOfView, graphicsPreference, isPerfHudEnabled } from "./prefs";
+import { cappedVerticalFov } from "./propCamera";
 import { nextTurnStep, setTurnStep, turnStep as storedTurnStep } from "./propTurn";
 import {
   type CaptureRecord,
@@ -1446,7 +1447,10 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         dpr={tierSettings.dpr}
         gl={glConfig}
         shadows={tierSettings.shadows ? GAME_SHADOW_TYPE : false}
-        camera={{ position: [0, 12, 18], fov: fieldOfView() }}
+        camera={{
+          position: [0, 12, 18],
+          fov: cappedVerticalFov(fieldOfView(), window.innerWidth / window.innerHeight),
+        }}
         onCreated={({ gl }) => {
           glRef.current = gl;
         }}

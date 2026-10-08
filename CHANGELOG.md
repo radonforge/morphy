@@ -22,6 +22,10 @@ Every Morphy release and what it changed for you, newest first.
   actions and fits on one line. Every other key is in All controls, behind ?.
 - The Graphics quality choice in the options is now a dropdown in the game's
   own style, and works with the arrow keys, Enter and Escape.
+- The camera behind a prop now sits closer and lower, and frames your disguise
+  by its size: further back for a dumpster, nearer for a cone. Scroll the mouse
+  wheel to pull it in or out. On screens wider than 16:9 the view no longer
+  stretches sideways, and sprinting widens it less.
 
 ## [0.4.0] - 2026-10-07
 
