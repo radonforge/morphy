@@ -23,7 +23,7 @@ test("a field of view that is not a finite number is the default", () => {
 });
 
 test("a stored field of view in range is kept as is", () => {
-  assert.equal(parseFieldOfView("72"), 72);
+  assert.equal(parseFieldOfView("62"), 62);
   assert.equal(parseFieldOfView(String(FIELD_OF_VIEW_MIN)), FIELD_OF_VIEW_MIN);
   assert.equal(parseFieldOfView(String(FIELD_OF_VIEW_MAX)), FIELD_OF_VIEW_MAX);
 });
@@ -32,6 +32,12 @@ test("a stored field of view out of range is clamped to the nearest end", () => 
   assert.equal(parseFieldOfView("0"), FIELD_OF_VIEW_MIN);
   assert.equal(parseFieldOfView("-20"), FIELD_OF_VIEW_MIN);
   assert.equal(parseFieldOfView("179"), FIELD_OF_VIEW_MAX);
+});
+
+test("a field of view stored above 70 loads as 70", () => {
+  assert.equal(FIELD_OF_VIEW_MAX, 70);
+  assert.equal(parseFieldOfView("85"), 70);
+  assert.equal(parseFieldOfView("90"), 70);
 });
 
 test("setting the field of view stores it clamped and reads back at once", () => {

@@ -17,7 +17,7 @@ export const LOOK_SENSITIVITY_STEP = 0.05;
 export const LOOK_SENSITIVITY_DEFAULT = 1;
 
 export const FIELD_OF_VIEW_MIN = 50;
-export const FIELD_OF_VIEW_MAX = 90;
+export const FIELD_OF_VIEW_MAX = 70;
 export const FIELD_OF_VIEW_STEP = 1;
 export const FIELD_OF_VIEW_DEFAULT = 55;
 
