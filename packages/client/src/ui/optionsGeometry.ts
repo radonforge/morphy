@@ -22,6 +22,11 @@ export interface OptionsSliceGeometry {
 
 const RADIANS_TO_DEGREES = 180 / Math.PI;
 
+/** Where the slice begins on a screen `width` pixels wide, as the worlds' `cover` takes it. */
+export function optionsCover(width: number): number {
+  return 1 - optionsSliceFraction(width);
+}
+
 /** The fraction of the width the slice covers on a screen `width` pixels wide. */
 export function optionsSliceFraction(width: number): number {
   if (width <= 0) return 1;
@@ -37,13 +42,13 @@ export function optionsSliceGeometry(width: number, height: number): OptionsSlic
   const fraction = optionsSliceFraction(width);
   if (fraction >= 1) {
     return {
-      shape: sliceShape({ edges: [], openness: [1] }, 0, width, height),
+      shape: sliceShape({ edges: [], openness: [1], cover: 1 }, 0, width, height),
       edgeMid: 0,
       leanDeg: 0,
     };
   }
-  const edge = 1 - fraction;
-  const shape = sliceShape({ edges: [edge], openness: [0, 1] }, 1, width, height);
+  const edge = optionsCover(width);
+  const shape = sliceShape({ edges: [edge], openness: [0, 1], cover: 1 }, 1, width, height);
   const leanDeg = height > 0 ? Math.atan((SLICE_SLANT * width) / height) * RADIANS_TO_DEGREES : 0;
   return { shape, edgeMid: edge * width, leanDeg };
 }

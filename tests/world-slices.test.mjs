@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 const {
   CLOSED_FOCUS,
+  COVER_CLEARANCE,
   clipPath,
   closedSlice,
   deviceBox,
@@ -128,6 +129,44 @@ test("a focus the frame cannot reach is held at the frame's edge, never inside t
     close(frameShift(layout, 0, width, height, 0.05), shape.left, "held at the left edge");
     close(frameShift(layout, 0, width, height, 0.99), shape.right - width, "held at the right");
   }
+});
+
+test("a cover gives the open world the whole screen, as focus does, and keeps the cover", () => {
+  const covered = worldsLayout(2, 1, false, 0.42);
+  assert.deepEqual(covered.edges, worldsLayout(2, 1, true).edges);
+  assert.equal(covered.cover, 0.42);
+  assert.equal(worldsLayout(2, 1, false).cover, 1);
+});
+
+test("under a cover the avatar slides left to stand clear of the panel's edge", () => {
+  for (const { width, height } of VIEWPORTS) {
+    for (const open of [0, 1]) {
+      const cover = 0.42;
+      const shift = frameShift(
+        worldsLayout(2, open, false, cover),
+        open,
+        width,
+        height,
+        AVATAR_FOCUS,
+      );
+      assert.ok(shift < 0, "the world moves left");
+      close(AVATAR_FOCUS * width + shift, (cover - COVER_CLEARANCE) * width, "avatar");
+    }
+  }
+});
+
+test("a cover easing in moves the framing continuously from where it was", () => {
+  const { width, height } = VIEWPORTS[0];
+  const from = worldsLayout(2, 0, false);
+  const to = worldsLayout(2, 0, false, 0.42);
+  let last = frameShift(from, 0, width, height, AVATAR_FOCUS);
+  const step = 0.02;
+  for (let t = step; t <= 1 + EPSILON; t += step) {
+    const shift = frameShift(mixLayouts(from, to, t), 0, width, height, AVATAR_FOCUS);
+    assert.ok(Math.abs(shift - last) < width * 0.05, `jump at ${t.toFixed(2)}`);
+    last = shift;
+  }
+  close(last, frameShift(to, 0, width, height, AVATAR_FOCUS), "lands on the target");
 });
 
 test("every open slice keeps the frame's edges outside it", () => {

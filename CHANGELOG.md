@@ -6,8 +6,8 @@ Every Morphy release and what it changed for you, newest first.
 
 ### Changed
 
-- Options open from the gear in the menu as a slanted panel over the world,
-  split into Audio, Video and Controls. Graphics quality and field of view
+- Options open from the gear in the menu as a slanted panel, the world sliding
+  aside to make room, split into Audio, Video and Controls. Graphics quality and field of view
   preview on the stage as you change them, and the match menu offers the same
   settings.
 

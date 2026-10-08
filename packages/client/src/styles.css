@@ -473,8 +473,7 @@ canvas {
     transform: none;
   }
 }
-.worlds-focus .world-slice-open,
-.menu-options-open .world-slice-open {
+.worlds-focus .world-slice-open {
   opacity: 0;
   transition: opacity 0.26s ease;
 }
@@ -497,6 +496,11 @@ canvas {
   text-transform: uppercase;
   color: #fff;
   text-shadow: 0 0.3vw 2vw rgba(0, 0, 0, 0.55);
+  transition: font-size 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+/* Under the Options slice the name steps down so it and the avatar share the free left part. */
+.worlds-covered .world-slice-name {
+  font-size: clamp(2rem, 3.8vw, 4rem);
 }
 .world-play-row {
   display: flex;
@@ -890,13 +894,14 @@ canvas {
 /*
  * The Options slice. Like a world slice it is the whole screen clipped to its shape (the clip
  * path and `--options-edge`, where the slanted edge crosses mid-height, come from
- * `optionsGeometry.ts`), so hit testing and the glass follow the cut exactly. The world left of
- * it stays visible; a click there lands on the backdrop and closes the slice.
+ * `optionsGeometry.ts`), so hit testing and the glass follow the cut exactly. The world slides
+ * into the part left of it, Play still in reach: the backdrop sits over the stage but under the
+ * slices, so only a click on the world itself closes the slice.
  */
 .options-backdrop {
   position: absolute;
   inset: 0;
-  z-index: 4;
+  z-index: 0;
   border: 0;
   padding: 0;
   background: transparent;
@@ -1545,6 +1550,7 @@ canvas {
   }
   .world-slice,
   .world-slice-v,
+  .world-slice-name,
   .world-play i,
   .dropdown,
   .dropdown-chevron {

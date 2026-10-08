@@ -469,7 +469,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
   return (
     <div
-      className={`menu${optionsOpen ? " menu-options-open" : ""}`}
+      className="menu"
       ref={menuRef}
       onPointerMove={handleSheenMove}
       style={{ "--glass-tint": MAP_GLASS[activeMap] } as React.CSSProperties}
@@ -489,6 +489,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
       <MapSlices
         open={openIndex}
         focus={picking}
+        covered={optionsOpen}
         motion={motion}
         night={LOBBY_NIGHT}
         canChoose={canChoose}
