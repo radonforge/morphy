@@ -24,7 +24,7 @@ import {
   StreetLamps,
 } from "../game/StreetLamps";
 import { useSharedGLTF } from "../game/sharedTextures";
-import { themeFor } from "../game/themes";
+import { type ThemePreset, themeFor } from "../game/themes";
 import { MAP_THEME_BASE, MORPH_COLOR } from "../theme";
 import { avatarNeighbors } from "./carousel";
 import { DIORAMA_FORM_S, pieceScale } from "./dioramaForm";
@@ -236,7 +236,7 @@ interface StageTheme {
   dirColor: string;
   /** Penumbra of the key light's shadows, in shadow-map texels; 1 is a hard edge. */
   shadowRadius: number;
-  sky: "stars" | "day";
+  sky: ThemePreset["sky"];
   turbidity: number;
   rayleigh: number;
   stars: { count: number; factor: number };

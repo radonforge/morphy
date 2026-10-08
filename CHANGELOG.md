@@ -4,6 +4,12 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- North District by day is now a golden hour: a low warm sun with long soft
+  shadows, cool shade and a sky that glows warm at the skyline, so the town
+  no longer looks flat.
+
 ### Fixed
 
 - On Low graphics, North District's night sky is no longer almost black: it

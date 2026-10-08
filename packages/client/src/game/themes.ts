@@ -8,6 +8,12 @@ import type { SkyGlowPreset, StreetLampPreset } from "./StreetLamps";
 const STARS_COUNT = 2400;
 const STARS_FACTOR = 4;
 
+type Vec3 = [number, number, number];
+
+/** Where the sun hangs, relative to what it lights; the shadowed sun keeps this direction. */
+export const DEFAULT_SUN_POSITION: Vec3 = [14, 26, 10];
+const HARD_SHADOW_RADIUS = 1;
+
 interface FogPreset {
   color: string;
   near: number;
@@ -39,7 +45,15 @@ export interface ThemePreset {
   ambient: number;
   dir: number;
   dirColor: string;
-  sky: "day" | "stars";
+  /** The sun's direction, which also places the drawn sky's sun. */
+  sunPosition: Vec3;
+  /** Penumbra of the sun's shadows, in shadow-map texels; 1 is a hard edge. */
+  shadowRadius: number;
+  /**
+   * `day` is three's physical sky, `stars` a night sky, `gradient` only the
+   * {@link skyGlow} dome, a painted sky from horizon to top.
+   */
+  sky: "day" | "stars" | "gradient";
   /** How many stars a night sky shows and how big; a city's own light hides most of them. */
   stars: { count: number; factor: number };
   skyGlow: SkyGlowPreset | null;
@@ -61,6 +75,8 @@ const DEFAULT_THEME: ThemePreset = {
   ambient: 0.7,
   dir: 1.4,
   dirColor: "#ffffff",
+  sunPosition: DEFAULT_SUN_POSITION,
+  shadowRadius: HARD_SHADOW_RADIUS,
   sky: "day",
   stars: { count: STARS_COUNT, factor: STARS_FACTOR },
   skyGlow: null,
@@ -73,6 +89,13 @@ const DEFAULT_THEME: ThemePreset = {
   grade: null,
 };
 
+const GOLDEN_SUN_POSITION: Vec3 = [26, 17, 14];
+const GOLDEN_HORIZON = "#f3cfa2";
+
+/**
+ * Each map's day. North District's is a golden hour: a low warm sun with soft shadows
+ * over cool shade, under a painted sky warm at the skyline that the haze melts into.
+ */
 const THEMES: Record<string, ThemePreset> = {
   station: {
     ground: MAP_THEME_BASE.station.ground,
@@ -83,6 +106,8 @@ const THEMES: Record<string, ThemePreset> = {
     ambient: 0.18,
     dir: 0.22,
     dirColor: "#8fa6e0",
+    sunPosition: DEFAULT_SUN_POSITION,
+    shadowRadius: HARD_SHADOW_RADIUS,
     sky: "stars",
     stars: { count: STARS_COUNT, factor: STARS_FACTOR },
     skyGlow: null,
@@ -105,22 +130,24 @@ const THEMES: Record<string, ThemePreset> = {
   urban: {
     ground: MAP_THEME_BASE.urban.ground,
     background: MAP_THEME_BASE.urban.background,
-    hemiSky: MAP_THEME_BASE.urban.hemiSky,
-    hemiGround: MAP_THEME_BASE.urban.hemiGround,
-    hemiIntensity: 1.0,
-    ambient: 0.8,
-    dir: MAP_THEME_BASE.urban.directional,
-    dirColor: "#ffffff",
-    sky: "day",
+    hemiSky: "#9ab8e8",
+    hemiGround: "#a08060",
+    hemiIntensity: 1.25,
+    ambient: 0.3,
+    dir: 2.0,
+    dirColor: "#ffcf9a",
+    sunPosition: GOLDEN_SUN_POSITION,
+    shadowRadius: 3,
+    sky: "gradient",
     stars: { count: STARS_COUNT, factor: STARS_FACTOR },
-    skyGlow: null,
+    skyGlow: { top: "#5d8fd0", horizon: GOLDEN_HORIZON, fade: 0.35 },
     streetLamps: null,
     turbidity: 4,
     rayleigh: 1.4,
-    fog: null,
+    fog: { color: GOLDEN_HORIZON, near: 50, far: 220 },
     deckLights: null,
-    bloom: null,
-    grade: { lift: [0.01, 0.005, 0], gain: [1.02, 1.01, 0.98], contrast: 1.04, saturation: 1.08 },
+    bloom: { intensity: 0.3, radius: 0.8, threshold: 1 },
+    grade: { lift: [0.01, 0.01, 0.03], gain: [1.04, 1, 0.94], contrast: 1.06, saturation: 1.1 },
   },
 };
 
@@ -142,6 +169,8 @@ const NIGHT_THEMES: Record<string, ThemePreset> = {
     ambient: 0.18,
     dir: 0.22,
     dirColor: "#8fa6e0",
+    sunPosition: DEFAULT_SUN_POSITION,
+    shadowRadius: HARD_SHADOW_RADIUS,
     sky: "stars",
     stars: { count: 500, factor: 2 },
     skyGlow: { top: "#0d1030", horizon: "#3d2c4a", fade: 0.35 },
