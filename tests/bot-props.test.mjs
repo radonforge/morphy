@@ -784,31 +784,44 @@ test("a prop whose hiding spot holds a decoy hides somewhere else", async (t) =>
   );
 });
 
+/** Disguise, prop spawn and seed that once picked a spot in a station doorway's clearance. */
+const DOORWAY_PICKS = [
+  ["computer-wide", 2, 5],
+  ["computer-wide", 12, 6],
+  ["bed-single", 8, 7],
+  ["bed-single", 6, 8],
+  ["computer-wide", 9, 8],
+  ["computer", 0, 9],
+  ["bed-double", 10, 9],
+];
+
 test("a prop never hides in a doorway's clearance", () => {
   const terrainOf = new Terrain(STATION);
-  const type = "bed-single";
-  const site = pickHideSite(
-    terrainOf,
-    {
-      type,
-      from: STATION.spawnPoints.props[8],
-      radius: HIDE_SEARCH_RADIUS,
-      maxPath: (HIDE_DURATION_MS / 1_000) * MOVE_SPEED * RUN_MULTIPLIER_PROP * HIDE_TRAVEL_SHARE,
-      threats: [],
-      leaving: null,
-    },
-    makeRng(7),
-  );
-  assert.ok(site, "it found a spot");
   const context = { catalog: STATION.propCatalog, cards: ASSET_CARDS, tags: ASSET_TAGS };
-  const boxes = objectHitboxes({ id: type, type, ...site }, context);
+  const maxPath = (HIDE_DURATION_MS / 1_000) * MOVE_SPEED * RUN_MULTIPLIER_PROP * HIDE_TRAVEL_SHARE;
   assert.ok(terrainOf.doorClearance.length > 0, "the station has doorways");
-  for (const zone of terrainOf.doorClearance) {
-    for (const box of boxes) {
-      assert.ok(
-        overlapDepth(box, zone) <= LEVEL_OVERLAP_TOLERANCE,
-        `the ${type} at ${site.x.toFixed(2)}, ${site.z.toFixed(2)} stands in a doorway`,
-      );
+  for (const [type, spawnIndex, seed] of DOORWAY_PICKS) {
+    const site = pickHideSite(
+      terrainOf,
+      {
+        type,
+        from: STATION.spawnPoints.props[spawnIndex],
+        radius: HIDE_SEARCH_RADIUS,
+        maxPath,
+        threats: [],
+        leaving: null,
+      },
+      makeRng(seed),
+    );
+    assert.ok(site, `a ${type} from spawn ${spawnIndex} found a spot`);
+    const boxes = objectHitboxes({ id: type, type, ...site }, context);
+    for (const zone of terrainOf.doorClearance) {
+      for (const box of boxes) {
+        assert.ok(
+          overlapDepth(box, zone) <= LEVEL_OVERLAP_TOLERANCE,
+          `the ${type} at ${site.x.toFixed(2)}, ${site.z.toFixed(2)} stands in a doorway`,
+        );
+      }
     }
   }
 });
