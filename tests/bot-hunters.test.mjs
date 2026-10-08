@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { PANIC_SEEN_RADIUS } from "../packages/bot/src/config.ts";
+import {
+  ENGAGE_RANGE_MAX,
+  ENGAGE_RANGE_MIN,
+  lerp,
+  PANIC_SEEN_RADIUS,
+} from "../packages/bot/src/config.ts";
 import { BotDriver } from "../packages/bot/src/driver.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
@@ -16,6 +21,9 @@ const CHASE_WARMUP_TICKS = 40;
 const CHASE_TICKS = 160;
 const CHASE_START_GAP = 8;
 const PROP_RUN_SPEED = MOVE_SPEED * RUN_MULTIPLIER_PROP;
+const ENGAGE_RANGE = lerp(ENGAGE_RANGE_MIN, ENGAGE_RANGE_MAX, DIFFICULTY);
+/** How far past its reach a runner may get between two of the hunter's decisions. */
+const CHASE_SLACK = 1;
 
 const FLEE_TICKS = 200;
 const FLEE_SETTLE_TICKS = 40;
@@ -154,11 +162,12 @@ test("two hunter bots left alone never target each other on sight", async () => 
 });
 
 /**
- * A hunter closing on a disguise that runs. The two motions used to move at
- * different speeds: `inspect` walked at `MOVE_SPEED` while a panicking prop ran
- * at `MOVE_SPEED * RUN_MULTIPLIER_PROP`, so the gap opened at 2.5 m/s for as
- * long as the prop kept going, and a fleeing prop is never `shootable`, so
- * `inspect` is the only path a hunter has to it.
+ * A hunter keeping a disguise that runs in reach. A runner in reach is shot at,
+ * and the hunter stands to shoot, so the gap opens until the runner slips out
+ * of reach; from there `inspect` is the only path the hunter has to it. The two
+ * motions used to move at different speeds: `inspect` walked at `MOVE_SPEED`
+ * while a panicking prop ran at `MOVE_SPEED * RUN_MULTIPLIER_PROP`, so the gap
+ * opened at 2.5 m/s for as long as the prop kept going.
  *
  * The quarry is a bare body rather than a second policy because the claim under
  * test is about a prop at *top* speed. A real prop slows to a walk the moment it
@@ -170,7 +179,7 @@ test("two hunter bots left alone never target each other on sight", async () => 
  * patrol goal is pinned straight down the arena, since a random one sends the
  * hunter off the quarry's line and the result would be about that detour.
  */
-test("a hunter closes on a disguise running at a prop's top speed", async (t) => {
+test("a hunter keeps a disguise running at a prop's top speed in reach", async (t) => {
   t.mock.method(Math, "random", () => 0.5);
   const log = [];
   const driver = driverFor("Alpha", ARENA, log);
@@ -202,17 +211,19 @@ test("a hunter closes on a disguise running at a prop's top speed", async (t) =>
     return Math.hypot(quarry.x - self.x, quarry.z - self.z);
   };
 
-  const engaged = await chase(CHASE_WARMUP_TICKS);
+  await chase(CHASE_WARMUP_TICKS);
   const finished = await chase(CHASE_TICKS);
 
   await driver.stop();
 
   const running = log.filter(({ intent }) => intent.kind === "inspect" && intent.run === true);
   assert.ok(running.length > 0, "the hunter decided to run the disguise down, not walk after it");
+  const shooting = log.filter(({ intent }) => intent.kind === "shootTarget");
+  assert.ok(shooting.length > 0, "the hunter fired at the runner while it was in reach");
 
   assert.ok(
-    finished < engaged,
-    `the hunter gained ground on a running prop (gap ${finished.toFixed(1)}m, was ${engaged.toFixed(1)}m)`,
+    finished <= ENGAGE_RANGE + CHASE_SLACK,
+    `the hunter kept the running prop in reach (gap ${finished.toFixed(1)}m, reach ${ENGAGE_RANGE.toFixed(1)}m)`,
   );
 });
 

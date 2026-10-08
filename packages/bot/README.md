@@ -37,15 +37,22 @@ let bots play on their own (handy as a server smoke test).
 
 ## How it plays
 
-- **Hunter**: picks a target within an engage range and fires *only when it
-  predicts a server-side hit* (same raycast as `MorphyRoom`), so it never bleeds
-  HP on walls. Difficulty widens its sight and shortens its reaction time. Under
+- **Hunter**: picks a target within an engage range and fires only with a clear
+  shot at it (same raycast as `MorphyRoom`), so it never wastes a shot on a
+  wall, but it aims like a player (`src/aim.ts`): its crosshair wanders a little
+  round the target, a new target is flicked onto (now and then past) and fired
+  at only after a reaction time drawn for it, the trigger is pulled with a
+  chance that falls as the crosshair strays, and each shot leaves with an error
+  that grows with how fast the target crosses its view, how far it is and how
+  fast the hunter was moving. So it misses a runner far more than a crate
+  standing still, and pays the miss damage a player pays. Difficulty widens its
+  sight, shortens its reaction time and tightens its aim. Under
   `--visibility limited` it has no `role` to read and sees nothing while the
   props hide: a contact seen to wear no disguise is a teammate and is left
   alone, and every disguise in sight (a still prop, a decoy, or the scenery
   itself) looks the same until it gives itself away by moving, changing shape
-  or honking. A suspect standing still is shot, one still moving is chased
-  down, and with no suspect it tests the nearest object it has not tried by
+  or honking. A suspect in reach is shot at, standing still or running, one
+  out of reach is chased down, and with no suspect it tests the nearest object it has not tried by
   shooting it, every few seconds, paying the miss damage when it was furniture.
   A contact known only by sound is investigated whoever it turns out to be. A
   taunt it hears is run to, and with nothing to follow for a while it sounds
@@ -72,3 +79,22 @@ default.
 `--trace <path>` writes one JSONL file per bot, one line per *applied* decision
 (`{t,botName,policy,seq,phase,visibility,obs,intent}`), plus a `kill` line for
 every kill broadcast in the room and a terminal `round_end`. It is the practical way to measure what a bot actually did.
+
+## Measuring bot-only rounds
+
+```bash
+pnpm bot:sim                          # 60 rounds on each map, seed 1
+pnpm bot:sim --rounds 200 --map urban --seed 7
+```
+
+`pnpm bot:sim` (`tools/bot-sim/sim.mjs`) plays bot-only rounds in the real
+`MorphyRoom` on a virtual clock, so a three-minute round takes as long as its
+ticks take to compute (100 rounds on both maps run in well under a minute).
+The room is filled the way a quiet public room fills itself: `--bots` (default
+`BOT_FILL_TARGET`) server-driven bots at `DEFAULT_DIFFICULTY` with limited
+vision. `Math.random` is seeded from `--seed`, so the same seed replays the
+same rounds. It prints one Markdown row per map: prop win rate, median and p90
+hunt (from the hunt opening to the round's end, so a prop win counts the full
+round), shots per capture, the share of captures on a prop that was moving,
+captures per round, and how often a hunter ran its HP out. It is not part of
+`pnpm test`; run it before and after a change to bot behaviour or pacing.

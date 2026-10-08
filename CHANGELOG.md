@@ -15,6 +15,9 @@ Every Morphy release and what it changed for you, newest first.
 
 ### Changed
 
+- Bot hunters now shoot at a prop they see running instead of waiting for it to
+  stop, and miss far more doing it: they aim like a player, a little late and a
+  little off, and a miss costs them health as it costs you.
 - As a prop, a tap of Q or E now snaps your disguise to the next 90, 45 or 15
   degree mark, the step you choose, and holding the key spins it as before.
   Press X to switch the step; the choice is remembered.

@@ -62,7 +62,8 @@ function isSuspect(entity: ObservedEntity): boolean {
 
 /**
  * Whether a contact is a disguise *seen* to be on the move: the one suspect
- * worth sprinting after, because it is the one a walking hunter can never catch:
+ * worth sprinting after once it is out of reach, because it is the one a
+ * walking hunter can never catch:
  * a panicking prop runs at `MOVE_SPEED * RUN_MULTIPLIER_PROP` and a walking
  * approach closes at `MOVE_SPEED`, so the gap opens for as long as it keeps
  * running.
@@ -163,10 +164,7 @@ export class ScriptedPolicy implements Policy {
   private hunterLimited(obs: Observation): Intent {
     const seq = obs.seq;
     const engageRange = lerp(ENGAGE_RANGE_MIN, ENGAGE_RANGE_MAX, this.difficulty);
-    const shootable = nearest(
-      obs.entities,
-      (e) => isSuspect(e) && !e.movedRecently && e.distance <= engageRange,
-    );
+    const shootable = nearest(obs.entities, (e) => isSuspect(e) && e.distance <= engageRange);
     const suspect = this.nearestSuspect(obs);
     const lead = this.followTaunt(obs);
     this.settleProbe(obs);

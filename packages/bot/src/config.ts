@@ -2,6 +2,7 @@ import {
   DEFAULT_PORT,
   DEFAULT_WEAPON,
   FOOTSTEP_HEARING_RADIUS,
+  INPUT_SEND_RATE_MS,
   PLAYER_EYE_HEIGHT,
   WEAPONS,
 } from "@morphy/shared";
@@ -77,14 +78,74 @@ export const REACTION_MS_MAX = 950;
 export const REACTION_MS_MIN = 180;
 
 /**
+ * Spread of the reaction time drawn each time a hunter acquires a new target,
+ * as a fraction of the difficulty's mean, and the floor no draw goes under: a
+ * player is sometimes quick and sometimes slow on the trigger, never instant.
+ */
+export const REACTION_JITTER = 0.3;
+export const REACTION_FLOOR_FRACTION = 0.5;
+/**
+ * The extra beat a hunter takes past the fire cooldown before its next shot at
+ * the same target, drawn per shot as the absolute value of a normal draw of
+ * this spread: a player does not fire on the cooldown's exact frame.
+ */
+export const AIM_FOLLOW_UP_JITTER_MS = 150;
+
+/**
  * Combat aim is a bounded turn, not a snap: the bot may only rotate toward a
- * target this fast and can fire only once aligned within {@link AIM_TOLERANCE_RAD}.
- * Difficulty lerps the rate: a low-difficulty bot visibly swings its aim around
- * and a strafing player can stay ahead of it, instead of being instantly locked.
+ * target this fast. Difficulty lerps the rate: a low-difficulty bot visibly
+ * swings its aim around and a strafing player can stay ahead of it, instead of
+ * being instantly locked.
  */
 export const AIM_TURN_RATE_MIN = 1.6;
 export const AIM_TURN_RATE_MAX = 14;
-export const AIM_TOLERANCE_RAD = (4 * Math.PI) / 180;
+/**
+ * The crosshair never sits dead on a target: it wanders around it with this
+ * standard deviation, lerped by difficulty, and drifts back over
+ * {@link AIM_DRIFT_TAU_S}, the slow hand-shake of a player tracking something.
+ */
+export const AIM_DRIFT_MAX_RAD = (2 * Math.PI) / 180;
+export const AIM_DRIFT_MIN_RAD = (0.4 * Math.PI) / 180;
+export const AIM_DRIFT_TAU_S = 0.4;
+/**
+ * Now and then the flick onto a new target carries past it by up to this
+ * fraction of the turn, and the aim comes back from the far side, at the
+ * latest once the reaction time is up.
+ */
+export const AIM_OVERSHOOT_CHANCE = 0.35;
+export const AIM_OVERSHOOT_MAX_FRACTION = 0.25;
+/** Below this the aim counts as having reached the far end of an overshoot. */
+export const AIM_OVERSHOOT_SETTLE_RAD = (1 * Math.PI) / 180;
+/**
+ * The trigger is a judgement on how far the crosshair sits off the target: the
+ * chance of firing on a tick falls as a Gaussian of the aim error with this
+ * width, so a bot fires on a near miss now and then and almost never far off.
+ */
+export const AIM_FIRE_ERROR_RAD = (3 * Math.PI) / 180;
+/**
+ * The tick the trigger chance is stated for: a bot ticking at another rate
+ * scales its chance to match, so how readily it fires never depends on how
+ * often it is asked.
+ */
+export const AIM_TRIGGER_TICK_S = INPUT_SEND_RATE_MS / 1_000;
+/**
+ * The standard deviation of the error a shot leaves the crosshair with, drawn
+ * per shot and never seen by the bot before it fires: a base, plus a share per
+ * m/s the target moves across the line of sight, per metre of distance and per
+ * m/s the hunter itself was moving. Difficulty scales the sum from the first
+ * scale to the second, so a running prop is a hard shot for every bot and a
+ * near-impossible one for a weak bot.
+ */
+export const AIM_SPREAD_BASE_RAD = (1.2 * Math.PI) / 180;
+export const AIM_SPREAD_PER_LATERAL_SPEED_RAD = (0.7 * Math.PI) / 180;
+export const AIM_SPREAD_PER_METER_RAD = (0.05 * Math.PI) / 180;
+export const AIM_SPREAD_PER_SELF_SPEED_RAD = (0.4 * Math.PI) / 180;
+export const AIM_SPREAD_SCALE_MAX = 1.8;
+export const AIM_SPREAD_SCALE_MIN = 0.6;
+/** Vertical error is this share of the horizontal: a player's aim slides sideways more than up and down. */
+export const AIM_PITCH_SPREAD_SHARE = 0.5;
+/** How quickly a velocity seen (the target's, or the bot's own) settles to a new value. */
+export const AIM_VELOCITY_SMOOTHING_S = 0.2;
 
 export const NAV_CELL_SIZE = 1.0;
 export const NAV_INFLATION_EPS = 0.05;
