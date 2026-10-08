@@ -164,6 +164,42 @@ export const DECIDE_INTERVAL_MS = 700;
 export const DECIDE_TIMEOUT_MS = 500;
 
 export const BOT_VISION_RANGE = WEAPONS[DEFAULT_WEAPON].range;
+/**
+ * The vertical field of view a player's camera opens at by default (the
+ * client's `FIELD_OF_VIEW_DEFAULT`) and the screen shape it is judged on. A
+ * hunter bot sees what a hunter player sees at those settings: a horizontal
+ * cone of the half-angle a perspective camera derives from them, about 43
+ * degrees either side of where it looks.
+ */
+export const HUNTER_VERTICAL_FOV_DEG = 55;
+export const REFERENCE_ASPECT = 16 / 9;
+export const HUNTER_VIEW_HALF_ANGLE_RAD = Math.atan(
+  Math.tan((HUNTER_VERTICAL_FOV_DEG * Math.PI) / 360) * REFERENCE_ASPECT,
+);
+/**
+ * A hunter with nothing in its sights glances aside now and then, the way a
+ * player searching a room looks around: every so often (a draw between the
+ * two intervals) it turns its view this far off the way it walks (a draw
+ * between the two angles), holds it, and turns back, never faster than
+ * {@link GLANCE_TURN_RATE} radians a second.
+ */
+export const GLANCE_INTERVAL_MIN_MS = 1_500;
+export const GLANCE_INTERVAL_MAX_MS = 3_500;
+export const GLANCE_ANGLE_MIN_RAD = (50 * Math.PI) / 180;
+export const GLANCE_ANGLE_MAX_RAD = (110 * Math.PI) / 180;
+export const GLANCE_HOLD_MS = 700;
+export const GLANCE_TURN_RATE = 6;
+/**
+ * Where on a body the bot looks for it: its middle, near its top
+ * ({@link SIGHT_SAMPLE_TOP_SHARE} of its height) and both sides at mid height
+ * ({@link SIGHT_SAMPLE_EDGE_SHARE} of the way from its middle to the edge of the
+ * model it renders as), so a disguise half behind a cabinet is still seen by
+ * the half that shows.
+ */
+export const SIGHT_SAMPLE_TOP_SHARE = 0.85;
+export const SIGHT_SAMPLE_EDGE_SHARE = 0.8;
+/** Side of the grid cells sight blockers are bucketed in, so a sightline tests only what stands along it. */
+export const SIGHT_CELL_SIZE = 4;
 export const BOT_HEARING_RADIUS = FOOTSTEP_HEARING_RADIUS;
 /** Cell size a contact known only by sound is snapped to, so hearing yields a
  * neighbourhood rather than a point. Sized to a map tile: within earshot a
@@ -171,9 +207,14 @@ export const BOT_HEARING_RADIUS = FOOTSTEP_HEARING_RADIUS;
 export const HEARD_POSITION_CELL = 4;
 /** How long a bot remembers a sound it heard: long enough for its next few decisions to act on it. */
 export const HEARD_SOUND_MEMORY_MS = 3_000;
+/**
+ * How long a step keeps a contact moving: a disguise seen to step or spin
+ * within this is `movedRecently`, and one whose rustle carried within this
+ * is heard where it went.
+ */
 export const MOVED_RECENTLY_MS = 600;
 export const MOVED_RECENTLY_MIN_DIST = 0.3;
-/** A disguise turning by more than this in place is seen to move, as a player sees it spin. */
+/** A disguise turning by more than this in place is seen to move, as a player sees it spin. It makes no sound. */
 export const MOVED_RECENTLY_MIN_TURN_RAD = 0.2;
 /**
  * How long a disguise stays a suspect after it gave itself away (seen moving,

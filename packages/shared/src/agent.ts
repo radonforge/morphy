@@ -100,10 +100,13 @@ export interface ObservedSelf {
 export interface ObservedEntity {
   /**
    * Under `"full"` visibility, the player's session id. Under `"limited"`, an
-   * opaque handle drawn from one sequence for players, decoys and scene props
-   * alike, dealt nearest first, so the id says nothing a player could not see:
-   * a session id would name a player, a decoy's key would name a decoy, and a
-   * handle dealt to players first would name them by their place in the line.
+   * opaque handle drawn from one sequence for players, decoys, scene props and
+   * the spots rustles are heard from alike, dealt nearest first, so the id says
+   * nothing a player could not see: a session id would name a player, a decoy's
+   * key would name a decoy, and a handle dealt to players first would name them
+   * by their place in the line. A rustle heard out of sight is named by where it
+   * was heard, never by who made it, so a contact known only by sound is a place
+   * to look, and the player behind it gets a handle of its own once seen.
    */
   id: string;
   x: number;

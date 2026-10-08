@@ -73,6 +73,7 @@ const body = (id, spawn, over = {}) => ({
   z: spawn.z,
   rot: 0,
   aim: 0,
+  propRot: 0,
   role: "hunter",
   alive: true,
   hp: 100,
@@ -300,13 +301,15 @@ test("a prop under chase keeps fleeing past its first escape point", async () =>
  * The crate is left standing whatever the shot did, as furniture would be, so
  * the question is only whether the bot comes back to it. Patrol goals are
  * pinned to the arena's centre, where the hunter already stands, so it keeps
- * the crate in reach instead of wandering off on a random goal.
+ * the crate in reach instead of wandering off on a random goal. The arena is
+ * sized so that the centre's navigation cell is centred on the hunter too: a
+ * goal half a cell off turned it aside, and a hunter sees only what it faces.
  */
 async function probeStillCrate(t, seed) {
   t.mock.method(Math, "random", () => 0.5);
   const arena = {
     ...ARENA,
-    bounds: { min: { x: -30, y: 0, z: -30 }, max: { x: 30, y: 10, z: 30 } },
+    bounds: { min: { x: -29.5, y: 0, z: -29.5 }, max: { x: 29.5, y: 10, z: 29.5 } },
   };
   const driver = driverFor("Alpha", arena, [], makeRng(seed));
   const self = body("bot:1", { x: 0, y: 0, z: 0 });

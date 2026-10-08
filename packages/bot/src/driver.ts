@@ -11,14 +11,7 @@ import {
   withTimeout,
 } from "@morphy/shared";
 import type { Rng } from "./aim";
-import {
-  ARRIVE_EPSILON,
-  BOT_VISION_RANGE,
-  DECIDE_INTERVAL_MS,
-  DECIDE_TIMEOUT_MS,
-  MAX_TICK_SECONDS,
-} from "./config";
-import { decoySource, playerSource } from "./contacts";
+import { ARRIVE_EPSILON, DECIDE_INTERVAL_MS, DECIDE_TIMEOUT_MS, MAX_TICK_SECONDS } from "./config";
 import type { Policy } from "./policy/types";
 import type { Vec3 } from "./raycast";
 import { Reflex, type ReflexWorld } from "./reflex";
@@ -108,7 +101,7 @@ export class BotDriver {
   private eventPhase: Phase = "lobby";
   private eventRole: Role = "prop";
   private eventHp = 0;
-  private losIds = new Set<string>();
+  private losIds: ReadonlySet<string> = new Set<string>();
   /** A decided chat line is only worth saying on the very next tick; a bot that dies or returns to the lobby first drops it rather than blurting it out a round later. */
   private pendingSay: string | null = null;
   /** A decided action is pressed on the next tick or not at all, for the same reason as {@link pendingSay}. */
@@ -209,14 +202,14 @@ export class BotDriver {
   private maybeKickDecide(world: ReflexWorld, now: number): void {
     if (this.decideInFlight) return;
     const due = now - this.lastDecideAt >= DECIDE_INTERVAL_MS;
-    const event = this.detectEvent(world);
+    const event = this.detectEvent(world, now);
     if (!due && !event) return;
     this.launchDecide(world, now);
   }
 
   /** Cheap per-tick triggers that wake the policy early. Reads the bot's *own*
    * state (phase, role, hp), which an observation always carries in full. */
-  private detectEvent(world: ReflexWorld): boolean {
+  private detectEvent(world: ReflexWorld, now: number): boolean {
     const self = world.self;
     let event = false;
 
@@ -231,7 +224,7 @@ export class BotDriver {
     if (self.hp < this.eventHp) event = true;
     this.eventHp = self.hp;
 
-    if (this.detectLineOfSightGain(world)) event = true;
+    if (this.detectLineOfSightGain(world, now)) event = true;
     if (this.reflex.consumeArrivalEvent()) event = true;
     if (this.reflex.consumeBlockedEvent()) event = true;
     if (this.reflex.consumeHeardEvent()) event = true;
@@ -245,29 +238,20 @@ export class BotDriver {
    * it stayed asleep while a teammate walked past and woke the instant a prop
    * appeared, before its policy had been told anything about either. Working
    * out who a contact is belongs to the policy, from the observation it is
-   * allowed to see. Dead players are skipped because they are not rendered for
-   * a human either, so they are not there to be noticed. A limited-vision bot
-   * is woken by a decoy coming into view as well: it perceives one as a
-   * disguise like any other, and sleeping through it would be a tell.
+   * allowed to see. What counts as in view is the reflex's own {@link
+   * Reflex.sense}, the test the observation and the motor read as well: dead
+   * players are not rendered for a human, a hunter sees only what lies in the
+   * cone it faces, and nobody sees through a wall or a cabinet. A
+   * limited-vision bot is woken by a decoy coming into view as well: it
+   * perceives one as a disguise like any other, and sleeping through it would
+   * be a tell.
    */
-  private detectLineOfSightGain(world: ReflexWorld): boolean {
-    const seen = new Set<string>();
-    const sighted: { source: string; x: number; y: number; z: number }[] = [];
-    for (const other of world.others) {
-      if (!other.alive) continue;
-      sighted.push({ source: playerSource(other.id), x: other.x, y: other.y, z: other.z });
-    }
-    if (this.options.visibility === "limited") {
-      for (const decoy of world.decoys) {
-        sighted.push({ source: decoySource(decoy.id), x: decoy.x, y: decoy.y, z: decoy.z });
-      }
-    }
+  private detectLineOfSightGain(world: ReflexWorld, now: number): boolean {
+    this.reflex.sense(world, now);
+    const seen = this.reflex.seenSources();
     let gained = false;
-    for (const contact of sighted) {
-      const dist = Math.hypot(contact.x - this.reflex.x, contact.z - this.reflex.z);
-      if (dist > BOT_VISION_RANGE || !this.reflex.canSee(contact.x, contact.y, contact.z)) continue;
-      seen.add(contact.source);
-      if (!this.losIds.has(contact.source)) gained = true;
+    for (const source of seen) {
+      if (!this.losIds.has(source)) gained = true;
     }
     this.losIds = seen;
     return gained;
