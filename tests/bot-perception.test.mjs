@@ -30,6 +30,12 @@ const MAP = {
   propCatalog: [],
 };
 
+/**
+ * The hunter at the origin looks down the -x axis, at the open side: a hunter
+ * sees only the cone it faces, and the wall stands behind it on +x.
+ */
+const FACING_OPEN_SIDE = -Math.PI / 2;
+
 const contact = (x, z) => ({
   id: "target",
   name: "target",
@@ -68,7 +74,7 @@ function observeMoving(reflex, from, to) {
 function ready(visibility, rng) {
   const reflex = new Reflex(0.6, visibility, rng);
   reflex.setMap(MAP);
-  reflex.syncPosition(0, 0, 0);
+  reflex.syncPosition(0, 0, FACING_OPEN_SIDE);
   return reflex;
 }
 
@@ -131,7 +137,7 @@ test("full visibility keeps ground truth even without line of sight", () => {
 
 /** Far enough past the wall to clear both the sight line and the hearing radius. */
 const GONE = contact(16, 3);
-const IN_PLAIN_SIGHT = contact(3, 0);
+const IN_PLAIN_SIGHT = contact(-3, 0);
 
 test("a contact lost from sight and earshot is tracked to where it was, not where it is", () => {
   const reflex = ready("limited");
@@ -145,7 +151,7 @@ test("a contact lost from sight and earshot is tracked to where it was, not wher
   );
   assert.deepEqual(
     reflex.pathGoal,
-    { x: 3, z: 0 },
+    { x: -3, z: 0 },
     "a contact in plain sight is approached directly",
   );
 
@@ -164,7 +170,7 @@ test("a contact lost from sight and earshot is tracked to where it was, not wher
 
   assert.deepEqual(
     reflex.pathGoal,
-    { x: 3, z: 0 },
+    { x: -3, z: 0 },
     "the bot still searches the last place it saw it",
   );
 });
@@ -289,10 +295,12 @@ test("a hunter shoots a decoy it has in its sights", () => {
   assert.ok(shot.dir.x < 0, "and the shot goes toward it");
 });
 
-test("a taunt in sight is heard where it was", () => {
+test("a taunt from a disguise in sight is heard where it was", () => {
   const reflex = ready("limited");
+  const honker = contact(-5.9, 1.9);
+  reflex.buildObservation(world(honker), 1, 950);
   reflex.hear("taunt", -5.9, 1.9, 1_000);
-  const [sound] = reflex.buildObservation(world(GONE), 1, 1_100).sounds;
+  const [sound] = reflex.buildObservation(world(honker), 2, 1_100).sounds;
   assert.ok(sound);
   assert.equal(sound.hasLineOfSight, true);
   assert.deepEqual({ x: sound.x, z: sound.z }, { x: -5.9, z: 1.9 });
@@ -370,7 +378,7 @@ function furnished(propAt) {
     props: [{ type: "crate", position: { x: propAt.x, y: 0, z: propAt.z }, rotation: 0 }],
     propCatalog: [CRATE],
   });
-  reflex.syncPosition(0, 0, 0);
+  reflex.syncPosition(0, 0, FACING_OPEN_SIDE);
   return reflex;
 }
 
@@ -391,7 +399,7 @@ test("decor nobody can wear, a parked car, is never shown as a disguise", () => 
     props: [{ type: "car", position: { x: -5, y: 0, z: -2 }, rotation: 0 }],
     propCatalog: [{ ...CRATE, id: "car", decor: true }],
   });
-  reflex.syncPosition(0, 0, 0);
+  reflex.syncPosition(0, 0, FACING_OPEN_SIDE);
   assert.deepEqual(reflex.buildObservation(world(GONE), 1, 1_000).entities, []);
   const parked = buildObstacles({
     ...MAP,

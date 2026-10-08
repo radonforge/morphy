@@ -1,6 +1,7 @@
 import { rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 import { MOVED_RECENTLY_MIN_DIST, MOVED_RECENTLY_MS } from "../../packages/bot/src/config.ts";
 import {
@@ -17,7 +18,9 @@ import {
 
 const MS_PER_SECOND = 1_000;
 const P90 = 0.9;
+const P99 = 0.99;
 const PERCENT = 100;
+const MICROS_PER_MS = 1_000;
 const DEFAULT_ROUNDS = 60;
 const DEFAULT_SEED = 1;
 const START_EPOCH_MS = Date.UTC(2026, 0, 1);
@@ -32,7 +35,8 @@ Prints one row per map: prop win rate, median and p90 hunt (hunt start to round
 end), shots per capture, the share of captures on a prop moving when the shot
 landed (its latest input carried it at half walking pace or more), the share on
 one that had moved within ${MOVED_RECENTLY_MS} ms, which also counts a prop that had just
-stopped, and how often a hunter ran its HP out. Needs at least
+stopped, how often a hunter ran its HP out, and the wall time one bot tick
+costs during the hunt (mean and p99, in microseconds). Needs at least
 ${MIN_PLAYERS_TO_START} bots, the players a round needs to start. Same seed, same rounds.`;
 
 const { values } = parseArgs({
@@ -214,6 +218,15 @@ async function simulate(mapId) {
     }
   };
 
+  const tickBots = room.tickBots.bind(room);
+  room.tickBots = () => {
+    if (!current) return tickBots();
+    const started = performance.now();
+    tickBots();
+    const perBot = (performance.now() - started) / room.bots.size;
+    current.tickCosts.push(perBot * MICROS_PER_MS);
+  };
+
   room.maybeStartRound();
   while (played.length < rounds) {
     if (!clock.step())
@@ -229,6 +242,7 @@ async function simulate(mapId) {
         movingCaptures: 0,
         recentlyMovedCaptures: 0,
         hunterOuts: 0,
+        tickCosts: [],
       };
     } else if (phase === "round_end" && current) {
       played.push({ ...current, winner: room.state.winner, huntMs: clock.now - huntStart });
@@ -244,6 +258,7 @@ function summarize(mapId, played) {
   const hunts = played.map((round) => round.huntMs / MS_PER_SECOND).sort((a, b) => a - b);
   const sum = (key) => played.reduce((total, round) => total + round[key], 0);
   const captures = sum("captures");
+  const ticks = played.flatMap((round) => round.tickCosts).sort((a, b) => a - b);
   return {
     map: mapId,
     rounds: played.length,
@@ -256,6 +271,8 @@ function summarize(mapId, played) {
       captures === 0 ? Number.NaN : (PERCENT * sum("recentlyMovedCaptures")) / captures,
     capturesPerRound: captures / played.length,
     hunterOutsPerRound: sum("hunterOuts") / played.length,
+    tickMeanUs: ticks.reduce((total, cost) => total + cost, 0) / ticks.length,
+    tickP99Us: quantile(ticks, P99),
   };
 }
 
@@ -266,12 +283,12 @@ try {
   for (const mapId of maps) rows.push(await simulate(mapId));
   console.log(
     `${botCount} bots, ${rounds} rounds per map, seed ${seed}\n\n` +
-      `| Map | Rounds | Prop wins | Median hunt | p90 hunt | Shots per capture | Captures on a prop moving at capture | Captures on a prop that moved within ${MOVED_RECENTLY_MS} ms | Captures per round | Hunter HP outs per round |\n` +
-      "|---|---|---|---|---|---|---|---|---|---|",
+      `| Map | Rounds | Prop wins | Median hunt | p90 hunt | Shots per capture | Captures on a prop moving at capture | Captures on a prop that moved within ${MOVED_RECENTLY_MS} ms | Captures per round | Hunter HP outs per round | Bot tick, mean / p99 |\n` +
+      "|---|---|---|---|---|---|---|---|---|---|---|",
   );
   for (const row of rows) {
     console.log(
-      `| ${row.map} | ${row.rounds} | ${fixed(row.propWinPct, 0)}% | ${fixed(row.medianHuntS, 1)} s | ${fixed(row.p90HuntS, 1)} s | ${fixed(row.shotsPerCapture, 1)} | ${fixed(row.movingCapturePct, 0)}% | ${fixed(row.recentlyMovedCapturePct, 0)}% | ${fixed(row.capturesPerRound, 2)} | ${fixed(row.hunterOutsPerRound, 2)} |`,
+      `| ${row.map} | ${row.rounds} | ${fixed(row.propWinPct, 0)}% | ${fixed(row.medianHuntS, 1)} s | ${fixed(row.p90HuntS, 1)} s | ${fixed(row.shotsPerCapture, 1)} | ${fixed(row.movingCapturePct, 0)}% | ${fixed(row.recentlyMovedCapturePct, 0)}% | ${fixed(row.capturesPerRound, 2)} | ${fixed(row.hunterOutsPerRound, 2)} | ${fixed(row.tickMeanUs, 0)} / ${fixed(row.tickP99Us, 0)} µs |`,
     );
   }
 } finally {

@@ -48,7 +48,10 @@ let bots play on their own (handy as a server smoke test).
   standing still, and pays the miss damage a player pays. Difficulty widens its
   sight, shortens its reaction time and tightens its aim. Under
   `--visibility limited` it has no `role` to read and sees nothing while the
-  props hide: a contact seen to wear no disguise is a teammate and is left
+  props hide, and then only what a player's screen would show: the cone it
+  faces at the default field of view (it glances aside now and then while it
+  searches), never through a wall or a piece of furniture, though any part of a
+  disguise that shows is enough. A contact seen to wear no disguise is a teammate and is left
   alone, and every disguise in sight (a still prop, a decoy, or the scenery
   itself) looks the same until it gives itself away by moving, changing shape
   or honking. A suspect in reach is shot at, standing still or running, one
@@ -56,14 +59,17 @@ let bots play on their own (handy as a server smoke test).
   shooting it, every few seconds, paying the miss damage when it was furniture.
   A probe that went past the object tested nothing, so it tries that one again
   after `BOT_PROBE_RETRY_MS`.
-  A contact known only by sound is investigated whoever it turns out to be. A
+  A prop's rustle out of sight is a spot to investigate, not a contact it can
+  follow, and says nothing of who made it; a spin makes no sound, and nobody
+  hears a hunter's footsteps, bot or player. A
   taunt it hears is run to, and with nothing to follow for a while it sounds
   its sonar.
 - **Prop**: picks a prop type that exists in the scene, hides next to a matching
   cluster, transforms and holds still. With a hunter in plain sight it keeps
   holding still, since moving is what gives a disguise away, and bolts only when
-  that hunter is on top of it or when it only hears one close by, dropping a
-  decoy where it stood. Once hidden it taunts for points now and then, never
+  that hunter is on top of it or when it hears a rustle close by, dropping a
+  decoy where it stood. It sees all round, as a player's camera orbits a
+  disguise, but not through walls or furniture. Once hidden it taunts for points now and then, never
   with a hunter in sight. A sonar pulse close by sends it running; one further
   off keeps it still and quiet.
 
@@ -100,5 +106,6 @@ hunt (from the hunt opening to the round's end, so a prop win counts the full
 round), shots per capture, the share of captures on a prop moving when the
 shot landed (read off its latest input), the share on one that had moved within
 `MOVED_RECENTLY_MS` (which also counts a prop that had just stopped), captures
-per round, and how often a hunter ran its HP out. It is not part of
+per round, how often a hunter ran its HP out, and the wall time one bot tick
+costs during the hunt (mean and p99). It is not part of
 `pnpm test`; run it before and after a change to bot behaviour or pacing.

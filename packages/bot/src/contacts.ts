@@ -14,6 +14,15 @@ export function scenePropSource(index: number): string {
 }
 
 /**
+ * Source key of a spot footsteps were heard from out of sight, by its snapped
+ * position: a place, never the player who made the noise, so following it
+ * leads to where it was heard and not to wherever that player went next.
+ */
+export function heardSpotSource(x: number, z: number): string {
+  return `h:${x},${z}`;
+}
+
+/**
  * Opaque names for what a limited-vision bot perceives. A session id would tell
  * a policy it is looking at a player, and a decoy's room key would tell it the
  * opposite, so every contact of either kind is named from one counter instead

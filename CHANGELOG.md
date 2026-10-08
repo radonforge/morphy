@@ -15,6 +15,11 @@ Every Morphy release and what it changed for you, newest first.
 
 ### Changed
 
+- Bots no longer see behind them or through furniture: a bot hunter sees only
+  what is in front of it, looking round as it searches, and a cabinet hides you
+  from a bot as it hides you from a player. Bots also stopped hearing hunters'
+  footsteps, which players never hear either, and a prop turning in place makes
+  no sound for them.
 - Bot hunters now shoot at a prop they see running instead of waiting for it to
   stop, and miss far more doing it: they aim like a player, a little late and a
   little off, and a miss costs them health as it costs you.

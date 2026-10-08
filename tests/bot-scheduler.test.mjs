@@ -141,6 +141,18 @@ test("a chat line decided before the bot died is dropped, not saved for later", 
   await driver.stop();
 });
 
+/** A map with no colliders, so a contact is in sight as soon as it stands in front of the bot. */
+const OPEN_MAP = {
+  id: "open",
+  bounds: { min: { x: -20, y: 0, z: -20 }, max: { x: 20, y: 10, z: 20 } },
+  spawnPoints: { props: [{ x: 0, y: 0, z: 0 }] },
+  colliders: [],
+  tiles: [],
+  scenery: [],
+  props: [],
+  propCatalog: [],
+};
+
 /**
  * The room-filling bots run with `"limited"` vision (`MorphyRoom.addBot`). The
  * two modes differ in exactly one thing, whether a contact carries ground
@@ -150,9 +162,9 @@ function worldWithOneContact(selfRole, contactRole, contactPropType) {
   const body = (id, role, propType) => ({
     id,
     name: id,
-    x: id === "self" ? 0 : 3,
+    x: 0,
     y: 0,
-    z: 0,
+    z: id === "self" ? 0 : 3,
     rot: 0,
     aim: 0,
     role,
@@ -186,6 +198,7 @@ async function observationSeenBy(visibility) {
     visibility,
     trace: null,
   });
+  bot.setMap(OPEN_MAP);
   try {
     bot.launchDecide(worldWithOneContact("hunter", "prop", "crate"), Date.now());
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -225,6 +238,7 @@ test("a limited-vision bot reads a hunter as undisguised, which is what a player
     visibility: "limited",
     trace: null,
   });
+  bot.setMap(OPEN_MAP);
   try {
     bot.launchDecide(worldWithOneContact("hunter", "hunter", ""), Date.now());
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -268,12 +282,12 @@ test("a bot wakes its policy for any contact that comes into view, not just enem
     visibility: "limited",
     trace: null,
   });
-  const body = (id, role, x) => ({
+  const body = (id, role, z) => ({
     id,
     name: id,
-    x,
+    x: 0,
     y: 0,
-    z: 0,
+    z,
     rot: 0,
     aim: 0,
     role,
@@ -286,19 +300,7 @@ test("a bot wakes its policy for any contact that comes into view, not just enem
   const self = body("self", "hunter", 0);
   const settle = () => new Promise((resolve) => setTimeout(resolve, 15));
 
-  // An open map with no colliders: `canSee` needs a map at all (it answers
-  // false without one), and no walls means line of sight is purely a matter of
-  // distance, which is what this test is about.
-  bot.setMap({
-    id: "open",
-    bounds: { min: { x: -20, y: 0, z: -20 }, max: { x: 20, y: 10, z: 20 } },
-    spawnPoints: { props: [{ x: 0, y: 0, z: 0 }] },
-    colliders: [],
-    tiles: [],
-    scenery: [],
-    props: [],
-    propCatalog: [],
-  });
+  bot.setMap(OPEN_MAP);
   bot.syncPosition(0, 0);
 
   try {

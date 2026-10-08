@@ -3,7 +3,6 @@ import {
   colliderAabb,
   DEFAULT_WEAPON,
   type PropBounds,
-  RAY_EPSILON,
   rayAabb,
   type Vec3,
   WEAPONS,
@@ -44,28 +43,6 @@ export function normalize3(v: Vec3): Vec3 | null {
   const len = Math.hypot(v.x, v.y, v.z);
   if (len === 0) return null;
   return { x: v.x / len, y: v.y / len, z: v.z / len };
-}
-
-/**
- * Whether the straight segment from `origin` to `target` reaches it without a
- * wall in between: the bot's line-of-sight test for {@link buildObservation}.
- * Uses the same wall colliders and slab test as shot resolution, so "I can see
- * it" and "I could hit it" share one geometry.
- */
-export function lineOfSightClear(origin: Vec3, target: Vec3, colliders: BoxCollider[]): boolean {
-  const dx = target.x - origin.x;
-  const dy = target.y - origin.y;
-  const dz = target.z - origin.z;
-  const dist = Math.hypot(dx, dy, dz);
-  if (dist < RAY_EPSILON) return true;
-  const dir: Vec3 = { x: dx / dist, y: dy / dist, z: dz / dist };
-  for (const collider of colliders) {
-    if (collider.position.y <= 0) continue;
-    const { min, max } = colliderAabb(collider);
-    const t = rayAabb(origin, dir, min, max, dist);
-    if (t !== null && t < dist) return false;
-  }
-  return true;
 }
 
 /**
