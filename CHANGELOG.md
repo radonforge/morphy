@@ -4,6 +4,13 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-08
+
+Bots that play fair and props that see more. Bot hunters see only what is in
+front of them, cannot see through furniture and shoot at a prop that runs. The
+menu shows who is playing each map, and props get a first person view, a closer
+camera and a turn step.
+
 ### Added
 
 - Each map in the menu shows how many people are playing it right now, so you
@@ -29,9 +36,9 @@ Every Morphy release and what it changed for you, newest first.
 - The controls bar at the bottom of the screen now shows only your role's own
   actions and fits on one line. Every other key is in All controls, behind ?.
 - The Graphics quality choice in the options is now a dropdown in the game's
-  own style, and works with the arrow keys, Enter and Escape.
-- The Graphics quality dropdown now stays inside a short window instead of
-  opening off screen, and typing the first letters of an option picks it.
+  own style. It works with the arrow keys, Enter and Escape, typing the first
+  letters of an option picks it, and it stays inside a short window instead of
+  opening off screen.
 - The camera behind a prop now sits closer and lower, and frames your disguise
   by its size: further back for a dumpster, nearer for a cone. Scroll the mouse
   wheel to pull it in or out. On screens wider than 16:9 the view no longer
