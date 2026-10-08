@@ -59,6 +59,13 @@ export const HUNTER_CAPTURE_HEAL = 50;
  * spectate a round away.
  */
 export const HUNTER_RESPAWN_MS = 6_000;
+/**
+ * How much of the hunt a caught prop sees replayed from its hunter's eyes before the
+ * caught card. Client-side only: the server has already made the player a hunter, who
+ * nothing can hurt, so the replay costs that player their own hunting time and no one
+ * else anything, and Space skips it.
+ */
+export const KILL_CAM_WINDOW_MS = 3_000;
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 

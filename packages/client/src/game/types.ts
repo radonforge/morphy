@@ -7,6 +7,8 @@ export interface RemotePlayerView {
   y: number;
   z: number;
   rot: number;
+  /** Look heading in the `rot` convention: the way the player faces, not a pitch. */
+  aim: number;
   propRot: number;
   role: Role;
   alive: boolean;

@@ -4,6 +4,12 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- Kill cam: a caught prop sees the last three seconds replayed through the
+  hunter's eyes, slowing down into the shot that got them, before the caught
+  card. Space skips it.
+
 ### Changed
 
 - The card a caught prop sees now also says "You're a hunter now", so the
