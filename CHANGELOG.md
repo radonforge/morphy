@@ -4,6 +4,11 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-10-08
+
+Bot props that hide like players. They pick a spot beside objects of their own
+kind, turn to match them, and run when a hunter closes in.
+
 ### Changed
 
 - Bot props hide like the objects around them, turn to match them and run when
