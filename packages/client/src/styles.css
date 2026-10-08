@@ -31,6 +31,8 @@
   --my: 0%;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, monospace;
   --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --minimap-size: clamp(132px, 10.5vw, 176px);
+  --minimap-gap: 10px;
   color-scheme: dark;
 }
 
@@ -2111,10 +2113,93 @@ canvas {
 
 /* ---------- Kill feed ---------- */
 
+/* ---------- Minimap ---------- */
+
+.minimap {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: var(--minimap-size);
+  height: var(--minimap-size);
+  border-radius: 50%;
+  background: rgba(8, 14, 28, 0.94);
+  box-shadow:
+    inset 0 0 0 1px var(--border-strong),
+    0 0 0 3px rgba(4, 7, 12, 0.35),
+    0 10px 28px -12px rgba(2, 5, 12, 0.6);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.minimap-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.minimap-plan {
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 64%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 64%, transparent 100%);
+}
+
+.minimap-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: rgba(53, 224, 255, 0.3);
+  stroke-width: 0.6;
+}
+
+.minimap-self {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 4px rgba(53, 224, 255, 0.7));
+}
+
+.minimap-self svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: var(--cyan);
+  stroke: var(--accent-ink);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+.minimap-north,
+.minimap-scale {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(4, 7, 12, 0.9);
+}
+
+.minimap-north {
+  top: 6px;
+  color: var(--cyan);
+}
+
+.minimap-scale {
+  bottom: 7px;
+  color: var(--muted);
+}
+
 .killfeed {
   position: absolute;
   right: 14px;
-  top: 14px;
+  top: calc(14px + var(--minimap-size) + var(--minimap-gap));
   display: flex;
   flex-direction: column;
   align-items: flex-end;

@@ -4,6 +4,12 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- A round radar at the top right shows the 30 m around you, north up. As a prop
+  you see hunters on it only while they move, so one standing still can still
+  ambush you; as a hunter you see your teammates. Props never show on it.
+
 ## [0.4.2] - 2026-10-08
 
 Bot props that hide like players. They pick a spot beside objects of their own
