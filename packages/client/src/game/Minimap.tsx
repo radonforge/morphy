@@ -17,20 +17,37 @@ import {
 } from "./radar";
 import type { LookRef, PlayersRef } from "./types";
 
-const VOID_COLOR = "#080e1c";
+const VOID_COLOR = "#04070e";
 const PLAN_COLORS: Record<PlanKind, string> = {
-  floor: "#121b31",
-  paving: "#162039",
-  yard: "#172238",
-  grass: "#1f4a39",
-  block: "#2a3557",
+  floor: "#1a2540",
+  paving: "#1f2b49",
+  yard: "#1c2844",
+  grass: "#2a6b4b",
+  block: "#4d5f94",
 };
+const BLOCK_EDGE_COLOR = "#7d90c8";
+const BLOCK_EDGE_PX = 1;
 const HUNTER_COLOR = "#ffb24a";
 const HUNTER_INK = "#3a2203";
 const MAX_PIXEL_RATIO = 2;
-const BADGE_RADIUS_PX = 4.5;
-const BADGE_RIM_PX = 1.2;
-const BADGE_CORE_PX = 1.5;
+const BADGE_RADIUS_PX = 7.2;
+const BADGE_RIM_PX = 1.4;
+const GLYPH_HEAD_RADIUS_PX = 2.1;
+const GLYPH_HEAD_Y_PX = -1.3;
+const GLYPH_EAR_PX: readonly (readonly (readonly [number, number])[])[] = [
+  [
+    [-2.3, -2.1],
+    [-1.9, -4.9],
+    [-0.5, -3.1],
+  ],
+  [
+    [2.3, -2.1],
+    [1.9, -4.9],
+    [0.5, -3.1],
+  ],
+];
+const GLYPH_BODY_RADIUS_PX = 3.6;
+const GLYPH_BODY_Y_PX = 4.6;
 const BOB_AMPLITUDE_PX = 1.6;
 const BOB_RATE_RAD_PER_MS = (2 * Math.PI) / 300;
 const PULSE_PERIOD_MS = 1_100;
@@ -70,6 +87,26 @@ export interface MinimapSurface {
 export type MinimapSurfaceRef = { current: MinimapSurface | null };
 
 /**
+ * A hunter's silhouette inside its badge, at `unit` device pixels per CSS
+ * pixel: a head with two pointed ears over the round of its shoulders, so a
+ * badge reads as somebody rather than a dot.
+ */
+function drawHunterGlyph(ctx: CanvasRenderingContext2D, x: number, y: number, unit: number): void {
+  ctx.beginPath();
+  ctx.arc(x, y + GLYPH_HEAD_Y_PX * unit, GLYPH_HEAD_RADIUS_PX * unit, 0, Math.PI * 2);
+  for (const ear of GLYPH_EAR_PX) {
+    ear.forEach(([ex, ey], index) => {
+      if (index === 0) ctx.moveTo(x + ex * unit, y + ey * unit);
+      else ctx.lineTo(x + ex * unit, y + ey * unit);
+    });
+    ctx.closePath();
+  }
+  ctx.moveTo(x + GLYPH_BODY_RADIUS_PX * unit, y + GLYPH_BODY_Y_PX * unit);
+  ctx.arc(x, y + GLYPH_BODY_Y_PX * unit, GLYPH_BODY_RADIUS_PX * unit, 0, Math.PI, true);
+  ctx.fill();
+}
+
+/**
  * Paint the static plan once, at exactly the visible canvas's scale, padded by
  * {@link MINIMAP_RADIUS} of void on every side so a player at the map's edge
  * still crops a full window out of it.
@@ -77,6 +114,7 @@ export type MinimapSurfaceRef = { current: MinimapSurface | null };
 function paintPlan(
   map: MapDefinition,
   scale: number,
+  ratio: number,
 ): Pick<MinimapSurface, "plan" | "scale" | "originX" | "originZ"> {
   const originX = map.bounds.min.x - MINIMAP_RADIUS;
   const originZ = map.bounds.min.z - MINIMAP_RADIUS;
@@ -87,15 +125,24 @@ function paintPlan(
   if (ctx) {
     ctx.fillStyle = VOID_COLOR;
     ctx.fillRect(0, 0, plan.width, plan.height);
-    for (const rect of minimapPlan(map)) {
+    const rects = minimapPlan(map);
+    const blocks = new Path2D();
+    for (const rect of rects) {
+      const left = (rect.x - rect.w / 2 - originX) * scale;
+      const top = (rect.z - rect.d / 2 - originZ) * scale;
+      if (rect.kind === "block") {
+        blocks.rect(left, top, rect.w * scale, rect.d * scale);
+        continue;
+      }
       ctx.fillStyle = PLAN_COLORS[rect.kind];
-      ctx.fillRect(
-        (rect.x - rect.w / 2 - originX) * scale,
-        (rect.z - rect.d / 2 - originZ) * scale,
-        rect.w * scale,
-        rect.d * scale,
-      );
+      ctx.fillRect(left, top, rect.w * scale, rect.d * scale);
     }
+    ctx.strokeStyle = BLOCK_EDGE_COLOR;
+    ctx.lineWidth = BLOCK_EDGE_PX * ratio;
+    ctx.lineJoin = "round";
+    ctx.stroke(blocks);
+    ctx.fillStyle = PLAN_COLORS.block;
+    ctx.fill(blocks);
   }
   return { plan, scale, originX, originZ };
 }
@@ -145,7 +192,7 @@ export function Minimap({
         arrowAngle: Number.NaN,
         ratio,
         size: pixels,
-        ...paintPlan(map, pixels / (2 * MINIMAP_RADIUS)),
+        ...paintPlan(map, pixels / (2 * MINIMAP_RADIUS), ratio),
       };
     };
     fit();
@@ -251,9 +298,7 @@ export function MinimapPainter({
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = HUNTER_INK;
-      ctx.beginPath();
-      ctx.arc(x, y, BADGE_CORE_PX * ratio, 0, Math.PI * 2);
-      ctx.fill();
+      drawHunterGlyph(ctx, x, y, ratio);
     }
     ctx.globalAlpha = 1;
 
