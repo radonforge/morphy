@@ -176,7 +176,7 @@ export class ScriptedPolicy implements Policy {
     if (lead) return { kind: "moveTo", x: lead.x, z: lead.z, run: true, seq };
     if (suspect) return { kind: "inspect", targetId: suspect.id, run: isFleeing(suspect), seq };
     const probe = this.pickProbe(obs, engageRange);
-    if (probe) return { kind: "shootTarget", targetId: probe.id, seq };
+    if (probe) return { kind: "shootTarget", targetId: probe.id, probe: true, seq };
     const intent: Intent = { kind: "patrol", seq };
     if (this.quietDecisions >= SONAR_PATIENCE_DECISIONS && obs.self.canSonarNow) {
       intent.act = "sonar";

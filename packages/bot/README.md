@@ -54,6 +54,8 @@ let bots play on their own (handy as a server smoke test).
   or honking. A suspect in reach is shot at, standing still or running, one
   out of reach is chased down, and with no suspect it tests the nearest object it has not tried by
   shooting it, every few seconds, paying the miss damage when it was furniture.
+  A probe that went past the object tested nothing, so it tries that one again
+  after `BOT_PROBE_RETRY_MS`.
   A contact known only by sound is investigated whoever it turns out to be. A
   taunt it hears is run to, and with nothing to follow for a while it sounds
   its sonar.

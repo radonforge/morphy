@@ -190,6 +190,12 @@ export const BOT_TELL_MATCH_RADIUS = 0.75;
  */
 export const BOT_PROBE_INTERVAL_MAX_MS = 6_000;
 export const BOT_PROBE_INTERVAL_MIN_MS = 2_500;
+/**
+ * How soon a hunter tests again after a probe that went past what it tested:
+ * a miss says nothing about the object, so a player shoots it again once the
+ * crosshair is back on it rather than waiting out a whole probe interval.
+ */
+export const BOT_PROBE_RETRY_MS = 1_500;
 export const NEARBY_PROP_RADIUS = 12;
 
 export const DEFAULT_BOT_COUNT = 3;

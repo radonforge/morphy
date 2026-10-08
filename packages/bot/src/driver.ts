@@ -10,6 +10,7 @@ import {
   type Visibility,
   withTimeout,
 } from "@morphy/shared";
+import type { Rng } from "./aim";
 import {
   ARRIVE_EPSILON,
   BOT_VISION_RANGE,
@@ -54,6 +55,8 @@ export interface BotDriverOptions {
   policy: Policy;
   visibility: Visibility;
   trace: Trace | null;
+  /** Draws the aim's noise; tests pass a seeded `makeRng` to replay it. */
+  rng?: Rng;
 }
 
 /** A sound the room played, at the spot a player's client plays it from. */
@@ -112,7 +115,7 @@ export class BotDriver {
   private pendingAct: BotAct | null = null;
 
   constructor(private readonly options: BotDriverOptions) {
-    this.reflex = new Reflex(options.difficulty, options.visibility);
+    this.reflex = new Reflex(options.difficulty, options.visibility, options.rng);
   }
 
   get ready(): boolean {

@@ -58,6 +58,7 @@ import {
   BOT_HEARING_RADIUS,
   BOT_PROBE_INTERVAL_MAX_MS,
   BOT_PROBE_INTERVAL_MIN_MS,
+  BOT_PROBE_RETRY_MS,
   BOT_TELL_MATCH_RADIUS,
   BOT_TELL_WINDOW_MS,
   BOT_VISION_RANGE,
@@ -195,6 +196,7 @@ export class Reflex {
   private rot = 0;
   private lastShotAt = 0;
   private lastShotTargetId: string | null = null;
+  private probeMissed = false;
 
   private readonly follower = new PathFollower();
   private pathGoal: Point2 | null = null;
@@ -304,14 +306,14 @@ export class Reflex {
     this.resetMotion();
     this.forgetContacts();
     this.lastShotAt = 0;
-    this.lastShotTargetId = null;
   }
 
   /**
    * Drop every contact handle, last sighting, movement sample, tell and heard
-   * sound, and the aim on whatever was last fired at, as a new round begins. A sample kept from before the props hid
-   * would read every prop that walked to its spot as one seen moving the
-   * moment the hunt opens.
+   * sound, and the aim on and record of whatever was last fired at, as a new
+   * round begins: handles restart, so a record kept would name another
+   * contact. A sample kept from before the props hid would read every prop
+   * that walked to its spot as one seen moving the moment the hunt opens.
    */
   forgetContacts(): void {
     this.aimTargetId = null;
@@ -324,6 +326,8 @@ export class Reflex {
     this.shapes.clear();
     this.handles.clear();
     this.heard = [];
+    this.lastShotTargetId = null;
+    this.probeMissed = false;
   }
 
   /**
@@ -442,7 +446,7 @@ export class Reflex {
       canShootNow: now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS,
       canTauntNow: this.sincePressed("taunt", now) >= TAUNT_COOLDOWN_MS,
       canSonarNow: this.sincePressed("sonar", now) >= SONAR_COOLDOWN_MS,
-      canProbeNow: now - this.lastShotAt >= probeInterval,
+      canProbeNow: now - this.lastShotAt >= (this.probeMissed ? BOT_PROBE_RETRY_MS : probeInterval),
       lastShotTargetId: this.lastShotTargetId,
     };
     this.forgetDeparted(world.others, world.decoys);
@@ -825,7 +829,7 @@ export class Reflex {
         this.runApproach(intent.targetId, intent.run, world, dt, now);
         break;
       case "shootTarget":
-        shoot = this.runShoot(intent.targetId, world, dt, now);
+        shoot = this.runShoot(intent.targetId, intent.probe === true, world, dt, now);
         break;
     }
 
@@ -964,6 +968,7 @@ export class Reflex {
 
   private runShoot(
     targetId: string,
+    probe: boolean,
     world: ReflexWorld,
     dt: number,
     now: number,
@@ -987,7 +992,21 @@ export class Reflex {
 
     if (canHit && dir) {
       this.follower.clear();
-      return this.aimAndFire(target, targetId, dir, dist, dt, now);
+      const shot = this.aimAndFire(target, dir, dist, dt, now);
+      if (shot) {
+        const struck = canHitTarget(
+          origin,
+          shot.dir,
+          target.x,
+          target.y,
+          target.z,
+          bounds,
+          map.colliders,
+        );
+        this.lastShotTargetId = struck ? targetId : null;
+        this.probeMissed = probe && !struck;
+      }
+      return shot;
     }
 
     this.aimTargetId = null;
@@ -1012,7 +1031,6 @@ export class Reflex {
    */
   private aimAndFire(
     target: Contact,
-    targetId: string,
     dir: Vec3,
     distance: number,
     dt: number,
@@ -1048,7 +1066,6 @@ export class Reflex {
       Math.atan2(dir.y, Math.hypot(dir.x, dir.z)) +
       spread * AIM_PITCH_SPREAD_SHARE * gaussian(this.rng);
     this.lastShotAt = now;
-    this.lastShotTargetId = targetId;
     this.fireReadyAt = now + BOT_FIRE_COOLDOWN_MS + followUpDelayMs(this.rng);
     return { dir: directionOf(yaw, pitch) };
   }

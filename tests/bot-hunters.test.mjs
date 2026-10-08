@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  BOT_EYE_HEIGHT,
   ENGAGE_RANGE_MAX,
   ENGAGE_RANGE_MIN,
   lerp,
@@ -8,8 +9,15 @@ import {
 } from "../packages/bot/src/config.ts";
 import { BotDriver } from "../packages/bot/src/driver.ts";
 import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
+import { canHitTarget } from "../packages/bot/src/raycast.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
-import { MOVE_SPEED, RUN_MULTIPLIER_PROP } from "../packages/shared/src/index.ts";
+import {
+  MOVE_SPEED,
+  makeRng,
+  RUN_MULTIPLIER_PROP,
+  UNTRANSFORMED_PROP_HEIGHT,
+  UNTRANSFORMED_PROP_RADIUS,
+} from "../packages/shared/src/index.ts";
 
 const DIFFICULTY = 0.6;
 const TICK_MS = 50;
@@ -29,6 +37,17 @@ const FLEE_TICKS = 200;
 const FLEE_SETTLE_TICKS = 40;
 const FLEE_GAP = PANIC_SEEN_RADIUS * 0.75;
 const MIN_FLEE_TRAVEL = 20;
+
+const PROBE_TICKS = 200;
+const PROBE_GAP = 10;
+/** An aim seed whose first probe at the still crate goes past it, and one whose first lands. */
+const PROBE_MISS_SEED = 2;
+const PROBE_HIT_SEED = 1;
+const CRATE_BOUNDS = {
+  radius: UNTRANSFORMED_PROP_RADIUS,
+  yMin: 0,
+  yMax: UNTRANSFORMED_PROP_HEIGHT,
+};
 
 /**
  * An open arena, long enough to hold a chase at a prop's top speed. The question
@@ -78,7 +97,7 @@ function recordingPolicy(log) {
   };
 }
 
-function driverFor(name, map, log) {
+function driverFor(name, map, log, rng) {
   const driver = new BotDriver({
     name,
     difficulty: DIFFICULTY,
@@ -86,6 +105,7 @@ function driverFor(name, map, log) {
     policy: recordingPolicy(log),
     visibility: "limited",
     trace: null,
+    rng,
   });
   driver.setMap(map);
   return driver;
@@ -271,4 +291,64 @@ test("a prop under chase keeps fleeing past its first escape point", async () =>
     `expected the prop to keep running after reaching its first escape point, ` +
       `got ${after.toFixed(1)}m in the ${FLEE_TICKS - FLEE_SETTLE_TICKS} ticks that followed`,
   );
+});
+
+/**
+ * A hunter alone with a still disguise it has no reason to suspect, so every
+ * shot it fires is a probe of that one object. Each shot is scored by the test
+ * the way the bot sees it: whether its ray crossed the crate's visible bounds.
+ * The crate is left standing whatever the shot did, as furniture would be, so
+ * the question is only whether the bot comes back to it. Patrol goals are
+ * pinned to the arena's centre, where the hunter already stands, so it keeps
+ * the crate in reach instead of wandering off on a random goal.
+ */
+async function probeStillCrate(t, seed) {
+  t.mock.method(Math, "random", () => 0.5);
+  const arena = {
+    ...ARENA,
+    bounds: { min: { x: -30, y: 0, z: -30 }, max: { x: 30, y: 10, z: 30 } },
+  };
+  const driver = driverFor("Alpha", arena, [], makeRng(seed));
+  const self = body("bot:1", { x: 0, y: 0, z: 0 });
+  const crate = body("bot:2", { x: 0, y: 0, z: PROBE_GAP }, { role: "prop", propType: "crate" });
+
+  const shots = [];
+  let now = 1_000;
+  for (let tick = 0; tick < PROBE_TICKS; tick++) {
+    now += TICK_MS;
+    const world = { phase: "hunting", winner: "", self, others: [crate], decoys: [] };
+    const action = driver.tick(world, now);
+    if (action.shoot) {
+      const origin = { x: self.x, y: BOT_EYE_HEIGHT, z: self.z };
+      shots.push(
+        canHitTarget(origin, action.shoot.dir, crate.x, crate.y, crate.z, CRATE_BOUNDS, []),
+      );
+    }
+    if (action.input) {
+      self.x = action.input.x;
+      self.z = action.input.z;
+      self.rot = action.input.rot;
+      self.aim = action.input.aim;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  await driver.stop();
+  return shots;
+}
+
+/**
+ * A probe that goes past the object it tests says nothing about it. The bot
+ * used to count the object tested the moment it fired, so a still prop it
+ * happened to miss passed for furniture for the rest of the round.
+ */
+test("a hunter probes a still disguise again after a probe that missed it", async (t) => {
+  const shots = await probeStillCrate(t, PROBE_MISS_SEED);
+  assert.equal(shots[0], false, "the seed's first probe goes past the crate");
+  assert.ok(shots.length >= 2, `the hunter came back to the crate (${shots.length} shot)`);
+});
+
+test("a hunter does not probe again a disguise its shot struck and left standing", async (t) => {
+  const shots = await probeStillCrate(t, PROBE_HIT_SEED);
+  assert.equal(shots[0], true, "the seed's first probe strikes the crate");
+  assert.deepEqual(shots, [true], "one probe that struck the crate settles it as furniture");
 });
