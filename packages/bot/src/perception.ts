@@ -257,10 +257,10 @@ export function bodySamples(viewer: Viewer, body: Body): Vec3[] {
   const top = body.y + extent.yMin + (extent.yMax - extent.yMin) * SIGHT_SAMPLE_TOP_SHARE;
   const dx = body.x - viewer.x;
   const dz = body.z - viewer.z;
-  const len = Math.hypot(dx, dz) || 1;
-  const ux = -dz / len;
-  const uz = dx / len;
-  const side = reachAlong(body, ux, uz) * SIGHT_SAMPLE_EDGE_SHARE;
+  const len = Math.hypot(dx, dz);
+  const ux = len < SEGMENT_EPSILON ? 0 : -dz / len;
+  const uz = len < SEGMENT_EPSILON ? 0 : dx / len;
+  const side = len < SEGMENT_EPSILON ? 0 : reachAlong(body, ux, uz) * SIGHT_SAMPLE_EDGE_SHARE;
   const sx = ux * side;
   const sz = uz * side;
   return [

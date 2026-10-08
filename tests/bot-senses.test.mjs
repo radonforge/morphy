@@ -412,6 +412,14 @@ test("every point looked for on a disguise lies inside the model it renders as, 
   }
 });
 
+test("a body standing where the viewer stands is looked for at finite points", () => {
+  const viewer = { x: 2, y: 1.6, z: 3, heading: FACING_NORTH, halfAngle: null, range: 30 };
+  const body = { x: 2, y: 0, z: 3, yaw: 0, extent: { halfX: 0.5, halfZ: 0.5, yMin: 0, yMax: 1 } };
+  for (const sample of bodySamples(viewer, body)) {
+    assert.ok([sample.x, sample.y, sample.z].every(Number.isFinite), JSON.stringify(sample));
+  }
+});
+
 test("a disguise whose whole model a container hides is not seen spinning, though its hitbox sticks out", () => {
   const spinBehind = (furniture) => {
     const reflex = new Reflex(0.6, "limited", makeRng(1));
