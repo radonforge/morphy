@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { CONTROL_GROUPS, mainControls } from "../packages/client/src/game/Controls.tsx";
 import { lockPointer } from "../packages/client/src/game/pointerLock.ts";
 import { movementFromHeld } from "../packages/client/src/game/useControls.ts";
 
@@ -65,4 +66,77 @@ test("a void-returning pointer lock is still requested", () => {
 
 test("a missing canvas requests nothing", () => {
   assert.doesNotThrow(() => lockPointer(null));
+});
+
+const NOW = 1_000_000;
+const BASE_BAR = {
+  role: "prop",
+  alive: true,
+  canShoot: false,
+  canTransform: false,
+  phase: "starting",
+  rerollsLeft: 0,
+  decoysLeft: 0,
+  tauntReadyAt: 0,
+  sonarReadyAt: 0,
+};
+
+const barKeys = (state) => mainControls({ ...BASE_BAR, ...state }, NOW).items.map((c) => c.keys);
+const barLabels = (state) => mainControls({ ...BASE_BAR, ...state }, NOW).items.map((c) => c.label);
+const dialogKeys = CONTROL_GROUPS.flatMap((g) => g.items.map((c) => c.keys.join(" ")));
+
+const BAR_STATES = {
+  prop: { role: "prop", canTransform: true, phase: "hunting", rerollsLeft: 2, decoysLeft: 1 },
+  hunter: { role: "hunter", canShoot: true, phase: "hunting" },
+  preRound: { role: "prop", phase: "starting" },
+};
+
+test("a prop's bar holds only swap, decoy and taunt, with their counts", () => {
+  assert.deepEqual(barKeys(BAR_STATES.prop), [["R"], ["C"], ["F"]]);
+  assert.deepEqual(barLabels(BAR_STATES.prop), ["Swap (2)", "Decoy (1)", "Taunt"]);
+});
+
+test("a hiding prop's bar has no taunt yet", () => {
+  assert.deepEqual(barKeys({ ...BAR_STATES.prop, phase: "hiding" }), [["R"], ["C"]]);
+});
+
+test("a hunter's bar holds only shoot and sonar", () => {
+  assert.deepEqual(barKeys(BAR_STATES.hunter), [["LMB"], ["F"]]);
+});
+
+test("the taunt and sonar labels count down their cooldown", () => {
+  const prop = barLabels({ ...BAR_STATES.prop, tauntReadyAt: NOW + 4_200 });
+  assert.equal(prop.at(-1), "Taunt (5s)");
+  const hunter = barLabels({ ...BAR_STATES.hunter, sonarReadyAt: NOW + 900 });
+  assert.equal(hunter.at(-1), "Sonar (1s)");
+});
+
+test("before the round the bar holds only movement", () => {
+  assert.deepEqual(barKeys(BAR_STATES.preRound), [["WASD"]]);
+});
+
+test("a blinded or downed player's bar is a note, not keys", () => {
+  const blinded = mainControls({ ...BASE_BAR, role: "hunter", phase: "hiding" }, NOW);
+  assert.ok(blinded.note);
+  assert.deepEqual(blinded.items, []);
+  const downed = mainControls({ ...BASE_BAR, ...BAR_STATES.hunter, alive: false }, NOW);
+  assert.ok(downed.note);
+  assert.deepEqual(downed.items, []);
+});
+
+test("every key the bar shows is listed in the controls dialog", () => {
+  for (const [name, state] of Object.entries(BAR_STATES)) {
+    for (const keys of barKeys(state)) {
+      assert.ok(
+        dialogKeys.includes(keys.join(" ")),
+        `${name} bar shows ${keys} missing from the dialog`,
+      );
+    }
+  }
+});
+
+test("the keys dropped from the bar are still listed in the controls dialog", () => {
+  for (const keys of ["Shift", "Space", "Q E", "V", "1 2 3", "?"]) {
+    assert.ok(dialogKeys.includes(keys), `${keys} missing from the dialog`);
+  }
 });
