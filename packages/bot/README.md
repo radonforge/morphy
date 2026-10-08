@@ -97,6 +97,8 @@ The room is filled the way a quiet public room fills itself: `--bots` (default
 `DEFAULT_DIFFICULTY` with limited vision. `Math.random` is seeded from `--seed`, so the same seed replays the
 same rounds. It prints one Markdown row per map: prop win rate, median and p90
 hunt (from the hunt opening to the round's end, so a prop win counts the full
-round), shots per capture, the share of captures on a prop that was moving,
-captures per round, and how often a hunter ran its HP out. It is not part of
+round), shots per capture, the share of captures on a prop moving when the
+shot landed (read off its latest input), the share on one that had moved within
+`MOVED_RECENTLY_MS` (which also counts a prop that had just stopped), captures
+per round, and how often a hunter ran its HP out. It is not part of
 `pnpm test`; run it before and after a change to bot behaviour or pacing.

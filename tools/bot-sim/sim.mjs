@@ -5,9 +5,11 @@ import { parseArgs } from "node:util";
 import { MOVED_RECENTLY_MIN_DIST, MOVED_RECENTLY_MS } from "../../packages/bot/src/config.ts";
 import {
   BOT_FILL_TARGET,
+  INPUT_SEND_RATE_MS,
   isMapId,
   MAP_CATALOG,
   MIN_PLAYERS_TO_START,
+  MOVE_SPEED,
   MSG_KILL,
   MSG_SHOT_FIRED,
   makeRng,
@@ -19,15 +21,19 @@ const PERCENT = 100;
 const DEFAULT_ROUNDS = 60;
 const DEFAULT_SEED = 1;
 const START_EPOCH_MS = Date.UTC(2026, 0, 1);
+/** A prop whose latest input carried it at least this fast is moving; slower is a crowd nudge. */
+const MOVING_MIN_SPEED = MOVE_SPEED / 2;
 
 const USAGE = `pnpm bot:sim [--rounds N] [--map urban|station] [--seed N] [--bots N]
 
 Plays bot-only rounds in a real MorphyRoom on a virtual clock: server-filled
 bots at DEFAULT_DIFFICULTY with limited vision, as a quiet public room runs them.
 Prints one row per map: prop win rate, median and p90 hunt (hunt start to round
-end), shots per capture, the share of captures on a moving prop, and how often
-a hunter ran its HP out. Needs at least ${MIN_PLAYERS_TO_START} bots, the
-players a round needs to start. Same seed, same rounds.`;
+end), shots per capture, the share of captures on a prop moving when the shot
+landed (its latest input carried it at half walking pace or more), the share on
+one that had moved within ${MOVED_RECENTLY_MS} ms, which also counts a prop that had just
+stopped, and how often a hunter ran its HP out. Needs at least
+${MIN_PLAYERS_TO_START} bots, the players a round needs to start. Same seed, same rounds.`;
 
 const { values } = parseArgs({
   options: {
@@ -160,14 +166,39 @@ async function simulate(mapId) {
   clock = new VirtualClock();
   Math.random = makeRng(seed);
   const room = botRoom(mapId);
-  const moved = new Map();
+  const motion = new Map();
   const played = [];
   let current = null;
   let huntStart = 0;
   let phase = room.state.phase;
 
-  const movingNow = (id) => {
-    const at = moved.get(id)?.lastMovedAt;
+  const handleInput = room.handleInput.bind(room);
+  room.handleInput = (actor, payload) => {
+    const player = room.state.players.get(actor.sessionId);
+    if (!player) return handleInput(actor, payload);
+    const from = { x: player.x, z: player.z };
+    handleInput(actor, payload);
+    const step = Math.hypot(player.x - from.x, player.z - from.z);
+    const last = motion.get(actor.sessionId);
+    const anchor = last?.anchor ?? from;
+    const drifted = Math.hypot(player.x - anchor.x, player.z - anchor.z) > MOVED_RECENTLY_MIN_DIST;
+    motion.set(actor.sessionId, {
+      inputAt: clock.now,
+      speed: (step * MS_PER_SECOND) / (last ? clock.now - last.inputAt : INPUT_SEND_RATE_MS),
+      anchor: drifted ? { x: player.x, z: player.z } : anchor,
+      movedAt: drifted ? clock.now : (last?.movedAt ?? null),
+    });
+  };
+  const movingAtCapture = (id) => {
+    const last = motion.get(id);
+    return (
+      last !== undefined &&
+      clock.now - last.inputAt <= INPUT_SEND_RATE_MS &&
+      last.speed >= MOVING_MIN_SPEED
+    );
+  };
+  const movedRecently = (id) => {
+    const at = motion.get(id)?.movedAt;
     return at !== undefined && at !== null && clock.now - at <= MOVED_RECENTLY_MS;
   };
   room.broadcast = (type, payload) => {
@@ -176,22 +207,11 @@ async function simulate(mapId) {
     if (type !== MSG_KILL) return;
     if (payload.reason === "converted") {
       current.captures++;
-      if (movingNow(payload.victimId)) current.movingCaptures++;
+      if (movingAtCapture(payload.victimId)) current.movingCaptures++;
+      if (movedRecently(payload.victimId)) current.recentlyMovedCaptures++;
     } else if (payload.reason === "self") {
       current.hunterOuts++;
     }
-  };
-  const tickBots = room.tickBots.bind(room);
-  room.tickBots = () => {
-    tickBots();
-    room.state.players.forEach((player, id) => {
-      const last = moved.get(id);
-      if (!last) {
-        moved.set(id, { x: player.x, z: player.z, lastMovedAt: null });
-      } else if (Math.hypot(player.x - last.x, player.z - last.z) > MOVED_RECENTLY_MIN_DIST) {
-        moved.set(id, { x: player.x, z: player.z, lastMovedAt: clock.now });
-      }
-    });
   };
 
   room.maybeStartRound();
@@ -203,7 +223,13 @@ async function simulate(mapId) {
     phase = room.state.phase;
     if (phase === "hunting") {
       huntStart = clock.now;
-      current = { shots: 0, captures: 0, movingCaptures: 0, hunterOuts: 0 };
+      current = {
+        shots: 0,
+        captures: 0,
+        movingCaptures: 0,
+        recentlyMovedCaptures: 0,
+        hunterOuts: 0,
+      };
     } else if (phase === "round_end" && current) {
       played.push({ ...current, winner: room.state.winner, huntMs: clock.now - huntStart });
       current = null;
@@ -226,6 +252,8 @@ function summarize(mapId, played) {
     p90HuntS: quantile(hunts, P90),
     shotsPerCapture: captures === 0 ? Number.NaN : sum("shots") / captures,
     movingCapturePct: captures === 0 ? Number.NaN : (PERCENT * sum("movingCaptures")) / captures,
+    recentlyMovedCapturePct:
+      captures === 0 ? Number.NaN : (PERCENT * sum("recentlyMovedCaptures")) / captures,
     capturesPerRound: captures / played.length,
     hunterOutsPerRound: sum("hunterOuts") / played.length,
   };
@@ -238,12 +266,12 @@ try {
   for (const mapId of maps) rows.push(await simulate(mapId));
   console.log(
     `${botCount} bots, ${rounds} rounds per map, seed ${seed}\n\n` +
-      "| Map | Rounds | Prop wins | Median hunt | p90 hunt | Shots per capture | Captures on a moving prop | Captures per round | Hunter HP outs per round |\n" +
-      "|---|---|---|---|---|---|---|---|---|",
+      `| Map | Rounds | Prop wins | Median hunt | p90 hunt | Shots per capture | Captures on a prop moving at capture | Captures on a prop that moved within ${MOVED_RECENTLY_MS} ms | Captures per round | Hunter HP outs per round |\n` +
+      "|---|---|---|---|---|---|---|---|---|---|",
   );
   for (const row of rows) {
     console.log(
-      `| ${row.map} | ${row.rounds} | ${fixed(row.propWinPct, 0)}% | ${fixed(row.medianHuntS, 1)} s | ${fixed(row.p90HuntS, 1)} s | ${fixed(row.shotsPerCapture, 1)} | ${fixed(row.movingCapturePct, 0)}% | ${fixed(row.capturesPerRound, 2)} | ${fixed(row.hunterOutsPerRound, 2)} |`,
+      `| ${row.map} | ${row.rounds} | ${fixed(row.propWinPct, 0)}% | ${fixed(row.medianHuntS, 1)} s | ${fixed(row.p90HuntS, 1)} s | ${fixed(row.shotsPerCapture, 1)} | ${fixed(row.movingCapturePct, 0)}% | ${fixed(row.recentlyMovedCapturePct, 0)}% | ${fixed(row.capturesPerRound, 2)} | ${fixed(row.hunterOutsPerRound, 2)} |`,
     );
   }
 } finally {
