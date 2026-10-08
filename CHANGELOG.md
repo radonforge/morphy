@@ -8,6 +8,8 @@ Every Morphy release and what it changed for you, newest first.
 
 - Each map in the menu shows how many people are playing it right now, so you
   can pick the map where the others are.
+- A field of view slider in the lobby options and the match menu, from 50 to
+  90 degrees, that changes the view as you drag it.
 
 ### Changed
 
