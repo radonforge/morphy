@@ -1350,7 +1350,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     return () => window.removeEventListener("keydown", onKey);
   }, [canCycleTurnStep, turnStep, pushFeed]);
   const blinded = localRole === "hunter" && phase === "hiding";
-  const showMinimap = (phase === "hiding" || phase === "hunting") && !blinded;
+  const showMinimap = (phase === "hiding" || phase === "hunting") && !blinded && !caught;
 
   const closeChat = () => {
     setChatOpen(false);
