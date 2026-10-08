@@ -82,10 +82,8 @@ export const JUMP_RELEASE_GRAVITY_MULT = 2.4;
 export const FALL_GRAVITY_MULT = 1.35;
 
 export const PROP_TURN_SPEED = 2.4;
-/** How far a Shift tap of Q/E turns a disguise: to the next quarter turn. */
-export const PROP_TURN_SNAP = Math.PI / 2;
-/** How far a plain tap of Q/E turns a disguise: to the next 15 degrees. */
-export const PROP_TURN_FINE_STEP = Math.PI / 12;
+/** The degrees a tap of Q/E can turn a disguise by, in the order X cycles them; the first is the default. */
+export const PROP_TURN_STEPS_DEG = [90, 45, 15] as const;
 export const PROP_TURN_TAP_MS = 200;
 
 export const REROLL_BUDGET = 2;
