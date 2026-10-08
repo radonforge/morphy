@@ -74,6 +74,8 @@ varying vec3 vDir;
 void main() {
   float h = smoothstep(0.0, fade, max(vDir.y, 0.0));
   gl_FragColor = vec4(mix(horizon, top, h), 1.0);
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
 }`;
 
 /** A city's light-polluted sky: a dome glowing warm at the skyline, drawn behind everything. */

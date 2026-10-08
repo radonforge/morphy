@@ -4,6 +4,11 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- On Low graphics, North District's night sky is no longer almost black: it
+  glows at the skyline as it does on the other settings.
+
 ## [0.4.2] - 2026-10-08
 
 Bot props that hide like players. They pick a spot beside objects of their own
