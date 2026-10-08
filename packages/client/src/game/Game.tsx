@@ -64,6 +64,7 @@ import {
 } from "./audio";
 import { ControlsBar, ControlsDialog } from "./Controls";
 import { CopyDiagnostics } from "./CopyDiagnostics";
+import { announcesHunt, CAUGHT_CARD_COPY, caughtByLine, localCaptureOf } from "./caught";
 import { deviceHints } from "./deviceProbe";
 import {
   createFrameRing,
@@ -1108,11 +1109,12 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         if (typeof event.victimName !== "string" || typeof event.reason !== "string") return;
         pushFeed(killText(event));
         if (event.reason === "converted") {
-          const capture = { byName: event.byName, atMs: Date.now() - huntStartRef.current };
-          setCaptures((prev) => ({ ...prev, [event.victimId]: capture }));
+          const record = { byName: event.byName, atMs: Date.now() - huntStartRef.current };
+          setCaptures((prev) => ({ ...prev, [event.victimId]: record }));
           const now = performance.now();
-          if (event.victimId === sessionId) {
-            setCaught({ byId: event.byId, byName: event.byName, at: now });
+          const capture = localCaptureOf(event, sessionId, now);
+          if (capture) {
+            setCaught(capture);
           } else if (event.byId === sessionId) {
             catchRef.current = { victimId: event.victimId, at: now };
             showCatchBanner(event.victimName);
@@ -1161,7 +1163,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     if (!caught) return;
     const timer = setTimeout(() => {
       setCaught(null);
-      if (prevPhaseRef.current !== "hunting") return;
+      if (!announcesHunt(prevPhaseRef.current)) return;
       showHuntNowBanner(true);
       playYouHuntNow();
     }, CAUGHT_CAM_MS);
@@ -1591,8 +1593,9 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
 
       {caught && phase === "hunting" && (
         <div className="caught-card" role="status">
-          <div className="caught-title">Caught</div>
-          <div className="caught-by">by {caught.byName}</div>
+          <div className="caught-title">{CAUGHT_CARD_COPY.title}</div>
+          <div className="caught-by">{caughtByLine(caught.byName)}</div>
+          <div className="caught-next">{CAUGHT_CARD_COPY.hunterNow}</div>
         </div>
       )}
 

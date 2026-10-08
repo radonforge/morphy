@@ -4,6 +4,11 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- The card a caught prop sees now also says "You're a hunter now", so the
+  switch to hunting is clear before the hunt call.
+
 ## [0.4.2] - 2026-10-08
 
 Bot props that hide like players. They pick a spot beside objects of their own
