@@ -20,6 +20,8 @@ Every Morphy release and what it changed for you, newest first.
   45 and 15 degrees; the choice is remembered.
 - The controls bar at the bottom of the screen now shows only your role's own
   actions and fits on one line. Every other key is in All controls, behind ?.
+- The Graphics quality choice in the options is now a dropdown in the game's
+  own style, and works with the arrow keys, Enter and Escape.
 
 ## [0.4.0] - 2026-10-07
 
