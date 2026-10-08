@@ -15,7 +15,8 @@ interface ControlGroup {
   items: ControlSpec[];
 }
 
-const CONTROL_GROUPS: ControlGroup[] = [
+/** Every control in the game, as the ? dialog lists it. */
+export const CONTROL_GROUPS: ControlGroup[] = [
   {
     title: "Movement",
     items: [
@@ -72,7 +73,7 @@ function ControlKeys({ keys }: { keys: string[] }) {
   );
 }
 
-interface BarState {
+export interface BarState {
   role: Role;
   alive: boolean;
   canShoot: boolean;
@@ -107,16 +108,14 @@ function useNowUntil(until: number): number {
   return now;
 }
 
-function mainControls(s: BarState, now: number): { note?: string; items: ControlSpec[] } {
+/** What the bar shows for the local player's state: the role's own actions, or a note instead. */
+export function mainControls(s: BarState, now: number): { note?: string; items: ControlSpec[] } {
   if (!s.alive) return { note: "Out of HP, back in the hunt in a moment", items: [] };
   if (s.canShoot) {
     return {
       items: [
         { keys: ["LMB"], label: "Shoot" },
-        { keys: ["1", "2", "3"], label: "Weapon" },
         { keys: ["F"], label: cooldownLabel("Sonar", s.sonarReadyAt, now) },
-        { keys: ["Shift"], label: "Run" },
-        { keys: ["Space"], label: "Jump" },
       ],
     };
   }
@@ -124,27 +123,17 @@ function mainControls(s: BarState, now: number): { note?: string; items: Control
     return {
       items: [
         { keys: ["R"], label: `Swap (${s.rerollsLeft})` },
-        { keys: ["Q", "E"], label: "Turn 15°, Shift 90°, hold to spin" },
         { keys: ["C"], label: `Decoy (${s.decoysLeft})` },
-        { keys: ["V"], label: "View" },
         ...(s.phase === "hunting"
           ? [{ keys: ["F"], label: cooldownLabel("Taunt", s.tauntReadyAt, now) }]
           : []),
-        { keys: ["Shift"], label: "Run" },
-        { keys: ["Space"], label: "Jump" },
       ],
     };
   }
   if (s.role === "hunter" && s.phase === "hiding") {
     return { note: "You're blinded… wait for the hunt", items: [] };
   }
-  return {
-    items: [
-      { keys: ["WASD"], label: "Move" },
-      { keys: ["Shift"], label: "Run" },
-      { keys: ["Space"], label: "Jump" },
-    ],
-  };
+  return { items: [{ keys: ["WASD"], label: "Move" }] };
 }
 
 export function ControlsBar({ onOpen, ...state }: BarState & { onOpen: () => void }) {
@@ -164,7 +153,7 @@ export function ControlsBar({ onOpen, ...state }: BarState & { onOpen: () => voi
       )}
       <button type="button" className="controls-chip" onClick={onOpen} title="All controls (?)">
         <Kbd>?</Kbd>
-        <span className="control-label">Controls</span>
+        <span className="control-label">All controls</span>
       </button>
     </div>
   );

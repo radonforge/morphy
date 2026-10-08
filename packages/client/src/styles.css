@@ -1452,6 +1452,7 @@ canvas {
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  width: max-content;
   max-width: 94vw;
   pointer-events: none;
 }
@@ -2419,6 +2420,7 @@ canvas {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 
 .control-keys {
@@ -2449,6 +2451,7 @@ canvas {
   background: transparent;
   border: 1px solid var(--border);
   border-radius: 5px;
+  white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
   transition:
