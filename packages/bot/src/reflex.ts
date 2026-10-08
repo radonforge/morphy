@@ -26,6 +26,19 @@ import {
   type Visibility,
 } from "@morphy/shared";
 import {
+  aimSpread,
+  directionOf,
+  driftStep,
+  fireChance,
+  followUpDelayMs,
+  gaussian,
+  lateralSpeed,
+  overshootRad,
+  type Rng,
+  reactionDelayMs,
+  VelocityEstimate,
+} from "./aim";
+import {
   buildObstacles,
   buildWalls,
   type Obstacle,
@@ -33,7 +46,9 @@ import {
   type Wall,
 } from "./collision";
 import {
-  AIM_TOLERANCE_RAD,
+  AIM_OVERSHOOT_SETTLE_RAD,
+  AIM_PITCH_SPREAD_SHARE,
+  AIM_TRIGGER_TICK_S,
   AIM_TURN_RATE_MAX,
   AIM_TURN_RATE_MIN,
   ARRIVE_EPSILON,
@@ -43,6 +58,7 @@ import {
   BOT_HEARING_RADIUS,
   BOT_PROBE_INTERVAL_MAX_MS,
   BOT_PROBE_INTERVAL_MIN_MS,
+  BOT_PROBE_RETRY_MS,
   BOT_TELL_MATCH_RADIUS,
   BOT_TELL_WINDOW_MS,
   BOT_VISION_RANGE,
@@ -62,8 +78,6 @@ import {
   NEARBY_PROP_RADIUS,
   PATH_REPLAN_MS,
   PATROL_PICK_ATTEMPTS,
-  REACTION_MS_MAX,
-  REACTION_MS_MIN,
   STUCK_PROGRESS_FRACTION,
   STUCK_TICK_LIMIT,
   TARGET_MOVE_REPLAN_CELLS,
@@ -182,6 +196,7 @@ export class Reflex {
   private rot = 0;
   private lastShotAt = 0;
   private lastShotTargetId: string | null = null;
+  private probeMissed = false;
 
   private readonly follower = new PathFollower();
   private pathGoal: Point2 | null = null;
@@ -195,7 +210,11 @@ export class Reflex {
   private blockedEdge = false;
 
   private aimTargetId: string | null = null;
-  private aimAcquiredAt = 0;
+  private fireReadyAt = 0;
+  private aimDrift = 0;
+  private overshoot = 0;
+  private readonly targetVelocity = new VelocityEstimate();
+  private readonly selfVelocity = new VelocityEstimate();
 
   private readonly movement = new Map<string, MovementSample>();
   private readonly lastPerceived = new Map<string, Point2>();
@@ -209,9 +228,11 @@ export class Reflex {
   private heardEdge = false;
   private readonly pressedAt = new Map<BotAct, number>();
 
+  /** `rng` draws the aim's noise; tests pass a seeded `makeRng` to replay it. */
   constructor(
     private readonly difficulty: number,
     private readonly visibility: Visibility,
+    private readonly rng: Rng = Math.random,
   ) {}
 
   get ready(): boolean {
@@ -285,22 +306,28 @@ export class Reflex {
     this.resetMotion();
     this.forgetContacts();
     this.lastShotAt = 0;
-    this.lastShotTargetId = null;
   }
 
   /**
    * Drop every contact handle, last sighting, movement sample, tell and heard
-   * sound, as a new round begins. A sample kept from before the props hid
-   * would read every prop that walked to its spot as one seen moving the
-   * moment the hunt opens.
+   * sound, and the aim on and record of whatever was last fired at, as a new
+   * round begins: handles restart, so a record kept would name another
+   * contact. A sample kept from before the props hid would read every prop
+   * that walked to its spot as one seen moving the moment the hunt opens.
    */
   forgetContacts(): void {
+    this.aimTargetId = null;
+    this.overshoot = 0;
+    this.aimDrift = 0;
+    this.targetVelocity.reset();
     this.lastPerceived.clear();
     this.movement.clear();
     this.tellAt.clear();
     this.shapes.clear();
     this.handles.clear();
     this.heard = [];
+    this.lastShotTargetId = null;
+    this.probeMissed = false;
   }
 
   /**
@@ -362,6 +389,7 @@ export class Reflex {
     this.posX = x;
     this.posZ = z;
     if (rot !== undefined) this.rot = rot;
+    this.selfVelocity.reset();
     this.resetMotion();
   }
 
@@ -418,7 +446,7 @@ export class Reflex {
       canShootNow: now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS,
       canTauntNow: this.sincePressed("taunt", now) >= TAUNT_COOLDOWN_MS,
       canSonarNow: this.sincePressed("sonar", now) >= SONAR_COOLDOWN_MS,
-      canProbeNow: now - this.lastShotAt >= probeInterval,
+      canProbeNow: now - this.lastShotAt >= (this.probeMissed ? BOT_PROBE_RETRY_MS : probeInterval),
       lastShotTargetId: this.lastShotTargetId,
     };
     this.forgetDeparted(world.others, world.decoys);
@@ -801,11 +829,12 @@ export class Reflex {
         this.runApproach(intent.targetId, intent.run, world, dt, now);
         break;
       case "shootTarget":
-        shoot = this.runShoot(intent.targetId, world, dt, now);
+        shoot = this.runShoot(intent.targetId, intent.probe === true, world, dt, now);
         break;
     }
 
     this.separateFromCrowd(world.others);
+    this.selfVelocity.observe(this.posX, this.posZ, now);
     return {
       input: {
         x: this.posX,
@@ -939,6 +968,7 @@ export class Reflex {
 
   private runShoot(
     targetId: string,
+    probe: boolean,
     world: ReflexWorld,
     dt: number,
     now: number,
@@ -962,24 +992,21 @@ export class Reflex {
 
     if (canHit && dir) {
       this.follower.clear();
-      const turnRate = lerp(AIM_TURN_RATE_MIN, AIM_TURN_RATE_MAX, this.difficulty);
-      const aimError = this.turnToward(target.x, target.z, turnRate * dt);
-      if (aimError > AIM_TOLERANCE_RAD) {
-        this.aimTargetId = null;
-        return null;
+      const shot = this.aimAndFire(target, dir, dist, dt, now);
+      if (shot) {
+        const struck = canHitTarget(
+          origin,
+          shot.dir,
+          target.x,
+          target.y,
+          target.z,
+          bounds,
+          map.colliders,
+        );
+        this.lastShotTargetId = struck ? targetId : null;
+        this.probeMissed = probe && !struck;
       }
-      if (this.aimTargetId !== target.source) {
-        this.aimTargetId = target.source;
-        this.aimAcquiredAt = now;
-      }
-      const reactionMs = lerp(REACTION_MS_MAX, REACTION_MS_MIN, this.difficulty);
-      const ready = now - this.aimAcquiredAt >= reactionMs;
-      if (ready && now - this.lastShotAt >= BOT_FIRE_COOLDOWN_MS) {
-        this.lastShotAt = now;
-        this.lastShotTargetId = targetId;
-        return { dir };
-      }
-      return null;
+      return shot;
     }
 
     this.aimTargetId = null;
@@ -990,6 +1017,57 @@ export class Reflex {
     if (wp) this.steer(wp, true, world.self.role, dt);
     else this.faceToward(goal.x, goal.z);
     return null;
+  }
+
+  /**
+   * Track a target in the clear and fire when the shot looks good, the way a
+   * player does. The crosshair follows the target with a hand's wander, a new
+   * target is flicked onto (sometimes past) and fired at only after a reaction
+   * time drawn for it, and each tick the trigger is pulled with a chance that
+   * falls with how far the crosshair sits off the target. The shot itself then
+   * leaves with an error drawn from {@link aimSpread}: what makes a running
+   * prop hard to hit is how fast it crosses the line of sight, read off where
+   * the bot has seen it, never anything it could not see.
+   */
+  private aimAndFire(
+    target: Contact,
+    dir: Vec3,
+    distance: number,
+    dt: number,
+    now: number,
+  ): MotorOutput["shoot"] {
+    const dx = target.x - this.posX;
+    const dz = target.z - this.posZ;
+    const bearing = Math.atan2(dx, dz);
+    if (this.aimTargetId !== target.source) {
+      this.aimTargetId = target.source;
+      this.fireReadyAt = now + reactionDelayMs(this.difficulty, this.rng);
+      this.overshoot = overshootRad(wrapAngle(bearing - this.rot), this.rng);
+      this.targetVelocity.reset();
+    }
+    this.targetVelocity.observe(target.x, target.z, now);
+    this.aimDrift = driftStep(this.aimDrift, dt, this.difficulty, this.rng);
+    const turnRate = lerp(AIM_TURN_RATE_MIN, AIM_TURN_RATE_MAX, this.difficulty);
+    const left = this.turnTo(bearing + this.overshoot + this.aimDrift, turnRate * dt);
+    if (left < AIM_OVERSHOOT_SETTLE_RAD || now >= this.fireReadyAt) this.overshoot = 0;
+    if (now < this.fireReadyAt || now - this.lastShotAt < BOT_FIRE_COOLDOWN_MS) return null;
+    const holdChance = 1 - fireChance(Math.abs(wrapAngle(bearing - this.rot)));
+    if (this.rng() >= 1 - holdChance ** (dt / AIM_TRIGGER_TICK_S)) return null;
+    const spread = aimSpread(
+      {
+        lateralSpeed: lateralSpeed(this.targetVelocity.vx, this.targetVelocity.vz, dx, dz),
+        distance,
+        selfSpeed: this.selfVelocity.speed,
+      },
+      this.difficulty,
+    );
+    const yaw = this.rot + spread * gaussian(this.rng);
+    const pitch =
+      Math.atan2(dir.y, Math.hypot(dir.x, dir.z)) +
+      spread * AIM_PITCH_SPREAD_SHARE * gaussian(this.rng);
+    this.lastShotAt = now;
+    this.fireReadyAt = now + BOT_FIRE_COOLDOWN_MS + followUpDelayMs(this.rng);
+    return { dir: directionOf(yaw, pitch) };
   }
 
   private arrivedAt(gx: number, gz: number): boolean {
@@ -1006,9 +1084,8 @@ export class Reflex {
     this.rot = Math.atan2(tx - this.posX, tz - this.posZ);
   }
 
-  /** Rotate at most `maxStep` radians toward (tx,tz); returns the angular error still remaining. */
-  private turnToward(tx: number, tz: number, maxStep: number): number {
-    const desired = Math.atan2(tx - this.posX, tz - this.posZ);
+  /** Rotate at most `maxStep` radians toward the heading `desired`; returns the angular error still remaining. */
+  private turnTo(desired: number, maxStep: number): number {
     const delta = wrapAngle(desired - this.rot);
     const step = Math.max(-maxStep, Math.min(maxStep, delta));
     this.rot = wrapAngle(this.rot + step);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  ENGAGE_RANGE_MAX,
   MAX_FLEE_DEFLECTIONS,
   MAX_HIDE_REPICKS,
   PANIC_RADIUS,
@@ -16,6 +17,8 @@ import { ScriptedPolicy } from "../packages/bot/src/policy/scripted.ts";
 const DIFFICULTY = 0.6;
 const BOUNDS = { min: { x: -20, y: 0, z: -20 }, max: { x: 20, y: 10, z: 20 } };
 const DECISIONS = 12;
+/** Past the engage range at any difficulty, so a suspect there can only be closed on. */
+const OUT_OF_REACH = ENGAGE_RANGE_MAX + 2;
 
 /**
  * A contact on the +x axis, in plain sight, disguised and standing still, that
@@ -40,7 +43,7 @@ const suspect = (id, distance, over = {}) => contact(id, distance, { tellRecentl
 /** A contact wearing no disguise: a character with a weapon, so a hunter. */
 const character = (id, distance, over = {}) => contact(id, distance, { disguised: false, ...over });
 
-/** A disguise seen on the move, so a suspect, but not yet worth a shot. */
+/** A disguise seen on the move, so a suspect. */
 const mover = (id, distance, over = {}) =>
   contact(id, distance, { movedRecently: true, tellRecently: true, ...over });
 
@@ -189,32 +192,52 @@ test("a hunter probes nothing out of reach", async () => {
   assert.equal(intent.kind, "patrol");
 });
 
-test("a hunter chases a suspect before it spends a probe", async () => {
-  const policy = new ScriptedPolicy(DIFFICULTY);
-  const intent = await policy.decide(
+test("a hunter goes after a suspect before it spends a probe", async () => {
+  const inReach = await new ScriptedPolicy(DIFFICULTY).decide(
     observation(1, [contact("crate", 3), mover("prop-a", 8)], { canProbeNow: true }),
   );
-  assert.equal(intent.kind, "inspect");
-  assert.equal(intent.targetId, "prop-a");
+  assert.equal(inReach.kind, "shootTarget");
+  assert.equal(inReach.targetId, "prop-a");
+
+  const outOfReach = await new ScriptedPolicy(DIFFICULTY).decide(
+    observation(1, [contact("crate", 3), mover("prop-a", OUT_OF_REACH)], { canProbeNow: true }),
+  );
+  assert.equal(outOfReach.kind, "inspect");
+  assert.equal(outOfReach.targetId, "prop-a");
 });
 
 test("a hunter chases a disguise it cannot shoot yet, however long it takes", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const pointBlank = await run(policy, DECISIONS, () => [mover("prop-a", 0.8)]);
-  assert.deepEqual(kinds(pointBlank), ["inspect"], "a mover at arm's reach is not given up on");
+  const farOff = await run(policy, DECISIONS, () => [mover("prop-a", OUT_OF_REACH)]);
+  assert.deepEqual(kinds(farOff), ["inspect"], "a mover out of reach is not given up on");
 
   const bySound = await run(new ScriptedPolicy(DIFFICULTY), DECISIONS, () => [heard("prop-b", 4)]);
   assert.deepEqual(kinds(bySound), ["inspect"], "nor is a contact known only by sound");
 });
 
 /**
- * A walking hunter loses 2.5 m/s to a panicking prop, and a prop on the move is
- * never `shootable`, so the contact a hunter most needs to catch was the one it
- * could only ever walk after.
+ * A prop that runs gives itself away, and a player shoots at it rather than
+ * waiting for it to stop. Until the reflex's aim made a runner the harder shot,
+ * a moving disguise was never `shootable`: the hunter chased it and fired a
+ * second or two after it stopped, which read as mechanical.
  */
-test("a hunter runs down a disguise it can see running", async () => {
+test("a hunter shoots at a disguise it can see running, in reach", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const intent = (await run(policy, 1, () => [mover("prop-a", 6)]))[0];
+  for (const distance of [0.8, 6, 12]) {
+    const intent = (await run(policy, 1, () => [mover("prop-a", distance)]))[0];
+    assert.equal(intent.kind, "shootTarget", `a runner ${distance} m off is fired at`);
+    assert.equal(intent.targetId, "prop-a");
+  }
+});
+
+/**
+ * A walking hunter loses 2.5 m/s to a panicking prop, so the contact a hunter
+ * most needs to catch once it is out of reach was the one it could only ever
+ * walk after.
+ */
+test("a hunter runs down a disguise it can see running, out of reach", async () => {
+  const policy = new ScriptedPolicy(DIFFICULTY);
+  const intent = (await run(policy, 1, () => [mover("prop-a", OUT_OF_REACH)]))[0];
   assert.equal(intent.kind, "inspect");
   assert.equal(intent.run, true);
 });
@@ -249,7 +272,11 @@ test("a hunter investigates a noise without knowing whose it is", async () => {
 test("a hunter prefers a seen disguise to a noise, and a noise to a seen teammate", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
   const intent = (
-    await run(policy, 1, () => [character("hunter-b", 1), heard("noise", 9), mover("prop-a", 12)])
+    await run(policy, 1, () => [
+      character("hunter-b", 1),
+      heard("noise", 9),
+      mover("prop-a", OUT_OF_REACH),
+    ])
   )[0];
   assert.equal(intent.kind, "inspect");
   assert.equal(intent.targetId, "noise", "the nearest contact that is not a known teammate");
@@ -260,8 +287,8 @@ test("a hunter chases the nearest disguise, not the nearest contact", async () =
   const intent = (
     await run(policy, 1, () => [
       character("hunter-b", 1),
-      mover("prop-far", 12),
-      mover("prop-near", 6),
+      mover("prop-far", OUT_OF_REACH + 6),
+      mover("prop-near", OUT_OF_REACH),
     ])
   )[0];
   assert.equal(intent.kind, "inspect");
@@ -539,7 +566,7 @@ test("a hunter runs to a taunt it heard", async () => {
 
 test("a hunter goes after a disguise in sight before a taunt", async () => {
   const policy = new ScriptedPolicy(DIFFICULTY);
-  const intent = await policy.decide(hearing(1, [mover("prop-a", 12)], [taunt("s1", 8)]));
+  const intent = await policy.decide(hearing(1, [mover("prop-a", OUT_OF_REACH)], [taunt("s1", 8)]));
   assert.equal(intent.kind, "inspect");
   assert.equal(intent.targetId, "prop-a");
 });

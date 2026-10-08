@@ -3,11 +3,16 @@ import { test } from "node:test";
 import { buildObstacles } from "../packages/bot/src/collision.ts";
 import {
   BOT_PROBE_INTERVAL_MAX_MS,
+  BOT_PROBE_RETRY_MS,
   BOT_TELL_WINDOW_MS,
   HEARD_SOUND_MEMORY_MS,
 } from "../packages/bot/src/config.ts";
 import { Reflex } from "../packages/bot/src/reflex.ts";
-import { SONAR_HEARING_RADIUS, TAUNT_HEARING_RADIUS } from "../packages/shared/src/index.ts";
+import {
+  makeRng,
+  SONAR_HEARING_RADIUS,
+  TAUNT_HEARING_RADIUS,
+} from "../packages/shared/src/index.ts";
 
 // A single wall standing between the bot at the origin and a contact further
 // down the +x axis: it blocks line of sight without blocking the ground the
@@ -60,8 +65,8 @@ function observeMoving(reflex, from, to) {
   return reflex.buildObservation(world(to), 2, 1_200);
 }
 
-function ready(visibility) {
-  const reflex = new Reflex(0.6, visibility);
+function ready(visibility, rng) {
+  const reflex = new Reflex(0.6, visibility, rng);
   reflex.setMap(MAP);
   reflex.syncPosition(0, 0, 0);
   return reflex;
@@ -468,7 +473,7 @@ test("a hunt opens with no disguise seen moving, however far it walked to hide",
 });
 
 test("a hunter's probe falls due only a probe interval after its last shot", () => {
-  const reflex = ready("limited");
+  const reflex = ready("limited", makeRng(1));
   const scene = world(contact(-5, 0));
   const handle = sole(reflex.buildObservation(scene, 1, 1_000)).id;
   const intent = { kind: "shootTarget", targetId: handle, seq: 1 };
@@ -482,4 +487,35 @@ test("a hunter's probe falls due only a probe interval after its last shot", () 
   const due = reflex.buildObservation(scene, 3, firedAt + BOT_PROBE_INTERVAL_MAX_MS);
   assert.equal(due.self.canProbeNow, true);
   assert.equal(due.self.lastShotTargetId, handle, "and it knows what it fired at");
+});
+
+/** An aim seed whose first shot at a crate this far off goes past it. */
+const MISS_SEED = 2;
+const MISS_RANGE = 12;
+
+/** The hunter's state a probe retry after its first shot at a crate, fired as a probe or not. */
+function afterFirstMiss(probe) {
+  const reflex = ready("limited", makeRng(MISS_SEED));
+  const scene = world(contact(-MISS_RANGE, 0));
+  const handle = sole(reflex.buildObservation(scene, 1, 1_000)).id;
+  const intent = { kind: "shootTarget", targetId: handle, probe, seq: 1 };
+  for (let tick = 1; tick <= 60; tick++) {
+    const now = 1_000 + tick * 50;
+    if (reflex.executeIntent(intent, scene, 0.05, now).shoot) {
+      return reflex.buildObservation(scene, 2, now + BOT_PROBE_RETRY_MS).self;
+    }
+  }
+  assert.fail("the bot never fired");
+}
+
+test("a probe that went past what it tested falls due again sooner", () => {
+  const self = afterFirstMiss(true);
+  assert.equal(self.lastShotTargetId, null, "the seed's shot goes past the crate");
+  assert.equal(self.canProbeNow, true);
+});
+
+test("a shot at a suspect that went past it leaves the probe cadence as it was", () => {
+  const self = afterFirstMiss(false);
+  assert.equal(self.lastShotTargetId, null, "the seed's shot goes past the crate");
+  assert.equal(self.canProbeNow, false);
 });

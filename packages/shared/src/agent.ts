@@ -45,7 +45,12 @@ export type Intent =
   | (IntentMeta & { kind: "moveTo"; x: number; z: number; run: boolean })
   | (IntentMeta & { kind: "hideAs"; x: number; z: number })
   | (IntentMeta & { kind: "inspect"; targetId: string; run: boolean })
-  | (IntentMeta & { kind: "shootTarget"; targetId: string })
+  | (IntentMeta & {
+      kind: "shootTarget";
+      targetId: string;
+      /** A test of a disguise that gave nothing away, not a shot at a suspect. */
+      probe?: boolean;
+    })
   | (IntentMeta & { kind: "chat"; text: string });
 
 export type Visibility = "full" | "limited";
@@ -67,13 +72,18 @@ export interface ObservedSelf {
   /**
    * Long enough has passed since the bot last fired to spend a speculative shot
    * on a disguise that has given nothing away: the pace a player tests the scene
-   * at, never faster, because every such shot that misses costs HP.
+   * at, never faster, because every such shot that misses costs HP. A probe
+   * that went past what it tested settled nothing, so the next test falls due
+   * sooner, once the crosshair could be back on it.
    */
   canProbeNow: boolean;
   /**
-   * The contact the bot last fired at, by the id its observation named it with,
-   * or null before its first shot: what lets a policy tell the object it meant
-   * to test from one it shot for another reason.
+   * The contact the bot's last shot struck, by the id its observation named it
+   * with, or null before its first shot and after a shot that went past the
+   * contact it was aimed at: what lets a policy tell the object it meant to
+   * test from one it shot for another reason, and a test that landed from a
+   * miss that settled nothing. Struck is read off the shot's own ray against
+   * the contact's visible bounds, never off the server's verdict.
    */
   lastShotTargetId: string | null;
 }
