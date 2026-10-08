@@ -12,9 +12,12 @@ const { MAP_CATALOG, PLAYER_COUNTS_PATH } = await import("../packages/shared/src
 const { cachedFor, countPlayersByMap } = await import("../packages/server/src/playerCounts.ts");
 const { registerPlayerCountsRoute } = await import("../packages/server/src/http.ts");
 const { playerStats } = await import("../packages/server/src/stats/repository.ts");
-const { parsePlayerCounts } = await import("../packages/client/src/net/playerCounts.ts");
+const { fetchPlayerCounts, parsePlayerCounts } = await import(
+  "../packages/client/src/net/playerCounts.ts"
+);
 
 const TTL_MS = 5_000;
+const RETRY_MS = 2_000;
 const SERVER_ERROR = 500;
 
 after(() => {
@@ -73,7 +76,7 @@ function clockAt(start) {
 test("the cached load runs once per TTL however many callers ask", async () => {
   let loads = 0;
   const { clock, now } = clockAt(1_000);
-  const counts = cachedFor(async () => ++loads, TTL_MS, now);
+  const counts = cachedFor(async () => ++loads, TTL_MS, RETRY_MS, now);
   const first = await Promise.all([counts(), counts(), counts()]);
   assert.deepEqual(first, [1, 1, 1]);
   clock.now += TTL_MS - 1;
@@ -84,9 +87,41 @@ test("the cached load runs once per TTL however many callers ask", async () => {
   assert.equal(loads, 2);
 });
 
-test("a failed load is not cached, so the next caller loads again", async () => {
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+test("a load in flight is shared, so no second load starts until it settles", async () => {
+  const loads = [];
+  const { clock, now } = clockAt(1_000);
+  const counts = cachedFor(
+    () => {
+      const load = deferred();
+      loads.push(load);
+      return load.promise;
+    },
+    TTL_MS,
+    RETRY_MS,
+    now,
+  );
+  const first = counts();
+  clock.now += TTL_MS * 10;
+  const second = counts();
+  assert.equal(second, first);
+  assert.equal(loads.length, 1);
+  loads[0].resolve(7);
+  assert.deepEqual(await Promise.all([first, second]), [7, 7]);
+});
+
+test("a failed load is kept for the retry window, then loaded again", async () => {
   let loads = 0;
-  const { now } = clockAt(1_000);
+  const { clock, now } = clockAt(1_000);
   const counts = cachedFor(
     async () => {
       loads++;
@@ -94,10 +129,45 @@ test("a failed load is not cached, so the next caller loads again", async () => 
       return loads;
     },
     TTL_MS,
+    RETRY_MS,
     now,
   );
+  const failed = counts();
+  await assert.rejects(failed, /query failed/);
+  for (let call = 0; call < 100; call++) assert.equal(counts(), failed);
+  clock.now += RETRY_MS - 1;
   await assert.rejects(counts(), /query failed/);
+  assert.equal(loads, 1);
+  clock.now += 1;
   assert.equal(await counts(), 2);
+  assert.equal(loads, 2);
+});
+
+test("a success keeps the TTL and a failure the retry window, whichever came before", async () => {
+  const outcomes = [1, "fail", 3, "fail"];
+  let loads = 0;
+  const { clock, now } = clockAt(1_000);
+  const counts = cachedFor(
+    async () => {
+      const outcome = outcomes[loads++];
+      if (outcome === "fail") throw new Error("query failed");
+      return outcome;
+    },
+    TTL_MS,
+    RETRY_MS,
+    now,
+  );
+  assert.equal(await counts(), 1);
+  clock.now += TTL_MS;
+  await assert.rejects(counts(), /query failed/);
+  clock.now += RETRY_MS;
+  assert.equal(await counts(), 3);
+  clock.now += TTL_MS - 1;
+  assert.equal(await counts(), 3);
+  assert.equal(loads, 3);
+  clock.now += 1;
+  await assert.rejects(counts(), /query failed/);
+  assert.equal(loads, 4);
 });
 
 function mountRoute(counts) {
@@ -145,6 +215,48 @@ test("the route serves the counts, and a 500 with no detail when the query fails
   } finally {
     console.error = originalError;
   }
+});
+
+function rejected(reason) {
+  const failure = Promise.reject(reason);
+  failure.catch(() => {});
+  return failure;
+}
+
+test("the route logs a cached failure once, and the next failure again", async () => {
+  let failure = rejected("driver down");
+  const route = mountRoute(() => failure);
+  const logged = [];
+  const originalError = console.error;
+  console.error = (...args) => logged.push(args);
+  try {
+    for (let call = 0; call < 3; call++) assert.equal((await route()).status, SERVER_ERROR);
+    assert.equal(logged.length, 1);
+    failure = rejected("driver down");
+    assert.equal((await route()).status, SERVER_ERROR);
+    assert.equal(logged.length, 2);
+  } finally {
+    console.error = originalError;
+  }
+});
+
+test("the client warns once when the counts path answers with something other than JSON", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWarn = console.warn;
+  const warnings = [];
+  globalThis.fetch = async () =>
+    new Response("<!doctype html>", { headers: { "content-type": "text/html" } });
+  console.warn = (...args) => warnings.push(args);
+  try {
+    const signal = new AbortController().signal;
+    await assert.rejects(fetchPlayerCounts(signal), /not JSON/);
+    await assert.rejects(fetchPlayerCounts(signal), /not JSON/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    console.warn = originalWarn;
+  }
+  assert.equal(warnings.length, 1);
+  assert.match(String(warnings[0][0]), /not proxied/);
 });
 
 test("the client reads the counts it knows and refuses a malformed body", () => {

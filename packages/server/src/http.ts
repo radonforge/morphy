@@ -79,17 +79,22 @@ interface PlayerCountsApp {
 /**
  * Serve the humans playing on each map, so the menu can show where people are before a pick. The
  * counts come from `counts`, which the caller caches (`cachedFor`) so the rooms are queried once
- * per TTL however many menus poll. No room ids leave the server: matchmaking joins by map.
+ * per TTL however many menus poll. A failure is logged once however many requests it answers,
+ * since the cache hands every caller in its retry window the same rejection. No room ids leave the
+ * server: matchmaking joins by map.
  */
 export function registerPlayerCountsRoute(
   app: PlayerCountsApp,
   counts: () => Promise<MapPlayerCount[]>,
 ): void {
+  let lastLogged: Promise<MapPlayerCount[]> | undefined;
   app.get(PLAYER_COUNTS_PATH, (_req, res) => {
-    counts().then(
+    const answer = counts();
+    answer.then(
       (body) => res.json(body),
       (error: unknown) => {
-        console.error("[morphy] player count query failed:", error);
+        if (answer !== lastLogged) console.error("[morphy] player count query failed:", error);
+        lastLogged = answer;
         res.status(500).json({ error: "player counts unavailable" });
       },
     );

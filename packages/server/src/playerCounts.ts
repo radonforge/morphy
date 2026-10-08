@@ -26,24 +26,30 @@ export function countPlayersByMap(rooms: readonly CountedRoom[]): MapPlayerCount
 }
 
 /**
- * Wrap `load` so it runs at most once per `ttlMs` however many callers ask: every call inside the
- * window shares the same promise, in flight or settled. A rejection is not kept, so the next call
- * after a failure loads again.
+ * Wrap `load` so it runs at most once per window however many callers ask: while a load is in
+ * flight every call shares it, a success is kept for `ttlMs` and a failure for `retryMs`, both
+ * from when it settled. Keeping the failure bounds how often a broken source is asked again, and
+ * every caller in its window sees the same rejection.
  */
 export function cachedFor<T>(
   load: () => Promise<T>,
   ttlMs: number,
+  retryMs: number,
   now: () => number = Date.now,
 ): () => Promise<T> {
-  let cached: { at: number; value: Promise<T> } | undefined;
+  let cached: { value: Promise<T>; until: number } | undefined;
   return () => {
-    const at = now();
-    if (cached && at - cached.at < ttlMs) return cached.value;
-    const entry = { at, value: load() };
+    if (cached && now() < cached.until) return cached.value;
+    const entry = { value: load(), until: Number.POSITIVE_INFINITY };
     cached = entry;
-    entry.value.catch(() => {
-      if (cached === entry) cached = undefined;
-    });
+    entry.value.then(
+      () => {
+        entry.until = now() + ttlMs;
+      },
+      () => {
+        entry.until = now() + retryMs;
+      },
+    );
     return entry.value;
   };
 }

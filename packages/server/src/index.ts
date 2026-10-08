@@ -1,6 +1,11 @@
 import { defineRoom, defineServer, matchMaker } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import { DEFAULT_PORT, PLAYER_COUNTS_TTL_MS, ROOM_NAME } from "@morphy/shared";
+import {
+  DEFAULT_PORT,
+  PLAYER_COUNTS_RETRY_MS,
+  PLAYER_COUNTS_TTL_MS,
+  ROOM_NAME,
+} from "@morphy/shared";
 import cors from "cors";
 import { registerPlayerCountsRoute, registerStatsRoute } from "./http";
 import { cachedFor, countPlayersByMap } from "./playerCounts";
@@ -13,6 +18,7 @@ const stopStatsPurge = scheduleStatsPurge(playerStats);
 const playerCounts = cachedFor(
   async () => countPlayersByMap(await matchMaker.query({ name: ROOM_NAME })),
   PLAYER_COUNTS_TTL_MS,
+  PLAYER_COUNTS_RETRY_MS,
 );
 
 const server = defineServer({
