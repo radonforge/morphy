@@ -4,6 +4,11 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- A decoy dropped beside a wall or a building no longer shoves you into it. You walk
+  out of a fresh decoy and it turns solid behind you.
+
 ## [0.4.2] - 2026-10-08
 
 Bot props that hide like players. They pick a spot beside objects of their own

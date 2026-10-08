@@ -42,6 +42,7 @@ import {
   advanceMovement,
   cappedFrameSeconds,
   clampToBounds,
+  createDecoyGhosts,
   GROUND_EPSILON,
   type MovementBody,
   type ObbCollider,
@@ -50,6 +51,7 @@ import {
   resolveColliders,
   STEP_DISTANCE,
   supportHeightAt,
+  updateDecoyGhosts,
 } from "./movement";
 import { lockPointer } from "./pointerLock";
 import { FIELD_OF_VIEW_DEFAULT, fieldOfView, lookSensitivity } from "./prefs";
@@ -295,14 +297,29 @@ function buildColliders(map: MapDefinition, catalog: Catalog): ObbCollider[] {
   return colliders;
 }
 
-function buildDecoyColliders(decoys: DecoyView[], catalog: Catalog): ObbCollider[] {
-  const colliders: ObbCollider[] = [];
+function buildDecoyColliders(decoys: DecoyView[], catalog: Catalog): Map<string, ObbCollider[]> {
+  const byDecoy = new Map<string, ObbCollider[]>();
   for (const decoy of decoys) {
     const def = catalog.get(decoy.propType);
     if (!def) continue;
+    const colliders: ObbCollider[] = [];
     pushPropPartColliders(colliders, def, decoy, decoy.rot);
+    byDecoy.set(decoy.id, colliders);
   }
-  return colliders;
+  return byDecoy;
+}
+
+function solidColliders(
+  statics: ObbCollider[],
+  decoys: ReadonlyMap<string, ObbCollider[]>,
+  ghosts: ReadonlySet<string>,
+): ObbCollider[] {
+  if (decoys.size === 0) return statics;
+  const solid = [...statics];
+  for (const [id, colliders] of decoys) {
+    if (!ghosts.has(id)) solid.push(...colliders);
+  }
+  return solid;
 }
 
 interface Wall {
@@ -444,10 +461,6 @@ export const Scene = memo(function Scene({
   );
   const staticColliders = useMemo(() => buildColliders(map, catalog), [map, catalog]);
   const decoyColliders = useMemo(() => buildDecoyColliders(decoys, catalog), [decoys, catalog]);
-  const colliders = useMemo(
-    () => (decoyColliders.length > 0 ? [...staticColliders, ...decoyColliders] : staticColliders),
-    [staticColliders, decoyColliders],
-  );
   const walls = useMemo(() => buildWalls(map), [map]);
   const theme = useMemo(() => themeFor(map.id, night), [map.id, night]);
   const localGroundRef = useRef(new THREE.Vector3());
@@ -594,7 +607,8 @@ export const Scene = memo(function Scene({
         tauntPulseRef={tauntPulseRef}
         inputBlocked={inputBlocked}
         playersRef={playersRef}
-        colliders={colliders}
+        colliders={staticColliders}
+        decoyColliders={decoyColliders}
         walls={walls}
         avatar={localMeta?.avatar ?? ""}
         playerPos={localGroundRef}
@@ -1764,6 +1778,7 @@ interface LocalPlayerProps {
   inputBlocked: boolean;
   playersRef: PlayersRef;
   colliders: ObbCollider[];
+  decoyColliders: Map<string, ObbCollider[]>;
   walls: Wall[];
   avatar: string;
   playerPos: PlayerPosRef;
@@ -1788,6 +1803,7 @@ function LocalPlayer({
   inputBlocked,
   playersRef,
   colliders,
+  decoyColliders,
   walls,
   avatar,
   playerPos,
@@ -1893,10 +1909,7 @@ function LocalPlayer({
     lookRef.current.pitch = 0;
   }, [caughtCam, playersRef, body, lookRef]);
   const runMultiplier = role === "hunter" ? RUN_MULTIPLIER_HUNTER : RUN_MULTIPLIER_PROP;
-  const world = useMemo(
-    () => ({ colliders, bounds: map.bounds, runMultiplier }),
-    [colliders, map.bounds, runMultiplier],
-  );
+  const decoyGhosts = useRef(createDecoyGhosts());
 
   useGuardedFrame((_, rawDelta) => {
     const delta = cappedFrameSeconds(rawDelta);
@@ -1924,6 +1937,13 @@ function LocalPlayer({
 
     const cameFrom = { x: body.x, z: body.z };
 
+    const solid = solidColliders(
+      colliders,
+      decoyColliders,
+      updateDecoyGhosts(decoyGhosts.current, body, decoyColliders),
+    );
+    const world = { colliders: solid, bounds: map.bounds, runMultiplier };
+
     let support: number;
     let horizSpeed = 0;
     let sprinting = false;
@@ -1931,7 +1951,7 @@ function LocalPlayer({
     if (frozen) {
       body.vx = 0;
       body.vz = 0;
-      support = supportHeightAt(body.x, body.z, body.y, colliders);
+      support = supportHeightAt(body.x, body.z, body.y, solid);
     } else {
       const k = keys.current;
       const moved = advanceMovement(
@@ -1995,7 +2015,7 @@ function LocalPlayer({
           body.z += (dz / dist) * push;
         }
       }
-      resolveColliders(body, colliders, cameFrom);
+      resolveColliders(body, solid, cameFrom);
       clampToBounds(body, map.bounds);
     }
 

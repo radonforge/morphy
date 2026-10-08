@@ -263,6 +263,64 @@ export function resolveColliders(
   }
 }
 
+/** Whether the body's footprint and vertical span meet the collider's box. */
+export function bodyOverlapsCollider(
+  body: { x: number; y: number; z: number },
+  c: ObbCollider,
+): boolean {
+  if (c.yMax <= body.y + STEP_HEIGHT || c.yMin >= body.y + PLAYER_HEIGHT) return false;
+  const dx = body.x - c.x;
+  const dz = body.z - c.z;
+  const lx = dx * c.cos - dz * c.sin;
+  const lz = dx * c.sin + dz * c.cos;
+  const ox = lx - clamp(lx, -c.hx, c.hx);
+  const oz = lz - clamp(lz, -c.hz, c.hz);
+  return ox * ox + oz * oz < PLAYER_RADIUS * PLAYER_RADIUS;
+}
+
+/**
+ * Which decoys the local body may walk through. A decoy has no entry face when
+ * it appears on top of the body, so {@link resolveColliders} would shove the
+ * body out by the nearest face, whatever stands on that side (a wall, a house).
+ * Instead a decoy first seen overlapping the body is a ghost until the body no
+ * longer overlaps it, and solid like any other from then on.
+ */
+export interface DecoyGhosts {
+  known: Set<string>;
+  ghosts: Set<string>;
+}
+
+export function createDecoyGhosts(): DecoyGhosts {
+  return { known: new Set(), ghosts: new Set() };
+}
+
+/**
+ * Advance the ghost state one frame against the decoys now standing (colliders
+ * by decoy id) and return the ids of the decoys that are currently ghosts.
+ */
+export function updateDecoyGhosts(
+  state: DecoyGhosts,
+  body: { x: number; y: number; z: number },
+  decoys: ReadonlyMap<string, ObbCollider[]>,
+): ReadonlySet<string> {
+  for (const id of state.known) {
+    if (!decoys.has(id)) {
+      state.known.delete(id);
+      state.ghosts.delete(id);
+    }
+  }
+  for (const [id, colliders] of decoys) {
+    const overlapping = colliders.some((c) => bodyOverlapsCollider(body, c));
+    if (!state.known.has(id)) {
+      state.known.add(id);
+      if (overlapping) state.ghosts.add(id);
+    } else if (!overlapping) {
+      state.ghosts.delete(id);
+    }
+  }
+  return state.ghosts;
+}
+
 export function clampToBounds(body: { x: number; z: number }, bounds: MapBounds): void {
   body.x = clamp(body.x, bounds.min.x + PLAYER_RADIUS, bounds.max.x - PLAYER_RADIUS);
   body.z = clamp(body.z, bounds.min.z + PLAYER_RADIUS, bounds.max.z - PLAYER_RADIUS);
