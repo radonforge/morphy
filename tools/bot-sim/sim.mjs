@@ -7,6 +7,7 @@ import {
   BOT_FILL_TARGET,
   isMapId,
   MAP_CATALOG,
+  MIN_PLAYERS_TO_START,
   MSG_KILL,
   MSG_SHOT_FIRED,
   makeRng,
@@ -25,7 +26,8 @@ Plays bot-only rounds in a real MorphyRoom on a virtual clock: server-filled
 bots at DEFAULT_DIFFICULTY with limited vision, as a quiet public room runs them.
 Prints one row per map: prop win rate, median and p90 hunt (hunt start to round
 end), shots per capture, the share of captures on a moving prop, and how often
-a hunter ran its HP out. Same seed, same rounds.`;
+a hunter ran its HP out. Needs at least ${MIN_PLAYERS_TO_START} bots, the
+players a round needs to start. Same seed, same rounds.`;
 
 const { values } = parseArgs({
   options: {
@@ -53,6 +55,12 @@ for (const [name, value] of [
     console.error(`--${name} must be a positive integer, got ${value}\n\n${USAGE}`);
     process.exit(2);
   }
+}
+if (botCount < MIN_PLAYERS_TO_START) {
+  console.error(
+    `--bots must be at least ${MIN_PLAYERS_TO_START}, the players a round needs to start, got ${botCount}\n\n${USAGE}`,
+  );
+  process.exit(2);
 }
 for (const id of maps) {
   if (!isMapId(id)) {

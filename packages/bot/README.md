@@ -93,8 +93,8 @@ pnpm bot:sim --rounds 200 --map urban --seed 7
 `MorphyRoom` on a virtual clock, so a three-minute round takes as long as its
 ticks take to compute (100 rounds on both maps run in well under a minute).
 The room is filled the way a quiet public room fills itself: `--bots` (default
-`BOT_FILL_TARGET`) server-driven bots at `DEFAULT_DIFFICULTY` with limited
-vision. `Math.random` is seeded from `--seed`, so the same seed replays the
+`BOT_FILL_TARGET`, at least `MIN_PLAYERS_TO_START`) server-driven bots at
+`DEFAULT_DIFFICULTY` with limited vision. `Math.random` is seeded from `--seed`, so the same seed replays the
 same rounds. It prints one Markdown row per map: prop win rate, median and p90
 hunt (from the hunt opening to the round's end, so a prop win counts the full
 round), shots per capture, the share of captures on a prop that was moving,
