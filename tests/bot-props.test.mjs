@@ -8,6 +8,7 @@ import {
   FIRST_TAUNT_MAX_MS,
   FIRST_TAUNT_MIN_MS,
   HIDE_ALIGN_TOLERANCE_RAD,
+  HIDE_MOVE_AWAY,
   HIDE_SAME_TYPE_RADIUS,
   HIDE_WALL_BACK_REACH,
   MAX_HIDE_REPICKS,
@@ -653,7 +654,7 @@ const STATION = buildMap("station", 1);
  * which way its disguise faces, and every tick's disguise turn while it was
  * still walking.
  */
-async function hideOnStation(t, type, spawnIndex, seed) {
+async function hideOnStation(t, type, spawnIndex, seed, decoys = []) {
   t.mock.method(Math, "random", makeRng(seed));
   const driver = new BotDriver({
     name: "Hider",
@@ -686,7 +687,7 @@ async function hideOnStation(t, type, spawnIndex, seed) {
   let now = 1_000;
   for (let elapsed = 0; elapsed < HIDE_DURATION_MS; elapsed += TICK_MS) {
     now += TICK_MS;
-    const action = driver.tick({ phase: "hiding", winner: "", self, others: [], decoys: [] }, now);
+    const action = driver.tick({ phase: "hiding", winner: "", self, others: [], decoys }, now);
     if (action.input) {
       const walked = Math.hypot(action.input.x - self.x, action.input.z - self.z) > 1e-6;
       if (walked) turnsWhileWalking.push(action.input.propRot);
@@ -724,6 +725,54 @@ test("a prop keeps its hide spot while the path holds, re-picks when blocked, th
     { x: last.x, z: last.z },
     { x: spawn.x, z: spawn.z },
     "it hides where it stands",
+  );
+});
+
+test("a hiding spot a decoy stands on is reported blocked, not reached", () => {
+  const crate = {
+    id: "crate",
+    name: "Crate",
+    parts: [
+      {
+        kind: "box",
+        position: { x: 0, y: HALF, z: 0 },
+        size: { x: 1, y: 1, z: 1 },
+        color: "#ffffff",
+      },
+    ],
+  };
+  const reflex = new Reflex(DIFFICULTY, "limited");
+  reflex.setMap({ ...ARENA, propCatalog: [crate] });
+  reflex.syncPosition(0, 0, 0);
+  const self = player("bot:1", 0, 0, { role: "prop", propType: "crate", hp: 0 });
+  const spot = { x: 3, z: 0 };
+  const decoy = { id: "decoy:1", ...spot, y: 0, rot: 0, propType: "crate" };
+  const world = { phase: "hiding", winner: "", self, others: [], decoys: [decoy] };
+  const intent = { kind: "hideAs", ...spot, yaw: Math.PI, seq: 1 };
+  let now = 1_000;
+  let blocked = false;
+  let obs = null;
+  for (let k = 0; k < 100; k++) {
+    now += TICK_MS;
+    const output = reflex.executeIntent(intent, world, TICK_MS / 1_000, now);
+    Object.assign(self, output.input);
+    obs = reflex.buildObservation(world, k, now);
+    assert.equal(obs.arrived, false, "standing short of the spot is no arrival");
+    blocked ||= obs.pathBlocked;
+  }
+  assert.ok(Math.hypot(obs.self.x - spot.x, obs.self.z - spot.z) > HALF, "the decoy kept it off");
+  assert.ok(blocked, "the spot was reported blocked");
+});
+
+test("a prop whose hiding spot holds a decoy hides somewhere else", async (t) => {
+  const type = "container";
+  const { self: clear } = await hideOnStation(t, type, 0, 1);
+  t.mock.restoreAll();
+  const decoy = { id: "decoy:1", x: clear.x, y: 0, z: clear.z, rot: clear.propRot, propType: type };
+  const { self } = await hideOnStation(t, type, 0, 1, [decoy]);
+  assert.ok(
+    Math.hypot(self.x - decoy.x, self.z - decoy.z) >= HIDE_MOVE_AWAY,
+    "it gave up the spot instead of settling short of it",
   );
 });
 

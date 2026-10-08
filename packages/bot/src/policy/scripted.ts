@@ -393,11 +393,13 @@ export class ScriptedPolicy implements Policy {
    * Go to (or stay on) the hiding spot, picking one first if the prop has
    * none. While the hunters are blind it may run anywhere it reaches in the
    * time left; during the hunt it walks to one close by, away from the spot
-   * it gave up and hidden from the hunters it perceived. A settled prop
-   * taunts when its next taunt falls due.
+   * it gave up and hidden from the hunters it perceived. A spot it could not
+   * stand on (a decoy left there, say) is given up the same way. A settled
+   * prop taunts when its next taunt falls due.
    */
   private hideIntent(obs: Observation, now: number | null, leaving: Spot | null): Intent {
     if (obs.pathBlocked && this.lastKind === "hideAs") {
+      leaving ??= this.hide;
       this.hide = null;
       this.hideRepicks += 1;
     } else {

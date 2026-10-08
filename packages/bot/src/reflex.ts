@@ -1256,7 +1256,9 @@ export class Reflex {
    * never stands for a tick at each. A hiding spot is always stepped onto;
    * any other goal only when it stands on walkable ground, so a hunter sent
    * to a spot heard beside furniture stops at the path's end instead of
-   * shouldering into it. Furniture in the way stops it where it stands.
+   * shouldering into it. Furniture in the way stops it where it stands; on a
+   * hiding spot it reports the spot blocked instead, since a disguise short of
+   * where it was meant to stand is not the hide the policy chose.
    */
   private stepOnto(
     gx: number,
@@ -1267,7 +1269,17 @@ export class Reflex {
     dt: number,
   ): void {
     this.steer({ x: gx, z: gz }, run, role, dt);
-    if (this.reached(gx, gz, exact) || this.stuckTicks >= STUCK_TICK_LIMIT) this.settle();
+    if (this.reached(gx, gz, exact)) this.settle();
+    else if (this.stuckTicks < STUCK_TICK_LIMIT) return;
+    else if (exact) this.blockGoal();
+    else this.settle();
+  }
+
+  /** Stop short of a goal something stands on and report it blocked, until the next replan tries it again. */
+  private blockGoal(): void {
+    this.follower.clear();
+    if (!this.pathBlocked) this.blockedEdge = true;
+    this.pathBlocked = true;
   }
 
   private runPatrol(world: ReflexWorld, dt: number, now: number): void {
