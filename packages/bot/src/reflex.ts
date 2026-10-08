@@ -437,9 +437,10 @@ export class Reflex {
 
   /**
    * Whether the bot hears this player's rustle: a live prop that stepped a
-   * moment ago within earshot, which is exactly when a player's client plays
-   * one. A spin makes no sound, and a hunter's footsteps are not played to
-   * anyone, so neither is heard.
+   * moment ago within earshot. A player's client rustles once per stride
+   * instead, so a bot also hears a short shuffle a player would not. A spin
+   * makes no sound, and a hunter's footsteps are not played to anyone, so
+   * neither is heard.
    */
   private hears(other: BotPlayer, now: number): boolean {
     if (this.blind || other.role !== "prop" || !other.alive) return false;
