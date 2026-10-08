@@ -883,17 +883,100 @@ canvas {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
-.menu-select {
+.dropdown {
+  appearance: none;
+  cursor: pointer;
   width: clamp(120px, 12vw, 170px);
-  padding: 5px 10px;
-  font: inherit;
-  font-size: 0.8rem;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 0 12px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--text);
   background: rgba(0, 0, 0, 0.5);
   border: 0;
-  border-radius: var(--r-control);
+  border-radius: 4px;
   box-shadow: inset 0 0 0 1px var(--border);
+  outline: none;
+  transition:
+    box-shadow 0.14s ease,
+    color 0.14s ease;
+}
+.dropdown:hover,
+.dropdown.open {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+.dropdown:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px var(--cyan),
+    0 0 0 3px rgba(53, 224, 255, 0.25);
+}
+.dropdown-value {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.dropdown-chevron {
+  flex: none;
+  width: 10px;
+  height: 6px;
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 0.14s ease;
+}
+.dropdown.open .dropdown-chevron {
+  transform: rotate(180deg);
+}
+.dropdown-list {
+  position: fixed;
+  z-index: 100;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: var(--panel-solid);
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 1px var(--border-strong),
+    0 12px 32px -8px rgba(2, 5, 12, 0.7);
+}
+.dropdown-option {
+  position: relative;
   cursor: pointer;
+  padding: 7px 10px 7px 20px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.dropdown-option.active {
+  color: var(--accent-ink);
+  background: var(--accent-fill);
+}
+.dropdown-option[aria-selected="true"]::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  background: var(--cyan);
+}
+.dropdown-option.active[aria-selected="true"]::before {
+  background: var(--accent-ink);
 }
 .stage-chip {
   pointer-events: none;
@@ -1252,7 +1335,9 @@ canvas {
   }
   .world-slice,
   .world-slice-v,
-  .world-play i {
+  .world-play i,
+  .dropdown,
+  .dropdown-chevron {
     transition: none;
   }
   .panel,

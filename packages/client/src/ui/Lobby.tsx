@@ -39,7 +39,6 @@ import {
   GRAPHICS_LABEL,
   GRAPHICS_PREFERENCES,
   type GraphicsPreference,
-  isGraphicsPreference,
 } from "../game/graphicsTier";
 import { LookSensitivitySlider } from "../game/LookSensitivitySlider";
 import {
@@ -52,6 +51,7 @@ import { storageGet, storageSet } from "../safeStorage";
 import { MAP_GLASS } from "../theme";
 import { CarouselRail } from "./CarouselRail";
 import { AVATAR_COUNT, avatarIndex, stepAvatar } from "./carousel";
+import { Dropdown } from "./Dropdown";
 import { MapSlices } from "./MapSlices";
 import { loadPrefs, savePrefs } from "./prefs";
 import { StatsPane } from "./StatsPane";
@@ -183,11 +183,7 @@ function mapIndex(map: MapId): number {
 }
 
 function isTypingTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement
-  );
+  return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
 }
 
 function isActivatable(target: EventTarget | null): boolean {
@@ -201,6 +197,10 @@ const PANE_TITLES: Record<PaneId, string> = {
 };
 
 const VOLUME_SLIDER_MAX = 100;
+const GRAPHICS_OPTIONS = GRAPHICS_PREFERENCES.map((pref) => ({
+  value: pref,
+  label: GRAPHICS_LABEL[pref],
+}));
 const SHEEN_PERCENT = 100;
 
 export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: LobbyProps) {
@@ -443,8 +443,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     if (next) playUiClick();
   }, []);
 
-  const changeGraphics = useCallback((value: string) => {
-    if (!isGraphicsPreference(value)) return;
+  const changeGraphics = useCallback((value: GraphicsPreference) => {
     setGraphicsPreference(value);
     setGraphicsState(value);
     playUiClick();
@@ -862,18 +861,12 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
                   <b>Graphics quality</b>
                   <span>Auto reads your GPU and steps down after a slow round</span>
                 </span>
-                <select
-                  className="menu-select"
+                <Dropdown
                   value={graphics}
-                  onChange={(e) => changeGraphics(e.target.value)}
-                  aria-label="Graphics quality"
-                >
-                  {GRAPHICS_PREFERENCES.map((pref) => (
-                    <option key={pref} value={pref}>
-                      {GRAPHICS_LABEL[pref]}
-                    </option>
-                  ))}
-                </select>
+                  options={GRAPHICS_OPTIONS}
+                  onChange={changeGraphics}
+                  label="Graphics quality"
+                />
               </div>
               <div className="menu-opt-row">
                 <span className="l">
