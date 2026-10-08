@@ -4,6 +4,13 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- Options open from the gear in the menu as a slanted panel over the world,
+  split into Audio, Video and Controls. Graphics quality and field of view
+  preview on the stage as you change them, and the match menu offers the same
+  settings.
+
 ## [0.4.2] - 2026-10-08
 
 Bot props that hide like players. They pick a spot beside objects of their own

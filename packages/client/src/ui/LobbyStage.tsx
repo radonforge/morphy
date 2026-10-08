@@ -37,6 +37,7 @@ import {
   type StageLight,
 } from "./lobbyDioramas";
 import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
+import { stageLens } from "./stageLens";
 import { useReducedMotion } from "./useReducedMotion";
 import {
   closedSlice,
@@ -1291,6 +1292,7 @@ function Compositor({
     const focus = focusOf(slots, width / height, focusCamera);
     views.forEach((view, index) => {
       const shift = frameShift(layout, index, width, height, focus);
+      view.camera.fov = index === open ? stageLens(CAMERA_FOV) : CAMERA_FOV;
       view.camera.aspect = width / height;
       view.camera.setViewOffset(width, height, -shift, 0, width, height);
     });

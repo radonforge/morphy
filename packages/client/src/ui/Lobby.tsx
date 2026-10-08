@@ -14,45 +14,22 @@ import {
 } from "@morphy/shared";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
-  areUiSoundsEnabled,
-  getMusicVolume,
-  getVolume,
-  isMusicEnabled,
-  isMuted,
   playMorph,
   playUiClick,
   playUiClose,
   playUiDeploy,
   playUiHover,
   playUiOpen,
-  setMusicEnabled,
-  setMusicVolume,
-  setMuted,
-  setUiSoundsEnabled,
-  setVolume,
   startLobbyMusic,
   stopLobbyMusic,
   unlockAudio,
 } from "../game/audio";
-import { FieldOfViewSlider } from "../game/FieldOfViewSlider";
-import {
-  GRAPHICS_LABEL,
-  GRAPHICS_PREFERENCES,
-  type GraphicsPreference,
-} from "../game/graphicsTier";
-import { LookSensitivitySlider } from "../game/LookSensitivitySlider";
-import {
-  graphicsPreference,
-  isPerfHudEnabled,
-  setGraphicsPreference,
-  setPerfHudEnabled,
-} from "../game/prefs";
 import { storageGet, storageSet } from "../safeStorage";
 import { MAP_GLASS } from "../theme";
 import { CarouselRail } from "./CarouselRail";
 import { AVATAR_COUNT, avatarIndex, stepAvatar } from "./carousel";
-import { Dropdown } from "./Dropdown";
 import { MapSlices } from "./MapSlices";
+import { OptionsSlice } from "./OptionsSlice";
 import { loadPrefs, savePrefs } from "./prefs";
 import { StatsPane } from "./StatsPane";
 import { STAGE_MAX_ACTORS, type StageActor } from "./stageActors";
@@ -101,7 +78,7 @@ interface LobbyProps {
   onJoinParty: (code: string, name: string, avatar: AvatarId) => void;
 }
 
-type PaneId = "private" | "stats" | "options";
+type PaneId = "private" | "stats";
 
 interface NavItem {
   id: PaneId;
@@ -138,6 +115,34 @@ function avatarEmoji(avatar: string): string {
   return isAvatarId(avatar) ? AVATAR_EMOJI[avatar] : "❔";
 }
 
+const GEAR_TEETH = 8;
+const GEAR_TOOTH_ANGLES = Array.from(
+  { length: GEAR_TEETH },
+  (_, tooth) => (tooth * 360) / GEAR_TEETH,
+);
+
+/** The Options button's icon: a toothed ring drawn in the tab's own colour. */
+function GearIcon() {
+  return (
+    <svg className="menu-gear-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <g fill="currentColor">
+        {GEAR_TOOTH_ANGLES.map((angle) => (
+          <rect
+            key={angle}
+            x="10.4"
+            y="1.6"
+            width="3.2"
+            height="5"
+            rx="0.8"
+            transform={`rotate(${angle} 12 12)`}
+          />
+        ))}
+      </g>
+      <circle cx="12" cy="12" r="6.6" fill="none" stroke="currentColor" strokeWidth="2.6" />
+    </svg>
+  );
+}
+
 function resolveAvatar(avatar: string): AvatarId {
   return isAvatarId(avatar) ? avatar : DEFAULT_AVATAR_ID;
 }
@@ -145,7 +150,6 @@ function resolveAvatar(avatar: string): AvatarId {
 const NAV_ITEMS: NavItem[] = [
   { id: "private", label: "Party" },
   { id: "stats", label: "Stats" },
-  { id: "options", label: "Options" },
 ];
 
 const STUDIO_NAME = "Radon Forge";
@@ -193,14 +197,8 @@ function isActivatable(target: EventTarget | null): boolean {
 const PANE_TITLES: Record<PaneId, string> = {
   private: "Private room",
   stats: "Your stats",
-  options: "Options",
 };
 
-const VOLUME_SLIDER_MAX = 100;
-const GRAPHICS_OPTIONS = GRAPHICS_PREFERENCES.map((pref) => ({
-  value: pref,
-  label: GRAPHICS_LABEL[pref],
-}));
 const SHEEN_PERCENT = 100;
 
 export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: LobbyProps) {
@@ -208,13 +206,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   const [selectedMap, setSelectedMap] = useState<MapId>(() => loadPrefs().map);
   const [selectedAvatar, setSelectedAvatar] = useState<AvatarId>(() => loadPrefs().avatar);
   const [pane, setPane] = useState<PaneId | null>(null);
-  const [muted, setMutedState] = useState(() => isMuted());
-  const [volume, setVolumeState] = useState(() => getVolume());
-  const [uiSounds, setUiSoundsState] = useState(() => areUiSoundsEnabled());
-  const [musicOn, setMusicOnState] = useState(() => isMusicEnabled());
-  const [musicVol, setMusicVolState] = useState(() => getMusicVolume());
-  const [perfHud, setPerfHudState] = useState(() => isPerfHudEnabled());
-  const [graphics, setGraphicsState] = useState<GraphicsPreference>(() => graphicsPreference());
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -312,14 +304,35 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
         return;
       }
       playUiOpen();
+      setOptionsOpen(false);
       setPane(id);
     },
     [pane, closePane],
   );
 
+  const gearRef = useRef<HTMLButtonElement>(null);
+
+  /** Every way out of Options lands here, so focus always goes back to the gear that opened it. */
+  const closeOptions = useCallback(() => {
+    playUiClose();
+    setOptionsOpen(false);
+    gearRef.current?.focus();
+  }, []);
+
+  const toggleOptions = useCallback(() => {
+    if (optionsOpen) {
+      closeOptions();
+      return;
+    }
+    playUiOpen();
+    setPane(null);
+    setOptionsOpen(true);
+  }, [optionsOpen, closeOptions]);
+
   const openAvatarPicker = useCallback(() => {
     playUiOpen();
     setPane(null);
+    setOptionsOpen(false);
     setPicking(true);
   }, []);
 
@@ -376,7 +389,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
   }, []);
 
   useEffect(() => {
-    if (picking || pane !== null) return;
+    if (picking || pane !== null || optionsOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
       if (isTypingTarget(e.target)) return;
@@ -393,7 +406,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [picking, pane, play, openIndex, canChoose, openSlice]);
+  }, [picking, pane, optionsOpen, play, openIndex, canChoose, openSlice]);
 
   const handleAvatarStep = useCallback(
     (delta: number) => {
@@ -427,59 +440,6 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
     [joinCode, name, selectedAvatar, onJoinParty],
   );
 
-  const toggleAudio = useCallback(() => {
-    playUiClick();
-    setMutedState((prev) => {
-      const next = !prev;
-      setMuted(next);
-      return next;
-    });
-  }, []);
-
-  const toggleUiSounds = useCallback(() => {
-    const next = !areUiSoundsEnabled();
-    setUiSoundsEnabled(next);
-    setUiSoundsState(next);
-    if (next) playUiClick();
-  }, []);
-
-  const changeGraphics = useCallback((value: GraphicsPreference) => {
-    setGraphicsPreference(value);
-    setGraphicsState(value);
-    playUiClick();
-  }, []);
-
-  const togglePerfHud = useCallback(() => {
-    const next = !isPerfHudEnabled();
-    setPerfHudEnabled(next);
-    setPerfHudState(next);
-    playUiClick();
-  }, []);
-
-  const toggleMusic = useCallback(() => {
-    const next = !isMusicEnabled();
-    setMusicEnabled(next);
-    setMusicOnState(next);
-    if (next) {
-      startLobbyMusic();
-    } else {
-      stopLobbyMusic();
-    }
-    playUiClick();
-  }, []);
-
-  const handleVolumeChange = useCallback((value: number) => {
-    const next = value / VOLUME_SLIDER_MAX;
-    setVolume(next);
-    setVolumeState(next);
-  }, []);
-
-  const handleMusicVolumeChange = useCallback((value: number) => {
-    const next = value / VOLUME_SLIDER_MAX;
-    setMusicVolume(next);
-    setMusicVolState(next);
-  }, []);
-
   const trimmedName = name.trim();
   const avatarInfo = AVATAR_CATALOG.find((info) => info.id === selectedAvatar);
 
@@ -509,7 +469,7 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
 
   return (
     <div
-      className="menu"
+      className={`menu${optionsOpen ? " menu-options-open" : ""}`}
       ref={menuRef}
       onPointerMove={handleSheenMove}
       style={{ "--glass-tint": MAP_GLASS[activeMap] } as React.CSSProperties}
@@ -587,6 +547,18 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
               {item.label}
             </button>
           ))}
+          <button
+            type="button"
+            ref={gearRef}
+            className={`menu-tab menu-gear${optionsOpen ? " sel" : ""}`}
+            onClick={toggleOptions}
+            onPointerEnter={playUiHover}
+            aria-pressed={optionsOpen}
+            aria-label="Options"
+            title="Options"
+          >
+            <GearIcon />
+          </button>
         </nav>
       </header>
 
@@ -781,129 +753,11 @@ export function Lobby({ status, party, onConnect, onCreateParty, onJoinParty }: 
             </div>
           )}
 
-          {pane === "options" && (
-            <div className="menu-card">
-              <div className="menu-opt-row">
-                <span className="l">
-                  <b>Audio</b>
-                  <span>Master switch for every sound</span>
-                </span>
-                <button
-                  type="button"
-                  className={`menu-toggle${muted ? "" : " on"}`}
-                  onClick={toggleAudio}
-                  onPointerEnter={playUiHover}
-                  aria-pressed={!muted}
-                  aria-label={muted ? "Unmute audio" : "Mute audio"}
-                />
-              </div>
-              <div className="menu-opt-row">
-                <span className="l">
-                  <b>Volume</b>
-                  <span>Master level for effects and interface</span>
-                </span>
-                <input
-                  type="range"
-                  className="menu-slider"
-                  min={0}
-                  max={VOLUME_SLIDER_MAX}
-                  value={Math.round(volume * VOLUME_SLIDER_MAX)}
-                  onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                  onPointerUp={playUiClick}
-                  aria-label="Master volume"
-                />
-              </div>
-              <div className="menu-opt-row">
-                <span className="l">
-                  <b>Music</b>
-                  <span>Lobby theme by alkakrab</span>
-                </span>
-                <button
-                  type="button"
-                  className={`menu-toggle${musicOn ? " on" : ""}`}
-                  onClick={toggleMusic}
-                  onPointerEnter={playUiHover}
-                  aria-pressed={musicOn}
-                  aria-label={musicOn ? "Disable music" : "Enable music"}
-                />
-              </div>
-              <div className="menu-opt-row">
-                <span className="l">
-                  <b>Music volume</b>
-                  <span>Level of the lobby theme</span>
-                </span>
-                <input
-                  type="range"
-                  className="menu-slider"
-                  min={0}
-                  max={VOLUME_SLIDER_MAX}
-                  value={Math.round(musicVol * VOLUME_SLIDER_MAX)}
-                  onChange={(e) => handleMusicVolumeChange(Number(e.target.value))}
-                  aria-label="Music volume"
-                />
-              </div>
-              <div className="menu-opt-row">
-                <span className="l">
-                  <b>Interface sounds</b>
-                  <span>Menu ticks and clicks</span>
-                </span>
-                <button
-                  type="button"
-                  className={`menu-toggle${uiSounds ? " on" : ""}`}
-                  onClick={toggleUiSounds}
-                  onPointerEnter={playUiHover}
-                  aria-pressed={uiSounds}
-                  aria-label={uiSounds ? "Disable interface sounds" : "Enable interface sounds"}
-                />
-              </div>
-              <div className="menu-opt-row">
-                <span className="l">
-                  <b>Graphics quality</b>
-                  <span>Auto reads your GPU and steps down after a slow round</span>
-                </span>
-                <Dropdown
-                  value={graphics}
-                  options={GRAPHICS_OPTIONS}
-                  onChange={changeGraphics}
-                  label="Graphics quality"
-                />
-              </div>
-              <div className="menu-opt-row">
-                <span className="l">
-                  <b>Look sensitivity</b>
-                  <span>Mouse and trackpad aim speed</span>
-                </span>
-                <LookSensitivitySlider />
-              </div>
-              <div className="menu-opt-row">
-                <span className="l">
-                  <b>Field of view</b>
-                  <span>How wide the match camera sees</span>
-                </span>
-                <FieldOfViewSlider />
-              </div>
-              <div className="menu-opt-row">
-                <span className="l">
-                  <b>Performance readout</b>
-                  <span>FPS and ping in the corner of the match HUD</span>
-                </span>
-                <button
-                  type="button"
-                  className={`menu-toggle${perfHud ? " on" : ""}`}
-                  onClick={togglePerfHud}
-                  onPointerEnter={playUiHover}
-                  aria-pressed={perfHud}
-                  aria-label={
-                    perfHud ? "Disable performance readout" : "Enable performance readout"
-                  }
-                />
-              </div>
-            </div>
-          )}
-
           {pane === "stats" && <StatsPane />}
         </section>
       )}
+
+      {optionsOpen && <OptionsSlice reduced={reduced} onClose={closeOptions} />}
     </div>
   );
 }
