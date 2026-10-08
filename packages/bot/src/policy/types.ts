@@ -1,4 +1,5 @@
 import type { Intent, Observation } from "@morphy/shared";
+import type { Terrain } from "../terrain";
 
 /**
  * A pluggable brain. `decide` is async and low-frequency: it returns a
@@ -13,4 +14,10 @@ import type { Intent, Observation } from "@morphy/shared";
 export interface Policy {
   readonly name: string;
   decide(obs: Observation, signal: AbortSignal): Promise<Intent>;
+  /**
+   * Hand the policy the map as a player knows it before perceiving anything:
+   * its layout and furniture, never where anyone stands. Called whenever the
+   * room's map is set.
+   */
+  setTerrain?(terrain: Terrain): void;
 }

@@ -153,7 +153,10 @@ export class Bot {
   private onSound(kind: SoundKind, message: unknown, selfId: string): void {
     if (typeof message !== "object" || message === null) return;
     const m = message as Record<string, unknown>;
-    if (m.playerId === selfId) return;
+    if (m.playerId === selfId) {
+      if (kind === "taunt") this.driver.hearOwnHonk(Date.now());
+      return;
+    }
     if (!isFiniteNumber(m.x) || !isFiniteNumber(m.z)) return;
     this.driver.hear({ kind, x: m.x, z: m.z }, Date.now());
   }

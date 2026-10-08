@@ -4,6 +4,11 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- Bot props hide like the objects around them, turn to match them and run when
+  cornered instead of freezing in front of you.
+
 ## [0.4.1] - 2026-10-08
 
 Bots that play fair and props that see more. Bot hunters see only what is in

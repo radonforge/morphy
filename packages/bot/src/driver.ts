@@ -117,6 +117,8 @@ export class BotDriver {
 
   setMap(map: MapDefinition): void {
     this.reflex.setMap(map);
+    const terrain = this.reflex.terrain;
+    if (terrain) this.options.policy.setTerrain?.(terrain);
   }
 
   /** Adopt an authoritative position (spawn or teleport) instead of dead-reckoning to it. */
@@ -186,6 +188,11 @@ export class BotDriver {
   /** Let the bot hear a sound the room played, as a player's client would play it. */
   hear(sound: RoomSound, now: number): void {
     this.reflex.hear(sound.kind, sound.x, sound.z, now);
+  }
+
+  /** Let the bot hear its own disguise honk, as a player's client plays it to them. */
+  hearOwnHonk(now: number): void {
+    this.reflex.hearOwnHonk(now);
   }
 
   recordKill(event: { byId: string; victimId: string; reason: string }, now: number): void {

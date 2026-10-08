@@ -43,7 +43,17 @@ export type Intent =
   | (IntentMeta & { kind: "idle" })
   | (IntentMeta & { kind: "patrol" })
   | (IntentMeta & { kind: "moveTo"; x: number; z: number; run: boolean })
-  | (IntentMeta & { kind: "hideAs"; x: number; z: number })
+  | (IntentMeta & {
+      kind: "hideAs";
+      x: number;
+      z: number;
+      /**
+       * The way to turn the disguise once there, as a player turns it with the
+       * turn keys: only after arriving, and never with a possible hunter in
+       * sight to watch it turn. Absent, the disguise stays as it is.
+       */
+      yaw?: number;
+    })
   | (IntentMeta & { kind: "inspect"; targetId: string; run: boolean })
   | (IntentMeta & {
       kind: "shootTarget";
@@ -67,6 +77,16 @@ export interface ObservedSelf {
   canShootNow: boolean;
   /** A prop's taunt is off cooldown, as its own HUD shows it. */
   canTauntNow: boolean;
+  /**
+   * How long ago, this hunt, the prop's own disguise honked without it
+   * pressing the key: the room's forced taunt, or one a hunter's sonar drew.
+   * A player hears their own disguise honk the same way. Null when it has not.
+   */
+  forcedHonkMsAgo: number | null;
+  /** Decoys the prop has left to drop, as its own HUD shows them. */
+  decoysLeft: number;
+  /** A prop's decoy is off cooldown and it has one left. */
+  canDecoyNow: boolean;
   /** A hunter's sonar is off cooldown, as its own HUD shows it. */
   canSonarNow: boolean;
   /**
@@ -167,16 +187,9 @@ export interface ObservedDoorway {
   z: number;
 }
 
-export interface ObservedProp {
-  type: string;
-  x: number;
-  z: number;
-}
-
 export interface ObservedMap {
   bounds: MapBounds;
   doorways: ObservedDoorway[];
-  nearbyProps: ObservedProp[];
 }
 
 /** The compact JSON snapshot handed to a {@link Policy.decide} call. */
@@ -185,6 +198,8 @@ export interface Observation {
   seq: number;
   visibility: Visibility;
   phase: Phase;
+  /** How long the current phase has run, as the round clock on a player's HUD tells it. */
+  phaseMs: number;
   /** True when the reflex could not path to the current intent's target. */
   pathBlocked: boolean;
   /**
