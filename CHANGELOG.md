@@ -10,6 +10,8 @@ Every Morphy release and what it changed for you, newest first.
   can pick the map where the others are.
 - A field of view slider in the lobby options and the match menu, from 50 to
   90 degrees, that changes the view as you drag it.
+- Props can press V to look out from their disguise in first person, and press
+  it again to go back to the camera behind them. The choice is remembered.
 
 ### Changed
 

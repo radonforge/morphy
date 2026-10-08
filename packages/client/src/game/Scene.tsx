@@ -26,12 +26,12 @@ import {
 } from "@morphy/shared";
 import { Billboard, Sky, Stars, Text } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
-import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef } from "react";
+import { memo, type ReactElement, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { MORPH_COLOR } from "../theme";
 import { playJump, playLand, playMorph, playStep, playWeaponShot } from "./audio";
 import { CeilingView } from "./CeilingView";
-import { capUnderCeiling, ceilingBetween } from "./ceiling";
+import { capUnderCeiling, ceilingBetween, ceilingHeightAt } from "./ceiling";
 import { GroundView } from "./GroundView";
 import type { ShadowSettings } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
@@ -53,6 +53,7 @@ import {
 import { lockPointer } from "./pointerLock";
 import { FIELD_OF_VIEW_DEFAULT, fieldOfView, lookSensitivity } from "./prefs";
 import { advancePropTurn, PROP_TURN_IDLE, type PropTurnPress } from "./propTurn";
+import { type PropView, propEyeHeight, propView, setPropView } from "./propView";
 import { SkyGlow, StreetLamps } from "./StreetLamps";
 import { useSharedGLTF } from "./sharedTextures";
 import { StaticModels } from "./staticModels";
@@ -1809,6 +1810,32 @@ function LocalPlayer({
   const prevPropType = useRef("");
 
   const frozen = !alive || (role === "hunter" && phase === "hiding") || caughtCam !== null;
+  const [view, setView] = useState<PropView>(propView);
+  const firstPerson = role === "prop" && view === "first";
+  const eyeHeight = useMemo(() => {
+    const def = propType ? catalog.get(propType) : undefined;
+    return def ? propEyeHeight(computePropBounds(def).yMax) : PLAYER_EYE_HEIGHT;
+  }, [catalog, propType]);
+
+  const canSwitchView = role === "prop" && alive && caughtCam === null && !inputBlocked;
+  useEffect(() => {
+    if (!canSwitchView) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.code !== "KeyV" || event.repeat) return;
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      setView((current) => (current === "first" ? "third" : "first"));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canSwitchView]);
+
+  useEffect(() => {
+    setPropView(view);
+  }, [view]);
+
+  useEffect(() => {
+    if (firstPerson) lookRef.current.pitch = 0;
+  }, [firstPerson, lookRef]);
 
   useEffect(() => {
     if (!caughtCam) return;
@@ -1972,6 +1999,25 @@ function LocalPlayer({
         camera.rotateX(amplitude * Math.sin(seconds * CATCH_SHAKE_FREQ_X));
         camera.rotateY(amplitude * Math.cos(seconds * CATCH_SHAKE_FREQ_Y));
       }
+    } else if (firstPerson) {
+      const cosPitch = Math.cos(pitch);
+      const eyeY =
+        body.y +
+        capUnderCeiling(
+          eyeHeight,
+          body.y,
+          1,
+          ceilingHeightAt(ceiling, body.x, body.z),
+          CAMERA_CEILING_MARGIN,
+          CAMERA_MIN_DISTANCE,
+        );
+      camera.position.set(body.x, eyeY, body.z);
+      camera.lookAt(
+        body.x - Math.sin(yaw) * cosPitch,
+        eyeY - Math.sin(pitch),
+        body.z - Math.cos(yaw) * cosPitch,
+      );
+      camDistRef.current = CAMERA_MIN_DISTANCE;
     } else {
       const localPitch = THREE.MathUtils.clamp(pitch, TP_PITCH_MIN, TP_PITCH_MAX);
       const cosPitch = Math.cos(localPitch);
@@ -2041,7 +2087,9 @@ function LocalPlayer({
   return (
     <group ref={groupRef}>
       {alive && role !== "hunter" && (
-        <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
+        <group visible={!firstPerson || caughtCam !== null}>
+          <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
+        </group>
       )}
       {caughtCam && role === "hunter" && <AnimalAvatar id={avatar} role={role} />}
     </group>

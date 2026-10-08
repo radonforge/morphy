@@ -41,6 +41,7 @@ const CONTROL_GROUPS: ControlGroup[] = [
       { keys: ["Shift+Q", "Shift+E"], label: "Snap 90° (tap)" },
       { keys: ["Q", "E"], label: "Spin disguise (hold)" },
       { keys: ["C"], label: "Drop decoy" },
+      { keys: ["V"], label: "First / third person view" },
       { keys: ["F"], label: "Taunt (+1, +3 near a hunter)" },
     ],
   },
@@ -125,6 +126,7 @@ function mainControls(s: BarState, now: number): { note?: string; items: Control
         { keys: ["R"], label: `Swap (${s.rerollsLeft})` },
         { keys: ["Q", "E"], label: "Turn 15°, Shift 90°, hold to spin" },
         { keys: ["C"], label: `Decoy (${s.decoysLeft})` },
+        { keys: ["V"], label: "View" },
         ...(s.phase === "hunting"
           ? [{ keys: ["F"], label: cooldownLabel("Taunt", s.tauntReadyAt, now) }]
           : []),
