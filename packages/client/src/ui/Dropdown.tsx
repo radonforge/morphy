@@ -1,10 +1,15 @@
 import type React from "react";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { closedDropdown, type DropdownState, dropdownKey } from "./dropdownKeys";
-
-const LIST_GAP_PX = 4;
-const VIEWPORT_MARGIN_PX = 8;
+import {
+  closedDropdown,
+  type DropdownState,
+  dropdownKey,
+  NO_TYPED_PREFIX,
+  type TypedPrefix,
+  typeAheadKey,
+} from "./dropdownKeys";
+import { placeDropdownList } from "./dropdownPlacement";
 
 export interface DropdownOption<T extends string> {
   readonly value: T;
@@ -19,21 +24,20 @@ interface DropdownProps<T extends string> {
 }
 
 /**
- * Lays the open list under its trigger, or over it when the viewport has no room below. The list
- * is fixed to the viewport and portalled to `body`, so no pane's overflow clips it and it stacks
- * above every pane; it is kept inside the viewport and scrolls when taller than it.
+ * Positions the open list by `placeDropdownList`. The list is fixed to the viewport and
+ * portalled to `body`, so no pane's overflow clips it and it stacks above every pane. Its
+ * natural height is read from `scrollHeight`, which the `maxHeight` set here does not shrink.
  */
 function placeList(trigger: HTMLElement, list: HTMLElement): void {
-  const box = trigger.getBoundingClientRect();
-  const height = list.offsetHeight;
-  const below = window.innerHeight - box.bottom - LIST_GAP_PX - VIEWPORT_MARGIN_PX;
-  const above = box.top - LIST_GAP_PX - VIEWPORT_MARGIN_PX;
-  const top =
-    height > below && above > below ? box.top - LIST_GAP_PX - height : box.bottom + LIST_GAP_PX;
-  list.style.top = `${top}px`;
-  const left = Math.min(box.left, window.innerWidth - list.offsetWidth - VIEWPORT_MARGIN_PX);
-  list.style.left = `${Math.max(VIEWPORT_MARGIN_PX, left)}px`;
-  list.style.minWidth = `${box.width}px`;
+  const placement = placeDropdownList(
+    trigger.getBoundingClientRect(),
+    { width: list.offsetWidth, height: list.scrollHeight },
+    { width: window.innerWidth, height: window.innerHeight },
+  );
+  list.style.top = `${placement.top}px`;
+  list.style.left = `${placement.left}px`;
+  list.style.maxHeight = `${placement.maxHeight}px`;
+  list.style.minWidth = `${placement.minWidth}px`;
 }
 
 /**
@@ -41,7 +45,7 @@ function placeList(trigger: HTMLElement, list: HTMLElement): void {
  * leaves the trigger, which names the option the keyboard is on through `aria-activedescendant`,
  * so closing (by a pick, Escape, a click outside or blur) always leaves focus where it was. While
  * the list is open no key reaches the window's listeners, so neither the lobby nor a match acts
- * on keys meant for the list.
+ * on keys meant for the list. Typing a label's first letters picks it, as a native select does.
  */
 export function Dropdown<T extends string>({ value, options, onChange, label }: DropdownProps<T>) {
   const id = useId();
@@ -54,6 +58,7 @@ export function Dropdown<T extends string>({ value, options, onChange, label }: 
   const [state, setState] = useState<DropdownState>(() => closedDropdown(selected));
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const typedRef = useRef<TypedPrefix>(NO_TYPED_PREFIX);
 
   const close = useCallback(() => setState(closedDropdown(selected)), [selected]);
 
@@ -83,19 +88,37 @@ export function Dropdown<T extends string>({ value, options, onChange, label }: 
     const place = () => {
       if (triggerRef.current && listRef.current) placeList(triggerRef.current, listRef.current);
     };
+    const onScroll = (event: Event) => {
+      if (event.target instanceof Node && listRef.current?.contains(event.target)) return;
+      place();
+    };
     place();
     window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [state.open]);
 
-  const onKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+  useLayoutEffect(() => {
+    if (!state.open) return;
+    document.getElementById(`${id}option-${state.active}`)?.scrollIntoView({ block: "nearest" });
+  }, [id, state.open, state.active]);
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (state.open) event.stopPropagation();
     if (event.altKey || event.ctrlKey || event.metaKey) return;
-    const outcome = dropdownKey(state, event.key, options.length, selected);
+    const typed = typeAheadKey(
+      state,
+      typedRef.current,
+      event.key,
+      event.timeStamp,
+      options.map((option) => option.label),
+      selected,
+    );
+    if (typed) typedRef.current = typed.typed;
+    const outcome = typed?.outcome ?? dropdownKey(state, event.key, options.length, selected);
     if (outcome.handled) {
       event.preventDefault();
       event.stopPropagation();
@@ -146,6 +169,7 @@ export function Dropdown<T extends string>({ value, options, onChange, label }: 
       </button>
       {state.open &&
         createPortal(
+          // biome-ignore lint/a11y/useKeyWithClickEvents: focus never leaves the trigger, whose onKeyDown drives the list through aria-activedescendant
           <div
             ref={listRef}
             id={listId}
@@ -154,7 +178,6 @@ export function Dropdown<T extends string>({ value, options, onChange, label }: 
             className="dropdown-list"
             onMouseDown={(event) => event.preventDefault()}
             onClick={onListClick}
-            onKeyDown={onKeyDown}
           >
             {options.map((option, index) => (
               <div
