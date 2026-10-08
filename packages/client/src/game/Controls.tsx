@@ -1,4 +1,4 @@
-import type { Phase, Role } from "@morphy/shared";
+import { DECOY_BUDGET, type Phase, REROLL_BUDGET, type Role } from "@morphy/shared";
 import { useEffect, useState } from "react";
 import { Kbd } from "../ui/Kbd";
 import { type PropTurnMode, turnModeLabel } from "./propTurn";
@@ -6,9 +6,16 @@ import { type PropTurnMode, turnModeLabel } from "./propTurn";
 const COOLDOWN_TICK_MS = 250;
 const MS_PER_SECOND = 1_000;
 
+interface Pips {
+  left: number;
+  max: number;
+}
+
 interface ControlSpec {
   keys: string[];
   label: string;
+  value?: string;
+  pips?: Pips;
 }
 
 interface ControlGroup {
@@ -62,6 +69,23 @@ export const CONTROL_GROUPS: ControlGroup[] = [
     ],
   },
 ];
+
+/** One pip per use of a counter, numbered from 1, lit while that use is still available. */
+export function pipStates({ left, max }: Pips): { n: number; lit: boolean }[] {
+  const available = Math.min(Math.max(left, 0), max);
+  return Array.from({ length: max }, (_, i) => ({ n: i + 1, lit: i < available }));
+}
+
+function ControlPips({ pips }: { pips: Pips }) {
+  const lit = Math.min(Math.max(pips.left, 0), pips.max);
+  return (
+    <span className="control-pips" role="img" aria-label={`${lit} of ${pips.max} left`}>
+      {pipStates(pips).map(({ n, lit: on }) => (
+        <span className={on ? "control-pip control-pip-on" : "control-pip"} key={n} />
+      ))}
+    </span>
+  );
+}
 
 function ControlKeys({ keys }: { keys: string[] }) {
   return (
@@ -124,9 +148,9 @@ export function mainControls(s: BarState, now: number): { note?: string; items: 
   if (s.canTransform) {
     return {
       items: [
-        { keys: ["R"], label: `Swap (${s.rerollsLeft})` },
-        { keys: ["Q", "E"], label: `Turn ${turnModeLabel(s.turnMode)}` },
-        { keys: ["C"], label: `Decoy (${s.decoysLeft})` },
+        { keys: ["R"], label: "Swap", pips: { left: s.rerollsLeft, max: REROLL_BUDGET } },
+        { keys: ["Q", "E"], label: "Turn", value: turnModeLabel(s.turnMode) },
+        { keys: ["C"], label: "Decoy", pips: { left: s.decoysLeft, max: DECOY_BUDGET } },
         ...(s.phase === "hunting"
           ? [{ keys: ["F"], label: cooldownLabel("Taunt", s.tauntReadyAt, now) }]
           : []),
@@ -151,6 +175,8 @@ export function ControlsBar({ onOpen, ...state }: BarState & { onOpen: () => voi
           <span className="control" key={c.label}>
             <ControlKeys keys={c.keys} />
             <span className="control-label">{c.label}</span>
+            {c.value ? <span className="control-value">{c.value}</span> : null}
+            {c.pips ? <ControlPips pips={c.pips} /> : null}
           </span>
         ))
       )}
