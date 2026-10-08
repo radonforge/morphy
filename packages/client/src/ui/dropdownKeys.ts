@@ -87,3 +87,57 @@ export function dropdownKey(
       return unhandled;
   }
 }
+
+/** How long after a typed character the next one still extends the same search. */
+export const TYPE_AHEAD_RESET_MS = 500;
+
+/** The characters typed so far, lower-cased, and when the last of them was typed. */
+export interface TypedPrefix {
+  readonly text: string;
+  readonly at: number;
+}
+
+/** No search under way: the next character starts one. */
+export const NO_TYPED_PREFIX: TypedPrefix = { text: "", at: Number.NEGATIVE_INFINITY };
+
+/**
+ * Type-ahead, the half of a select-only combobox that `dropdownKey` leaves out. A character typed
+ * within `TYPE_AHEAD_RESET_MS` of the last extends the search, any other starts a new one. The
+ * search lands on the first label, wrapping, that starts with it in any case: from the current
+ * option while the search grows, so it stays put while it still matches, and from the next one
+ * for a new search. When nothing matches and every character typed is the same, that one letter
+ * is searched from the next option instead, so pressing it again cycles through its options. Closed, a match is picked at once, as
+ * a native select does; open, the cursor moves to it. A key that types no character, or a Space
+ * that would start a search, returns `null` and is `dropdownKey`'s; a character that matches
+ * nothing is not the dropdown's.
+ */
+export function typeAheadKey(
+  state: DropdownState,
+  typed: TypedPrefix,
+  key: string,
+  at: number,
+  labels: readonly string[],
+  selected: number,
+): { readonly typed: TypedPrefix; readonly outcome: DropdownKeyOutcome } | null {
+  if ([...key].length !== 1 || labels.length === 0) return null;
+  const continues = typed.text !== "" && at - typed.at <= TYPE_AHEAD_RESET_MS;
+  if (key === " " && !continues) return null;
+  const text = (continues ? typed.text : "") + key.toLowerCase();
+  const next: TypedPrefix = { text, at };
+  const current = state.open ? clampIndex(state.active, labels.length) : selected;
+  const find = (prefix: string, from: number) =>
+    labels
+      .map((_, step) => (from + step) % labels.length)
+      .find((index) => labels[index]?.toLowerCase().startsWith(prefix));
+  const first = [...text][0] ?? text;
+  const match =
+    find(text, continues ? current : current + 1) ??
+    ([...text].every((char) => char === first) ? find(first, current + 1) : undefined);
+  if (match === undefined) return { typed: next, outcome: { state, commit: null, handled: false } };
+  return {
+    typed: next,
+    outcome: state.open
+      ? { state: { open: true, active: match }, commit: null, handled: true }
+      : { state: closedDropdown(match), commit: match, handled: true },
+  };
+}
