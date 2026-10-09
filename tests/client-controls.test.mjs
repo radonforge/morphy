@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CONTROL_GROUPS, mainControls } from "../packages/client/src/game/Controls.tsx";
+import { CONTROL_GROUPS, mainControls, pipStates } from "../packages/client/src/game/Controls.tsx";
 import { lockPointer } from "../packages/client/src/game/pointerLock.ts";
 import { movementFromHeld } from "../packages/client/src/game/useControls.ts";
+import { DECOY_BUDGET, REROLL_BUDGET } from "../packages/shared/src/index.ts";
 
 test("no held key drives no action", () => {
   const keys = movementFromHeld(new Set());
@@ -79,6 +80,7 @@ const BASE_BAR = {
   decoysLeft: 0,
   tauntReadyAt: 0,
   sonarReadyAt: 0,
+  turnMode: "free",
 };
 
 const barKeys = (state) => mainControls({ ...BASE_BAR, ...state }, NOW).items.map((c) => c.keys);
@@ -91,17 +93,37 @@ const BAR_STATES = {
   preRound: { role: "prop", phase: "starting" },
 };
 
-test("a prop's bar holds only swap, decoy and taunt, with their counts", () => {
-  assert.deepEqual(barKeys(BAR_STATES.prop), [["R"], ["C"], ["F"]]);
-  assert.deepEqual(barLabels(BAR_STATES.prop), ["Swap (2)", "Decoy (1)", "Taunt"]);
+test("a prop's bar holds only swap, turn, decoy and taunt", () => {
+  assert.deepEqual(barKeys(BAR_STATES.prop), [["R"], ["Q", "E"], ["C"], ["F"]]);
+  assert.deepEqual(barLabels(BAR_STATES.prop), ["Swap", "Turn", "Decoy", "Taunt"]);
+});
+
+test("swap and decoy carry their counts as pips of the budget, turn its mode as a value", () => {
+  const [swap, turn, decoy] = mainControls({ ...BASE_BAR, ...BAR_STATES.prop }, NOW).items;
+  assert.deepEqual(swap.pips, { left: 2, max: REROLL_BUDGET });
+  assert.deepEqual(decoy.pips, { left: 1, max: DECOY_BUDGET });
+  assert.equal(turn.value, "free");
+});
+
+test("pips light as many as are left and never more than the budget", () => {
+  const lit = (pips) => pipStates(pips).map((p) => p.lit);
+  assert.deepEqual(lit({ left: 1, max: 3 }), [true, false, false]);
+  assert.deepEqual(lit({ left: 0, max: 2 }), [false, false]);
+  assert.deepEqual(lit({ left: 5, max: 2 }), [true, true]);
+  assert.deepEqual(lit({ left: -1, max: 2 }), [false, false]);
 });
 
 test("a hiding prop's bar has no taunt yet", () => {
-  assert.deepEqual(barKeys({ ...BAR_STATES.prop, phase: "hiding" }), [["R"], ["C"]]);
+  assert.deepEqual(barKeys({ ...BAR_STATES.prop, phase: "hiding" }), [["R"], ["Q", "E"], ["C"]]);
 });
 
 test("a hunter's bar holds only shoot and sonar", () => {
   assert.deepEqual(barKeys(BAR_STATES.hunter), [["LMB"], ["F"]]);
+});
+
+test("the turn entry names a stepped mode in degrees", () => {
+  const turn = mainControls({ ...BASE_BAR, ...BAR_STATES.prop, turnMode: 45 }, NOW).items[1];
+  assert.equal(turn.value, "45°");
 });
 
 test("the taunt and sonar labels count down their cooldown", () => {

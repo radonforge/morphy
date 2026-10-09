@@ -59,6 +59,13 @@ export const HUNTER_CAPTURE_HEAL = 50;
  * spectate a round away.
  */
 export const HUNTER_RESPAWN_MS = 6_000;
+/**
+ * How much of the hunt a caught prop sees replayed from its hunter's eyes before the
+ * caught card. Client-side only: the server has already made the player a hunter, who
+ * nothing can hurt, so the replay costs that player their own hunting time and no one
+ * else anything, and Space skips it.
+ */
+export const KILL_CAM_WINDOW_MS = 3_000;
 export const UNTRANSFORMED_PROP_RADIUS = 0.5;
 export const UNTRANSFORMED_PROP_HEIGHT = 1.8;
 
@@ -70,6 +77,18 @@ export const PLAYER_EYE_HEIGHT = 1.6;
  * is the same risk whoever is listening.
  */
 export const FOOTSTEP_HEARING_RADIUS = 12;
+/**
+ * How far round the player the minimap reaches, in metres: the plan, a prop's
+ * moving hunters and a hunter's teammates all stop at this radius.
+ */
+export const MINIMAP_RADIUS = 30;
+/**
+ * A hunter shows on a prop's minimap while it has stepped further than
+ * {@link MINIMAP_MOVE_MIN_DIST} within the last {@link MINIMAP_MOVE_WINDOW_MS},
+ * so one standing still drops off it and can lie in ambush.
+ */
+export const MINIMAP_MOVE_WINDOW_MS = 600;
+export const MINIMAP_MOVE_MIN_DIST = 0.3;
 
 export const MOVE_SPEED = 5;
 export const RUN_MULTIPLIER_HUNTER = 1.7;
@@ -84,8 +103,10 @@ export const JUMP_RELEASE_GRAVITY_MULT = 2.4;
 export const FALL_GRAVITY_MULT = 1.35;
 
 export const PROP_TURN_SPEED = 2.4;
-/** The degrees a tap of Q/E can turn a disguise by, in the order X cycles them; the first is the default. */
+/** The degrees a tap of Q/E can turn a disguise by in a stepped turn mode, in the order X cycles them after free. */
 export const PROP_TURN_STEPS_DEG = [90, 45, 15] as const;
+/** Rad/s of the free turn mode, the default: slow enough to line a disguise up with its neighbours by eye (about 69 degrees a second, a full turn in 5.2 s). */
+export const PROP_FREE_TURN_SPEED = 1.2;
 export const PROP_TURN_TAP_MS = 200;
 
 export const REROLL_BUDGET = 2;

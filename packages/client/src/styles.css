@@ -12,6 +12,7 @@
   --success: #4ce8a0;
   --text: #dbe7f2;
   --muted: rgba(219, 231, 242, 0.55);
+  --muted-bright: rgba(232, 240, 248, 0.88);
   --r-surface: 28px;
   --r-control: 14px;
   --glass-tint: rgba(11, 18, 31, 0.55);
@@ -31,6 +32,8 @@
   --my: 0%;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, monospace;
   --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --minimap-size: clamp(132px, 10.5vw, 176px);
+  --minimap-gap: 10px;
   color-scheme: dark;
 }
 
@@ -2310,6 +2313,77 @@ canvas {
     0 0 10px rgba(4, 7, 12, 0.9);
 }
 
+.caught-next {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--amber);
+  text-shadow:
+    0 1px 2px rgba(4, 7, 12, 0.95),
+    0 0 10px rgba(4, 7, 12, 0.9);
+}
+
+.kill-cam {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px 6vh;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 3px rgba(255, 91, 91, 0.55);
+  background: linear-gradient(
+    to bottom,
+    rgba(4, 7, 12, 0.55),
+    rgba(4, 7, 12, 0) 18%,
+    rgba(4, 7, 12, 0) 82%,
+    rgba(4, 7, 12, 0.55)
+  );
+}
+
+.kill-cam-title {
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--danger);
+  text-shadow: 0 2px 0 rgba(4, 7, 12, 0.95);
+  animation: kill-cam-blink 1s steps(2, start) infinite;
+}
+
+.kill-cam-view {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  text-shadow: 0 1px 2px rgba(4, 7, 12, 0.95);
+}
+
+.kill-cam-skip {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-top: 8px;
+  color: var(--amber);
+  text-shadow: 0 1px 2px rgba(4, 7, 12, 0.95);
+}
+
+@keyframes kill-cam-blink {
+  to {
+    opacity: 0.55;
+  }
+}
+
 @keyframes caught-life {
   0% {
     opacity: 0;
@@ -2327,10 +2401,93 @@ canvas {
 
 /* ---------- Kill feed ---------- */
 
+/* ---------- Minimap ---------- */
+
+.minimap {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: var(--minimap-size);
+  height: var(--minimap-size);
+  border-radius: 50%;
+  background: rgba(8, 14, 28, 0.94);
+  box-shadow:
+    inset 0 0 0 1px var(--border-strong),
+    0 0 0 3px rgba(4, 7, 12, 0.35),
+    0 10px 28px -12px rgba(2, 5, 12, 0.6);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.minimap-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.minimap-plan {
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 64%, transparent 100%);
+  mask-image: radial-gradient(circle closest-side, #000 64%, transparent 100%);
+}
+
+.minimap-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: rgba(53, 224, 255, 0.3);
+  stroke-width: 0.6;
+}
+
+.minimap-self {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 13px;
+  height: 13px;
+  transform: translate(-50%, -50%);
+  filter: drop-shadow(0 0 4px rgba(53, 224, 255, 0.7));
+}
+
+.minimap-self svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: var(--cyan);
+  stroke: var(--accent-ink);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+.minimap-north,
+.minimap-scale {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(4, 7, 12, 0.9);
+}
+
+.minimap-north {
+  top: 6px;
+  color: var(--cyan);
+}
+
+.minimap-scale {
+  bottom: 7px;
+  color: var(--muted);
+}
+
 .killfeed {
   position: absolute;
   right: 14px;
-  top: 14px;
+  top: calc(14px + var(--minimap-size) + var(--minimap-gap));
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -2701,18 +2858,27 @@ canvas {
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 10px;
   max-width: 100%;
-  padding: 6px 12px;
-  background: rgba(4, 7, 12, 0.4);
-  border-radius: 6px;
   pointer-events: none;
 }
 
-.control {
+.control,
+.controls-chip,
+.controls-note {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  padding: 5px 14px 5px 7px;
+  background: linear-gradient(180deg, var(--glass-sheen), transparent 60%), var(--glass-tint);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 1px 0 var(--glass-rim-top),
+    inset 0 0 0 1px var(--glass-rim-edge),
+    0 2px 8px -3px var(--glass-shadow-contact),
+    0 10px 24px -10px var(--glass-shadow-ambient);
   white-space: nowrap;
 }
 
@@ -2721,40 +2887,84 @@ canvas {
   gap: 3px;
 }
 
+.control-keys .kbd {
+  min-width: 22px;
+  height: 22px;
+}
+
 .control-label {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: var(--muted-bright);
+}
+
+.control-value {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.control-pips {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.control-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: rgba(53, 224, 255, 0.18);
+}
+
+.control-pip-on {
+  background: var(--cyan);
+  box-shadow: 0 0 6px rgba(53, 224, 255, 0.6);
 }
 
 .controls-note {
+  padding: 8px 18px;
   font-family: var(--font-mono);
   font-size: 0.72rem;
   letter-spacing: 0.06em;
-  color: var(--muted);
+  color: var(--muted-bright);
 }
 
 .controls-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 2px;
-  padding: 3px 9px 3px 6px;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  white-space: nowrap;
+  margin-left: 14px;
+  padding: 5px 14px 5px 5px;
+  border: 0;
   cursor: pointer;
   pointer-events: auto;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
+  opacity: 0.8;
+  transition: opacity 0.15s ease;
+}
+
+.controls-chip .kbd {
+  min-width: 22px;
+  height: 22px;
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--glass-rim-edge);
 }
 
 .controls-chip:hover {
-  border-color: var(--border-strong);
-  background: rgba(53, 224, 255, 0.06);
+  opacity: 1;
+}
+
+.controls-chip:hover .kbd,
+.controls-chip:hover .control-label {
+  color: var(--text);
+}
+
+.controls-chip:focus {
+  outline: none;
+}
+
+.controls-chip:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
 }
 
 .controls-dialog {
@@ -2869,6 +3079,7 @@ canvas {
   .hitmarker,
   .catch-banner,
   .caught-card,
+  .kill-cam-title,
   .ring-low .ring-label {
     animation: none;
   }
