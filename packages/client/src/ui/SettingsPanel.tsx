@@ -110,11 +110,7 @@ export interface SettingsPanelProps {
  * switch starts the lobby theme. Every control writes the same pref the game reads, so there is
  * one place a setting lives on screen.
  */
-export function SettingsPanel({
-  context,
-  autoFocus = false,
-  onMutedChange,
-}: SettingsPanelProps) {
+export function SettingsPanel({ context, autoFocus = false, onMutedChange }: SettingsPanelProps) {
   const id = useId();
   const [section, setSection] = useState<SettingsSectionId>(DEFAULT_SECTION[context]);
   const [muted, setMutedState] = useState(() => isMuted());
