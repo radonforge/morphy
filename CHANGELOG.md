@@ -14,6 +14,8 @@ Every Morphy release and what it changed for you, newest first.
 
 - Props turn their disguise smoothly and slowly with Q and E by default. X cycles the
   turn mode through free, 90, 45 and 15 degrees, and the controls bar shows it.
+- The controls bar is a row of floating glass pills, one per action, with swap and decoy
+  counts shown as pips and a brighter label that reads over the day sky.
 - The card a caught prop sees now also says "You're a hunter now", so the
   switch to hunting is clear before the hunt call.
 
