@@ -2107,6 +2107,64 @@ canvas {
     0 0 10px rgba(4, 7, 12, 0.9);
 }
 
+.kill-cam {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px 6vh;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 3px rgba(255, 91, 91, 0.55);
+  background: linear-gradient(
+    to bottom,
+    rgba(4, 7, 12, 0.55),
+    rgba(4, 7, 12, 0) 18%,
+    rgba(4, 7, 12, 0) 82%,
+    rgba(4, 7, 12, 0.55)
+  );
+}
+
+.kill-cam-title {
+  font-family: var(--font-mono);
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--danger);
+  text-shadow: 0 2px 0 rgba(4, 7, 12, 0.95);
+  animation: kill-cam-blink 1s steps(2, start) infinite;
+}
+
+.kill-cam-view {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  text-shadow: 0 1px 2px rgba(4, 7, 12, 0.95);
+}
+
+.kill-cam-skip {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-top: 8px;
+  color: var(--amber);
+  text-shadow: 0 1px 2px rgba(4, 7, 12, 0.95);
+}
+
+@keyframes kill-cam-blink {
+  to {
+    opacity: 0.55;
+  }
+}
+
 @keyframes caught-life {
   0% {
     opacity: 0;
@@ -2674,6 +2732,7 @@ canvas {
   .hitmarker,
   .catch-banner,
   .caught-card,
+  .kill-cam-title,
   .ring-low .ring-label {
     animation: none;
   }
