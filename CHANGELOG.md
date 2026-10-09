@@ -4,6 +4,13 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-09
+
+A sharper hunt. A caught prop watches the shot that got them replayed through
+the hunter's eyes, a radar shows the hunters moving around you, and Q and E turn
+a disguise freely. Options open as a slanted panel, the controls bar is a row of
+glass pills, and North District's day is a golden hour.
+
 ### Added
 
 - A round radar at the top right shows the 30 m around you, north up. As a prop
