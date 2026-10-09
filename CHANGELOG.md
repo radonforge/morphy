@@ -28,6 +28,8 @@ Every Morphy release and what it changed for you, newest first.
 
 ### Fixed
 
+- On Low graphics, North District's night sky is no longer almost black: it
+  glows at the skyline as it does on the other settings.
 - A decoy dropped beside a wall or a building no longer shoves you into it. You walk
   out of a fresh decoy and it turns solid behind you.
 
