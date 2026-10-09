@@ -4,10 +4,23 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- Kill cam: a caught prop sees the last three seconds replayed through the
+  hunter's eyes, slowing down into the shot that got them, before the caught
+  card. Space skips it.
+
 ### Changed
 
 - Props turn their disguise smoothly and slowly with Q and E by default. X cycles the
   turn mode through free, 90, 45 and 15 degrees, and the controls bar shows it.
+- The card a caught prop sees now also says "You're a hunter now", so the
+  switch to hunting is clear before the hunt call.
+
+### Fixed
+
+- A decoy dropped beside a wall or a building no longer shoves you into it. You walk
+  out of a fresh decoy and it turns solid behind you.
 
 ## [0.4.2] - 2026-10-08
 
