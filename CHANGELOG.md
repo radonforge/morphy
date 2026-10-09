@@ -12,6 +12,8 @@ Every Morphy release and what it changed for you, newest first.
 
 ### Changed
 
+- Props turn their disguise smoothly and slowly with Q and E by default. X cycles the
+  turn mode through free, 90, 45 and 15 degrees, and the controls bar shows it.
 - The card a caught prop sees now also says "You're a hunter now", so the
   switch to hunting is clear before the hunt call.
 

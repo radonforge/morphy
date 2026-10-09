@@ -91,8 +91,10 @@ export const JUMP_RELEASE_GRAVITY_MULT = 2.4;
 export const FALL_GRAVITY_MULT = 1.35;
 
 export const PROP_TURN_SPEED = 2.4;
-/** The degrees a tap of Q/E can turn a disguise by, in the order X cycles them; the first is the default. */
+/** The degrees a tap of Q/E can turn a disguise by in a stepped turn mode, in the order X cycles them after free. */
 export const PROP_TURN_STEPS_DEG = [90, 45, 15] as const;
+/** Rad/s of the free turn mode, the default: slow enough to line a disguise up with its neighbours by eye (about 69 degrees a second, a full turn in 5.2 s). */
+export const PROP_FREE_TURN_SPEED = 1.2;
 export const PROP_TURN_TAP_MS = 200;
 
 export const REROLL_BUDGET = 2;

@@ -79,6 +79,7 @@ const BASE_BAR = {
   decoysLeft: 0,
   tauntReadyAt: 0,
   sonarReadyAt: 0,
+  turnMode: "free",
 };
 
 const barKeys = (state) => mainControls({ ...BASE_BAR, ...state }, NOW).items.map((c) => c.keys);
@@ -91,17 +92,21 @@ const BAR_STATES = {
   preRound: { role: "prop", phase: "starting" },
 };
 
-test("a prop's bar holds only swap, decoy and taunt, with their counts", () => {
-  assert.deepEqual(barKeys(BAR_STATES.prop), [["R"], ["C"], ["F"]]);
-  assert.deepEqual(barLabels(BAR_STATES.prop), ["Swap (2)", "Decoy (1)", "Taunt"]);
+test("a prop's bar holds only swap, turn, decoy and taunt, with their counts", () => {
+  assert.deepEqual(barKeys(BAR_STATES.prop), [["R"], ["Q", "E"], ["C"], ["F"]]);
+  assert.deepEqual(barLabels(BAR_STATES.prop), ["Swap (2)", "Turn free", "Decoy (1)", "Taunt"]);
 });
 
 test("a hiding prop's bar has no taunt yet", () => {
-  assert.deepEqual(barKeys({ ...BAR_STATES.prop, phase: "hiding" }), [["R"], ["C"]]);
+  assert.deepEqual(barKeys({ ...BAR_STATES.prop, phase: "hiding" }), [["R"], ["Q", "E"], ["C"]]);
 });
 
 test("a hunter's bar holds only shoot and sonar", () => {
   assert.deepEqual(barKeys(BAR_STATES.hunter), [["LMB"], ["F"]]);
+});
+
+test("the turn entry names a stepped mode in degrees", () => {
+  assert.ok(barLabels({ ...BAR_STATES.prop, turnMode: 45 }).includes("Turn 45°"));
 });
 
 test("the taunt and sonar labels count down their cooldown", () => {

@@ -80,8 +80,8 @@ import {
 import {
   advancePropTurn,
   idlePropTurn,
+  type PropTurnMode,
   type PropTurnPress,
-  type PropTurnStep,
   resetPropTurn,
 } from "./propTurn";
 import { type PropView, propEyeHeight, propView, setPropView } from "./propView";
@@ -448,7 +448,7 @@ interface SceneProps {
   killCamLog: KillCamLog;
   localBreakDeferred: boolean;
   night: boolean;
-  turnStep: PropTurnStep;
+  turnMode: PropTurnMode;
 }
 
 /** A kill cam replay and the `performance.now()` it started playing at. */
@@ -481,7 +481,7 @@ export const Scene = memo(function Scene({
   killCamLog,
   localBreakDeferred,
   night,
-  turnStep,
+  turnMode,
 }: SceneProps) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
@@ -666,7 +666,7 @@ export const Scene = memo(function Scene({
         catchRef={catchRef}
         caughtCam={caughtCam}
         replaying={killCam !== null}
-        turnStep={turnStep}
+        turnMode={turnMode}
       />
       {ids
         .filter((id) => killCam === null && id !== localId && (meta[id]?.alive ?? true))
@@ -1839,7 +1839,7 @@ interface LocalPlayerProps {
   catchRef: CatchMomentRef;
   caughtCam: CaughtCam | null;
   replaying: boolean;
-  turnStep: PropTurnStep;
+  turnMode: PropTurnMode;
 }
 
 function LocalPlayer({
@@ -1865,7 +1865,7 @@ function LocalPlayer({
   catchRef,
   caughtCam,
   replaying,
-  turnStep,
+  turnMode,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!inputBlocked);
@@ -2049,7 +2049,7 @@ function LocalPlayer({
         turnPress.current,
         propRot.current,
         k.turnRight === k.turnLeft ? 0 : k.turnRight ? 1 : -1,
-        turnStep,
+        turnMode,
         delta,
       );
     } else {
