@@ -47,7 +47,7 @@ test("the menu opens on Audio and a match on Controls", () => {
 
 test("only the menu tags settings as live, and only those that preview", () => {
   const live = Object.keys(SETTING_COPY).filter((id) => isLivePreview(id, "menu"));
-  assert.deepEqual(live.sort(), ["fieldOfView", "graphics", "musicVolume", "volume"]);
+  assert.deepEqual(live.sort(), ["graphics", "musicVolume", "volume"]);
   for (const id of Object.keys(SETTING_COPY)) assert.equal(isLivePreview(id, "match"), false);
 });
 
@@ -56,7 +56,6 @@ test("a match says which settings wait for the next one", () => {
   assert.equal(settingHint("perfHud", "match"), "Applies from the next match");
   assert.equal(settingHint("graphics", "menu"), SETTING_COPY.graphics.hint);
   assert.equal(settingHint("volume", "match"), SETTING_COPY.volume.hint);
-  assert.doesNotMatch(settingHint("fieldOfView", "match"), /preview/);
 });
 
 test("the rail's arrows step and wrap on either axis", () => {

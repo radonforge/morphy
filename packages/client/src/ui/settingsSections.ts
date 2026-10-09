@@ -90,14 +90,13 @@ export const SETTING_COPY: Record<SettingId, SettingCopy> = {
   },
   fieldOfView: {
     label: "Field of view",
-    hint: "How wide the match camera sees; drag to preview it here",
-    live: true,
+    hint: "How wide the match camera sees",
+    live: false,
     nextMatch: false,
   },
 };
 
 const NEXT_MATCH_HINT = "Applies from the next match";
-const MATCH_FIELD_OF_VIEW_HINT = "How wide the match camera sees";
 
 /** The section a context opens on: the menu starts with sound, a match with what it changes most. */
 export const DEFAULT_SECTION: Record<SettingsContext, SettingsSectionId> = {
@@ -115,7 +114,6 @@ export function sectionById(id: SettingsSectionId): SettingsSection {
 export function settingHint(id: SettingId, context: SettingsContext): string {
   const copy = SETTING_COPY[id];
   if (context === "match" && copy.nextMatch) return NEXT_MATCH_HINT;
-  if (context === "match" && id === "fieldOfView") return MATCH_FIELD_OF_VIEW_HINT;
   return copy.hint;
 }
 

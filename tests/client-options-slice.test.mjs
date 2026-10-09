@@ -6,7 +6,6 @@ const { OPTIONS_SLICE_MIN_PX, OPTIONS_SLICE_WIDTH, optionsSliceFraction, options
 const { SLICE_SLANT, sliceShape, worldsLayout } = await import(
   "../packages/client/src/ui/worldSlices.ts"
 );
-const { setStageLensPreview, stageLens } = await import("../packages/client/src/ui/stageLens.ts");
 
 const EPSILON = 1e-9;
 const VIEWPORTS = [
@@ -73,13 +72,4 @@ test("a slice covering the whole screen has no edge and no lean", () => {
     [480, 800],
     [0, 800],
   ]);
-});
-
-test("the stage keeps its lens unless a drag lends it one, and gets it back on release", () => {
-  const base = 38;
-  assert.equal(stageLens(base), base);
-  setStageLensPreview(64);
-  assert.equal(stageLens(base), 64);
-  setStageLensPreview(null);
-  assert.equal(stageLens(base), base);
 });

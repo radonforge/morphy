@@ -100,8 +100,6 @@ export interface SettingsPanelProps {
   autoFocus?: boolean;
   /** Hears the master switch, for a mute button elsewhere on screen to follow it. */
   onMutedChange?: (muted: boolean) => void;
-  /** Hears the field of view while its slider is dragged, and null as the drag ends. */
-  onFieldOfViewPreview?: (fov: number | null) => void;
 }
 
 /**
@@ -116,7 +114,6 @@ export function SettingsPanel({
   context,
   autoFocus = false,
   onMutedChange,
-  onFieldOfViewPreview,
 }: SettingsPanelProps) {
   const id = useId();
   const [section, setSection] = useState<SettingsSectionId>(DEFAULT_SECTION[context]);
@@ -254,7 +251,7 @@ export function SettingsPanel({
       case "lookSensitivity":
         return <LookSensitivitySlider />;
       case "fieldOfView":
-        return <FieldOfViewSlider onPreview={onFieldOfViewPreview} />;
+        return <FieldOfViewSlider />;
     }
   };
 
