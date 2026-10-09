@@ -9,6 +9,11 @@ Every Morphy release and what it changed for you, newest first.
 - The card a caught prop sees now also says "You're a hunter now", so the
   switch to hunting is clear before the hunt call.
 
+### Fixed
+
+- A decoy dropped beside a wall or a building no longer shoves you into it. You walk
+  out of a fresh decoy and it turns solid behind you.
+
 ## [0.4.2] - 2026-10-08
 
 Bot props that hide like players. They pick a spot beside objects of their own
