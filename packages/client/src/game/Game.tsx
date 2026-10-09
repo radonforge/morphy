@@ -110,6 +110,7 @@ import {
   samplePose,
 } from "./killCam";
 import { LookSensitivitySlider } from "./LookSensitivitySlider";
+import { Minimap, MinimapPainter, type MinimapSurface } from "./Minimap";
 import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
 import { usePostFx } from "./postFx";
@@ -833,6 +834,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chatUnlockRef = useRef(false);
   const listenerRef = useRef<ListenerPose>({ x: 0, z: 0, forwardX: 0, forwardZ: -1 });
+  const minimapRef = useRef<MinimapSurface | null>(null);
   const prevScoreRef = useRef(0);
 
   const [map, setMap] = useState<MapDefinition | null>(null);
@@ -1441,6 +1443,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     return () => window.removeEventListener("keydown", onKey);
   }, [canCycleTurnMode, turnMode, pushFeed]);
   const blinded = localRole === "hunter" && phase === "hiding";
+  const showMinimap = (phase === "hiding" || phase === "hunting") && !blinded && !caught;
 
   const closeChat = () => {
     setChatOpen(false);
@@ -1578,6 +1581,15 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         <RenderGate skip={blinded} post={post} antialias={tierSettings.antialias} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
         <PropFootsteps playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
+        {showMinimap && (
+          <MinimapPainter
+            surfaceRef={minimapRef}
+            playersRef={playersRef}
+            lookRef={lookRef}
+            localId={sessionId}
+            localRole={localRole}
+          />
+        )}
         <PerfProbe
           playersRef={playersRef}
           localId={sessionId}
@@ -1758,6 +1770,8 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       )}
 
       {scoreboardOpen && <Scoreboard ids={ids} meta={meta} localId={sessionId} />}
+
+      {showMinimap && <Minimap map={map} surfaceRef={minimapRef} />}
 
       <div className="killfeed">
         {killFeed.map((line) => (

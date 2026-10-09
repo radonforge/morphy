@@ -77,6 +77,18 @@ export const PLAYER_EYE_HEIGHT = 1.6;
  * is the same risk whoever is listening.
  */
 export const FOOTSTEP_HEARING_RADIUS = 12;
+/**
+ * How far round the player the minimap reaches, in metres: the plan, a prop's
+ * moving hunters and a hunter's teammates all stop at this radius.
+ */
+export const MINIMAP_RADIUS = 30;
+/**
+ * A hunter shows on a prop's minimap while it has stepped further than
+ * {@link MINIMAP_MOVE_MIN_DIST} within the last {@link MINIMAP_MOVE_WINDOW_MS},
+ * so one standing still drops off it and can lie in ambush.
+ */
+export const MINIMAP_MOVE_WINDOW_MS = 600;
+export const MINIMAP_MOVE_MIN_DIST = 0.3;
 
 export const MOVE_SPEED = 5;
 export const RUN_MULTIPLIER_HUNTER = 1.7;
