@@ -3,12 +3,14 @@ import { test } from "node:test";
 import {
   advanceMovement,
   clampToBounds,
+  createDecoyGhosts,
   MAX_BODY_SPEED,
   MAX_FRAME_DISPLACEMENT,
   PLAYER_RADIUS,
   PLAYER_SEPARATION,
   resolveColliders,
   STEP_HEIGHT,
+  updateDecoyGhosts,
 } from "../packages/client/src/game/movement.ts";
 import { buildMap } from "../packages/server/src/maps/index.ts";
 
@@ -286,4 +288,85 @@ test("a body that clears a prop entirely in one frame is still stopped by it", (
     state.z >= prop.hz,
     `expected the body to be put back against the face it came in by, got z=${state.z}`,
   );
+});
+
+const DECOY_HALF = 0.5;
+const WIDE_DECOY_HALF = 2;
+const DECOY_STEP_OFF = 2;
+
+/** A crate-sized decoy standing where the body does, as the server drops it. */
+function decoyUnder(state, hx = DECOY_HALF) {
+  return {
+    x: state.x,
+    z: state.z,
+    cos: 1,
+    sin: 0,
+    hx,
+    hz: DECOY_HALF,
+    yMin: 0,
+    yMax: STEP_HEIGHT + 1,
+  };
+}
+
+/** One frame with decoys, the way LocalPlayer spends it. */
+function decoyFrame(state, input, statics, decoys, ghosts, seconds) {
+  const cameFrom = { x: state.x, z: state.z };
+  const passable = updateDecoyGhosts(ghosts, state, decoys);
+  const solid = [...statics];
+  for (const [id, colliders] of decoys) if (!passable.has(id)) solid.push(...colliders);
+  advanceMovement(state, input, world(solid), seconds);
+  resolveColliders(state, solid, cameFrom);
+  clampToBounds(state, BOUNDS);
+}
+
+test("a decoy dropped against a wall does not push its owner through it", () => {
+  const state = body({ z: WALL_Z + WALL_HALF_THICKNESS + PLAYER_RADIUS });
+  const decoys = new Map([["d1", [decoyUnder(state, WIDE_DECOY_HALF)]]]);
+  const ghosts = createDecoyGhosts();
+  for (let i = 0; i < 10; i++) {
+    decoyFrame(state, running({ forward: 0 }), [WALL], decoys, ghosts, 1 / 60);
+  }
+  assert.ok(
+    state.z > WALL_Z + WALL_HALF_THICKNESS,
+    `expected the body to stay on the near side of the slab, got z=${state.z}`,
+  );
+});
+
+test("a decoy the body has stepped off becomes solid", () => {
+  const state = body();
+  const decoys = new Map([["d1", [decoyUnder(state)]]]);
+  const ghosts = createDecoyGhosts();
+  decoyFrame(state, running({ forward: 0 }), [], decoys, ghosts, 1 / 60);
+  assert.ok(ghosts.ghosts.has("d1"), "a decoy on top of the body is passable");
+  const backwards = running({ forward: -1 });
+  for (let i = 0; i < 120 && state.z < DECOY_STEP_OFF; i++) {
+    decoyFrame(state, backwards, [], decoys, ghosts, 1 / 60);
+  }
+  decoyFrame(state, backwards, [], decoys, ghosts, 1 / 60);
+  assert.ok(!ghosts.ghosts.has("d1"), "a decoy the body no longer overlaps is solid");
+  for (let i = 0; i < 120; i++) decoyFrame(state, running(), [], decoys, ghosts, 1 / 60);
+  assert.ok(
+    state.z >= DECOY_HALF + PLAYER_RADIUS - 1e-6,
+    `expected the solid decoy to stop the body, got z=${state.z}`,
+  );
+});
+
+test("a decoy that was never under the body is solid from the start", () => {
+  const state = body({ z: DECOY_STEP_OFF });
+  const decoys = new Map([["d1", [decoyUnder(body())]]]);
+  const ghosts = createDecoyGhosts();
+  for (let i = 0; i < 120; i++) decoyFrame(state, running(), [], decoys, ghosts, 1 / 60);
+  assert.ok(
+    state.z >= DECOY_HALF + PLAYER_RADIUS - 1e-6,
+    `expected the decoy to stop the body, got z=${state.z}`,
+  );
+});
+
+test("a decoy that is gone is forgotten", () => {
+  const state = body();
+  const ghosts = createDecoyGhosts();
+  updateDecoyGhosts(ghosts, state, new Map([["d1", [decoyUnder(state)]]]));
+  updateDecoyGhosts(ghosts, state, new Map());
+  assert.equal(ghosts.known.size, 0);
+  assert.equal(ghosts.ghosts.size, 0);
 });
