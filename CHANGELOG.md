@@ -4,6 +4,11 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Changed
+
+- The card a caught prop sees now also says "You're a hunter now", so the
+  switch to hunting is clear before the hunt call.
+
 ### Fixed
 
 - A decoy dropped beside a wall or a building no longer shoves you into it. You walk
