@@ -4,16 +4,37 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- A round radar at the top right shows the 30 m around you, north up. As a prop
+  you see hunters on it only while they move, so one standing still can still
+  ambush you; as a hunter you see your teammates. Props never show on it.
+- Kill cam: a caught prop sees the last three seconds replayed through the
+  hunter's eyes, slowing down into the shot that got them, before the caught
+  card. Space skips it.
+
 ### Changed
 
 - North District by day is now a golden hour: a low warm sun with long soft
   shadows, cool shade and a sky that glows warm at the skyline, so the town
   no longer looks flat.
+- Options open from the gear in the menu as a slanted panel, the world sliding
+  aside to make room, split into Audio, Video and Controls. Graphics quality previews on the
+  stage as you change it, and the match menu offers the same
+  settings.
+- Props turn their disguise smoothly and slowly with Q and E by default. X cycles the
+  turn mode through free, 90, 45 and 15 degrees, and the controls bar shows it.
+- The controls bar is a row of floating glass pills, one per action, with swap and decoy
+  counts shown as pips and a brighter label that reads over the day sky.
+- The card a caught prop sees now also says "You're a hunter now", so the
+  switch to hunting is clear before the hunt call.
 
 ### Fixed
 
 - On Low graphics, North District's night sky is no longer almost black: it
   glows at the skyline as it does on the other settings.
+- A decoy dropped beside a wall or a building no longer shoves you into it. You walk
+  out of a fresh decoy and it turns solid behind you.
 
 ## [0.4.2] - 2026-10-08
 

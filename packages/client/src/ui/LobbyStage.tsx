@@ -1291,6 +1291,7 @@ function Compositor({
     const focus = focusOf(slots, width / height, focusCamera);
     views.forEach((view, index) => {
       const shift = frameShift(layout, index, width, height, focus);
+      view.camera.fov = CAMERA_FOV;
       view.camera.aspect = width / height;
       view.camera.setViewOffset(width, height, -shift, 0, width, height);
     });
