@@ -19,6 +19,12 @@ export const SLICE_OPEN_S = 0.55;
 /** Where the open world's focus (the avatar) lands across its slice, 0 left to 1 right. */
 export const OPEN_FOCUS_IN_SLICE = 0.64;
 
+/**
+ * How far left of a panel covering the right of the screen the open world's focus stays, as a
+ * fraction of the width, so the avatar stands clear of the panel instead of under its edge.
+ */
+export const COVER_CLEARANCE = 0.08;
+
 /** The point of the frame a closed slice is centred on, as a fraction of the frame's width. */
 export const CLOSED_FOCUS = 0.5;
 
@@ -41,6 +47,11 @@ export interface WorldsLayout {
   edges: number[];
   /** How open each slice is, 0 closed to 1 open. */
   openness: number[];
+  /**
+   * Where a panel covering the right of the screen begins, as a fraction of width at mid-height:
+   * 1 when nothing covers it. The worlds keep their shapes under it; only the framing moves.
+   */
+  cover: number;
 }
 
 export interface WorldsMotion {
@@ -75,16 +86,19 @@ function growth(count: number): number {
 
 /**
  * The slices at rest with `open` open. With `focus` the open slice takes the whole screen and
- * every other edge leaves it, which is how the avatar picker gets today's full frame back.
+ * every other edge leaves it, which is how the avatar picker gets today's full frame back. A
+ * `cover` under 1 says a panel covers the screen right of it (the Options slice), which takes
+ * the whole screen for the open world as `focus` does, so the world slides into the part left
+ * free instead of being cut by the panel.
  */
-export function worldsLayout(count: number, open: number, focus: boolean): WorldsLayout {
+export function worldsLayout(count: number, open: number, focus: boolean, cover = 1): WorldsLayout {
   const openness = Array.from({ length: count }, (_, index) => (index === open ? 1 : 0));
   const edges: number[] = [];
-  if (focus) {
+  if (focus || cover < 1) {
     for (let edge = 0; edge < count - 1; edge++) {
       edges.push(edge < open ? -SLICE_SLANT / 2 : 1 + SLICE_SLANT / 2);
     }
-    return { edges, openness };
+    return { edges, openness, cover };
   }
   const weights = openness.map((value) => (value === 1 ? growth(count) : 1));
   const total = weights.reduce((sum, weight) => sum + weight, 0);
@@ -93,13 +107,14 @@ export function worldsLayout(count: number, open: number, focus: boolean): World
     run += weights[edge] ?? 0;
     edges.push(run / total);
   }
-  return { edges, openness };
+  return { edges, openness, cover };
 }
 
 export function mixLayouts(a: WorldsLayout, b: WorldsLayout, t: number): WorldsLayout {
   return {
     edges: a.edges.map((edge, index) => lerp(edge, b.edges[index] ?? edge, t)),
     openness: a.openness.map((value, index) => lerp(value, b.openness[index] ?? value, t)),
+    cover: lerp(a.cover, b.cover, t),
   };
 }
 
@@ -183,7 +198,9 @@ export function sliceShape(
  * the frame, the open one puts `focus` (where the avatar stands, as a fraction of the frame) at
  * `OPEN_FOCUS_IN_SLICE` across itself, and a slice part way open is part way between. The slide
  * is kept small enough that the frame's own edges never show inside the slice, so a slice that
- * covers the screen gets exactly today's frame.
+ * covers the screen gets exactly today's frame. Under a `cover` the focus is held
+ * `COVER_CLEARANCE` left of the panel's edge, and the frame may slide left as far as the panel's
+ * edge, since what shows past it is behind the panel.
  */
 export function frameShift(
   layout: WorldsLayout,
@@ -197,13 +214,19 @@ export function frameShift(
   const leftMid = index === 0 ? 0 : (layout.edges[index - 1] ?? 0) * width;
   const rightMid = index === count - 1 ? width : (layout.edges[index] ?? 1) * width;
   const openness = layout.openness[index] ?? 0;
-  const target = lerp(
+  const covered = layout.cover < 1;
+  const coverMid = layout.cover * width;
+  const framed = lerp(
     (leftMid + rightMid) / 2,
     leftMid + (rightMid - leftMid) * OPEN_FOCUS_IN_SLICE,
     openness,
   );
+  const target = covered ? Math.min(framed, coverMid - COVER_CLEARANCE * width) : framed;
+  const visibleRight = covered
+    ? Math.min(shape.right, coverMid + (SLICE_SLANT * width) / 2)
+    : shape.right;
   const anchor = lerp(CLOSED_FOCUS, focus, openness) * width;
-  return clamp(target - anchor, shape.right - width, shape.left);
+  return clamp(target - anchor, visibleRight - width, shape.left);
 }
 
 /** A slice's horizontal extent in device pixels, snapped outward to cover every pixel of it. */

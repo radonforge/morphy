@@ -2,12 +2,14 @@ import { MAP_CATALOG, type MapInfo } from "@morphy/shared";
 import { type ReactNode, type RefObject, useLayoutEffect, useRef } from "react";
 import { playUiHover } from "../game/audio";
 import { usePlayerCounts } from "../net/usePlayerCounts";
+import { optionsCover } from "./optionsGeometry";
 import {
   clipPath,
   isMoving,
   layoutAt,
   moveTo,
   SLICE_OPEN_S,
+  settledMotion,
   sliceShape,
   WORLD_IDS,
   type WorldsMotion,
@@ -34,11 +36,14 @@ export function mapTag(info: MapInfo, night: boolean): string {
  * people are playing its map, when anyone is. It owns `motion`, the one record of where the
  * slices are going, and the stage reads the same record, so the clip paths here and the viewports there follow one curve. Positions are
  * written straight to the elements every animation frame of a move rather than through React,
- * which re-renders only when the open slice or the chrome changes.
+ * which re-renders only when the open slice or the chrome changes. While `covered`, the Options
+ * slice covers the right of the screen and the open world slides into the part left of it, on
+ * the same curve, and back when it closes.
  */
 export function MapSlices({
   open,
   focus,
+  covered,
   motion,
   night,
   canChoose,
@@ -48,6 +53,7 @@ export function MapSlices({
 }: {
   open: number;
   focus: boolean;
+  covered: boolean;
   motion: RefObject<WorldsMotion>;
   night: boolean;
   canChoose: boolean;
@@ -63,12 +69,9 @@ export function MapSlices({
     const node = container.current;
     if (node === null) return;
     const now = performance.now();
-    motion.current = moveTo(
-      motion.current,
-      worldsLayout(WORLD_IDS.length, open, focus),
-      now,
-      reduced ? 0 : SLICE_OPEN_MS,
-    );
+    const target = () =>
+      worldsLayout(WORLD_IDS.length, open, focus, covered ? optionsCover(node.clientWidth) : 1);
+    motion.current = moveTo(motion.current, target(), now, reduced ? 0 : SLICE_OPEN_MS);
     let handle = 0;
     const apply = () => {
       const at = performance.now();
@@ -85,17 +88,23 @@ export function MapSlices({
     };
     apply();
     const resize = new ResizeObserver(() => {
-      if (handle === 0) apply();
+      if (handle !== 0) return;
+      if (covered) motion.current = settledMotion(target());
+      apply();
     });
     resize.observe(node);
     return () => {
       cancelAnimationFrame(handle);
       resize.disconnect();
     };
-  }, [motion, open, focus, reduced]);
+  }, [motion, open, focus, covered, reduced]);
 
   return (
-    <div className={`worlds${focus ? " worlds-focus" : ""}`} ref={container} inert={focus}>
+    <div
+      className={`worlds${focus ? " worlds-focus" : ""}${covered ? " worlds-covered" : ""}`}
+      ref={container}
+      inert={focus}
+    >
       {MAP_CATALOG.map((info, index) => {
         const isOpen = index === open;
         const tag = mapTag(info, night);

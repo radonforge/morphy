@@ -23,6 +23,7 @@ export const FIELD_OF_VIEW_DEFAULT = 55;
 
 let lookSensitivityCache: number | null = null;
 let fieldOfViewCache: number | null = null;
+const graphicsListeners = new Set<() => void>();
 
 export function isPerfHudEnabled(): boolean {
   return storageGet(PERF_HUD_STORAGE_KEY) === "1";
@@ -39,6 +40,17 @@ export function graphicsPreference(): GraphicsPreference {
 
 export function setGraphicsPreference(value: GraphicsPreference): void {
   storageSet(GRAPHICS_STORAGE_KEY, value);
+  for (const listener of graphicsListeners) listener();
+}
+
+/**
+ * Calls `listener` after every change of the graphics preference made on this page, and returns
+ * the unsubscribe; shaped for `useSyncExternalStore`, which is how the lobby stage redraws on the
+ * tier being picked instead of waiting for a reload.
+ */
+export function subscribeGraphicsPreference(listener: () => void): () => void {
+  graphicsListeners.add(listener);
+  return () => graphicsListeners.delete(listener);
 }
 
 /** A stored look multiplier clamped into range; anything that is not a finite number is the default. */

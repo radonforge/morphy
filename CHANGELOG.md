@@ -15,6 +15,10 @@ Every Morphy release and what it changed for you, newest first.
 
 ### Changed
 
+- Options open from the gear in the menu as a slanted panel, the world sliding
+  aside to make room, split into Audio, Video and Controls. Graphics quality previews on the
+  stage as you change it, and the match menu offers the same
+  settings.
 - Props turn their disguise smoothly and slowly with Q and E by default. X cycles the
   turn mode through free, 90, 45 and 15 degrees, and the controls bar shows it.
 - The controls bar is a row of floating glass pills, one per action, with swap and decoy

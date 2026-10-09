@@ -44,6 +44,7 @@ import { Canvas } from "@react-three/fiber";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Vector3, type WebGLRenderer } from "three";
 import type { Connection } from "../net/connection";
+import { SettingsPanel } from "../ui/SettingsPanel";
 import {
   isMuted,
   playCatch,
@@ -84,7 +85,6 @@ import {
   gpuInfo,
   recordFrame,
 } from "./diagnostics";
-import { FieldOfViewSlider } from "./FieldOfViewSlider";
 import {
   type GraphicsTier,
   MAX_RENDER_FPS,
@@ -109,7 +109,6 @@ import {
   replayReachedShot,
   samplePose,
 } from "./killCam";
-import { LookSensitivitySlider } from "./LookSensitivitySlider";
 import { Minimap, MinimapPainter, type MinimapSurface } from "./Minimap";
 import { PropFootsteps } from "./PropFootsteps";
 import { lockPointer } from "./pointerLock";
@@ -1881,20 +1880,13 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
 
       {paused && isRoundInPlay(phase) && (
         <div className="pause">
-          <div className="pause-card panel">
+          <div className="pause-card pause-card-wide panel">
             <span className="eyebrow">Round in progress</span>
             <h2>Match menu</h2>
             <button type="button" onClick={resume}>
               Resume
             </button>
-            <div className="pause-setting">
-              <span>Look sensitivity</span>
-              <LookSensitivitySlider />
-            </div>
-            <div className="pause-setting">
-              <span>Field of view</span>
-              <FieldOfViewSlider />
-            </div>
+            <SettingsPanel context="match" onMutedChange={setMuted} />
             <button type="button" className="btn-ghost" onClick={onLeaveMatch}>
               Leave match
             </button>
