@@ -1,8 +1,8 @@
-import { type RefObject, useLayoutEffect, useMemo } from "react";
+import { type RefObject, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import { deviceHints } from "../game/deviceProbe";
 import { type PostLook, postSettings, resolveTier, TIER_SETTINGS } from "../game/graphicsTier";
 import { type PostComposer, usePostFx } from "../game/postFx";
-import { graphicsPreference } from "../game/prefs";
+import { graphicsPreference, subscribeGraphicsPreference } from "../game/prefs";
 
 /**
  * Builds the match's post chain on the player's graphics tier for the world it is mounted in, so
@@ -11,7 +11,8 @@ import { graphicsPreference } from "../game/prefs";
  * where there is no chain, `target` stays empty and the stage draws straight to the canvas. Its
  * own module so the stage can load it lazily: until it mounts, the stage draws without it.
  * The chain is handed over in the commit that mounts it, so a world opening never draws a frame
- * between losing the old world's chain and getting its own.
+ * between losing the old world's chain and getting its own. Picking another graphics quality in
+ * Options rebuilds the chain on the new tier at once, which is the stage's live preview of it.
  */
 export function StagePost({
   look,
@@ -20,7 +21,8 @@ export function StagePost({
   look: PostLook;
   target: RefObject<PostComposer | null>;
 }) {
-  const tier = useMemo(() => TIER_SETTINGS[resolveTier(graphicsPreference(), deviceHints())], []);
+  const preference = useSyncExternalStore(subscribeGraphicsPreference, graphicsPreference);
+  const tier = useMemo(() => TIER_SETTINGS[resolveTier(preference, deviceHints())], [preference]);
   const post = useMemo(() => postSettings(tier, look), [tier, look]);
   const composer = usePostFx(post, tier.antialias);
   useLayoutEffect(() => {

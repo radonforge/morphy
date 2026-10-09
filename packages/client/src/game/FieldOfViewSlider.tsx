@@ -9,7 +9,7 @@ import {
 
 /**
  * The match camera's vertical field of view as a slider with its value in
- * degrees beside it. The lobby Options pane and the in-game Match menu both
+ * degrees beside it. The lobby Options slice and the in-game Match menu both
  * render it, writing the one pref the camera reads every frame, so a change
  * applies while playing.
  */

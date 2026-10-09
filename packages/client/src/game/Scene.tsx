@@ -36,12 +36,28 @@ import { capUnderCeiling, ceilingBetween, ceilingHeightAt } from "./ceiling";
 import { GroundView } from "./GroundView";
 import type { ShadowSettings } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
+import {
+  type Appearance,
+  appearanceOf,
+  beginSample,
+  createEyeOut,
+  createPoseOut,
+  decoyStandsAt,
+  hunterEyeAt,
+  type KillCamLog,
+  type KillReplay,
+  pushPose,
+  sampleDue,
+  samplePose,
+  sourceTimeAt,
+} from "./killCam";
 import { fitModel, MODEL_MIN_SIZE } from "./modelFit";
 import { enableShadows } from "./modelShading";
 import {
   advanceMovement,
   cappedFrameSeconds,
   clampToBounds,
+  createDecoyGhosts,
   GROUND_EPSILON,
   type MovementBody,
   type ObbCollider,
@@ -50,6 +66,7 @@ import {
   resolveColliders,
   STEP_DISTANCE,
   supportHeightAt,
+  updateDecoyGhosts,
 } from "./movement";
 import { lockPointer } from "./pointerLock";
 import { FIELD_OF_VIEW_DEFAULT, fieldOfView, lookSensitivity } from "./prefs";
@@ -63,8 +80,8 @@ import {
 import {
   advancePropTurn,
   idlePropTurn,
+  type PropTurnMode,
   type PropTurnPress,
-  type PropTurnStep,
   resetPropTurn,
 } from "./propTurn";
 import { type PropView, propEyeHeight, propView, setPropView } from "./propView";
@@ -244,6 +261,7 @@ const CAUGHT_CAM_START_RISE = 0.3;
 const CAUGHT_CAM_END_RISE = 1.6;
 const CAUGHT_CAM_LOOK_AHEAD_RATIO = 0.6;
 const DIRECTION_EPSILON = 1e-3;
+const KILL_CAM_SHOT_SOUND_RANGE = 60;
 
 type Catalog = Map<string, PropDefinition>;
 
@@ -295,14 +313,29 @@ function buildColliders(map: MapDefinition, catalog: Catalog): ObbCollider[] {
   return colliders;
 }
 
-function buildDecoyColliders(decoys: DecoyView[], catalog: Catalog): ObbCollider[] {
-  const colliders: ObbCollider[] = [];
+function buildDecoyColliders(decoys: DecoyView[], catalog: Catalog): Map<string, ObbCollider[]> {
+  const byDecoy = new Map<string, ObbCollider[]>();
   for (const decoy of decoys) {
     const def = catalog.get(decoy.propType);
     if (!def) continue;
+    const colliders: ObbCollider[] = [];
     pushPropPartColliders(colliders, def, decoy, decoy.rot);
+    byDecoy.set(decoy.id, colliders);
   }
-  return colliders;
+  return byDecoy;
+}
+
+function solidColliders(
+  statics: ObbCollider[],
+  decoys: ReadonlyMap<string, ObbCollider[]>,
+  ghosts: ReadonlySet<string>,
+): ObbCollider[] {
+  if (decoys.size === 0) return statics;
+  const solid = [...statics];
+  for (const [id, colliders] of decoys) {
+    if (!ghosts.has(id)) solid.push(...colliders);
+  }
+  return solid;
 }
 
 interface Wall {
@@ -411,8 +444,17 @@ interface SceneProps {
   shadows: ShadowSettings | null;
   catchRef: CatchMomentRef;
   caughtCam: CaughtCam | null;
+  killCam: KillCamPlayback | null;
+  killCamLog: KillCamLog;
+  localBreakDeferred: boolean;
   night: boolean;
-  turnStep: PropTurnStep;
+  turnMode: PropTurnMode;
+}
+
+/** A kill cam replay and the `performance.now()` it started playing at. */
+export interface KillCamPlayback {
+  replay: KillReplay;
+  startedAt: number;
 }
 
 export const Scene = memo(function Scene({
@@ -435,8 +477,11 @@ export const Scene = memo(function Scene({
   shadows,
   catchRef,
   caughtCam,
+  killCam,
+  killCamLog,
+  localBreakDeferred,
   night,
-  turnStep,
+  turnMode,
 }: SceneProps) {
   const catalog = useMemo<Catalog>(
     () => new Map(map.propCatalog.map((def) => [def.id, def])),
@@ -444,10 +489,6 @@ export const Scene = memo(function Scene({
   );
   const staticColliders = useMemo(() => buildColliders(map, catalog), [map, catalog]);
   const decoyColliders = useMemo(() => buildDecoyColliders(decoys, catalog), [decoys, catalog]);
-  const colliders = useMemo(
-    () => (decoyColliders.length > 0 ? [...staticColliders, ...decoyColliders] : staticColliders),
-    [staticColliders, decoyColliders],
-  );
   const walls = useMemo(() => buildWalls(map), [map]);
   const theme = useMemo(() => themeFor(map.id, night), [map.id, night]);
   const localGroundRef = useRef(new THREE.Vector3());
@@ -475,6 +516,7 @@ export const Scene = memo(function Scene({
       const before = seen.get(id);
       seen.set(id, propType);
       if (before && !propType && meta[id]?.role === "hunter") {
+        if (id === localId && localBreakDeferred) continue;
         const pose =
           id === localId
             ? localGroundRef.current
@@ -511,7 +553,7 @@ export const Scene = memo(function Scene({
         renderPosesRef.current.delete(id);
       }
     }
-  }, [meta, ids, localId, catalog, playersRef, breaksRef]);
+  }, [meta, ids, localId, catalog, playersRef, breaksRef, localBreakDeferred]);
   const canTransform =
     localRole === "prop" &&
     localAlive &&
@@ -519,6 +561,8 @@ export const Scene = memo(function Scene({
     (phase === "hiding" || phase === "hunting");
   const canShoot =
     localRole === "hunter" && localAlive && !inputBlocked && phase === "hunting" && !caughtCam;
+  const recordingKillCam =
+    localRole === "prop" && localAlive && phase === "hunting" && caughtCam === null;
 
   return (
     <>
@@ -551,6 +595,7 @@ export const Scene = memo(function Scene({
           meta={meta}
           ids={ids}
           tauntPulseRef={tauntPulseRef}
+          forced={killCam !== null}
         />
       )}
       <SunLight
@@ -563,7 +608,25 @@ export const Scene = memo(function Scene({
       <MapView map={map} groundColor={theme.ground} />
       {map.ceiling && <CeilingView panels={map.ceiling} />}
       <PropActions room={room} enabled={canTransform} motionRef={motionRef} />
-      <Decoys decoys={decoys} catalog={catalog} />
+      {killCam === null && <Decoys decoys={decoys} catalog={catalog} />}
+      <KillCamRecorder
+        enabled={recordingKillCam}
+        log={killCamLog}
+        localId={localId}
+        playersRef={playersRef}
+        localPos={localGroundRef}
+        renderPoses={renderPosesRef}
+      />
+      {killCam && (
+        <KillCamView
+          playback={killCam}
+          catalog={catalog}
+          meta={meta}
+          shotsRef={shotsRef}
+          breaksRef={breaksRef}
+          catchRef={catchRef}
+        />
+      )}
       <Shooter
         room={room}
         enabled={canShoot}
@@ -594,17 +657,19 @@ export const Scene = memo(function Scene({
         tauntPulseRef={tauntPulseRef}
         inputBlocked={inputBlocked}
         playersRef={playersRef}
-        colliders={colliders}
+        colliders={staticColliders}
+        decoyColliders={decoyColliders}
         walls={walls}
         avatar={localMeta?.avatar ?? ""}
         playerPos={localGroundRef}
         motionRef={motionRef}
         catchRef={catchRef}
         caughtCam={caughtCam}
-        turnStep={turnStep}
+        replaying={killCam !== null}
+        turnMode={turnMode}
       />
       {ids
-        .filter((id) => id !== localId && (meta[id]?.alive ?? true))
+        .filter((id) => killCam === null && id !== localId && (meta[id]?.alive ?? true))
         .map((id) => (
           <RemotePlayer
             key={id}
@@ -634,7 +699,7 @@ interface ShadowPose {
 /**
  * Asks for a shadow pass on every frame until {@link SHADOW_SETTLE_S} after the last
  * change to a caster (the local pose, a remote pose, the roster or a player's meta, a
- * taunt pulse), then only on a heartbeat while the scene is still. Never at a lower
+ * taunt pulse, a kill cam replaying), then only on a heartbeat while the scene is still. Never at a lower
  * rate while something moves: a body drawn at this frame's pose over a depth map from
  * an earlier one leaves its shadow behind and falls into it, which reads as flicker.
  */
@@ -645,6 +710,7 @@ function ShadowRefresh({
   meta,
   ids,
   tauntPulseRef,
+  forced,
 }: {
   playersRef: PlayersRef;
   localPos: PlayerPosRef;
@@ -652,6 +718,7 @@ function ShadowRefresh({
   meta: SceneMetaMap;
   ids: string[];
   tauntPulseRef: TauntPulseRef;
+  forced: boolean;
 }) {
   const gl = useThree((state) => state.gl);
   const sinceRender = useRef(0);
@@ -679,7 +746,7 @@ function ShadowRefresh({
 
   useGuardedFrame((_, delta) => {
     sinceRender.current += delta;
-    sinceChange.current += delta;
+    sinceChange.current = forced ? 0 : sinceChange.current + delta;
 
     const pos = localPos.current;
     const yaw = motionRef.current.yaw;
@@ -1764,13 +1831,15 @@ interface LocalPlayerProps {
   inputBlocked: boolean;
   playersRef: PlayersRef;
   colliders: ObbCollider[];
+  decoyColliders: Map<string, ObbCollider[]>;
   walls: Wall[];
   avatar: string;
   playerPos: PlayerPosRef;
   motionRef: LocalMotionRef;
   catchRef: CatchMomentRef;
   caughtCam: CaughtCam | null;
-  turnStep: PropTurnStep;
+  replaying: boolean;
+  turnMode: PropTurnMode;
 }
 
 function LocalPlayer({
@@ -1788,13 +1857,15 @@ function LocalPlayer({
   inputBlocked,
   playersRef,
   colliders,
+  decoyColliders,
   walls,
   avatar,
   playerPos,
   motionRef,
   catchRef,
   caughtCam,
-  turnStep,
+  replaying,
+  turnMode,
 }: LocalPlayerProps) {
   const groupRef = useRef<THREE.Group>(null);
   const keys = useControls(!inputBlocked);
@@ -1893,10 +1964,7 @@ function LocalPlayer({
     lookRef.current.pitch = 0;
   }, [caughtCam, playersRef, body, lookRef]);
   const runMultiplier = role === "hunter" ? RUN_MULTIPLIER_HUNTER : RUN_MULTIPLIER_PROP;
-  const world = useMemo(
-    () => ({ colliders, bounds: map.bounds, runMultiplier }),
-    [colliders, map.bounds, runMultiplier],
-  );
+  const decoyGhosts = useRef(createDecoyGhosts());
 
   useGuardedFrame((_, rawDelta) => {
     const delta = cappedFrameSeconds(rawDelta);
@@ -1924,6 +1992,13 @@ function LocalPlayer({
 
     const cameFrom = { x: body.x, z: body.z };
 
+    const solid = solidColliders(
+      colliders,
+      decoyColliders,
+      updateDecoyGhosts(decoyGhosts.current, body, decoyColliders),
+    );
+    const world = { colliders: solid, bounds: map.bounds, runMultiplier };
+
     let support: number;
     let horizSpeed = 0;
     let sprinting = false;
@@ -1931,7 +2006,7 @@ function LocalPlayer({
     if (frozen) {
       body.vx = 0;
       body.vz = 0;
-      support = supportHeightAt(body.x, body.z, body.y, colliders);
+      support = supportHeightAt(body.x, body.z, body.y, solid);
     } else {
       const k = keys.current;
       const moved = advanceMovement(
@@ -1974,7 +2049,7 @@ function LocalPlayer({
         turnPress.current,
         propRot.current,
         k.turnRight === k.turnLeft ? 0 : k.turnRight ? 1 : -1,
-        turnStep,
+        turnMode,
         delta,
       );
     } else {
@@ -1995,7 +2070,7 @@ function LocalPlayer({
           body.z += (dz / dist) * push;
         }
       }
-      resolveColliders(body, colliders, cameFrom);
+      resolveColliders(body, solid, cameFrom);
       clampToBounds(body, map.bounds);
     }
 
@@ -2025,13 +2100,15 @@ function LocalPlayer({
     }
 
     if (caughtCam) {
-      placeCaughtCamera(
-        camera,
-        body,
-        playersRef.current.get(caughtCam.byId),
-        (performance.now() - caughtCam.at) / CAUGHT_CAM_MS,
-        walls,
-      );
+      if (!replaying) {
+        placeCaughtCamera(
+          camera,
+          body,
+          playersRef.current.get(caughtCam.byId),
+          (performance.now() - caughtCam.at) / CAUGHT_CAM_MS,
+          walls,
+        );
+      }
     } else if (role === "hunter") {
       const aimPitch = pitch - motion.recoil * RECOIL_MAX_PITCH;
       const cosPitch = Math.cos(aimPitch);
@@ -2142,7 +2219,7 @@ function LocalPlayer({
   });
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} visible={!replaying}>
       {alive && role !== "hunter" && (
         <group visible={!firstPerson || caughtCam !== null}>
           <PlayerModel role={role} propType={propType} avatar={avatar} catalog={catalog} />
@@ -2187,6 +2264,225 @@ function placeCaughtCamera(
   camera.position.set(body.x + dirX * distance, pivotY + rise, body.z + dirZ * distance);
   const ahead = Math.min(length, distance * CAUGHT_CAM_LOOK_AHEAD_RATIO);
   camera.lookAt(body.x - dirX * ahead, pivotY, body.z - dirZ * ahead);
+}
+
+/**
+ * Samples every player in play into the kill cam's pose ring while the local player is a
+ * prop in the hunt: remote players at the smoothed pose they are drawn at, the local player
+ * at its own body. The ring is preallocated and the per-player callback is built once, so a
+ * sample writes numbers and string references and allocates nothing.
+ */
+function KillCamRecorder({
+  enabled,
+  log,
+  localId,
+  playersRef,
+  localPos,
+  renderPoses,
+}: {
+  enabled: boolean;
+  log: KillCamLog;
+  localId: string;
+  playersRef: PlayersRef;
+  localPos: PlayerPosRef;
+  renderPoses: RenderPosesRef;
+}) {
+  const record = useMemo(() => {
+    const ring = log.ring;
+    return (view: RemotePlayerView, id: string) => {
+      if (!view.alive) return;
+      const at = id === localId ? localPos.current : (renderPoses.current.get(id) ?? view);
+      pushPose(
+        ring,
+        id,
+        view.role === "hunter",
+        view.propType,
+        at.x,
+        at.y,
+        at.z,
+        view.rot,
+        view.aim,
+        view.propRot,
+      );
+    };
+  }, [log, localId, localPos, renderPoses]);
+
+  useGuardedFrame(() => {
+    if (!enabled) return;
+    const now = performance.now();
+    if (!sampleDue(log.ring, now)) return;
+    beginSample(log.ring, now);
+    playersRef.current.forEach(record);
+  });
+
+  return null;
+}
+
+/**
+ * The kill cam: the last moments before the local prop was caught, replayed through the
+ * hunter's eyes at its synced pose, with every other player drawn as they looked, the shots
+ * fired again as tracers and the victim's disguise shattering on the killing shot. It only
+ * moves the camera and its own copies of the players; the live ones are hidden meanwhile.
+ */
+function KillCamView({
+  playback,
+  catalog,
+  meta,
+  shotsRef,
+  breaksRef,
+  catchRef,
+}: {
+  playback: KillCamPlayback;
+  catalog: Catalog;
+  meta: SceneMetaMap;
+  shotsRef: ShotsRef;
+  breaksRef: BreaksRef;
+  catchRef: CatchMomentRef;
+}) {
+  const { replay, startedAt } = playback;
+  const camera = useThree((state) => state.camera);
+  const hunterTrack = useMemo(
+    () => replay.tracks.find((track) => track.id === replay.hunterId),
+    [replay],
+  );
+  const victimTrack = useMemo(
+    () => replay.tracks.find((track) => track.id === replay.victimId),
+    [replay],
+  );
+  const cast = useMemo(
+    () =>
+      replay.tracks
+        .filter((track) => track.id !== replay.hunterId)
+        .map((track) => ({ track, look: appearanceOf(track, replay.victimId) })),
+    [replay],
+  );
+  const actorRefs = useRef(new Map<string, THREE.Group>());
+  const decoyRefs = useRef<(THREE.Group | null)[]>([]);
+  const pose = useMemo(createPoseOut, []);
+  const eye = useMemo(createEyeOut, []);
+  const shotCursor = useRef(0);
+  const broke = useRef(false);
+  const lastEye = useRef({ x: Number.NaN, z: Number.NaN, t: 0 });
+  const lastShotAt = useRef(Number.NEGATIVE_INFINITY);
+  const motionRef = useRef<LocalMotion>({
+    speed: 0,
+    sprinting: false,
+    grounded: true,
+    yaw: 0,
+    pitch: 0,
+    recoil: 0,
+    landing: 0,
+  });
+
+  useGuardedFrame(() => {
+    const t = sourceTimeAt(replay, performance.now() - startedAt);
+
+    while (shotCursor.current < replay.shots.length) {
+      const shot = replay.shots[shotCursor.current];
+      if (!shot || shot.at > t) break;
+      shotCursor.current++;
+      shotsRef.current.push({ weapon: shot.weapon, origin: shot.origin, ends: shot.ends });
+      const heard = hunterTrack !== undefined && samplePose(hunterTrack, shot.at, pose);
+      const distance = heard ? Math.hypot(pose.x - shot.origin.x, pose.z - shot.origin.z) : 0;
+      playWeaponShot(shot.weapon, Math.max(0, 1 - distance / KILL_CAM_SHOT_SOUND_RANGE));
+      if (shot.shooterId === replay.hunterId) lastShotAt.current = shot.at;
+    }
+
+    if (!broke.current && t >= replay.shotAt) {
+      broke.current = true;
+      const look = victimTrack ? appearanceOf(victimTrack, replay.victimId) : null;
+      if (victimTrack && look?.propType && samplePose(victimTrack, replay.shotAt, pose)) {
+        breaksRef.current.push({ x: pose.x, y: pose.y, z: pose.z, propType: look.propType });
+      }
+    }
+
+    for (const { track, look } of cast) {
+      const group = actorRefs.current.get(track.id);
+      if (!group) continue;
+      const shown = !(track.id === replay.victimId && broke.current) && samplePose(track, t, pose);
+      group.visible = shown;
+      if (!shown) continue;
+      group.position.set(pose.x, pose.y, pose.z);
+      group.rotation.y = !look.hunter && look.propType ? pose.propRot : pose.rot;
+    }
+
+    replay.decoys.forEach((decoy, i) => {
+      const group = decoyRefs.current[i];
+      if (group) group.visible = decoyStandsAt(decoy, t);
+    });
+
+    if (!hunterTrack || !hunterEyeAt(replay, hunterTrack, t, PLAYER_EYE_HEIGHT, pose, eye)) return;
+    const cosPitch = Math.cos(eye.pitch);
+    camera.position.set(eye.x, eye.y, eye.z);
+    camera.lookAt(
+      eye.x + Math.sin(eye.yaw) * cosPitch,
+      eye.y + Math.sin(eye.pitch),
+      eye.z + Math.cos(eye.yaw) * cosPitch,
+    );
+
+    const motion = motionRef.current;
+    const prev = lastEye.current;
+    const dt = (t - prev.t) / 1000;
+    motion.speed =
+      dt > 0 && Number.isFinite(prev.x) ? Math.hypot(eye.x - prev.x, eye.z - prev.z) / dt : 0;
+    prev.x = eye.x;
+    prev.z = eye.z;
+    prev.t = t;
+    motion.yaw = eye.yaw;
+    motion.pitch = -eye.pitch;
+    const sinceShot = (t - lastShotAt.current) / 1000;
+    motion.recoil = sinceShot >= 0 ? RECOIL_DAMP ** sinceShot : 0;
+  });
+
+  return (
+    <>
+      {cast.map(({ track, look }) => (
+        <group
+          key={track.id}
+          visible={false}
+          ref={(group) => {
+            if (group) actorRefs.current.set(track.id, group);
+            else actorRefs.current.delete(track.id);
+          }}
+        >
+          <ReplayActor look={look} avatar={meta[track.id]?.avatar ?? ""} catalog={catalog} />
+        </group>
+      ))}
+      {replay.decoys.map((decoy, i) => {
+        const def = catalog.get(decoy.propType);
+        if (!def) return null;
+        return (
+          <group
+            key={`${decoy.id}:${decoy.from}`}
+            visible={false}
+            position={[decoy.x, decoy.y, decoy.z]}
+            rotation={[0, decoy.rot, 0]}
+            ref={(group) => {
+              decoyRefs.current[i] = group;
+            }}
+          >
+            <PropMesh def={def} />
+          </group>
+        );
+      })}
+      <HunterViewmodel enabled weapon={replay.weapon} motionRef={motionRef} catchRef={catchRef} />
+    </>
+  );
+}
+
+/** A replayed player, drawn without the pop-in a live disguise change plays. */
+function ReplayActor({
+  look,
+  avatar,
+  catalog,
+}: {
+  look: Appearance;
+  avatar: string;
+  catalog: Catalog;
+}) {
+  const def = !look.hunter && look.propType ? catalog.get(look.propType) : undefined;
+  if (def) return <PropMesh def={def} />;
+  return <AnimalAvatar id={avatar} role={look.hunter ? "hunter" : "prop"} />;
 }
 
 function AllyNameplate({ name, y }: { name: string; y: number }) {
