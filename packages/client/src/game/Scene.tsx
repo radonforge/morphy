@@ -89,7 +89,7 @@ import { SkyGlow, StreetLamps } from "./StreetLamps";
 import { useSharedGLTF } from "./sharedTextures";
 import { StaticModels } from "./staticModels";
 import { snapToTexels, sunBasis } from "./sunShadow";
-import { type DeckLightPreset, themeFor } from "./themes";
+import { DEFAULT_SUN_POSITION, type DeckLightPreset, themeFor } from "./themes";
 import type {
   BreaksRef,
   CatchMomentRef,
@@ -216,15 +216,13 @@ const TP_PITCH_MIN = -0.15;
 const TP_PITCH_MAX = 0.87;
 const TP_DEFAULT_PITCH = 0.26;
 export const DEFAULT_PITCH = 0.5;
-export const SUN_POSITION: [number, number, number] = [14, 26, 10];
+export const SUN_POSITION = DEFAULT_SUN_POSITION;
 const STARS_RADIUS = 120;
 const STARS_DEPTH = 40;
 const SHADOW_MARGIN = 4;
 const SHADOW_LEAD = 10;
 const SHADOW_LIGHT_DISTANCE = 60;
 const UNSHADOWED_SNAP = 1;
-const SUN_BASIS = sunBasis({ x: SUN_POSITION[0], y: SUN_POSITION[1], z: SUN_POSITION[2] });
-const SUN_OFFSET = new THREE.Vector3(...SUN_POSITION).setLength(SHADOW_LIGHT_DISTANCE);
 const SHADOW_NORMAL_BIAS_TEXELS = 2;
 const SHADOW_SETTLE_S = 0.4;
 const SHADOW_HEARTBEAT_S = 2;
@@ -568,9 +566,14 @@ export const Scene = memo(function Scene({
     <>
       <color attach="background" args={[theme.background]} />
       {theme.fog && <fog attach="fog" args={[theme.fog.color, theme.fog.near, theme.fog.far]} />}
-      {theme.sky === "day" ? (
-        <Sky sunPosition={SUN_POSITION} turbidity={theme.turbidity} rayleigh={theme.rayleigh} />
-      ) : (
+      {theme.sky === "day" && (
+        <Sky
+          sunPosition={theme.sunPosition}
+          turbidity={theme.turbidity}
+          rayleigh={theme.rayleigh}
+        />
+      )}
+      {theme.sky === "stars" && (
         <Stars
           radius={STARS_RADIUS}
           depth={STARS_DEPTH}
@@ -601,6 +604,8 @@ export const Scene = memo(function Scene({
       <SunLight
         intensity={theme.dir}
         color={theme.dirColor}
+        sunPosition={theme.sunPosition}
+        shadowRadius={theme.shadowRadius}
         playerPos={localGroundRef}
         motionRef={motionRef}
         shadows={shadows}
@@ -837,19 +842,32 @@ export function DeckLights({ map, preset }: { map: MapDefinition; preset: DeckLi
 function SunLight({
   intensity,
   color,
+  sunPosition,
+  shadowRadius,
   playerPos,
   motionRef,
   shadows,
 }: {
   intensity: number;
   color: string;
+  sunPosition: [number, number, number];
+  shadowRadius: number;
   playerPos: PlayerPosRef;
   motionRef: LocalMotionRef;
   shadows: ShadowSettings | null;
 }) {
   const lightRef = useRef<THREE.DirectionalLight>(null);
+  const basis = useMemo(
+    () => sunBasis({ x: sunPosition[0], y: sunPosition[1], z: sunPosition[2] }),
+    [sunPosition],
+  );
+  const offset = useMemo(
+    () => new THREE.Vector3(...sunPosition).setLength(SHADOW_LIGHT_DISTANCE),
+    [sunPosition],
+  );
   const target = useMemo(() => new THREE.Object3D(), []);
   const centre = useRef({ x: Number.NaN, y: 0, z: Number.NaN });
+  const placedOffset = useRef<THREE.Vector3 | null>(null);
   const radius = shadows?.radius ?? 0;
   const mapSize = shadows?.mapSize ?? 0;
   const texel = shadows ? (2 * radius) / mapSize : UNSHADOWED_SNAP;
@@ -861,15 +879,17 @@ function SunLight({
     const yaw = motionRef.current.yaw;
     const next = snapToTexels(
       { x: pos.x - Math.sin(yaw) * SHADOW_LEAD, y: 0, z: pos.z - Math.cos(yaw) * SHADOW_LEAD },
-      SUN_BASIS,
+      basis,
       texel,
     );
     const prev = centre.current;
-    if (next.x === prev.x && next.y === prev.y && next.z === prev.z) return;
+    const moved = next.x !== prev.x || next.y !== prev.y || next.z !== prev.z;
+    if (!moved && placedOffset.current === offset) return;
     centre.current = next;
+    placedOffset.current = offset;
     target.position.set(next.x, next.y, next.z);
     target.updateMatrixWorld();
-    light.position.set(next.x + SUN_OFFSET.x, next.y + SUN_OFFSET.y, next.z + SUN_OFFSET.z);
+    light.position.set(next.x + offset.x, next.y + offset.y, next.z + offset.z);
   });
 
   return (
@@ -889,6 +909,7 @@ function SunLight({
         shadow-camera-bottom={-radius}
         shadow-bias={-0.0004}
         shadow-normalBias={texel * SHADOW_NORMAL_BIAS_TEXELS}
+        shadow-radius={shadowRadius}
       />
       <primitive object={target} />
     </>

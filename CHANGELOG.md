@@ -15,6 +15,9 @@ Every Morphy release and what it changed for you, newest first.
 
 ### Changed
 
+- North District by day is now a golden hour: a low warm sun with long soft
+  shadows, cool shade and a sky that glows warm at the skyline, so the town
+  no longer looks flat.
 - Options open from the gear in the menu as a slanted panel, the world sliding
   aside to make room, split into Audio, Video and Controls. Graphics quality previews on the
   stage as you change it, and the match menu offers the same
