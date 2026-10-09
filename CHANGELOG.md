@@ -9,6 +9,23 @@ Every Morphy release and what it changed for you, newest first.
 - A round radar at the top right shows the 30 m around you, north up. As a prop
   you see hunters on it only while they move, so one standing still can still
   ambush you; as a hunter you see your teammates. Props never show on it.
+- Kill cam: a caught prop sees the last three seconds replayed through the
+  hunter's eyes, slowing down into the shot that got them, before the caught
+  card. Space skips it.
+
+### Changed
+
+- Props turn their disguise smoothly and slowly with Q and E by default. X cycles the
+  turn mode through free, 90, 45 and 15 degrees, and the controls bar shows it.
+- The controls bar is a row of floating glass pills, one per action, with swap and decoy
+  counts shown as pips and a brighter label that reads over the day sky.
+- The card a caught prop sees now also says "You're a hunter now", so the
+  switch to hunting is clear before the hunt call.
+
+### Fixed
+
+- A decoy dropped beside a wall or a building no longer shoves you into it. You walk
+  out of a fresh decoy and it turns solid behind you.
 
 ## [0.4.2] - 2026-10-08
 

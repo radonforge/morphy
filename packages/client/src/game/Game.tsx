@@ -64,6 +64,16 @@ import {
 } from "./audio";
 import { ControlsBar, ControlsDialog } from "./Controls";
 import { CopyDiagnostics } from "./CopyDiagnostics";
+import {
+  announcesHunt,
+  CAUGHT_CARD_COPY,
+  caughtByLine,
+  huntGoesOn,
+  KILL_CAM_COPY,
+  KILL_CAM_SKIP_CODE,
+  killCamViewLine,
+  localCaptureOf,
+} from "./caught";
 import { deviceHints } from "./deviceProbe";
 import {
   createFrameRing,
@@ -86,6 +96,19 @@ import {
   TIER_SETTINGS,
 } from "./graphicsTier";
 import { useGuardedFrame } from "./guardedFrame";
+import {
+  appearanceOf,
+  createKillCamLog,
+  createPoseOut,
+  freezeKillCam,
+  type KillReplay,
+  logDecoyAdded,
+  logDecoyRemoved,
+  logShot,
+  replayDurationMs,
+  replayReachedShot,
+  samplePose,
+} from "./killCam";
 import { LookSensitivitySlider } from "./LookSensitivitySlider";
 import { Minimap, MinimapPainter, type MinimapSurface } from "./Minimap";
 import { PropFootsteps } from "./PropFootsteps";
@@ -93,7 +116,7 @@ import { lockPointer } from "./pointerLock";
 import { usePostFx } from "./postFx";
 import { fieldOfView, graphicsPreference, isPerfHudEnabled } from "./prefs";
 import { cappedVerticalFov } from "./propCamera";
-import { nextTurnStep, setTurnStep, turnStep as storedTurnStep } from "./propTurn";
+import { nextTurnMode, setTurnMode, turnMode as storedTurnMode, turnModeLabel } from "./propTurn";
 import {
   type CaptureRecord,
   nextStartingRoles,
@@ -104,7 +127,7 @@ import {
   storyLine,
   wonRound,
 } from "./roundStory";
-import { CAUGHT_CAM_MS, DEFAULT_PITCH, Scene } from "./Scene";
+import { CAUGHT_CAM_MS, DEFAULT_PITCH, type KillCamPlayback, Scene } from "./Scene";
 import { falloff, type ListenerPose, type ListenerRef, stereoPan } from "./spatialAudio";
 import { themeLook } from "./themes";
 import type {
@@ -123,6 +146,26 @@ import type {
   TeleportRef,
 } from "./types";
 import { PLAYER_META_FIELDS, SCENE_META_FIELDS } from "./types";
+
+/** The local prop's capture: the pull-back camera, plus the kill cam while it replays. */
+type CaughtState = CaughtCam & {
+  byName: string;
+  replay: KillReplay | null;
+  replayed: boolean;
+};
+
+/**
+ * Shatters the caught prop's disguise where it stood at the killing shot, for a kill cam
+ * skipped before the shot played: the scene defers the live shatter to the replay.
+ */
+function breakVictimOf(replay: KillReplay, breaksRef: BreaksRef): void {
+  const track = replay.tracks.find((candidate) => candidate.id === replay.victimId);
+  if (!track) return;
+  const { propType } = appearanceOf(track, replay.victimId);
+  const pose = createPoseOut();
+  if (!propType || !samplePose(track, replay.shotAt, pose)) return;
+  breaksRef.current.push({ x: pose.x, y: pose.y, z: pose.z, propType });
+}
 
 const COUNTDOWN_TICK_MS = 250;
 const SHOT_SOUND_MAX_DISTANCE = 60;
@@ -814,7 +857,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [scoreboardOpen, setScoreboardOpen] = useState(false);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [turnStep, setTurnStepState] = useState(storedTurnStep);
+  const [turnMode, setTurnModeState] = useState(storedTurnMode);
   const [contextLost, setContextLost] = useState(false);
   const [decoys, setDecoys] = useState<DecoyView[]>([]);
   const [tauntReadyAt, setTauntReadyAt] = useState(0);
@@ -842,7 +885,8 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
   const [huntNowBanner, showHuntNowBanner] = useTransient<true>(PHASE_BANNER_MS);
   const [catchBanner, showCatchBanner] = useTransient<string>(CATCH_BANNER_MS);
   const [hitMarker, showHitMarker] = useTransient<number>(HIT_MARKER_MS);
-  const [caught, setCaught] = useState<(CaughtCam & { byName: string }) | null>(null);
+  const [caught, setCaught] = useState<CaughtState | null>(null);
+  const [killCamLog] = useState(createKillCamLog);
   const catchRef: CatchMomentRef = useRef(null);
   const [startingRoles, setStartingRoles] = useState<StartingRoles>({});
   const [captures, setCaptures] = useState<Readonly<Record<string, CaptureRecord>>>({});
@@ -974,6 +1018,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           propType: d.propType,
         };
         setDecoys((prev) => [...prev, view]);
+        logDecoyAdded(killCamLog, view, performance.now());
       }),
     );
 
@@ -983,6 +1028,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       callbacks.onRemove("decoys", (_decoy: unknown, key: unknown) => {
         const id = String(key);
         setDecoys((prev) => prev.filter((existing) => existing.id !== id));
+        logDecoyRemoved(killCamLog, id, performance.now());
       }),
     );
 
@@ -1063,11 +1109,15 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           if (!isFiniteNumber(end.x) || !isFiniteNumber(end.y) || !isFiniteNumber(end.z)) return;
           ends.push({ x: end.x, y: end.y, z: end.z });
         }
-        shotsRef.current.push({
+        const shot = {
           weapon: m.weapon,
           origin: { x: origin.x, y: origin.y, z: origin.z },
           ends,
-        });
+        };
+        shotsRef.current.push(shot);
+        if (typeof m.shooterId === "string") {
+          logShot(killCamLog, { ...shot, at: performance.now(), shooterId: m.shooterId });
+        }
         if (m.shooterId === sessionId) return;
         const local = playersRef.current.get(sessionId);
         const volume = local
@@ -1110,11 +1160,20 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         if (typeof event.victimName !== "string" || typeof event.reason !== "string") return;
         pushFeed(killText(event));
         if (event.reason === "converted") {
-          const capture = { byName: event.byName, atMs: Date.now() - huntStartRef.current };
-          setCaptures((prev) => ({ ...prev, [event.victimId]: capture }));
+          const record = { byName: event.byName, atMs: Date.now() - huntStartRef.current };
+          setCaptures((prev) => ({ ...prev, [event.victimId]: record }));
           const now = performance.now();
-          if (event.victimId === sessionId) {
-            setCaught({ byId: event.byId, byName: event.byName, at: now });
+          const capture = localCaptureOf(event, sessionId, now);
+          if (capture) {
+            const replay = huntGoesOn(playersRef.current, sessionId)
+              ? freezeKillCam(killCamLog, {
+                  now,
+                  hunterId: event.byId,
+                  victimId: sessionId,
+                  weapon: playersRef.current.get(event.byId)?.weapon ?? DEFAULT_WEAPON,
+                })
+              : null;
+            setCaught({ ...capture, replay, replayed: replay !== null });
           } else if (event.byId === sessionId) {
             catchRef.current = { victimId: event.victimId, at: now };
             showCatchBanner(event.victimName);
@@ -1149,7 +1208,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
       playerMetaUnsubscribers.clear();
       playersRef.current.clear();
     };
-  }, [room, sessionId, pushFeed, showCatchBanner, showHitMarker]);
+  }, [room, sessionId, pushFeed, showCatchBanner, showHitMarker, killCamLog]);
 
   const localScore = meta[sessionId]?.score ?? 0;
   useEffect(() => {
@@ -1159,16 +1218,50 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     pushFeed(gained >= TAUNT_DARING_POINTS ? `Daring taunt +${gained}` : `Taunt +${gained}`);
   }, [localScore, pushFeed]);
 
+  const endKillCam = useCallback(() => {
+    const now = performance.now();
+    setCaught((prev) => {
+      if (!prev?.replay) return prev;
+      if (!replayReachedShot(prev.replay, now - prev.at)) breakVictimOf(prev.replay, breaksRef);
+      return { ...prev, replay: null, at: now };
+    });
+  }, []);
+
+  const replaying = caught?.replay != null;
+  useEffect(() => {
+    if (!replaying) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.code !== KILL_CAM_SKIP_CODE || event.repeat || chatOpenRef.current) return;
+      event.preventDefault();
+      endKillCam();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [replaying, endKillCam]);
+
+  useEffect(() => {
+    if (replaying && phase !== "hunting") endKillCam();
+  }, [replaying, phase, endKillCam]);
+
+  const killCam = useMemo<KillCamPlayback | null>(
+    () => (caught?.replay ? { replay: caught.replay, startedAt: caught.at } : null),
+    [caught],
+  );
+
   useEffect(() => {
     if (!caught) return;
+    if (caught.replay) {
+      const timer = setTimeout(endKillCam, replayDurationMs(caught.replay));
+      return () => clearTimeout(timer);
+    }
     const timer = setTimeout(() => {
       setCaught(null);
-      if (prevPhaseRef.current !== "hunting") return;
+      if (!announcesHunt(prevPhaseRef.current)) return;
       showHuntNowBanner(true);
       playYouHuntNow();
     }, CAUGHT_CAM_MS);
     return () => clearTimeout(timer);
-  }, [caught, showHuntNowBanner]);
+  }, [caught, showHuntNowBanner, endKillCam]);
 
   useEffect(() => {
     if (!shotFx) return;
@@ -1334,21 +1427,21 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
     localRole === "prop" && localAlive && (phase === "hiding" || phase === "hunting");
   const canShoot = localRole === "hunter" && localAlive && phase === "hunting";
   const showCrosshair = (canTransform || canShoot) && !inputBlocked && !caught;
-  const canCycleTurnStep = canTransform && !inputBlocked && !caught;
+  const canCycleTurnMode = canTransform && !inputBlocked && !caught;
 
   useEffect(() => {
-    if (!canCycleTurnStep) return;
+    if (!canCycleTurnMode) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "KeyX" || e.repeat) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const next = nextTurnStep(turnStep);
-      setTurnStep(next);
-      setTurnStepState(next);
-      pushFeed(`Turn step ${next}°`);
+      const next = nextTurnMode(turnMode);
+      setTurnMode(next);
+      setTurnModeState(next);
+      pushFeed(`Turn ${turnModeLabel(next)}`);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [canCycleTurnStep, turnStep, pushFeed]);
+  }, [canCycleTurnMode, turnMode, pushFeed]);
   const blinded = localRole === "hunter" && phase === "hiding";
   const showMinimap = (phase === "hiding" || phase === "hunting") && !blinded && !caught;
 
@@ -1479,8 +1572,11 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
           shadows={tierSettings.shadows}
           catchRef={catchRef}
           caughtCam={caught}
+          killCam={killCam}
+          killCamLog={killCamLog}
+          localBreakDeferred={caught?.replayed ?? false}
           night={night}
-          turnStep={turnStep}
+          turnMode={turnMode}
         />
         <RenderGate skip={blinded} post={post} antialias={tierSettings.antialias} />
         <ListenerProbe playersRef={playersRef} localId={sessionId} listenerRef={listenerRef} />
@@ -1601,10 +1697,19 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
         </div>
       )}
 
-      {caught && phase === "hunting" && (
+      {caught?.replay && (
+        <div className="kill-cam" role="status">
+          <div className="kill-cam-title">{KILL_CAM_COPY.title}</div>
+          <div className="kill-cam-view">{killCamViewLine(caught.byName)}</div>
+          <div className="kill-cam-skip">{KILL_CAM_COPY.skip}</div>
+        </div>
+      )}
+
+      {caught && !caught.replay && phase === "hunting" && (
         <div className="caught-card" role="status">
-          <div className="caught-title">Caught</div>
-          <div className="caught-by">by {caught.byName}</div>
+          <div className="caught-title">{CAUGHT_CARD_COPY.title}</div>
+          <div className="caught-by">{caughtByLine(caught.byName)}</div>
+          <div className="caught-next">{CAUGHT_CARD_COPY.hunterNow}</div>
         </div>
       )}
 
@@ -1749,6 +1854,7 @@ export function Game({ connection, onBackToParty, onLeaveMatch, onRestartView }:
             decoysLeft={localMeta?.decoysLeft ?? 0}
             tauntReadyAt={tauntReadyAt}
             sonarReadyAt={sonarReadyAt}
+            turnMode={turnMode}
             onOpen={() => setControlsOpen(true)}
           />
         </div>

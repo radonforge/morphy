@@ -1,4 +1,9 @@
-import { PROP_TURN_SPEED, PROP_TURN_STEPS_DEG, PROP_TURN_TAP_MS } from "@morphy/shared";
+import {
+  PROP_FREE_TURN_SPEED,
+  PROP_TURN_SPEED,
+  PROP_TURN_STEPS_DEG,
+  PROP_TURN_TAP_MS,
+} from "@morphy/shared";
 import { storageGet, storageSet } from "../safeStorage";
 
 const GRID_EPSILON = 1e-6;
@@ -6,23 +11,31 @@ const MS_PER_SECOND = 1_000;
 const DEGREES_PER_HALF_TURN = 180;
 const TURN_STEP_STORAGE_KEY = "morphy:turn-step";
 
+export const FREE_TURN = "free";
+
 /** How many degrees a tap of Q/E turns the disguise by. */
 export type PropTurnStep = (typeof PROP_TURN_STEPS_DEG)[number];
 
+/** How Q/E turn the disguise: smoothly and slowly while held (`free`), or by a step on a tap and spinning on a hold. */
+export type PropTurnMode = typeof FREE_TURN | PropTurnStep;
+
+/** The modes in the order X cycles them; the first is the default. */
+export const PROP_TURN_MODES: readonly PropTurnMode[] = [FREE_TURN, ...PROP_TURN_STEPS_DEG];
+
 /**
  * The Q/E press in progress: its direction, how long it has been held, the yaw it began at and the
- * step it taps by. One object per player, updated in place every frame by `advancePropTurn`.
+ * mode it turns by. One object per player, updated in place every frame by `advancePropTurn`.
  */
 export interface PropTurnPress {
   dir: -1 | 0 | 1;
   heldMs: number;
   from: number;
-  step: PropTurnStep;
+  mode: PropTurnMode;
 }
 
 /** A press with no key down. */
 export function idlePropTurn(): PropTurnPress {
-  return { dir: 0, heldMs: 0, from: 0, step: PROP_TURN_STEPS_DEG[0] };
+  return { dir: 0, heldMs: 0, from: 0, mode: FREE_TURN };
 }
 
 /** Drops the press in progress, as if its key had never been down. */
@@ -31,28 +44,29 @@ export function resetPropTurn(press: PropTurnPress): void {
   press.heldMs = 0;
 }
 
-function isTurnStep(value: number): value is PropTurnStep {
-  return (PROP_TURN_STEPS_DEG as readonly number[]).includes(value);
-}
-
-/** A stored turn step; anything but one of `PROP_TURN_STEPS_DEG` is the default, the first. */
-export function parseTurnStep(raw: string | null): PropTurnStep {
+/** A stored turn mode: `free` or one of `PROP_TURN_STEPS_DEG`; anything else is the default, free. */
+export function parseTurnMode(raw: string | null): PropTurnMode {
   const value = Number(raw);
-  return raw !== null && isTurnStep(value) ? value : PROP_TURN_STEPS_DEG[0];
+  return PROP_TURN_STEPS_DEG.find((step) => step === value) ?? FREE_TURN;
 }
 
-/** The step X moves to from `step`, wrapping from the last back to the first. */
-export function nextTurnStep(step: PropTurnStep): PropTurnStep {
-  const index = PROP_TURN_STEPS_DEG.indexOf(step);
-  return PROP_TURN_STEPS_DEG[(index + 1) % PROP_TURN_STEPS_DEG.length] ?? PROP_TURN_STEPS_DEG[0];
+/** The mode X moves to from `mode`, wrapping from the last back to the first. */
+export function nextTurnMode(mode: PropTurnMode): PropTurnMode {
+  const index = PROP_TURN_MODES.indexOf(mode);
+  return PROP_TURN_MODES[(index + 1) % PROP_TURN_MODES.length] ?? FREE_TURN;
 }
 
-export function turnStep(): PropTurnStep {
-  return parseTurnStep(storageGet(TURN_STEP_STORAGE_KEY));
+/** The label the bar and the feed show for `mode`. */
+export function turnModeLabel(mode: PropTurnMode): string {
+  return mode === FREE_TURN ? FREE_TURN : `${mode}°`;
 }
 
-export function setTurnStep(step: PropTurnStep): void {
-  storageSet(TURN_STEP_STORAGE_KEY, String(step));
+export function turnMode(): PropTurnMode {
+  return parseTurnMode(storageGet(TURN_STEP_STORAGE_KEY));
+}
+
+export function setTurnMode(mode: PropTurnMode): void {
+  storageSet(TURN_STEP_STORAGE_KEY, String(mode));
 }
 
 function stepRadians(step: PropTurnStep): number {
@@ -76,9 +90,11 @@ export function nextGridAngle(from: number, dir: 1 | -1, step: number): number {
  * -1 for Q and 0 for neither, and returns the new yaw. `press` is updated in
  * place, so a frame allocates nothing.
  *
- * While a key is held the disguise spins at `PROP_TURN_SPEED`. A press released
+ * In `free` mode the disguise turns at `PROP_FREE_TURN_SPEED` while a key is held
+ * and stays where it is on release, so a tap is a short turn. In a stepped mode
+ * it spins at `PROP_TURN_SPEED` while held, and a press released
  * within `PROP_TURN_TAP_MS` is a tap instead: the yaw lands on the next multiple
- * of `step` degrees past where the press began, `step` as it was when the
+ * of the step in degrees past where the press began, the mode as it was when the
  * press began. Inside that window the spin stops at the tap's target, so a tap
  * never overshoots and swings back. Reversing without a release starts a new press.
  */
@@ -86,7 +102,7 @@ export function advancePropTurn(
   press: PropTurnPress,
   rot: number,
   dir: -1 | 0 | 1,
-  step: PropTurnStep,
+  mode: PropTurnMode,
   deltaSeconds: number,
 ): number {
   if (dir !== 0) {
@@ -94,20 +110,23 @@ export function advancePropTurn(
       press.dir = dir;
       press.heldMs = 0;
       press.from = rot;
-      press.step = step;
+      press.mode = mode;
+    }
+    if (press.mode === FREE_TURN) {
+      return wrapAngle(rot + dir * PROP_FREE_TURN_SPEED * deltaSeconds);
     }
     press.heldMs += deltaSeconds * MS_PER_SECOND;
     const spun = wrapAngle(rot + dir * PROP_TURN_SPEED * deltaSeconds);
     if (press.heldMs >= PROP_TURN_TAP_MS) return spun;
-    const target = nextGridAngle(press.from, dir, stepRadians(press.step));
+    const target = nextGridAngle(press.from, dir, stepRadians(press.mode));
     const reach = wrapAngle(target - press.from) * dir;
     const travelled = wrapAngle(spun - press.from) * dir;
     return travelled > reach ? target : spun;
   }
   if (press.dir === 0) return wrapAngle(rot);
   const landed =
-    press.heldMs < PROP_TURN_TAP_MS
-      ? nextGridAngle(press.from, press.dir, stepRadians(press.step))
+    press.mode !== FREE_TURN && press.heldMs < PROP_TURN_TAP_MS
+      ? nextGridAngle(press.from, press.dir, stepRadians(press.mode))
       : wrapAngle(rot);
   resetPropTurn(press);
   return landed;
