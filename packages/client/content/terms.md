@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-07
 
-By playing Morphy you agree to these terms. Morphy is made by Radon Forge, an independent, non-commercial project run by two private individuals in Italy. These terms cover the official game at morphy.radonforge.com. Morphy's source code is published separately under the MIT License, and a copy someone else runs is theirs, under their own terms.
+By playing Morphy you agree to these terms. Morphy is made by Radon Forge, an independent, non-commercial project run by two private individuals in Italy.
 
 ## The service
 
