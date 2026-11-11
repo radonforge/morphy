@@ -43,11 +43,11 @@ These keep their own licenses. The CC0 kits need no credit, but they get one her
 | `packages/client/public/models/urban/cars/` | [Car Kit](https://kenney.nl/assets/car-kit) | Kenney | CC0 1.0 |
 | `packages/client/public/sounds/sci-fi/`, `assets/audio/sci-fi/` | [Sci-fi Sounds](https://kenney.nl/assets/sci-fi-sounds) | Kenney | CC0 1.0 |
 | `packages/client/public/sounds/ui/`, `assets/audio/ui/` | [UI Audio](https://kenney.nl/assets/ui-audio) | Kenney | CC0 1.0 |
-| `packages/client/public/sounds/music/lobby-theme.ogg` | "Sci-Fi 5" from the [Free Sci-Fi Game Music Pack](https://alkakrab.itch.io/free-sci-fi-game-music-pack) | alkakrab | [AlkaKrab Music License](packages/client/public/sounds/music/AlkaKrab%20Music%20License%20Info.pdf), used in Morphy with the author's permission |
+| `packages/client/public/sounds/music/lobby-theme.ogg` | "Sci-Fi 5" from the [Free Sci-Fi Game Music Pack](https://alkakrab.itch.io/free-sci-fi-game-music-pack) | alkakrab | [AlkaKrab Music License](packages/client/public/sounds/music/AlkaKrab%20Music%20License%20Info.pdf) |
 
-The lobby theme is **not** free to reuse. It is in this repository with alkakrab's permission so
-that Morphy builds as it ships, but that permission is Morphy's, not yours: a fork may not
-redistribute the track. Remove it from your fork (the game runs without it, with a silent menu)
-or get your own license from the author.
+The lobby theme is **not** free to reuse. Its license lets Morphy play it but not redistribute it,
+and an open-source copy of the game needs the author's own permission. A fork may not
+redistribute the track: remove it (the game runs without it, with a silent menu) or get your own
+license from the author.
 
 CC0 1.0: <https://creativecommons.org/publicdomain/zero/1.0/>
