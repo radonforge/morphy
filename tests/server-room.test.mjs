@@ -1067,12 +1067,25 @@ test("chat sent faster than the cooldown is dropped, per player", (t) => {
   chatAs(room, "a", "one");
   chatAs(room, "a", "flood");
   chatAs(room, "b", "other player");
-  t.mock.timers.tick(CHAT_COOLDOWN_MS);
+  t.mock.timers.tick(CHAT_COOLDOWN_MS - 1);
+  chatAs(room, "a", "still too soon");
+  t.mock.timers.tick(1);
   chatAs(room, "a", "two");
   assert.deepEqual(
     chats.map((chat) => chat.text),
     ["one", "other player", "two"],
   );
+});
+
+test("a player who leaves takes their chat cooldown with them", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 0 });
+  const room = publicRoom();
+  room.broadcast = () => {};
+  joinRoom(room, "a");
+  chatAs(room, "a", "bye");
+  assert.equal(room.nextChatAt.has("a"), true);
+  room.onLeave({ sessionId: "a" });
+  assert.equal(room.nextChatAt.has("a"), false);
 });
 
 test("an empty chat message does not start the cooldown", (t) => {
