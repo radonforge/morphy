@@ -12,6 +12,7 @@ import {
   type AvatarId,
   BOT_FILL_DELAY_MS,
   type BotAct,
+  CHAT_COOLDOWN_MS,
   CONVERTED_HUNTER_HP,
   colliderAabb,
   computePropBounds,
@@ -365,6 +366,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private nextShotAt = new Map<string, number>();
   private nextDecoyAt = new Map<string, number>();
   private nextTauntAt = new Map<string, number>();
+  private nextChatAt = new Map<string, number>();
   private nextSonarAt = new Map<string, number>();
   /** When each prop's forced-taunt clock last restarted; see {@link sweepForcedTaunts}. */
   private tauntClockAt = new Map<string, number>();
@@ -451,6 +453,9 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
   private handleChat(client: Actor, payload: unknown): void {
     const text = parseChatText(payload);
     if (!text) return;
+    const now = Date.now();
+    if (now < (this.nextChatAt.get(client.sessionId) ?? 0)) return;
+    this.nextChatAt.set(client.sessionId, now + CHAT_COOLDOWN_MS);
     const player = this.state.players.get(client.sessionId);
     const name = player?.name ?? "?";
     this.broadcast(MSG_CHAT, { fromId: client.sessionId, name, text });
@@ -484,6 +489,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.cancelRespawn(client.sessionId);
     this.nextShotAt.delete(client.sessionId);
     this.nextDecoyAt.delete(client.sessionId);
+    this.nextChatAt.delete(client.sessionId);
     this.forgetSoundTimersOf(client.sessionId);
     this.pendingPings.delete(client.sessionId);
     this.deviceIds.delete(client.sessionId);
@@ -1396,6 +1402,7 @@ export class MorphyRoom extends Room<{ state: RoomState }> {
     this.cancelRespawn(sessionId);
     this.nextShotAt.delete(sessionId);
     this.nextDecoyAt.delete(sessionId);
+    this.nextChatAt.delete(sessionId);
     this.forgetSoundTimersOf(sessionId);
     if (this.bots.size === 0) this.stopBotTicker();
   }
