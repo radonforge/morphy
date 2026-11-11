@@ -26,7 +26,7 @@ Flags (after `--` when invoked through the root script):
 | `--code` | no default | join a private party room by code instead of matchmaking |
 | `--map`, `-m` | `urban` | map of a *newly created* room (`urban`, `station`) |
 | `--policy` | `scripted` | which policy drives the bots |
-| `--visibility` | `full` | `full` \| `limited`: what the bot is allowed to sense |
+| `--visibility` | `limited` | `limited` \| `full`: what the bot is allowed to sense (`full` only against a local server) |
 | `--trace` | no default | base path for per-bot JSONL traces of every applied decision |
 
 Bots default to readying only once **one more player than the bot count** is in
@@ -91,12 +91,12 @@ Movement integrates at `MOVE_SPEED` (times `RUN_MULTIPLIER_HUNTER` or
 `RUN_MULTIPLIER_PROP` while running) with the client's wall/furniture push-out,
 so bots stay inside the map and out of the scenery.
 
-**`--visibility limited` is the production-equivalent mode.** The CLI defaults to
-`full`, which reads `role` / `alive` / `propType` as ground truth, while a live
-room runs its bots at `limited` (`MorphyRoom.ts`), where the bot senses only what
-a player reads off the screen. `full` is a measuring anchor, not a way to play,
-so a bug reachable only under limited vision will not reproduce under the
-default.
+**`--visibility limited` is the default and the production-equivalent mode**: a
+live room runs its bots at `limited` too (`MorphyRoom.ts`), where the bot senses
+only what a player reads off the screen. `full` reads `role` / `alive` /
+`propType` as ground truth. It is a measuring anchor, not a way to play, so the
+CLI refuses it unless `--url` points at this machine (`localhost`, `127.x.x.x`
+or `[::1]`).
 
 `--trace <path>` writes one JSONL file per bot, one line per *applied* decision
 (`{t,botName,policy,seq,phase,visibility,obs,intent}`), plus a `kill` line for

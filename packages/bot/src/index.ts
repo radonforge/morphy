@@ -18,6 +18,7 @@ import {
   DEFAULT_BOT_COUNT,
   DEFAULT_DIFFICULTY,
   defaultServerUrl,
+  isLoopbackServerUrl,
 } from "./config";
 import { ScriptedPolicy } from "./policy/scripted";
 import type { Policy } from "./policy/types";
@@ -71,7 +72,7 @@ function parseArgs(argv: string[]): CliArgs {
     namePrefix: null,
     readyAtPlayers: null,
     policy: "scripted",
-    visibility: "full",
+    visibility: "limited",
     trace: null,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -144,6 +145,11 @@ function parseArgs(argv: string[]): CliArgs {
       default:
         break;
     }
+  }
+  if (args.visibility === "full" && !isLoopbackServerUrl(args.url)) {
+    throw new Error(
+      `--visibility full reads ground truth and only runs against a local server; refused for ${args.url}`,
+    );
   }
   return args;
 }
