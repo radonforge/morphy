@@ -4,6 +4,18 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-11
+
+A steadier room. Chat can no longer be flooded, and the bots you can run
+yourself play by what a player sees.
+
+### Fixed
+
+- One player can no longer flood the chat: a line sent less than a moment after
+  the last one is dropped.
+- Bots started from the command line now see only what a player sees, and the
+  all-seeing mode used to measure them only runs against a server on your own
+  machine.
 ## [0.5.0] - 2026-10-09
 
 A sharper hunt. A caught prop watches the shot that got them replayed through
