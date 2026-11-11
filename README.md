@@ -1,6 +1,4 @@
-# Morphy
-
-![A fox morphing into a barrel while an armed hunter closes in on a space station](packages/client/public/banner.jpg)
+![Morphy, multiplayer prop hunt: a fox morphing into a barrel while an armed hunter closes in on a space station](packages/client/public/banner.jpg)
 
 Browser multiplayer prop hunt. Low-poly 3D, LAN-first.
 
