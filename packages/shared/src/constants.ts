@@ -129,6 +129,7 @@ export const MAX_NAME_LENGTH = 16;
 /** Stands in for a player who never named themselves, on the stage and in the room alike. */
 export const DEFAULT_PLAYER_NAME = "Player";
 export const MAX_CHAT_LENGTH = 200;
+export const CHAT_COOLDOWN_MS = 750;
 
 export const PARTY_CODE_LENGTH = 5;
 export const PARTY_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";

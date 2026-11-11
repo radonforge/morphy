@@ -6,6 +6,7 @@ import { after, test } from "node:test";
 import {
   BOT_FILL_DELAY_MS,
   BOT_FILL_TARGET,
+  CHAT_COOLDOWN_MS,
   CONVERTED_HUNTER_HP,
   DECOY_BUDGET,
   DECOY_MISS_DAMAGE_FACTOR,
@@ -18,6 +19,7 @@ import {
   isDisguise,
   LOBBY_AUTOSTART_MS,
   MapValidationError,
+  MSG_CHAT,
   MSG_SHOT_FIRED,
   MSG_SONAR_PING,
   MSG_TAUNT,
@@ -1047,6 +1049,42 @@ function tauntRoom(hunterAt) {
 }
 
 const tauntAs = (room, id) => room.handleTaunt({ sessionId: id, send() {} });
+
+function chatRoom() {
+  const room = new MorphyRoom();
+  const chats = [];
+  room.broadcast = (type, payload) => {
+    if (type === MSG_CHAT) chats.push(payload);
+  };
+  return { room, chats };
+}
+
+const chatAs = (room, id, text) => room.handleChat({ sessionId: id, send() {} }, { text });
+
+test("chat sent faster than the cooldown is dropped, per player", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 0 });
+  const { room, chats } = chatRoom();
+  chatAs(room, "a", "one");
+  chatAs(room, "a", "flood");
+  chatAs(room, "b", "other player");
+  t.mock.timers.tick(CHAT_COOLDOWN_MS);
+  chatAs(room, "a", "two");
+  assert.deepEqual(
+    chats.map((chat) => chat.text),
+    ["one", "other player", "two"],
+  );
+});
+
+test("an empty chat message does not start the cooldown", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 0 });
+  const { room, chats } = chatRoom();
+  chatAs(room, "a", "   ");
+  chatAs(room, "a", "hello");
+  assert.deepEqual(
+    chats.map((chat) => chat.text),
+    ["hello"],
+  );
+});
 
 test("a taunt scores a point and is heard from where the prop stands", () => {
   const { room, prop, taunts } = tauntRoom(TAUNT_DARING_RADIUS * 3);
