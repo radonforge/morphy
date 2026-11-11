@@ -370,11 +370,12 @@ export function defaultServerUrl(): string {
 
 const LOOPBACK_HOSTNAMES: ReadonlySet<string> = new Set(["localhost", "[::1]"]);
 const LOOPBACK_IPV4 = /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+const TRAILING_DOT = /\.$/;
 
 /** Whether a server URL points at this machine: full vision is refused against any other server. */
 export function isLoopbackServerUrl(url: string): boolean {
   if (!URL.canParse(url)) return false;
-  const { hostname } = new URL(url);
+  const hostname = new URL(url).hostname.replace(TRAILING_DOT, "");
   return LOOPBACK_HOSTNAMES.has(hostname) || LOOPBACK_IPV4.test(hostname);
 }
 
