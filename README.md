@@ -4,6 +4,8 @@
 
 Browser multiplayer prop hunt. Low-poly 3D, LAN-first.
 
+Play it at [morphy.radonforge.com](https://morphy.radonforge.com).
+
 ## Requirements
 
 - Node ≥ 24
@@ -66,7 +68,14 @@ name and ready state; full round state machine
 (infection capture), decoys and win conditions; client-side movement + collision; prop disguises;
 chat, standings, kill feed and persistent lifetime stats; runtime-synthesized audio.
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome: start with [CONTRIBUTING.md](CONTRIBUTING.md).
+`AGENTS.md` is the architecture guide, for people and coding agents alike. Report security
+issues privately, as [SECURITY.md](SECURITY.md) describes.
+
 ## License
 
-Proprietary. © [Radon Forge](https://radonforge.com), all rights reserved; see `LICENSE`.
-Third-party model and audio kits keep their own licenses.
+The code is [MIT](LICENSE). The Morphy name and logo, the official instance's legal pages and the
+third-party models and audio are not: [COPYING.md](COPYING.md) lists what is covered by what.
+Morphy is made by [Radon Forge](https://radonforge.com).
