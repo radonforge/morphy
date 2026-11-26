@@ -1,8 +1,8 @@
 # Terms of use
 
-Last updated: 2026-10-07
+Last updated: 2026-11-26
 
-By playing Morphy you agree to these terms. Morphy is made by Radon Forge, an independent, non-commercial project run by two private individuals in Italy.
+By playing Morphy you agree to these terms. Morphy is made by Radon Forge, an independent, non-commercial project run by two private individuals in Italy. These terms cover the official game at morphy.radonforge.com. Morphy's source code is published separately under the MIT License, and a copy someone else runs is theirs, under their own terms.
 
 ## The service
 
@@ -23,7 +23,7 @@ We may remove a name, kick a player or block a device or address that breaks the
 Third-party assets keep their own licences:
 
 - The 3D models and sound effects from Kenney are released under CC0.
-- The lobby music, "Sci-Fi 5" by alkakrab, is royalty-free and may be used commercially. Credit is appreciated, but redistributing the track as is, reselling it or sublicensing it is not allowed.
+- The lobby music, "Sci-Fi 5" by alkakrab, is included in Morphy and its open-source repository with the author's permission. It is not covered by the MIT License; extracting, redistributing the track as is, reselling it or sublicensing it is not allowed.
 
 ## Liability
 
