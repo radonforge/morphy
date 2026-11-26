@@ -1,0 +1,36 @@
+name: Bug report
+description: Something broke in the game, server, bots or map editor.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. If it happened during a match, press **Esc** and use
+        **Copy diagnostics** in the match menu — pasting it below saves a lot of back-and-forth.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Join North District as a prop
+        2. ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics / environment
+      description: Paste **Copy diagnostics** from the match menu, or your browser, OS and whether you ran locally (`pnpm dev`) or on morphy.radonforge.com.
+      render: text
+    validations:
+      required: false
