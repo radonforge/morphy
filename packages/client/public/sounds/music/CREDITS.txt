@@ -1,3 +1,3 @@
 lobby-theme.ogg: "Sci-Fi 5" by alkakrab (https://alkakrab.itch.io/free-sci-fi-game-music-pack)
 Royalty-free, credit appreciated. License terms: AlkaKrab Music License Info.pdf (this directory)
-Note: use in open-source distributions requires the author's permission (alkakrab04@gmail.com).
+Included in Morphy's open-source repository (and its git history / GitHub forks) with written permission from the author on 2026-11-26. Not covered by MIT; do not extract or redistribute separately.

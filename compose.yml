@@ -1,6 +1,6 @@
 services:
   server:
-    image: ghcr.io/radonforge/morphy.lol:${MORPHY_TAG:-latest}
+    image: ghcr.io/radonforge/morphy:${MORPHY_TAG:-latest}
     restart: unless-stopped
     environment:
       PORT: 2567

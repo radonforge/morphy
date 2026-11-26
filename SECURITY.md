@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please do not open a public issue for a security problem. Report it privately through
-[GitHub's private vulnerability reporting](https://github.com/radonforge/morphy.lol/security/advisories/new),
+[GitHub's private vulnerability reporting](https://github.com/radonforge/morphy/security/advisories/new),
 or by email to [privacy@radonforge.com](mailto:privacy@radonforge.com).
 
 Tell us what is affected, how to reproduce it and what an attacker gains. We are two people

@@ -20,6 +20,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/radonforge/morphy/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/radonforge/morphy/ci.yml?branch=master&style=flat-square&label=CI"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-3b82f6?style=flat-square"></a>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white">
   <img alt="three.js" src="https://img.shields.io/badge/three.js-r184-049ef4?style=flat-square&logo=threedotjs&logoColor=white">

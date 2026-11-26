@@ -1,0 +1,26 @@
+name: Feature or change proposal
+description: Suggest a new feature, map, balance change or dependency.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before proposing a bigger change, check the settled directions in
+        [CONTRIBUTING.md](https://github.com/radonforge/morphy/blob/master/CONTRIBUTING.md#before-you-start)
+        (no accounts/login, multiplayer-first, random `R` reroll).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the gameplay or developer experience gap first.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: How should it work? Keep it concise.
+    validations:
+      required: true
