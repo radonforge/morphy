@@ -321,10 +321,11 @@ Audio samples in active use ship from `packages/client/public/sounds/` (`sci-fi/
 
 ## Deploy
 
-Work on a branch and open a pull request. `master` has **no branch protection**: the org is on
-GitHub's free plan, which gates that feature (and CODEOWNERS) behind a paid plan for private
-repositories, so the PR flow is convention, not enforcement. CI runs on every pull request and on
-every push to `master`.
+Work on a branch and open a pull request. The repo is public, so rulesets apply on the free plan:
+`master` takes changes only through a pull request with the `Lint, format & typecheck` check green
+(no approval required) and refuses deletion and force-push; `v*` tags can be created but never
+moved or deleted. Org admins can bypass both. CI runs on every pull request and on every push to
+`master`.
 
 Release workflow: tagged. A release PR renames `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD` (leaving an empty Unreleased above it) and bumps the root `package.json` version; the tag goes on its merge commit.
 
