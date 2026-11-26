@@ -2,7 +2,7 @@
   "name": "morphy",
   "description": "Browser multiplayer prop hunt in low-poly 3D, built with three.js and Colyseus",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.5.2",
   "license": "MIT",
   "homepage": "https://morphy.radonforge.com",
   "repository": {

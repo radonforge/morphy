@@ -4,6 +4,16 @@ Every Morphy release and what it changed for you, newest first.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-26
+
+Morphy is open source. The code is on GitHub under the MIT License, so you can
+read it, run your own copy or send a fix.
+
+### Changed
+
+- The terms of use now cover the official game at morphy.radonforge.com and say
+  how the source code and the lobby music are licensed.
+
 ## [0.5.1] - 2026-11-11
 
 A steadier room. Chat can no longer be flooded, and the bots you can run
